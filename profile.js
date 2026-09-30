@@ -1,8 +1,8 @@
 // Profile tab: Overview, Palate, Knowledge, Explored and Trophies.
 // The rules at the top are pure (no browser, no network) so they can be tested on their own.
 // The controller at the bottom loads what it needs from Supabase and draws the tab.
-import { DIMS, VERDICTS, FLAGS, esc, styleLabel, verdictShort, entryCard, entryName } from "./logic.js?v=4";
-import { marksHtml } from "./views.js?v=4";
+import { DIMS, dimRange, VERDICTS, FLAGS, esc, styleLabel, verdictShort, entryCard, entryName } from "./logic.js?v=5";
+import { marksHtml } from "./views.js?v=5";
 
 // ---------------------------------------------------------------- settings
 // How much each verdict counts toward the palate. A journal wine with no verdict yet counts a
@@ -62,25 +62,27 @@ export function palateEntries(journal, perceptionRows, baselineFor = () => ({ ba
     return { id: e.id, verdict: e.verdict || null, grape: e.grape, country: e.country, style: e.style, perception, adjusted, base, ref };
   });
 }
-// Preference lean per dimension, from -1 (low end) to 1 (high end). The user's slider input is
+// Preference lean per dimension, from -1 (low end) to 1 (high end). The user's rating is
 // averaged with the baseline so personal perception alone does not drive the profile.
-// Without a baseline, only sliders the user actually moved count.
+// Without a baseline, only ratings the user actually changed count. Every dimension is measured
+// from its own middle, so the 1-5 scales, oak (0 or 1) and CO2 (0, 1 or 2) are all comparable.
 export function computePalate(entries) {
   return DIMS.map((d) => {
+    const { min, max, mid, half } = dimRange(d);
     let sum = 0, absW = 0, n = 0, pSum = 0, pN = 0;
     entries.forEach((e) => {
       const b = e.base && e.base[d.key] != null ? e.base[d.key] : null;
       const adj = !!(e.adjusted && e.adjusted[d.key]) && typeof e.perception[d.key] === "number";
       if (b === null && !adj) return;
-      const baseVal = b === null ? 3 : b;
+      const baseVal = b === null ? mid : b;
       const effective = adj ? (e.perception[d.key] + baseVal) / 2 : baseVal;
       const w = weightOf(e.verdict);
-      if (w !== 0) { sum += w * (effective - 3); absW += Math.abs(w); n += 1; }
+      if (w !== 0) { sum += w * (effective - mid); absW += Math.abs(w); n += 1; }
       // "You notice more / less than the baseline" uses the raw difference, and only editor references.
       if (adj && e.ref && e.ref[d.key] != null) { pSum += e.perception[d.key] - e.ref[d.key]; pN += 1; }
     });
-    const lean = absW ? Math.max(-1, Math.min(1, sum / (absW * 2))) : 0;
-    return { ...d, lean, n, offset: pN ? pSum / pN : 0, pN };
+    const lean = absW ? Math.max(-1, Math.min(1, sum / (absW * half))) : 0;
+    return { ...d, lean, n, offset: pN ? pSum / pN : 0, pN, notice: (max - min) / 4 };
   });
 }
 export const leanWords = (palate) => palate.filter((d) => d.n >= 2 && Math.abs(d.lean) > 0.2).map((d) => (d.lean > 0 ? d.hi : d.lo));
@@ -257,7 +259,7 @@ function palateHtml(P) {
   const bars = P.palate.map((d) => {
     const strong = d.n >= 2;
     const msg = !strong ? "Needs more wines" : d.lean > 0.2 ? `You lean ${d.hi}` : d.lean < -0.2 ? `You lean ${d.lo}` : "No clear lean yet";
-    const pmsg = d.pN >= 2 && Math.abs(d.offset) >= 1 ? `You tend to notice ${d.name.toLowerCase()} ${d.offset > 0 ? "more" : "less"} than the baseline` : "";
+    const pmsg = d.pN >= 2 && Math.abs(d.offset) >= d.notice ? `You tend to notice ${d.key === "co2" ? d.name : d.name.toLowerCase()} ${d.offset > 0 ? "more" : "less"} than the baseline` : "";
     return `<div class="dimrow2"><div class="dimends"><span>${d.lo}</span><b>${d.name}</b><span>${d.hi}</span></div>
       <div class="leanbar"><div class="knob" style="left:calc(${((d.lean + 1) / 2) * 100}% - 8px);opacity:${strong ? 1 : 0.35}"></div></div>
       <div class="small">${msg}</div>${pmsg ? `<div class="small slate">${pmsg}</div>` : ""}</div>`;
