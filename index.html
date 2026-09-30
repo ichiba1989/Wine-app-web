@@ -100,11 +100,37 @@
   .round { width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%; border: 1px solid var(--line); background: #fff; font-size: 20px; line-height: 1; padding: 0; }
   .dimlabels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); padding: 0 44px; }
   textarea.field { resize: none; }
+  /* Learn tab */
+  .learn { display: flex; flex-direction: column; }
+  .modes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 60px; border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 6px 2px; }
+  .tile span { font-size: 10px; font-weight: 500; }
+  .tile.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .chips { display: flex; gap: 4px; margin-top: 8px; overflow: hidden; }
+  .chips.left { justify-content: flex-start; }
+  .chip { flex: 1 1 auto; white-space: nowrap; border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 6px; font-size: min(11px, 2.9vw); font-weight: 500; }
+  .chip.wide { flex: 0 0 auto; padding: 6px 16px; font-size: 12px; }
+  .chip.on { background: var(--slate); color: #fff; border-color: var(--slate); }
+  #lbody { margin-top: 14px; }
+  .qtext { font-size: 22px; font-weight: 400; line-height: 1.25; margin: 10px 0 12px; }
+  .lbar { height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; margin-top: 6px; }
+  .lbar.thin { height: 4px; }
+  .lbar div { height: 100%; background: var(--slate); transition: width 300ms; }
+  .ttop { display: flex; justify-content: space-between; font-size: 14px; }
+  .opts { display: flex; flex-direction: column; gap: 8px; }
+  .opt { display: flex; justify-content: space-between; align-items: center; text-align: left; border: 1px solid var(--line); background: #fff; border-radius: 12px; padding: 12px 14px; font-size: 15px; }
+  .opt:disabled { color: var(--ink); opacity: 1; }
+  .opt.right { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .opt.wrong { background: var(--wine); color: #fff; border-color: var(--wine); }
+  .fb { font-size: 14px; margin: 14px 0 0; }
+  .lacts { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
+  .btn.slim { width: auto; margin-top: 0; padding: 12px 18px; font-size: 15px; }
+  .link.bigger { font-size: 14px; margin-top: 12px; align-self: flex-start; }
 </style>
 </head>
 <body>
 <div id="app"></div>
 <div id="overlay"></div>
-<script type="module" src="app.js?v=1"></script>
+<script type="module" src="app.js?v=2"></script>
 </body>
 </html>
