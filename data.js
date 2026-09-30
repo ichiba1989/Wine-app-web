@@ -77,3 +77,4 @@ export async function addWithoutRating(sb, userId, form, today) {
   const uw = must(await sb.from("user_wines").insert(outsideRow(form, userId)).select("id").single());
   must(await sb.from("consumptions").insert({ user_id: userId, user_wine_id: uw.id, origin: "manual", consumed_on: today }));
 }
+
