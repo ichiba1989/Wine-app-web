@@ -197,3 +197,4 @@ export function addFormHtml(form, error = "") {
     <button class="btn primary" data-action="addrate">Rate it now</button>
     <button class="btn outline" data-action="addnorate">Add without rating</button></div></div>`;
 }
+
