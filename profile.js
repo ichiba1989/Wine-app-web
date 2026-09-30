@@ -3,6 +3,7 @@
 // The controller at the bottom loads what it needs from Supabase and draws the tab.
 import { DIMS, dimRange, VERDICTS, FLAGS, esc, styleLabel, verdictShort, entryCard, entryName } from "./logic.js?v=5";
 import { marksHtml } from "./views.js?v=5";
+import { accountCardHtml } from "./account.js?v=1";
 
 // ---------------------------------------------------------------- settings
 // How much each verdict counts toward the palate. A journal wine with no verdict yet counts a
@@ -252,6 +253,7 @@ function overviewHtml(P) {
     ${card("Trophies", `<div class="serif pbig">${acquired}</div><div class="prank">${esc(trophyRank(acquired))}</div>`)}
     ${card("Your palate", `<p class="ptext">${leans.length ? `You lean ${esc(leans.join(", "))}.` : "Add a couple more wines to your journal to see your palate take shape."}</p>`)}
     ${latest ? card("Latest rating", `<div class="iname"><span class="serif">${esc(entryName(latest))}</span>${marksHtml(entryCard(latest), 16)}</div><div class="small wine"><b>${esc(verdictShort(latest.verdict))}</b></div>`) : ""}
+    ${accountCardHtml(P.user)}
     ${P.userId ? `<div class="muted tiny uidline">Your account ID (needed to give you editor access): <span class="uid">${esc(P.userId)}</span></div>` : ""}`;
 }
 
@@ -402,7 +404,7 @@ export function createProfile(ctx) {
   return {
     state: P,
     // Opens on Overview every time, with fresh numbers.
-    mount(el) { root = el; P.sub = "overview"; P.loaded = false; P.userId = ctx.userId ? ctx.userId() : null; draw(); load(); },
+    mount(el) { root = el; P.sub = "overview"; P.loaded = false; P.userId = ctx.userId ? ctx.userId() : null; P.user = ctx.user ? ctx.user() : null; draw(); load(); },
     leave() { root = null; loadId++; },
   };
 }
