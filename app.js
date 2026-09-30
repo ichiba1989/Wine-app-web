@@ -9,6 +9,7 @@ import {
 import * as db from "./data.js";
 import { discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml } from "./views.js";
 import { createLearn } from "./learn.js?v=1";
+import { createProfile } from "./profile.js?v=1";
 
 let SUPABASE_URL = "PASTE-YOUR-PROJECT-URL-HERE";
 let SUPABASE_KEY = "PASTE-YOUR-PUBLISHABLE-KEY-HERE";
@@ -34,10 +35,23 @@ const state = {
   sheet: null, sheetUi: { saving: false, error: "" },
   form: null,
 };
-const TITLES = { discover: "Discover", swipes: "Swipes", journal: "Journal", learn: "Learn" };
+const TITLES = { discover: "Discover", swipes: "Swipes", journal: "Journal", profile: "Profile", learn: "Learn" };
 
 // The Learn tab lives in learn.js. It saves quiz answers itself and reports save problems through the banner.
 const learn = createLearn({ sb: () => state.sb, user: () => state.user, profile: () => state.profile, onError: (m) => setBanner(m) });
+// The Profile tab lives in profile.js. It reads the journal and swipes the app already loaded.
+const profileTab = createProfile({ sb: () => state.sb, journal: () => state.journal, states: () => state.states, cards: () => state.cards });
+
+// Counts for the Discover screen. Only swipes count as swipes (not later changes of interest).
+async function loadCounts() {
+  const [s, j] = await Promise.all([
+    state.sb.from("encounters").select("id", { count: "exact", head: true }).eq("event", "swipe"),
+    state.sb.from("consumptions").select("id", { count: "exact", head: true }),
+  ]);
+  if (s.error) throw s.error;
+  if (j.error) throw j.error;
+  return { swipes: s.count || 0, journal: j.count || 0 };
+}
 
 // ---------------------------------------------------------------- start up
 async function init() {
@@ -52,7 +66,7 @@ async function init() {
   }
 }
 async function refreshData() {
-  const [states, journal, counts] = await Promise.all([db.loadStates(state.sb), db.loadJournal(state.sb), db.countRows(state.sb)]);
+  const [states, journal, counts] = await Promise.all([db.loadStates(state.sb), db.loadJournal(state.sb), loadCounts()]);
   state.states = states; state.journal = journal; state.counts = counts;
 }
 async function enterMain() {
@@ -74,7 +88,7 @@ function shellHtml() {
   return `<div class="top"><h1 class="serif" id="title"></h1><span class="muted small">Early build</span></div>
     <div id="gbanner" class="banner gb" data-action="dismiss" hidden></div>
     <div class="content" id="content"><div id="tabbody"></div></div>
-    <nav class="tabs">${tab("discover", "Discover")}${tab("swipes", "Swipes")}${tab("journal", "Journal")}${tab("learn", "Learn")}</nav>`;
+    <nav class="tabs">${tab("discover", "Discover")}${tab("swipes", "Swipes")}${tab("journal", "Journal")}${tab("profile", "Profile")}${tab("learn", "Learn")}</nav>`;
 }
 function renderBody() {
   const body = $("#tabbody");
@@ -87,6 +101,8 @@ function renderBody() {
     body.innerHTML = swipesHtml(swipeLists(state.cards, state.states, state.journal), state.sw);
   } else if (state.tab === "learn") {
     learn.mount(body);
+  } else if (state.tab === "profile") {
+    profileTab.mount(body);
   } else {
     body.innerHTML = journalShellHtml(state.j);
     renderJournalList();
@@ -141,7 +157,7 @@ async function fly(el, kind) {
     state.deck.shift();
     state.interest = "try";
     setBanner(null);
-    state.counts = await db.countRows(state.sb);
+    state.counts = await loadCounts();
   } catch (e) {
     setBanner("Could not save that swipe: " + (e.message || e));
   }
@@ -267,8 +283,9 @@ document.addEventListener("click", async (ev) => {
     else if (action === "interest") { if (!state.busy) { state.interest = a; renderBody(); } }
     else if (action === "tab") {
       if (state.tab === "learn" && a !== "learn") learn.leave();
+      if (state.tab === "profile" && a !== "profile") profileTab.leave();
       state.tab = a;
-      if (a === "swipes" || a === "journal") await refreshData();
+      if (a === "swipes" || a === "journal" || a === "profile") await refreshData();
       render();
     }
     else if (action === "toggle") { state.sw.open[a] = !state.sw.open[a]; renderBody(); }
@@ -326,5 +343,5 @@ document.addEventListener("input", (ev) => {
   else if (t.dataset.sort) { state.sw.sort[t.dataset.sort] = t.value; renderBody(); }
 });
 
-window.__wine = { state, fly, render, init, learn };
+window.__wine = { state, fly, render, init, learn, profile: profileTab };
 init();
