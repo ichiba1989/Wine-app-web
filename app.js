@@ -3,18 +3,18 @@
 // The first time, the page asks for your two Supabase values and remembers them in this browser.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  FAMILIARITY, esc, clamp01, shuffle, tapEdge, swipeKind, cardFromRow, filterEntries, groupEntries, swipeLists,
+  FAMILIARITY, wineName, esc, clamp01, shuffle, tapEdge, swipeKind, cardFromRow, filterEntries, groupEntries, swipeLists,
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS,
-  queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS,
-} from "./logic.js?v=4";
-import * as db from "./data.js?v=4";
+  queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, dimMeta, isChoice,
+} from "./logic.js?v=5";
+import * as db from "./data.js?v=5";
 import { shrinkImage } from "./photos.js?v=4";
 import {
-  discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml,
-} from "./views.js?v=4";
+  discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE,
+} from "./views.js?v=5";
 import { createLearn } from "./learn.js?v=1";
-import { createProfile } from "./profile.js?v=2";
-import { createEditor } from "./editor.js?v=1";
+import { createProfile } from "./profile.js?v=3";
+import { createEditor } from "./editor.js?v=2";
 
 let SUPABASE_URL = "PASTE-YOUR-PROJECT-URL-HERE";
 let SUPABASE_KEY = "PASTE-YOUR-PUBLISHABLE-KEY-HERE";
@@ -43,6 +43,7 @@ const state = {
   refs: new Map(),                      // wine_vintage_id -> reference structure values set by editors
   feedback: false,                      // feedback switch (feature_access), on for everyone for now
   wf: null, wfDone: null,               // "report a problem with this wine"
+  confirm: null,                        // the delete confirmation that is open, if any
 };
 const isEditor = () => !!state.profile && ["editor", "admin"].includes(state.profile.role);
 const TITLES = { discover: "Discover", swipes: "Swipes", journal: "Journal", profile: "Profile", learn: "Learn", editor: "Editor" };
@@ -246,11 +247,19 @@ function syncSheet() {
   const s = state.sheet;
   if (!s) return;
   document.querySelectorAll("[data-sheet^='verdict:']").forEach((b) => b.classList.toggle("on", b.dataset.sheet === "verdict:" + s.verdict));
-  DIMS.forEach((d) => {
-    const r = document.querySelector(`[data-dim="${d.key}"]`);
-    if (r && Number(r.value) !== s.dims[d.key].value) r.value = s.dims[d.key].value;
+  DIMS.filter((d) => s.dims[d.key]).forEach((d) => {
+    const x = s.dims[d.key];
+    if (isChoice(d)) {
+      document.querySelectorAll(`[data-sheet^="choice:${d.key}:"]`).forEach((b) => {
+        const on = Number(b.dataset.sheet.split(":")[2]) === x.value;
+        b.classList.toggle("on", on); b.classList.toggle("def", on && !x.adjusted); b.setAttribute("aria-pressed", String(on));
+      });
+    } else {
+      const r = document.querySelector(`[data-dim="${d.key}"]`);
+      if (r && Number(r.value) !== x.value) r.value = x.value;
+    }
     const rs = document.getElementById("reset-" + d.key);
-    if (rs) rs.style.visibility = s.dims[d.key].adjusted ? "visible" : "hidden";
+    if (rs) rs.style.visibility = x.adjusted ? "visible" : "hidden";
   });
   document.querySelectorAll("[data-sheet='save']").forEach((b) => { b.disabled = !s.verdict || state.sheetUi.saving; });
   const err = $("#sheetErr");
@@ -304,6 +313,43 @@ async function saveSheet() {
   }
 }
 
+// ---------------------------------------------------------------- deleting entries and swipes
+function askConfirm(cfg) { state.confirm = { ...cfg, busy: false, error: "" }; $("#confirm").innerHTML = confirmHtml(state.confirm); }
+function closeConfirm() { state.confirm = null; $("#confirm").innerHTML = ""; }
+function askDeleteEntry() {
+  const id = state.sheet && state.sheet.entryId;
+  if (!id) return;
+  askConfirm({
+    title: "Delete this entry?",
+    body: `It is removed from your journal, along with its photos and notes. ${esc(KEPT_NOTE)}`,
+    run: async () => { await db.deleteJournalEntry(state.sb, id); closeOverlay(); await refreshData(); state.tab = "journal"; render(); },
+  });
+}
+function askDeleteSwipe(wineId) {
+  const card = state.cards.find((c) => c.id === wineId);
+  if (!card) return;
+  askConfirm({
+    title: "Delete this swipe?",
+    body: `${esc(wineName(card))} goes back into Discover. ${esc(SWIPE_KEPT_NOTE)}`,
+    run: async () => {
+      await db.deleteSwipe(state.sb, wineId);
+      await refreshData();
+      state.deck = [card, ...state.deck.filter((c) => c.id !== wineId)];   // it can be swiped again, and is shown next
+      renderBody();
+    },
+  });
+}
+document.addEventListener("click", async (ev) => {
+  const t = ev.target.closest("[data-confirm]");
+  if (!t || !state.confirm) return;
+  if (t.dataset.confirm === "no") { closeConfirm(); return; }
+  const c = state.confirm;
+  if (c.busy) return;
+  c.busy = true; c.error = ""; $("#confirm").innerHTML = confirmHtml(c);
+  try { await c.run(); closeConfirm(); }
+  catch (e) { c.busy = false; c.error = "Could not delete: " + (e.message || e); $("#confirm").innerHTML = confirmHtml(c); }
+});
+
 // ---------------------------------------------------------------- clicks and typing
 document.addEventListener("click", async (ev) => {
   const sheetBtn = ev.target.closest("[data-sheet]");
@@ -311,7 +357,9 @@ document.addEventListener("click", async (ev) => {
     const [action, a, b] = sheetBtn.dataset.sheet.split(":");
     if (action === "verdict") { state.sheet.verdict = a; syncSheet(); }
     else if (action === "nudge") { state.sheet = nudgeDim(state.sheet, a, Number(b)); syncSheet(); }
+    else if (action === "choice") { state.sheet = setDim(state.sheet, a, Number(b)); syncSheet(); }
     else if (action === "reset") { state.sheet = resetDim(state.sheet, a); syncSheet(); }
+    else if (action === "delete") askDeleteEntry();
     else if (action === "save") await saveSheet();
     else if (action === "close") closeOverlay();
     else if (action === "togglephoto") { state.sheet = toggleExistingPhoto(state.sheet, a); showPhotos(); }
@@ -342,6 +390,7 @@ document.addEventListener("click", async (ev) => {
       render();
     }
     else if (action === "toggle") { state.sw.open[a] = !state.sw.open[a]; renderBody(); }
+    else if (action === "delswipe") askDeleteSwipe(a);
     else if (action === "setint") {
       await db.changeInterest(state.sb, state.user.id, a, b);
       const s = state.states.find((x) => x.wine_vintage_id === a);
