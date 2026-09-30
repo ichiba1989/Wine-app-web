@@ -288,3 +288,4 @@ export function outsideRow(form, userId) {
     style: ["red", "white", "sparkling"].includes(form.style) ? form.style : "unknown",
   };
 }
+
