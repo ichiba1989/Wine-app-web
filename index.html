@@ -100,6 +100,42 @@
   .round { width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%; border: 1px solid var(--line); background: #fff; font-size: 20px; line-height: 1; padding: 0; }
   .dimlabels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); padding: 0 44px; }
   textarea.field { resize: none; }
+  /* Profile tab */
+  .profile { display: flex; flex-direction: column; }
+  .ptabs { position: sticky; top: 0; z-index: 4; background: var(--bg); display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; padding-bottom: 10px; }
+  .ptabs .tile { min-height: 58px; }
+  .ph { font-size: 22px; font-weight: 400; margin: 4px 0 6px; }
+  .pcard { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-top: 10px; }
+  .ptitle { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+  .ptext { margin: 2px 0; font-size: 14px; line-height: 1.5; }
+  .ptext.para { margin-top: 14px; }
+  .pgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .pstat { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
+  .pnum { font-size: 28px; line-height: 1; margin-bottom: 6px; }
+  .pbig { font-size: 32px; line-height: 1; }
+  .prank { color: var(--wine); font-weight: 600; font-size: 14px; margin-top: 6px; }
+  .twobig { display: flex; gap: 28px; } .twobig .small { margin-top: 6px; }
+  .dimrow2 { margin: 6px 0 16px; } .dimrow2:last-child { margin-bottom: 4px; }
+  .dimends { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); } .dimends b { color: var(--ink); }
+  .leanbar { position: relative; height: 6px; border-radius: 999px; background: var(--line); margin: 10px 0 8px; }
+  .knob { position: absolute; top: -5px; width: 16px; height: 16px; border-radius: 50%; background: var(--wine); transition: left 300ms; }
+  .slate { color: var(--slate); } .tiny { font-size: 11px; }
+  .wheel { display: block; width: 100%; max-width: 280px; margin: 0 auto 12px; }
+  .leg { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 14px; padding: 4px 0; }
+  .leg span:first-child { display: flex; align-items: center; gap: 8px; } .leg i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .leg .small { text-align: right; }
+  .tgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+  .tstat { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px; } .tstat .serif { font-size: 20px; line-height: 1; margin-bottom: 4px; }
+  .drow { margin: 8px 0 12px; } .dtop { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+  .kv { display: flex; justify-content: space-between; font-size: 14px; padding: 3px 0; }
+  .psub { font-size: 14px; margin: 18px 0 8px; }
+  .tgrid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .trophy { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 3px; }
+  .ttop2 { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .tbadge { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .tdots { display: flex; gap: 4px; } .tdots i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .ttl { font-size: 14px; font-weight: 600; }
+  .trophy .lbar { margin-top: 6px; }
   /* Learn tab */
   .learn { display: flex; flex-direction: column; }
   .modes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
@@ -131,6 +167,6 @@
 <body>
 <div id="app"></div>
 <div id="overlay"></div>
-<script type="module" src="app.js?v=2"></script>
+<script type="module" src="app.js?v=3"></script>
 </body>
 </html>
