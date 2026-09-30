@@ -101,6 +101,17 @@
   .round { width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%; border: 1px solid var(--line); background: #fff; font-size: 20px; line-height: 1; padding: 0; }
   .dimlabels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); padding: 0 44px; }
   textarea.field { resize: none; }
+  /* Fixed choices (oak, CO2), delete buttons and the confirmation */
+  .seg { display: flex; gap: 6px; margin: 6px 0 4px; }
+  .segbtn { flex: 1; border: 1px solid var(--line); background: #fff; border-radius: 12px; padding: 11px 4px; font-size: 14px; }
+  .segbtn.on { background: var(--ink); color: #fff; border-color: var(--ink); font-weight: 600; }
+  .segbtn.on.def { background: var(--slate); border-color: var(--slate); }
+  .btn.danger { background: transparent; color: var(--wine); border: 1px solid var(--wine); font-weight: 500; }
+  .btn.danger:disabled { opacity: .5; }
+  .pill.danger { color: var(--wine); border-color: var(--wine); }
+  .overlay.top { z-index: 60; align-items: center; padding: 20px; }
+  .sheet.small { border-radius: 20px; padding: 20px; max-height: none; }
+  .sheet.small .two { margin-top: 10px; } .sheet.small .btn { margin-top: 0; }
   /* Photos, thumbnails, feedback and the editor */
   .thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0; background: var(--line); }
   .item.withthumb { display: flex; gap: 10px; align-items: flex-start; } .ibody { min-width: 0; flex: 1; }
@@ -180,6 +191,7 @@
 <body>
 <div id="app"></div>
 <div id="overlay"></div>
-<script type="module" src="app.js?v=4"></script>
+<div id="confirm"></div>
+<script type="module" src="app.js?v=5"></script>
 </body>
 </html>
