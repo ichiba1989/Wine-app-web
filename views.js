@@ -1,9 +1,9 @@
 // Screens. Every function here takes data and returns an HTML string; nothing touches the network.
 import {
-  FAMILIARITY, INTEREST, FLAGS, VERDICTS, DIMS, GROUPS, GROUP_PAGE, SORTS, YEARS,
+  FAMILIARITY, INTEREST, FLAGS, VERDICTS, DIMS, isChoice, GROUPS, GROUP_PAGE, SORTS, YEARS,
   esc, wineName, entryCard, entryName, verdictShort, groupEntries, filterEntries, sortCards,
   WINE_FLAG_REASONS, photoCount,
-} from "./logic.js?v=4";
+} from "./logic.js?v=5";
 
 // ---------------------------------------------------------------- drawings
 const GLASS = { white: "#5F7440", sparkling: "#3E4B38", rose: "#8A5560", neutral: "#34403A", red: "#2C1C22" };
@@ -72,6 +72,7 @@ function section(id, title, count, open, inner) {
   return `<div class="sect"><button class="sect-head" data-action="toggle:${id}" aria-expanded="${open}"><span>${esc(title)} (${count})</span><span class="chev">${open ? "▲" : "▼"}</span></button>${open ? `<div class="sect-body">${inner}</div>` : ""}</div>`;
 }
 function item(card, actions, extra = "", thumb = "") {
+  actions += `<button class="pill danger" data-action="delswipe:${card.id}">Delete swipe</button>`;
   const where = [card.appellation || card.grape, card.country].filter(Boolean).join(", ");
   return `<div class="item withthumb">${thumb}<div class="ibody"><div class="iname"><span class="serif">${esc(wineName(card))}</span>${marksHtml(card, 16)}</div>
     <div class="meta">${esc(where)}${extra}</div><div class="acts">${actions}</div></div></div>`;
@@ -167,16 +168,24 @@ export function photosHtml(sheet) {
   return `<div class="phs">${existing}${queued}</div>
     <label class="pill addph">${label}<input type="file" accept="image/*" multiple hidden data-photo="sheet"></label>`;
 }
+// A structure control. Scales are sliders; oak and CO2 are buttons with a fixed set of choices (no values in between).
+// attr: the data attribute that carries clicks ("data-sheet" in the rating sheet, "data-editor" in the editor).
+// slider: the attribute that identifies the range input. reset: whether to show the Reset link.
+export function dimControlHtml(d, x, { attr = "data-sheet", slider = "data-dim", reset = true } = {}) {
+  const resetLink = reset ? `<button id="reset-${d.key}" class="link" ${attr}="reset:${d.key}" style="visibility:${x.adjusted ? "visible" : "hidden"}">Reset</button>` : "";
+  if (isChoice(d)) {
+    const btns = d.values.map((v, k) => `<button class="segbtn${x.value === v ? " on" : ""}${x.value === v && !x.adjusted ? " def" : ""}" ${attr}="choice:${d.key}:${v}" aria-pressed="${x.value === v}">${esc(d.labels[k])}</button>`).join("");
+    return `<div class="dim"><div class="dimtop"><span>${d.name}</span>${resetLink}</div><div class="seg" role="group" aria-label="${d.name}">${btns}</div></div>`;
+  }
+  return `<div class="dim"><div class="dimtop"><span>${d.name}</span>${resetLink}</div>
+      <div class="dimrow"><button class="round" ${attr}="nudge:${d.key}:-0.5" aria-label="Less ${d.name.toLowerCase()}">&minus;</button>
+        <input type="range" min="1" max="5" step="0.1" value="${x.value}" ${slider}="${d.key}" aria-label="${d.name}, from ${d.lo} to ${d.hi}">
+        <button class="round" ${attr}="nudge:${d.key}:0.5" aria-label="More ${d.name.toLowerCase()}">+</button></div>
+      <div class="dimlabels"><span>${d.lo}</span><span>${d.hi}</span></div></div>`;
+}
 export function sheetHtml(sheet, { saving = false, error = "" } = {}) {
   const verdicts = VERDICTS.map((v) => `<button class="vbtn${sheet.verdict === v.code ? " on" : ""}" data-sheet="verdict:${v.code}">${esc(v.label)}</button>`).join("");
-  const dims = DIMS.map((d) => {
-    const x = sheet.dims[d.key];
-    return `<div class="dim"><div class="dimtop"><span>${d.name}</span><button id="reset-${d.key}" class="link" data-sheet="reset:${d.key}" style="visibility:${x.adjusted ? "visible" : "hidden"}">Reset</button></div>
-      <div class="dimrow"><button class="round" data-sheet="nudge:${d.key}:-0.5" aria-label="Less ${d.name.toLowerCase()}">&minus;</button>
-        <input type="range" min="1" max="5" step="0.1" value="${x.value}" data-dim="${d.key}" aria-label="${d.name}, from ${d.lo} to ${d.hi}">
-        <button class="round" data-sheet="nudge:${d.key}:0.5" aria-label="More ${d.name.toLowerCase()}">+</button></div>
-      <div class="dimlabels"><span>${d.lo}</span><span>${d.hi}</span></div></div>`;
-  }).join("");
+  const dims = DIMS.filter((d) => sheet.dims[d.key]).map((d) => dimControlHtml(d, sheet.dims[d.key])).join("");
   const canSave = !!sheet.verdict && !saving;
   return `<div class="overlay"><div class="sheet" id="sheetPanel">
     <div class="sheethead"><div class="sheettitle"><div class="serif big">${esc(sheet.target.name)}</div><div class="muted small">How was it?</div></div>
@@ -189,8 +198,19 @@ export function sheetHtml(sheet, { saving = false, error = "" } = {}) {
     <textarea class="field" data-field="notes" rows="3" placeholder="Notes">${esc(sheet.notes)}</textarea>
     <div id="sheetPhotos" class="photoarea">${photosHtml(sheet)}</div>
     <div id="sheetErr" class="err">${esc(error)}</div>
-    <button class="btn primary" data-sheet="save"${canSave ? "" : " disabled"}>Save to journal</button></div></div>`;
+    <button class="btn primary" data-sheet="save"${canSave ? "" : " disabled"}>Save to journal</button>
+    ${sheet.entryId ? `<button class="btn danger" data-sheet="delete">Delete this entry</button>` : ""}</div></div>`;
 }
+
+// A confirmation that sits on top of whatever is open. Buttons carry data-confirm="yes" or "no".
+export function confirmHtml({ title, body, yes = "Delete", error = "", busy = false }) {
+  return `<div class="overlay top"><div class="sheet small" role="alertdialog" aria-label="${esc(title)}">
+    <div class="serif big">${esc(title)}</div><p class="ptext">${body}</p>
+    <div id="confirmErr" class="err">${esc(error)}</div>
+    <div class="two"><button class="btn outline" data-confirm="no"${busy ? " disabled" : ""}>Cancel</button><button class="btn danger" data-confirm="yes"${busy ? " disabled" : ""}>${esc(yes)}</button></div></div></div>`;
+}
+export const KEPT_NOTE = "Your name, account, photos and notes are removed. Only the anonymous rating is kept, and if you enter this wine again it replaces that copy.";
+export const SWIPE_KEPT_NOTE = "Your account link is removed. Only an anonymous record of the swipe is kept, and if you swipe this wine again it replaces that copy.";
 
 // ---------------------------------------------------------------- add a wine by hand
 export function formPhotosHtml(form) {
