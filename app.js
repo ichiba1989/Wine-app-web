@@ -13,7 +13,8 @@ import {
   discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE,
 } from "./views.js?v=5";
 import { createLearn } from "./learn.js?v=1";
-import { createProfile } from "./profile.js?v=3";
+import { createProfile } from "./profile.js?v=4";
+import { createAccount } from "./account.js?v=1";
 import { createEditor } from "./editor.js?v=2";
 
 let SUPABASE_URL = "PASTE-YOUR-PROJECT-URL-HERE";
@@ -51,7 +52,16 @@ const TITLES = { discover: "Discover", swipes: "Swipes", journal: "Journal", pro
 // The Learn tab lives in learn.js. It saves quiz answers itself and reports save problems through the banner.
 const learn = createLearn({ sb: () => state.sb, user: () => state.user, profile: () => state.profile, onError: (m) => setBanner(m) });
 // The Profile tab lives in profile.js. It reads the journal and swipes the app already loaded.
-const profileTab = createProfile({ sb: () => state.sb, userId: () => state.user.id, journal: () => state.journal, states: () => state.states, cards: () => state.cards });
+const profileTab = createProfile({ sb: () => state.sb, userId: () => state.user.id, user: () => state.user, journal: () => state.journal, states: () => state.states, cards: () => state.cards });
+// Email accounts live in account.js: a guest can attach an email, or sign in to an account they already have.
+// Signing in or out reloads the page so everything starts clean for the right person.
+const account = createAccount({
+  sb: () => state.sb, user: () => state.user,
+  setUser: (u) => { state.user = u; },
+  canSave: () => state.status === "main",
+  reload: () => location.replace(location.pathname + location.search),
+  onClose: () => { if (state.tab === "profile" && state.status === "main") render(); },
+});
 // The Editor tab (editors only) lives in editor.js.
 const editorTab = createEditor({ sb: () => state.sb, userId: () => state.user.id, cards: () => state.cards, onSaved: () => loadReferences() });
 
@@ -70,8 +80,13 @@ async function loadCounts() {
 async function init() {
   try {
     if (SUPABASE_URL.startsWith("PASTE") || SUPABASE_KEY.startsWith("PASTE")) { state.status = "setup"; return render(); }
-    state.sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
+    // An emailed link brings the person back to this page with a sign-in (or an error) in the address. Read it, then tidy the address.
+    const back = new URLSearchParams(location.hash.replace(/^#/, ""));
+    const linkError = back.get("error_description");
+    state.sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
     state.user = await db.ensureUser(state.sb);
+    if (location.hash) history.replaceState(null, "", location.pathname + location.search);
+    if (linkError) state.banner = "That email link did not work: " + linkError.replace(/\+/g, " ") + " Ask for a new code.";
     state.profile = await db.loadProfile(state.sb, state.user.id);
     if (state.profile.age_attested_at) await enterMain(); else { state.status = "age"; render(); }
   } catch (e) {
@@ -163,7 +178,7 @@ function render() {
       <button class="btn outline" data-action="retry">Try again</button></div>`;
   else if (state.status === "age") html = `<div class="center"><div class="serif" style="font-size:32px;line-height:1.1">A game that learns your palate while teaching you about wine.</div>
       ${state.underage ? `<div class="muted">This app is for people 21 and older in the US. Come back when you're 21.</div>`
-        : `<div class="muted">Are you 21 or older?</div><button class="btn primary" data-action="attest">I'm 21 or older</button><button class="btn outline" data-action="under">I'm under 21</button>`}
+        : `<div class="muted">Are you 21 or older?</div><button class="btn primary" data-action="attest">I'm 21 or older</button><button class="btn outline" data-action="under">I'm under 21</button><button class="link" data-account="open:signin">I already have an account</button>`}
       ${state.banner ? `<div class="err">${esc(state.banner)}</div>` : ""}</div>`;
   app.innerHTML = html;
 }
@@ -475,5 +490,5 @@ document.addEventListener("change", async (ev) => {
   }
 });
 
-window.__wine = { state, fly, render, init, learn, profile: profileTab, editor: editorTab };
+window.__wine = { state, fly, render, init, learn, profile: profileTab, editor: editorTab, account };
 init();
