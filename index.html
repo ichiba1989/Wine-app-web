@@ -1,4 +1,5 @@
 <!doctype html>
+
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -48,6 +49,7 @@
   .switch button.on { color: #fff; }
   .hint { margin: 8px 0 0; text-align: center; font-size: 11px; color: var(--muted); }
   .counts { margin: 6px 0 0; text-align: center; font-size: 11px; }
+  .fbline { margin: 6px 0 0; text-align: center; font-size: 11px; }
   .tabs { display: flex; background: var(--panel); border-top: 1px solid var(--line); }
   .tabs button { flex: 1; border: 0; background: transparent; padding: 12px 0; font-size: 13px; font-weight: 500; color: var(--muted); }
   .tabs button.on { color: var(--wine); }
@@ -100,6 +102,18 @@
   .round { width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%; border: 1px solid var(--line); background: #fff; font-size: 20px; line-height: 1; padding: 0; }
   .dimlabels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); padding: 0 44px; }
   textarea.field { resize: none; }
+  /* Photos, thumbnails, feedback and the editor */
+  .thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0; background: var(--line); }
+  .item.withthumb { display: flex; gap: 10px; align-items: flex-start; } .ibody { min-width: 0; flex: 1; }
+  .jrow .thumb { margin-right: 10px; }
+  .photoarea { margin-top: 12px; } .photoarea.top { margin-top: 4px; }
+  .phs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  .ph { position: relative; width: 72px; height: 72px; } .ph img { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; display: block; }
+  .ph.gone img { opacity: .3; }
+  .phx { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: var(--ink); color: #fff; font-size: 14px; line-height: 1; padding: 0; }
+  .addph, .photobtns .pill { display: inline-block; cursor: pointer; }
+  .photobtns { display: flex; flex-wrap: wrap; gap: 8px; }
+  .uidline { margin-top: 16px; word-break: break-all; } .uid { user-select: all; -webkit-user-select: all; font-family: ui-monospace, monospace; }
   /* Profile tab */
   .profile { display: flex; flex-direction: column; }
   .ptabs { position: sticky; top: 0; z-index: 4; background: var(--bg); display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; padding-bottom: 10px; }
@@ -167,6 +181,6 @@
 <body>
 <div id="app"></div>
 <div id="overlay"></div>
-<script type="module" src="app.js?v=3"></script>
+<script type="module" src="app.js?v=4"></script>
 </body>
 </html>
