@@ -93,7 +93,7 @@ const FLAGS = { Italy: "🇮🇹", France: "🇫🇷", Spain: "🇪🇸", German
 // Double-tapping near an edge of the card does the same as swiping that way.
 function tapEdge(nx, ny) {
   const [kind, dist] = [["unknown", nx], ["recognize", 1 - nx], ["had", ny]].sort((a, b) => a[1] - b[1])[0];
-  return dist < 0.3 ? kind : null;
+  return dist < 0.35 ? kind : null;
 }
 function swipeKind(dx, dy, t = 100) {
   if (dx > t) return "recognize";
@@ -238,8 +238,13 @@ async function fly(el, kind) {
 }
 
 function attachCard(el) {
-  let start = null, dx = 0, dy = 0, lastTap = null;
+  // Forgiving double-tap: fingers may wobble a little, and the second tap can be slower or a bit off.
+  const TAP_MOVE = 18, DOUBLE_TAP_MS = 500, TAP_APART = 70;
+  let start = null, dx = 0, dy = 0, lastTap = null, hintTimer = null;
   const label = (k) => el.querySelector(`[data-label="${k}"]`);
+  // After the first tap near an edge, show that edge's label faintly so it is clear a second tap will confirm it.
+  const clearHint = () => { clearTimeout(hintTimer); ["recognize", "unknown", "had"].forEach((k) => { label(k).style.opacity = 0; }); };
+  const showHint = (edge) => { clearHint(); if (edge) { label(edge).style.opacity = 0.55; hintTimer = setTimeout(clearHint, DOUBLE_TAP_MS + 50); } };
   const paint = () => {
     label("recognize").style.opacity = clamp01((dx - 40) / 80);
     label("unknown").style.opacity = clamp01((-dx - 40) / 80);
@@ -264,14 +269,20 @@ function attachCard(el) {
     const kind = swipeKind(dx, dy);
     if (kind) { fly(el, kind); return; }
     settle();
-    if (Math.hypot(e.clientX - from.x, e.clientY - from.y) < 10) {            // a tap that barely moved
+    if (Math.hypot(e.clientX - from.x, e.clientY - from.y) < TAP_MOVE) {      // a tap that barely moved
       const now = Date.now();
-      if (lastTap && now - lastTap.t < 350 && Math.hypot(from.x - lastTap.x, from.y - lastTap.y) < 40) {
-        lastTap = null;                                                          // second quick tap
-        const r = el.getBoundingClientRect();
-        const edge = tapEdge((from.x - r.left) / r.width, (from.y - r.top) / r.height);
-        if (edge) fly(el, edge);
-      } else lastTap = { t: now, x: from.x, y: from.y };
+      const r = el.getBoundingClientRect();
+      const edge = tapEdge((from.x - r.left) / r.width, (from.y - r.top) / r.height);
+      const prev = lastTap;
+      if (prev && now - prev.t < DOUBLE_TAP_MS && Math.hypot(from.x - prev.x, from.y - prev.y) < TAP_APART) {
+        lastTap = null;                                                          // second tap: a double-tap
+        clearHint();
+        const kind2 = edge || prev.edge;                                         // if the second tap drifted inward, use the first tap's edge
+        if (kind2) { label(kind2).style.opacity = 1; fly(el, kind2); }
+      } else {
+        lastTap = { t: now, x: from.x, y: from.y, edge };
+        showHint(edge);
+      }
     }
   });
   el.addEventListener("pointercancel", () => { start = null; settle(); });
@@ -363,7 +374,7 @@ document.addEventListener("click", async (e) => {
 });
 
 // exposed only so the page can be tested
-window.__wine = { state, fly, cardFromRow, tapEdge, swipeKind, render, init };
+window.__wine = { state, fly, attachCard, cardFromRow, tapEdge, swipeKind, render, init };
 init();
 </script>
 </body>
