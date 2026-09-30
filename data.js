@@ -1,5 +1,5 @@
 // Everything that talks to Supabase. Each function takes the client and throws on an error.
-import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=4";
+import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=5";
 import { BUCKET, newPhotoPath } from "./photos.js?v=4";
 
 const must = ({ data, error }) => { if (error) throw error; return data; };
@@ -148,4 +148,19 @@ export async function saveReferences(sb, userId, wineId, values, existingRows) {
   const { inserts, updates } = referenceWrites(values, existingRows, wineId, userId, new Date().toISOString());
   for (const u of updates) must(await sb.from("wine_reference_values").update(u.patch).eq("id", u.id));
   if (inserts.length) must(await sb.from("wine_reference_values").insert(inserts));
+}
+
+// ---------------------------------------------------------------- deleting entries and swipes
+// The database functions remove the link to the account and keep only an anonymous rating (see the update script).
+// Photos are private files, so they are erased first; if that fails nothing else is deleted and the person can try again.
+export async function deleteJournalEntry(sb, consumptionId) {
+  const rows = must(await sb.from("journal_photos").select("storage_path").eq("consumption_id", consumptionId));
+  if (rows.length) {
+    const r = await sb.storage.from(BUCKET).remove(rows.map((x) => x.storage_path));
+    if (r.error) throw r.error;
+  }
+  must(await sb.rpc("delete_my_journal_entry", { p_consumption_id: consumptionId }));
+}
+export async function deleteSwipe(sb, wineVintageId) {
+  must(await sb.rpc("delete_my_swipe", { p_wine_vintage_id: wineVintageId }));
 }
