@@ -11,18 +11,21 @@
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: -apple-system, "Segoe UI", system-ui, sans-serif; }
   #app { max-width: 480px; margin: 0 auto; height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
   .serif { font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif; }
-  .muted { color: var(--muted); }
-  .small { font-size: 11px; }
+  .muted { color: var(--muted); } .small { font-size: 12px; } .wine { color: var(--wine); }
   button { font: inherit; color: inherit; cursor: pointer; }
+  input, select, textarea { font: inherit; color: var(--ink); }
   .center { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 28px; gap: 12px; }
-  .btn { border: 0; border-radius: 14px; padding: 14px 18px; font-size: 16px; font-weight: 600; width: 100%; }
-  .btn.primary { background: var(--wine); color: #fff; }
+  .btn { border: 0; border-radius: 14px; padding: 14px 18px; font-size: 16px; font-weight: 600; width: 100%; margin-top: 8px; }
+  .btn.primary { background: var(--wine); color: #fff; } .btn.primary:disabled { background: #B9C4B8; }
   .btn.outline { background: transparent; border: 1px solid var(--ink); font-weight: 500; }
-  .field { width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 12px; font-size: 15px; background: #fff; color: var(--ink); }
+  .field { width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px; font-size: 15px; background: #fff; margin-top: 8px; }
+  .err { color: var(--wine); font-size: 12px; min-height: 16px; margin-top: 6px; }
   .top { display: flex; align-items: baseline; justify-content: space-between; padding: 14px 20px 10px; }
   .top h1 { margin: 0; font-size: 22px; font-weight: 400; }
-  .content { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0 16px 10px; overflow-y: auto; }
-  .banner { background: var(--wine); color: #fff; border-radius: 10px; padding: 8px 10px; font-size: 12px; margin-bottom: 8px; }
+  .content { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px 10px; }
+  #tabbody { min-height: 100%; display: flex; flex-direction: column; }
+  .banner { background: var(--wine); color: #fff; border-radius: 10px; padding: 8px 10px; font-size: 12px; margin: 0 16px 8px; }
+  .banner[hidden] { display: none; }
   .cardwrap { position: relative; flex: 1; min-height: 260px; }
   .behind { position: absolute; inset: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 24px; opacity: .7; transform: scale(.95) translateY(10px); }
   .card { position: absolute; inset: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 24px; overflow: hidden; display: flex; flex-direction: column; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; box-shadow: 0 18px 40px -22px rgba(22,38,29,.5); }
@@ -39,343 +42,69 @@
   .derived { text-decoration: underline dotted; text-underline-offset: 4px; text-decoration-color: var(--muted); }
   .legend { margin-top: 10px; font-size: 11px; color: var(--muted); }
   .marks { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-  .marks .flag { font-size: 26px; line-height: 1; }
+  .marks .flag { line-height: 1; }
   .switch { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px; background: var(--line); border-radius: 999px; padding: 4px; }
   .switch button { border: 0; background: transparent; padding: 9px 0; border-radius: 999px; font-weight: 500; }
   .switch button.on { color: #fff; }
   .hint { margin: 8px 0 0; text-align: center; font-size: 11px; color: var(--muted); }
-  .counts { margin: 6px 0 0; text-align: center; font-size: 11px; color: var(--ink); }
+  .counts { margin: 6px 0 0; text-align: center; font-size: 11px; }
   .tabs { display: flex; background: var(--panel); border-top: 1px solid var(--line); }
   .tabs button { flex: 1; border: 0; background: transparent; padding: 12px 0; font-size: 13px; font-weight: 500; color: var(--muted); }
   .tabs button.on { color: var(--wine); }
-  .section h2 { font-size: 20px; font-weight: 400; margin: 12px 0 6px; }
-  .row { padding: 10px 0; border-top: 1px solid var(--line); font-size: 14px; }
-  .row .meta { font-size: 12px; color: var(--muted); }
+  .stack { display: flex; flex-direction: column; gap: 8px; }
+  .sect { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .sect-head { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; border: 0; background: transparent; padding: 12px 14px; font-size: 14px; font-weight: 600; text-align: left; }
+  .sect-head .chev { font-size: 10px; color: var(--muted); }
+  .sect-body { padding: 0 14px 10px; }
+  .sortsel { width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 7px 10px; font-size: 12px; background: #fff; margin-bottom: 4px; }
+  .item { padding: 10px 0; border-top: 1px solid var(--line); }
+  .iname { display: flex; align-items: center; gap: 8px; }
+  .iname .serif { font-size: 16px; }
+  .meta { font-size: 12px; color: var(--muted); }
+  .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .pill { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 12px; font-size: 12px; }
+  .pill.dark { background: var(--ink); color: #fff; border-color: var(--ink); font-weight: 600; }
+  .pill.wine { background: var(--wine); color: #fff; border-color: var(--wine); font-weight: 600; padding: 7px 16px; font-size: 14px; }
+  .pill.wine:disabled { background: #B9C4B8; border-color: #B9C4B8; }
+  .pill.big { padding: 0 14px; font-size: 14px; white-space: nowrap; }
+  .link { border: 0; background: transparent; color: var(--slate); text-decoration: underline; font-size: 12px; padding: 4px 0; }
+  .link.block { display: block; width: 100%; padding: 10px 0; font-size: 13px; border-top: 1px solid var(--line); }
+  .jbar { position: sticky; top: 0; z-index: 5; background: var(--bg); padding-bottom: 8px; }
+  .jtop { display: flex; gap: 8px; align-items: stretch; }
+  .jtop .field { margin-top: 0; }
+  .jsel { display: flex; gap: 8px; margin-top: 8px; }
+  .jsel .sortsel { margin-bottom: 0; padding: 9px 10px; font-size: 13px; }
+  .jmeta { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--muted); margin: 2px 0 8px; min-height: 22px; }
+  .jmeta .links { display: flex; gap: 14px; }
+  .jrow { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 10px; border: 0; border-top: 1px solid var(--line); background: transparent; padding: 10px 0; text-align: left; }
+  .jl { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .jl .meta { display: block; }
+  .overlay { position: fixed; inset: 0; z-index: 30; background: rgba(22,38,29,.45); display: flex; align-items: flex-end; justify-content: center; }
+  .sheet { width: 100%; max-width: 480px; max-height: 92vh; max-height: 92dvh; overflow-y: auto; background: var(--panel); border-radius: 24px 24px 0 0; padding: 0 20px 24px; }
+  .sheethead { position: sticky; top: 0; z-index: 2; background: var(--panel); padding: 18px 0 10px; display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+  .sheettitle { min-width: 0; } .sheettitle .big { font-size: 20px; }
+  .sheetbtns { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .xbtn { border: 0; background: transparent; font-size: 30px; line-height: 1; padding: 0 4px; color: var(--ink); }
+  .verdicts { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+  .vbtn { width: 100%; text-align: left; border: 1px solid var(--line); background: #fff; border-radius: 12px; padding: 12px 14px; font-size: 15px; }
+  .vbtn.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .vbtn.tog { text-align: center; padding: 10px 6px; }
+  .three { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  h3.serif { font-size: 18px; font-weight: 400; margin: 20px 0 6px; }
+  .dim { margin-top: 12px; }
+  .dimtop { display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+  .dimrow { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+  .dimrow input[type=range] { flex: 1; min-width: 0; accent-color: var(--slate); }
+  .round { width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%; border: 1px solid var(--line); background: #fff; font-size: 20px; line-height: 1; padding: 0; }
+  .dimlabels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); padding: 0 44px; }
+  textarea.field { resize: none; }
 </style>
 </head>
 <body>
 <div id="app"></div>
-
-<script type="module">
-// =====================================================================
-// WINE APP: phone test page. One file, no build step.
-// Open this page in a phone browser. The first time, it asks for your two
-// Supabase values (project URL and publishable key) and remembers them in
-// this browser. You can also put them on the next two lines instead.
-// =====================================================================
-let SUPABASE_URL = "PASTE-YOUR-PROJECT-URL-HERE";
-let SUPABASE_KEY = "PASTE-YOUR-PUBLISHABLE-KEY-HERE";
-
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-// ---------- small helpers
-const $ = (s) => document.querySelector(s);
-const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const clamp01 = (v) => Math.max(0, Math.min(1, v));
-const store = {
-  get: (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } },
-  set: (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} },
-};
-if (SUPABASE_URL.startsWith("PASTE")) SUPABASE_URL = store.get("wine_url") || SUPABASE_URL;
-if (SUPABASE_KEY.startsWith("PASTE")) SUPABASE_KEY = store.get("wine_key") || SUPABASE_KEY;
-
-const COLORS = { wine: "#7B1E3A", slate: "#3E5C76", moss: "#3A4B40" };
-const FAMILIARITY = {
-  recognize: { label: "I recognize it", color: COLORS.slate },
-  unknown: { label: "I don't know it", color: COLORS.moss },
-  had: { label: "I've had this bottle", color: COLORS.wine },
-};
-const INTEREST = { try: { label: "Interested", color: COLORS.wine }, nope: { label: "Not interested", color: COLORS.moss } };
-const FLAGS = { Italy: "🇮🇹", France: "🇫🇷", Spain: "🇪🇸", Germany: "🇩🇪", USA: "🇺🇸", Australia: "🇦🇺", Chile: "🇨🇱", Argentina: "🇦🇷", "New Zealand": "🇳🇿", Portugal: "🇵🇹", Austria: "🇦🇹", "South Africa": "🇿🇦" };
-
-// ---------- pure logic (same rules as the app)
-// Double-tapping near an edge of the card does the same as swiping that way.
-function tapEdge(nx, ny) {
-  const [kind, dist] = [["unknown", nx], ["recognize", 1 - nx], ["had", ny]].sort((a, b) => a[1] - b[1])[0];
-  return dist < 0.35 ? kind : null;
-}
-function swipeKind(dx, dy, t = 100) {
-  if (dx > t) return "recognize";
-  if (dx < -t) return "unknown";
-  if (dy < -t) return "had";
-  return null;
-}
-function cardFromRow(r) {
-  const vintage = r.is_non_vintage ? "NV" : r.vintage_year ? String(r.vintage_year) : "";
-  const facts = [];
-  if (r.label_grapes && r.label_grapes.length) facts.push({ text: r.label_grapes.join("-"), derived: false });
-  if (r.rule_grapes && r.rule_grapes.length) facts.push({ text: r.rule_grapes.join(", "), derived: true });
-  if (r.appellation) facts.push({ text: r.appellation, derived: false });
-  if (r.classification) facts.push({ text: r.classification, derived: true });
-  const place = [r.region && r.region !== r.appellation ? r.region : null, r.country].filter(Boolean).join(", ");
-  if (place) facts.push({ text: place, derived: true });
-  return { id: r.wine_vintage_id, vintage, producer: r.producer, cuvee: r.wine_name || "", style: r.style, country: r.country, facts };
-}
-const wineName = (c) => `${c.vintage ? c.vintage + " " : ""}${c.producer}${c.cuvee ? " " + c.cuvee : ""}`;
-const shuffle = (a) => { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
-
-// ---------- drawings
-const GLASS = { white: "#5F7440", sparkling: "#3E4B38", rose: "#8A5560", neutral: "#34403A", red: "#2C1C22" };
-function bottleSvg(style) {
-  const type = ["red", "white", "sparkling", "rose"].includes(style) ? style : style === "fortified" ? "red" : "neutral";
-  const foil = type === "sparkling" ? "#B9A15A" : "#7B1E3A";
-  return `<svg class="bottle" viewBox="0 0 120 300" aria-hidden="true">
-    <path d="M50 8 h20 v70 c0 22 28 34 28 62 v140 a10 10 0 0 1 -10 10 h-56 a10 10 0 0 1 -10 -10 v-140 c0 -28 28 -40 28 -62 z" fill="${GLASS[type]}"/>
-    <rect x="48" y="6" width="24" height="26" rx="3" fill="${foil}"/>
-    <rect x="32" y="170" width="56" height="86" rx="2" fill="#E9E4D6"/>
-    <rect x="40" y="186" width="40" height="5" fill="#B8B29F"/><rect x="44" y="198" width="32" height="4" fill="#CFC9B7"/><rect x="44" y="210" width="32" height="4" fill="#CFC9B7"/>
-    <rect x="36" y="100" width="7" height="150" rx="3" fill="#fff" opacity=".12"/></svg>`;
-}
-function marksHtml(card, size = 26) {
-  const symbol = ["red", "white", "sparkling"].includes(card.style) ? card.style : null;
-  const flag = FLAGS[card.country];
-  if (!flag && !symbol) return "";
-  let mark = "";
-  if (symbol === "sparkling") {
-    mark = `<svg width="${size}" height="${size}" viewBox="0 0 32 36"><path d="M11 4 h10 l-1 14 c-.4 5 -1.6 7 -4 7 s-3.6 -2 -4 -7 z" fill="#E8D9A0" stroke="#8C7530" stroke-width="1.5" stroke-linejoin="round"/><path d="M16 25 v7 M11 33 h10" stroke="#8C7530" stroke-width="1.5" stroke-linecap="round"/><circle cx="14.5" cy="15" r="1.1" fill="#8C7530"/><circle cx="17.5" cy="11" r="1" fill="#8C7530"/><circle cx="16" cy="19" r=".9" fill="#8C7530"/><circle cx="26" cy="9" r="1.4" fill="none" stroke="#8C7530"/><circle cx="6" cy="14" r="1.2" fill="none" stroke="#8C7530"/></svg>`;
-  } else if (symbol) {
-    const fill = symbol === "white" ? "#C9D27A" : "#5B1030", edge = symbol === "white" ? "#8A9A3A" : "#3A0A1F";
-    const berries = [[8, 12], [16, 12], [24, 12], [12, 20], [20, 20], [16, 28]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="5" fill="${fill}" stroke="${edge}"/>`).join("");
-    mark = `<svg width="${size}" height="${size}" viewBox="0 0 32 36"><path d="M16 2 C16 6 18 8 22 8" stroke="#4E6B3A" stroke-width="2" fill="none" stroke-linecap="round"/>${berries}</svg>`;
-  }
-  return `<span class="marks">${flag ? `<span class="flag">${flag}</span>` : ""}${mark}</span>`;
-}
-
-// ---------- state
-const state = {
-  status: "loading",          // loading | setup | error | age | main
-  error: null, tab: "discover", underage: false,
-  user: null, profile: null,
-  allCards: [], deck: [], interest: "try", busy: false, banner: null,
-  counts: { swipes: 0, journal: 0 }, saved: { swipes: [], journal: [] },
-};
-let supabase = null;
-
-// ---------- data
-async function loadDeck() {
-  const [cards, seen] = await Promise.all([
-    supabase.from("v_catalog_cards").select("*"),
-    supabase.from("v_user_wine_state").select("wine_vintage_id"),
-  ]);
-  if (cards.error) throw cards.error;
-  if (seen.error) throw seen.error;
-  state.allCards = cards.data.map(cardFromRow);
-  const swiped = new Set(seen.data.map((s) => s.wine_vintage_id));
-  state.deck = shuffle(state.allCards.filter((c) => !swiped.has(c.id)));
-}
-async function refreshCounts() {
-  const [s, j] = await Promise.all([
-    supabase.from("encounters").select("id", { count: "exact", head: true }),
-    supabase.from("consumptions").select("id", { count: "exact", head: true }),
-  ]);
-  state.counts = { swipes: s.count || 0, journal: j.count || 0 };
-}
-async function loadSaved() {
-  const [sw, jr] = await Promise.all([
-    supabase.from("v_user_wine_state").select("wine_vintage_id, familiarity, interest, last_swiped_at").order("last_swiped_at", { ascending: false }).limit(50),
-    supabase.from("consumptions").select("id, wine_vintage_id, origin, verdict, created_at").order("created_at", { ascending: false }).limit(50),
-  ]);
-  if (sw.error) throw sw.error;
-  if (jr.error) throw jr.error;
-  state.saved = { swipes: sw.data, journal: jr.data };
-}
-async function attestAge() {
-  const { data, error } = await supabase.from("profiles")
-    .update({ age_attested_at: new Date().toISOString(), age_attested_rule: "US-21" })
-    .eq("id", state.user.id).select().single();
-  if (error) throw error;
-  state.profile = data;
-}
-
-async function init() {
-  try {
-    if (SUPABASE_URL.startsWith("PASTE") || SUPABASE_KEY.startsWith("PASTE")) { state.status = "setup"; return render(); }
-    supabase = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
-    let { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      const res = await supabase.auth.signInAnonymously();
-      if (res.error) throw res.error;
-      session = res.data.session;
-    }
-    state.user = session.user;
-    const prof = await supabase.from("profiles").select("*").eq("id", state.user.id).maybeSingle();
-    if (prof.error) throw prof.error;
-    if (!prof.data) throw new Error("No profile row for this user. Check that the on_auth_user_created trigger from the schema exists.");
-    state.profile = prof.data;
-    if (state.profile.age_attested_at) await enterMain(); else { state.status = "age"; render(); }
-  } catch (e) {
-    state.status = "error"; state.error = e.message || String(e); render();
-  }
-}
-async function enterMain() {
-  await loadDeck();
-  await refreshCounts();
-  state.status = "main"; render();
-}
-
-// ---------- swiping
-async function fly(el, kind) {
-  if (state.busy || !state.deck.length) return;
-  state.busy = true;
-  const card = state.deck[0];
-  const W = window.innerWidth, H = window.innerHeight;
-  const to = kind === "recognize" ? [W * 1.3, 0] : kind === "unknown" ? [-W * 1.3, 0] : [0, -H];
-  if (el) { el.style.transition = "transform 220ms ease-in"; el.style.transform = `translate(${to[0]}px, ${to[1]}px) rotate(${to[0] / 20}deg)`; }
-  await sleep(el ? 230 : 0);
-  try {
-    const { error } = await supabase.rpc("record_swipe", { p_wine_vintage_id: card.id, p_familiarity: kind, p_interest: state.interest });
-    if (error) throw error;
-    state.deck.shift();
-    state.interest = "try";
-    state.banner = null;
-    await refreshCounts();
-  } catch (e) {
-    state.banner = "Could not save that swipe: " + (e.message || e);
-  }
-  state.busy = false;
-  render();
-}
-
-function attachCard(el) {
-  // Forgiving double-tap: fingers may wobble a little, and the second tap can be slower or a bit off.
-  const TAP_MOVE = 18, DOUBLE_TAP_MS = 500, TAP_APART = 70;
-  let start = null, dx = 0, dy = 0, lastTap = null, hintTimer = null;
-  const label = (k) => el.querySelector(`[data-label="${k}"]`);
-  // After the first tap near an edge, show that edge's label faintly so it is clear a second tap will confirm it.
-  const clearHint = () => { clearTimeout(hintTimer); ["recognize", "unknown", "had"].forEach((k) => { label(k).style.opacity = 0; }); };
-  const showHint = (edge) => { clearHint(); if (edge) { label(edge).style.opacity = 0.55; hintTimer = setTimeout(clearHint, DOUBLE_TAP_MS + 50); } };
-  const paint = () => {
-    label("recognize").style.opacity = clamp01((dx - 40) / 80);
-    label("unknown").style.opacity = clamp01((-dx - 40) / 80);
-    label("had").style.opacity = clamp01((-dy - 40) / 80);
-  };
-  const settle = () => { el.style.transition = "transform 200ms ease-out"; el.style.transform = ""; dx = dy = 0; paint(); };
-  el.addEventListener("pointerdown", (e) => {
-    if (state.busy) return;
-    start = { x: e.clientX, y: e.clientY }; dx = dy = 0;
-    try { el.setPointerCapture(e.pointerId); } catch (_) {}
-    el.style.transition = "none";
-  });
-  el.addEventListener("pointermove", (e) => {
-    if (!start) return;
-    dx = e.clientX - start.x; dy = e.clientY - start.y;
-    el.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx / 20}deg)`;
-    paint();
-  });
-  el.addEventListener("pointerup", (e) => {
-    if (!start) return;
-    const from = start; start = null;
-    const kind = swipeKind(dx, dy);
-    if (kind) { fly(el, kind); return; }
-    settle();
-    if (Math.hypot(e.clientX - from.x, e.clientY - from.y) < TAP_MOVE) {      // a tap that barely moved
-      const now = Date.now();
-      const r = el.getBoundingClientRect();
-      const edge = tapEdge((from.x - r.left) / r.width, (from.y - r.top) / r.height);
-      const prev = lastTap;
-      if (prev && now - prev.t < DOUBLE_TAP_MS && Math.hypot(from.x - prev.x, from.y - prev.y) < TAP_APART) {
-        lastTap = null;                                                          // second tap: a double-tap
-        clearHint();
-        const kind2 = edge || prev.edge;                                         // if the second tap drifted inward, use the first tap's edge
-        if (kind2) { label(kind2).style.opacity = 1; fly(el, kind2); }
-      } else {
-        lastTap = { t: now, x: from.x, y: from.y, edge };
-        showHint(edge);
-      }
-    }
-  });
-  el.addEventListener("pointercancel", () => { start = null; settle(); });
-}
-
-// ---------- screens
-function cardHtml(c) {
-  const labels = ["recognize", "unknown", "had"].map((k) => `<div class="swipe-label" data-label="${k}" style="background:${FAMILIARITY[k].color}">${esc(FAMILIARITY[k].label)}</div>`).join("");
-  return `<div class="card" id="card">
-    <div class="image">${bottleSvg(c.style)}<span class="sample">sample image, real photo goes here</span>${labels}</div>
-    <div class="body">
-      ${c.vintage ? `<div class="vintage serif">${esc(c.vintage)}</div>` : ""}
-      <div class="prow"><div class="producer serif">${esc(c.producer)}</div>${marksHtml(c)}</div>
-      ${c.cuvee ? `<div class="cuvee serif">${esc(c.cuvee)}</div>` : ""}
-      <div class="facts">${c.facts.map((f) => `<div class="${f.derived ? "derived" : ""}">${esc(f.text)}</div>`).join("")}</div>
-      <div class="legend">Dotted underline: from wine rules, not printed on the label.</div>
-    </div></div>`;
-}
-function discoverHtml() {
-  const banner = state.banner ? `<div class="banner" data-action="dismiss">${esc(state.banner)} (tap to dismiss)</div>` : "";
-  if (!state.deck.length) {
-    return `<div class="center"><div class="serif" style="font-size:22px">No more wines to show.</div>
-      <div class="muted">If you expected some, check that the sample wines were published for testing.</div></div>`;
-  }
-  const c = state.deck[0];
-  const sw = ["try", "nope"].map((k) => `<button data-action="interest:${k}" class="${state.interest === k ? "on" : ""}" style="${state.interest === k ? `background:${INTEREST[k].color}` : ""}">${INTEREST[k].label}</button>`).join("");
-  return `${banner}
-    <div class="cardwrap">${state.deck.length > 1 ? '<div class="behind"></div>' : ""}${cardHtml(c)}</div>
-    <div class="switch">${sw}</div>
-    <p class="hint">Swipe or double-tap an edge of the card: left if you don't know it, right if you recognize it, top if you've had this bottle.</p>
-    <p class="counts">Saved so far: ${state.counts.swipes} swipes, ${state.counts.journal} journal entries</p>`;
-}
-function savedHtml() {
-  const nameOf = (id) => { const c = state.allCards.find((x) => x.id === id); return c ? wineName(c) : "Unknown wine"; };
-  const sw = state.saved.swipes.map((s) => `<div class="row">${esc(nameOf(s.wine_vintage_id))}<div class="meta">${esc(FAMILIARITY[s.familiarity] ? FAMILIARITY[s.familiarity].label : s.familiarity)}, ${esc(s.interest ? INTEREST[s.interest].label.toLowerCase() : "no interest picked")}</div></div>`).join("");
-  const jr = state.saved.journal.map((j) => `<div class="row">${esc(nameOf(j.wine_vintage_id))}<div class="meta">${esc(j.verdict || "No verdict yet")}, added by ${esc(j.origin)}</div></div>`).join("");
-  return `<div class="section"><h2 class="serif">Journal</h2>${jr || '<div class="muted small">Nothing yet. Swipe up on a bottle you have had.</div>'}
-    <h2 class="serif">Swipes</h2>${sw || '<div class="muted small">Nothing yet.</div>'}</div>`;
-}
-function mainHtml() {
-  const title = state.tab === "discover" ? "Discover" : "Saved";
-  const tab = (id, label) => `<button data-action="tab:${id}" class="${state.tab === id ? "on" : ""}">${label}</button>`;
-  return `<div class="top"><h1 class="serif">${title}</h1><span class="muted small">Early build</span></div>
-    <div class="content">${state.tab === "discover" ? discoverHtml() : savedHtml()}</div>
-    <nav class="tabs">${tab("discover", "Discover")}${tab("saved", "Saved")}</nav>`;
-}
-function render() {
-  const app = $("#app");
-  let html = "";
-  if (state.status === "loading") html = `<div class="center muted">Loading…</div>`;
-  else if (state.status === "setup") html = `<div class="center"><div class="serif" style="font-size:24px">Connect to your database</div>
-      <div class="muted small">In Supabase, open Project Settings, then API. Copy the project URL and the publishable key (it starts with sb_publishable_) and paste them here. This browser remembers them.</div>
-      <input id="cfgUrl" class="field" placeholder="Project URL (https://...supabase.co)" autocapitalize="off" autocomplete="off" spellcheck="false">
-      <input id="cfgKey" class="field" placeholder="Publishable key (sb_publishable_...)" autocapitalize="off" autocomplete="off" spellcheck="false">
-      ${state.banner ? `<div style="color:#7B1E3A;font-size:12px">${esc(state.banner)}</div>` : ""}
-      <button class="btn primary" data-action="savecfg">Save and start</button></div>`;
-  else if (state.status === "error") html = `<div class="center"><div style="color:#7B1E3A">${esc(state.error)}</div>
-      <div class="muted small">Check the two values at the top, that the database setup finished, and that anonymous sign-ins are switched on in Supabase.</div>
-      <button class="btn outline" data-action="retry">Try again</button></div>`;
-  else if (state.status === "age") html = `<div class="center"><div class="serif" style="font-size:32px;line-height:1.1">A game that learns your palate while teaching you about wine.</div>
-      ${state.underage ? `<div class="muted">This app is for people 21 and older in the US. Come back when you're 21.</div>`
-        : `<div class="muted">Are you 21 or older?</div><button class="btn primary" data-action="attest">I'm 21 or older</button><button class="btn outline" data-action="under">I'm under 21</button>`}
-      ${state.banner ? `<div style="color:#7B1E3A;font-size:12px">${esc(state.banner)}</div>` : ""}</div>`;
-  else html = mainHtml();
-  app.innerHTML = html;
-  const card = $("#card");
-  if (card) attachCard(card);
-}
-
-// ---------- clicks
-document.addEventListener("click", async (e) => {
-  const t = e.target.closest("[data-action]");
-  if (!t) return;
-  const [action, arg] = t.dataset.action.split(":");
-  try {
-    if (action === "attest") { await attestAge(); await enterMain(); }
-    else if (action === "savecfg") {
-      const u = ($("#cfgUrl").value || "").trim(), k = ($("#cfgKey").value || "").trim();
-      if (!/^https:\/\/.+/.test(u) || !k) { state.banner = "Paste both values. The URL should start with https://"; render(); return; }
-      SUPABASE_URL = u.replace(/\/+$/, ""); SUPABASE_KEY = k; store.set("wine_url", SUPABASE_URL); store.set("wine_key", SUPABASE_KEY);
-      state.banner = null; state.status = "loading"; render(); init();
-    }
-    else if (action === "under") { state.underage = true; render(); }
-    else if (action === "retry") { state.status = "loading"; render(); init(); }
-    else if (action === "dismiss") { state.banner = null; render(); }
-    else if (action === "interest") { if (!state.busy) { state.interest = arg; render(); } }
-    else if (action === "tab") { state.tab = arg; if (arg === "saved") { await loadSaved(); await refreshCounts(); } render(); }
-  } catch (err) { state.banner = String(err.message || err); render(); }
-});
-
-// exposed only so the page can be tested
-window.__wine = { state, fly, attachCard, cardFromRow, tapEdge, swipeKind, render, init };
-init();
-</script>
+<div id="overlay"></div>
+<script type="module" src="app.js?v=1"></script>
 </body>
 </html>
