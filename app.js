@@ -8,6 +8,7 @@ import {
 } from "./logic.js";
 import * as db from "./data.js";
 import { discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml } from "./views.js";
+import { createLearn } from "./learn.js?v=1";
 
 let SUPABASE_URL = "PASTE-YOUR-PROJECT-URL-HERE";
 let SUPABASE_KEY = "PASTE-YOUR-PUBLISHABLE-KEY-HERE";
@@ -33,7 +34,10 @@ const state = {
   sheet: null, sheetUi: { saving: false, error: "" },
   form: null,
 };
-const TITLES = { discover: "Discover", swipes: "Swipes", journal: "Journal" };
+const TITLES = { discover: "Discover", swipes: "Swipes", journal: "Journal", learn: "Learn" };
+
+// The Learn tab lives in learn.js. It saves quiz answers itself and reports save problems through the banner.
+const learn = createLearn({ sb: () => state.sb, user: () => state.user, profile: () => state.profile, onError: (m) => setBanner(m) });
 
 // ---------------------------------------------------------------- start up
 async function init() {
@@ -70,7 +74,7 @@ function shellHtml() {
   return `<div class="top"><h1 class="serif" id="title"></h1><span class="muted small">Early build</span></div>
     <div id="gbanner" class="banner gb" data-action="dismiss" hidden></div>
     <div class="content" id="content"><div id="tabbody"></div></div>
-    <nav class="tabs">${tab("discover", "Discover")}${tab("swipes", "Swipes")}${tab("journal", "Journal")}</nav>`;
+    <nav class="tabs">${tab("discover", "Discover")}${tab("swipes", "Swipes")}${tab("journal", "Journal")}${tab("learn", "Learn")}</nav>`;
 }
 function renderBody() {
   const body = $("#tabbody");
@@ -81,6 +85,8 @@ function renderBody() {
     if (card) attachCard(card);
   } else if (state.tab === "swipes") {
     body.innerHTML = swipesHtml(swipeLists(state.cards, state.states, state.journal), state.sw);
+  } else if (state.tab === "learn") {
+    learn.mount(body);
   } else {
     body.innerHTML = journalShellHtml(state.j);
     renderJournalList();
@@ -260,8 +266,9 @@ document.addEventListener("click", async (ev) => {
     }
     else if (action === "interest") { if (!state.busy) { state.interest = a; renderBody(); } }
     else if (action === "tab") {
+      if (state.tab === "learn" && a !== "learn") learn.leave();
       state.tab = a;
-      if (a !== "discover") await refreshData();
+      if (a === "swipes" || a === "journal") await refreshData();
       render();
     }
     else if (action === "toggle") { state.sw.open[a] = !state.sw.open[a]; renderBody(); }
@@ -319,6 +326,5 @@ document.addEventListener("input", (ev) => {
   else if (t.dataset.sort) { state.sw.sort[t.dataset.sort] = t.value; renderBody(); }
 });
 
-window.__wine = { state, fly, render, init };
+window.__wine = { state, fly, render, init, learn };
 init();
-
