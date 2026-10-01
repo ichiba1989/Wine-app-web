@@ -18,20 +18,20 @@
 <script type="module">
 const FILES = {
  "index.html": {
-  "hash": "a453baf254d54e65976cb0746faa90429486ec7679b921193fdae7780ef15f84",
-  "chars": 24253,
+  "hash": "23dbc9db707fc888ad6a5bbd7d6b67964cc26b8249b703719c22900691c92cc3",
+  "chars": 24613,
   "query": null,
   "exports": []
  },
  "app.js": {
-  "hash": "740751359dfac989964f60db51a1e468e85eccd6e74e2bccb74b35edeb7a06d4",
-  "chars": 35282,
-  "query": "14",
+  "hash": "e95ec13123d5003635a442bb1429a0b2d8f1ad75bafaee64e608dd19475770a2",
+  "chars": 35790,
+  "query": "15",
   "exports": []
  },
  "logic.js": {
   "hash": "cc6782b217bdcdaee5c6620e1c9e82061969bd05cd3c975bbb982435263a2899",
-  "chars": 23842,
+  "chars": 23866,
   "query": "7",
   "exports": [
    "COLORS",
@@ -113,10 +113,12 @@ const FILES = {
   ]
  },
  "data.js": {
-  "hash": "af9f626bd95a54ccc95d416aef1b8b06ea4dce65d2ff26f2fdcb6fe21c62f313",
-  "chars": 14088,
-  "query": "9",
+  "hash": "cfae5a537e88f7c14e6a61de90f89b9bbc15ef24c05e8c3044b7f8e37fb1a13f",
+  "chars": 15734,
+  "query": "10",
   "exports": [
+   "LEGACY_PERMISSIONS",
+   "accessFrom",
    "addWithoutRating",
    "attestAge",
    "changeInterest",
@@ -126,8 +128,10 @@ const FILES = {
    "deleteMyAccount",
    "deletePhotos",
    "deleteSwipe",
+   "deleteWineVintage",
    "ensureUser",
    "flagWine",
+   "loadAccess",
    "loadCards",
    "loadEditorLists",
    "loadEntryPhotos",
@@ -145,7 +149,8 @@ const FILES = {
    "saveReview",
    "saveWineInfo",
    "signedUrls",
-   "uploadPhotos"
+   "uploadPhotos",
+   "wineDeleteCheck"
   ]
  },
  "views.js": {
@@ -224,12 +229,14 @@ const FILES = {
   ]
  },
  "editor.js": {
-  "hash": "38846441059f91b6d17933d5860bd9d34c202417e61da674b09a5de109613606",
-  "chars": 19424,
-  "query": "7",
+  "hash": "cba9a9a7ecaef165fb74c354cd81383ee7f998f41fa81e0bd8ed5925a2128b59",
+  "chars": 20570,
+  "query": "8",
   "exports": [
+   "SECTION_PERMISSIONS",
    "createEditor",
-   "scoredGold"
+   "scoredGold",
+   "sectionsFor"
   ]
  },
  "profile.js": {
@@ -340,11 +347,12 @@ const FILES = {
   ]
  },
  "wineinfo.js": {
-  "hash": "9a96e6fb557951a6a7fc00abb21e32cfbb0f2e8073255eb1be2ca399c1984b05",
-  "chars": 9813,
-  "query": "2",
+  "hash": "f187335fa4fca78a40c70ec1c91c0c9ae08205c24069dd5dc368fef7b59fd49b",
+  "chars": 14145,
+  "query": "3",
   "exports": [
    "createWineInfo",
+   "deleteSummary",
    "formFromInfo",
    "parseList",
    "placeLabel",
@@ -354,7 +362,7 @@ const FILES = {
   ]
  }
 };
-const APP_SCRIPT = "app.js?v=14";
+const APP_SCRIPT = "app.js?v=15";
 const LIBRARIES = ["https://esm.sh/@supabase/supabase-js@2.109.0", "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.109.0/+esm"];
 const out = document.getElementById("out"), sum = document.getElementById("sum");
 const lines = []; let problems = 0, first = "";
