@@ -1,22 +1,44 @@
 // The wine app for a phone browser. State, screens and events live here.
 // Rules are in logic.js, database calls in data.js, and HTML in views.js.
 // The two Supabase values come from config.js. If that file is missing or still has placeholders, the page asks for them and remembers them in this browser.
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   FAMILIARITY, wineName, esc, clamp01, shuffle, tapEdge, swipeKind, cardFromRow, filterEntries, groupEntries, swipeLists,
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, dimMeta, isChoice,
 } from "./logic.js?v=5";
-import * as db from "./data.js?v=5";
+import * as db from "./data.js?v=6";
 import { shrinkImage } from "./photos.js?v=4";
 import {
   discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE,
 } from "./views.js?v=5";
 import { createLearn } from "./learn.js?v=1";
 import { createProfile } from "./profile.js?v=4";
-import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=2";
+import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=3";
 import { createEditor } from "./editor.js?v=2";
 
+// The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
+// is tried from a second, independent one. The last resort is the newest 2.x from the first source.
+const SUPABASE_JS_VERSION = "2.109.0";
+const LIBRARY_URLS = [
+  `https://esm.sh/@supabase/supabase-js@${SUPABASE_JS_VERSION}`,
+  `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@${SUPABASE_JS_VERSION}/+esm`,
+  "https://esm.sh/@supabase/supabase-js@2",
+];
+async function loadSupabaseLibrary() {
+  let last;
+  for (const url of LIBRARY_URLS) {
+    try { const m = await import(url); if (typeof m.createClient === "function") return m.createClient; last = new Error("loaded but looks wrong"); }
+    catch (e) { last = e; }
+  }
+  throw new Error("The database library could not be loaded from any of its sources (" + ((last && last.message) || last) + "). Check your connection and try again.");
+}
+// Keeps only https://host from whatever was pasted, so extra text such as /rest/v1 or a final slash cannot break every request.
+function cleanProjectUrl(raw) {
+  let t = String(raw || "").trim();
+  if (!t || t.includes("PASTE")) return "";
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(t)) t = "https://" + t;
+  try { const u = new URL(t); return u.protocol === "https:" && u.hostname.includes(".") ? u.origin : ""; } catch (_) { return ""; }
+}
 let SUPABASE_URL = "PASTE-YOUR-PROJECT-URL-HERE";
 let SUPABASE_KEY = "PASTE-YOUR-PUBLISHABLE-KEY-HERE";
 
@@ -26,7 +48,7 @@ const store = {
   get: (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } },
   set: (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} },
 };
-if (SUPABASE_URL.startsWith("PASTE")) SUPABASE_URL = store.get("wine_url") || SUPABASE_URL;
+if (SUPABASE_URL.startsWith("PASTE")) SUPABASE_URL = cleanProjectUrl(store.get("wine_url")) || SUPABASE_URL;
 if (SUPABASE_KEY.startsWith("PASTE")) SUPABASE_KEY = store.get("wine_key") || SUPABASE_KEY;
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
@@ -60,6 +82,7 @@ const account = createAccount({
   setUser: (u) => { state.user = u; },
   canSave: () => state.status === "main",
   prepareMerge: () => db.prepareGuestMerge(state.sb),
+  deleteAccount: () => db.deleteMyAccount(state.sb),
   reload: () => location.replace(location.pathname + location.search),
   onClose: () => { if (state.tab === "profile" && state.status === "main") render(); },
 });
@@ -83,13 +106,14 @@ async function init() {
     // config.js (created once in the site's folder) carries the connection details for everyone who opens the link.
     try {
       const cfg = await import("./config.js?v=1");
-      const u = String(cfg.SUPABASE_URL || "").trim().replace(/\/+$/, ""), k = String(cfg.SUPABASE_KEY || "").trim();
-      if (/^https:\/\/[^\s]+\.[^\s]+$/.test(u) && !u.includes("PASTE") && k && !k.includes("PASTE")) { SUPABASE_URL = u; SUPABASE_KEY = k; }
+      const u = cleanProjectUrl(cfg.SUPABASE_URL), k = String(cfg.SUPABASE_KEY || "").trim();
+      if (u && k && !k.includes("PASTE")) { SUPABASE_URL = u; SUPABASE_KEY = k; }
     } catch (_) { /* no config.js: use what this browser saved, or ask */ }
     if (SUPABASE_URL.startsWith("PASTE") || SUPABASE_KEY.startsWith("PASTE")) { state.status = "setup"; return render(); }
     // An emailed link brings the person back to this page with a sign-in (or an error) in the address. Read it, then tidy the address.
     const back = new URLSearchParams(location.hash.replace(/^#/, ""));
     const linkError = back.get("error_description");
+    const createClient = await loadSupabaseLibrary();
     state.sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
     state.user = await db.ensureUser(state.sb);
     if (location.hash) history.replaceState(null, "", location.pathname + location.search);
@@ -177,6 +201,7 @@ function renderJournalList() {
 }
 function render() {
   const app = $("#app");
+  if (state.status !== "loading") { window.__booted = true; const be = document.getElementById("bootError"); if (be) be.hidden = true; }   // tells index.html the app started
   if (state.status === "main") {
     if (!$("#tabbody")) app.innerHTML = shellHtml();
     $("#title").textContent = TITLES[state.tab];
@@ -199,6 +224,7 @@ function render() {
   else if (state.status === "age") html = `<div class="center"><div class="serif" style="font-size:32px;line-height:1.1">A game that learns your palate while teaching you about wine.</div>
       ${state.underage ? `<div class="muted">This app is for people 21 and older in the US. Come back when you're 21.</div>`
         : `<div class="muted">Are you 21 or older?</div><button class="btn primary" data-action="attest">I'm 21 or older</button><button class="btn outline" data-action="under">I'm under 21</button><button class="link" data-account="open:signin">I already have an account</button>`}
+      <div class="muted small"><a class="link" href="privacy.html" target="_blank" rel="noopener">Privacy policy</a></div>
       ${state.banner ? `<div class="err">${esc(state.banner)}</div>` : ""}</div>`;
   app.innerHTML = html;
 }
@@ -410,9 +436,9 @@ document.addEventListener("click", async (ev) => {
     else if (action === "retry") { state.status = "loading"; render(); init(); }
     else if (action === "dismiss") setBanner(null);
     else if (action === "savecfg") {
-      const u = ($("#cfgUrl").value || "").trim(), k = ($("#cfgKey").value || "").trim();
-      if (!/^https:\/\/.+/.test(u) || !k) { state.banner = "Paste both values. The URL should start with https://"; render(); return; }
-      SUPABASE_URL = u.replace(/\/+$/, ""); SUPABASE_KEY = k; store.set("wine_url", SUPABASE_URL); store.set("wine_key", SUPABASE_KEY);
+      const u = cleanProjectUrl($("#cfgUrl").value), k = ($("#cfgKey").value || "").trim();
+      if (!u || !k) { state.banner = "Paste both values. The URL should look like https://yourproject.supabase.co"; render(); return; }
+      SUPABASE_URL = u; SUPABASE_KEY = k; store.set("wine_url", SUPABASE_URL); store.set("wine_key", SUPABASE_KEY);
       state.banner = null; state.status = "loading"; render(); init();
     }
     else if (action === "interest") { if (!state.busy) { state.interest = a; renderBody(); } }
