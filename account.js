@@ -53,21 +53,38 @@ export function friendlyError(err, mode) {
 
 // ---------------------------------------------------------------- drawing
 // The card at the bottom of Profile, Overview.
+const footLinks = `<div class="acctfoot"><a class="link" href="privacy.html" target="_blank" rel="noopener">Privacy policy</a>
+  <button class="link dangerlink" data-account="open:delete">Delete my account and all my data</button></div>`;
 export function accountCardHtml(user) {
   if (!user) return "";
   if (isGuest(user)) {
     return `<div class="pcard"><div class="ptitle">Your account</div>
       <p class="ptext">You are using the app as a guest. Your journal lives only in this browser, so clearing your browsing data, switching phones, or a long break can lose it.</p>
       <button class="btn primary slim" data-account="open:save">Save my progress with email</button>
-      <div style="margin-top:8px"><button class="link" data-account="open:signin">I already have an account</button></div></div>`;
+      <div style="margin-top:8px"><button class="link" data-account="open:signin">I already have an account</button></div>${footLinks}</div>`;
   }
   return `<div class="pcard"><div class="ptitle">Your account</div>
     <p class="ptext">Signed in as <b>${esc(user.email || "your email")}</b>. Sign in with this email on any phone to get your journal back.</p>
-    <button class="btn outline slim" data-account="signout">Sign out</button></div>`;
+    <button class="btn outline slim" data-account="signout">Sign out</button>${footLinks}</div>`;
 }
 
 // canSave: false on the very first screen, where there is nothing yet to save.
+function deleteSheetHtml(A) {
+  const ready = A.typed.trim().toUpperCase() === "DELETE";
+  const body = A.step === "deleted"
+    ? `<div class="okbox">Your account and your data have been deleted.</div><button class="btn primary" data-account="finish">Done</button>`
+    : `<p class="ptext"><b>Deleted for good:</b> your account and sign-in, your journal entries with their notes and photos, your swipes, your quiz history, trophies and palate, and your email address.</p>
+      <p class="ptext"><b>What stays:</b> an anonymous record of the wines you rated and swiped, with no name, email, photos or notes. It cannot be traced back to you in the app.</p>
+      <input class="field" data-acct-confirm placeholder="Type DELETE to confirm" autocapitalize="characters" autocomplete="off" spellcheck="false" value="${esc(A.typed)}">
+      <div id="acctErr" class="err">${esc(A.error)}</div>
+      <button class="btn danger" data-account="deleteNow" id="deleteBtn"${ready && !A.busy ? "" : " disabled"}>Delete everything</button>
+      <button class="btn outline" data-account="close"${A.busy ? " disabled" : ""}>Cancel</button>`;
+  return `<div class="overlay"><div class="sheet" id="accountPanel">
+    <div class="sheethead"><div class="sheettitle"><div class="serif big">Delete my account</div><div class="muted small">This cannot be undone.</div></div>
+      <div class="sheetbtns">${A.step === "deleted" ? "" : `<button class="xbtn" data-account="close" aria-label="Close">&times;</button>`}</div></div>${body}</div></div>`;
+}
 function sheetHtml(A, user, canSave) {
+  if (A.mode === "delete") return deleteSheetHtml(A);
   const save = A.mode === "save";
   const title = save ? "Save your progress" : "Sign in";
   const sub = save ? "Add an email so you never lose your journal." : "Use the email you saved your progress with.";
@@ -100,9 +117,9 @@ function sheetHtml(A, user, canSave) {
 }
 
 // ---------------------------------------------------------------- controller
-// ctx: { sb(), user(), setUser(user), reload(), onClose(), canSave(), prepareMerge() }
+// ctx: { sb(), user(), setUser(user), reload(), onClose(), canSave(), prepareMerge(), deleteAccount() }
 export function createAccount(ctx) {
-  const A = { open: false, mode: "save", step: "email", email: "", code: "", busy: false, error: "", info: "", resendAt: 0 };
+  const A = { open: false, mode: "save", step: "email", email: "", code: "", busy: false, error: "", info: "", resendAt: 0, typed: "" };
   let timer = null;
   const overlay = () => document.querySelector("#overlay");
   const draw = () => { const o = overlay(); if (o && A.open) { o.innerHTML = sheetHtml(A, ctx.user(), ctx.canSave ? ctx.canSave() : true); paintResend(); } };
@@ -117,6 +134,21 @@ export function createAccount(ctx) {
   const setError = (msg) => { A.error = msg; const e = document.getElementById("acctErr"); if (e) e.textContent = msg; };
   const setBusy = (v) => { A.busy = v; document.querySelectorAll("#accountPanel [data-account='send'], #accountPanel [data-account='verify'], #accountPanel [data-account='link']").forEach((b) => { b.disabled = v; }); };
 
+  function syncDelete() {
+    const b = document.getElementById("deleteBtn");
+    if (b) b.disabled = !(A.typed.trim().toUpperCase() === "DELETE") || A.busy;
+  }
+  // Erases the account for good, then signs this browser out and starts over.
+  async function deleteNow() {
+    if (A.typed.trim().toUpperCase() !== "DELETE" || A.busy) return;
+    A.busy = true; A.error = ""; draw();
+    try {
+      await ctx.deleteAccount();
+      try { await ctx.sb().auth.signOut({ scope: "local" }); } catch (_) { /* the account is already gone */ }
+      clearPendingMerge(localStorage);
+      A.busy = false; A.step = "deleted"; draw();
+    } catch (e) { A.busy = false; A.error = "Could not delete: " + (e.message || e) + " Nothing else was removed, so you can try again."; draw(); }
+  }
   async function sendCode() {
     const email = A.email.trim();
     if (!validEmail(email)) return setError("Enter a valid email address.");
@@ -166,7 +198,9 @@ export function createAccount(ctx) {
     const t = ev.target.closest("[data-account]");
     if (!t || t.disabled) return;
     const [action, arg] = t.dataset.account.split(":");
-    if (action === "open") { Object.assign(A, { open: true, mode: arg, step: "email", code: "", error: "", info: "", busy: false }); draw(); }
+    if (action === "open") { Object.assign(A, { open: true, mode: arg, step: arg === "delete" ? "confirm" : "email", code: "", typed: "", error: "", info: "", busy: false }); draw(); }
+    else if (action === "deleteNow") deleteNow();
+    else if (action === "finish") ctx.reload();
     else if (action === "mode") { A.mode = arg; A.error = ""; draw(); }
     else if (action === "close") { A.open = false; stopTimer(); const o = overlay(); if (o) o.innerHTML = ""; if (ctx.onClose) ctx.onClose(); }
     else if (action === "send") sendCode();
@@ -181,6 +215,7 @@ export function createAccount(ctx) {
     if (!t.dataset) return;
     if (t.dataset.acctEmail !== undefined) A.email = t.value;
     else if (t.dataset.acctCode !== undefined) A.code = t.value;
+    else if (t.dataset.acctConfirm !== undefined) { A.typed = t.value; syncDelete(); }
   });
   document.addEventListener("keydown", (ev) => {
     if (ev.key !== "Enter" || !A.open || A.busy) return;
