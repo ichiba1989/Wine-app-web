@@ -27,10 +27,10 @@
   .banner { background: var(--wine); color: #fff; border-radius: 10px; padding: 8px 10px; font-size: 12px; margin: 0 16px 8px; }
   .banner[hidden] { display: none; }
   .banner.good { background: var(--slate); }
-  .cardwrap { position: relative; flex: 1; min-height: 260px; }
+  .cardwrap { position: relative; flex: 1; min-height: 360px; }
   .behind { position: absolute; inset: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 24px; opacity: .7; transform: scale(.95) translateY(10px); }
   .card { position: absolute; inset: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 24px; overflow: hidden; display: flex; flex-direction: column; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; box-shadow: 0 18px 40px -22px rgba(22,38,29,.5); }
-  .image { position: relative; height: 42%; background: linear-gradient(180deg,#E3EAE0,#CBD8C9); display: flex; align-items: flex-end; justify-content: center; }
+  .image { position: relative; height: 52%; background: linear-gradient(180deg,#E3EAE0,#CBD8C9); display: flex; align-items: flex-end; justify-content: center; }
   .image svg.bottle { height: 88%; margin-bottom: 6px; }
   .sample { position: absolute; bottom: 4px; right: 12px; font-size: 10px; color: var(--muted); }
   .swipe-label { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); padding: 6px 16px; border-radius: 999px; color: #fff; font-weight: 600; font-size: 14px; opacity: 0; pointer-events: none; white-space: nowrap; }
@@ -46,10 +46,17 @@
   .marks .flag { line-height: 1; }
   .switch { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px; background: var(--line); border-radius: 999px; padding: 4px; }
   .switch button { border: 0; background: transparent; padding: 9px 0; border-radius: 999px; font-weight: 500; }
+  .switch.small { margin: 0; padding: 2px; width: 168px; flex: 0 0 auto; }
+  .switch.small button { padding: 3px 0; font-size: 11px; }
+  .belowcard { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+  body[data-tab="discover"] .top { padding: 6px 20px 2px; }
+  body[data-tab="discover"] .top h1 { font-size: 16px; }
+  body[data-tab="discover"] .content { padding-bottom: 2px; }
   .switch button.on { color: #fff; }
   .hint { margin: 8px 0 0; text-align: center; font-size: 11px; color: var(--muted); }
   .counts { margin: 6px 0 0; text-align: center; font-size: 11px; }
-  .fbline { margin: 6px 0 0; text-align: center; font-size: 11px; }
+  .fbline { margin: 0; text-align: right; font-size: 11px; }
+  .fbline .link { font-size: 11px; padding: 2px 0; }
   .tabs { display: flex; background: var(--panel); border-top: 1px solid var(--line); }
   .tabs button { flex: 1; border: 0; background: transparent; padding: 12px 0; font-size: 13px; font-weight: 500; color: var(--muted); }
   .tabs button.on { color: var(--wine); }
@@ -100,6 +107,8 @@
   .dimrow { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
   .dimrow input[type=range] { flex: 1; min-width: 0; accent-color: var(--slate); }
   .round { width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%; border: 1px solid var(--line); background: #fff; font-size: 20px; line-height: 1; padding: 0; }
+  .steplabels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); padding: 0 44px; }
+  .steplabels span.on { color: var(--ink); font-weight: 600; }
   .dimlabels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); padding: 0 44px; }
   textarea.field { resize: none; }
   /* Start-up problems and account links */
@@ -114,6 +123,33 @@
   .nudgeacts .btn { margin: 0; }
   .acctfoot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-top: 14px; font-size: 13px; }
   .dangerlink { color: var(--wine); }
+  /* Quiz verification: the correct answer stands out */
+  .qlabel { font-size: 12px; font-weight: 600; color: var(--muted); margin: 10px 0 2px; } .qlabel.good { color: #2F6B3A; } .qlabel.bad { color: var(--wine); }
+  .nvrow { display: flex; align-items: center; gap: 6px; font-size: 14px; padding-top: 22px; } .addgrapes { display: block; font-size: 13px; margin: 8px 0; }
+  .okmark { color: #2F6B3A; font-weight: 700; }
+  .field.correct { border: 2px solid #2F6B3A; background: #EAF4EA; } .field.wrong { border-color: #D8B4B4; background: #FBF3F3; }
+  /* The rating window: numbered pages */
+  .wtop { position: sticky; top: 0; z-index: 3; background: var(--panel); }
+  .wtop .sheethead { position: static; padding: 4px 0 8px; }
+  .wnav { display: flex; align-items: center; justify-content: space-between; padding-top: 6px; }
+  .wcorner { width: 44px; height: 40px; border: 0; background: transparent; font-size: 34px; line-height: 1; color: var(--ink); padding: 0; }
+  .wcorner:first-child { text-align: left; } .wcorner:last-child { text-align: right; }
+  .wsteps { display: flex; gap: 8px; }
+  .wstep { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: #fff; font-size: 12px; font-weight: 600; padding: 0; color: var(--muted); }
+  .wstep.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .wpages { touch-action: pan-y; min-height: 300px; }
+  .wpage[hidden] { display: none; }
+  .wfoot { position: sticky; bottom: 0; background: var(--panel); padding: 8px 0 4px; }
+  .wfoot .btn { margin-top: 0; }
+  .stylerow { display: flex; gap: 6px; margin: 6px 0 10px; flex-wrap: wrap; }
+  .stylerow .chip { flex: 1 1 auto; text-align: center; }
+  .seg.sub { margin-top: 0; } .seg.sub[hidden] { display: none; }
+  .deleterow { margin-top: 36px; text-align: right; }
+  .deletelink { border: 0; background: transparent; padding: 2px 0; font-size: 10px; color: #8A978D; text-decoration: none; opacity: .8; }
+  .delsmall { align-self: center; border: 0; background: transparent; padding: 2px 0; margin-left: auto; font-size: 10px; color: #8A978D; opacity: .8; }
+  .infobtn { margin-top: 8px; }
+  .confirmname { font-size: 16px; margin: 6px 0 10px; }
+  .whatkept { margin: 4px 0 8px; font-size: 13px; } .whatkept summary { color: var(--slate); cursor: pointer; }
   /* Structure rules: suggestions, the gold set and the rule test */
   .goldtag { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #fff; background: #B08A3E; border-radius: 6px; padding: 1px 6px; vertical-align: 1px; }
   .goldbanner, .rulebanner { border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.4; margin: 8px 0; }
@@ -247,6 +283,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=12" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=14" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>
