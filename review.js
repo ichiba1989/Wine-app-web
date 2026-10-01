@@ -3,7 +3,7 @@
 //   Feedback: general messages testers sent from the app (broken, confusing, ideas), to read and mark handled.
 //   Quiz:  edit each question, record its source, and verify it (verified questions are what players see).
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
-import { esc, wineName } from "./logic.js?v=5";
+import { esc, wineName } from "./logic.js?v=7";
 
 export const TOPICS = ["Grapes", "Regions", "Producers", "Winemaking", "Other alcohol"];
 export const DIFFS = [
@@ -32,7 +32,7 @@ export function flagView(f, questionsById, cardsById) {
   const card = f.wine_vintage_id ? cardsById.get(f.wine_vintage_id) : null;
   return {
     id: f.id, status: f.status, reason: f.reason, note: f.note || "", date: String(f.created_at || "").slice(0, 10),
-    isQuiz: f.target_type === "quiz_question", questionId: f.quiz_question_id || null,
+    isQuiz: f.target_type === "quiz_question", questionId: f.quiz_question_id || null, wineVintageId: f.wine_vintage_id || null,
     title: f.target_type === "quiz_question" ? (q ? q.question : "A quiz question that is no longer listed") : (card ? wineName(card) : "A wine that is no longer listed"),
     detail: q ? `Answer: ${q.correct_answer}` : "",
   };
@@ -110,11 +110,11 @@ function flagsHtml(R) {
   const cById = new Map(R.ctx.cards().map((c) => [c.id, c]));
   const rows = filterFlags(R.flags, R.flagFilter).map((f) => flagView(f, qById, cById)).map((v) => {
     const acts = flagActions(v.status).map((a) => `<button class="pill${a.to === "closed" ? "" : " dark"}" data-review="flag:${v.id}:${a.to}">${a.label}</button>`).join("");
-    const open = v.isQuiz && v.questionId && qById.has(v.questionId) ? `<button class="pill" data-review="openq:${v.questionId}">Open question</button>` : "";
+    const open = v.isQuiz && v.questionId && qById.has(v.questionId) ? `<button class="pill" data-review="openq:${v.questionId}">Open question</button>`
+      : !v.isQuiz && v.wineVintageId && cById.has(v.wineVintageId) && R.ctx.editWine ? `<button class="pill" data-review="editwine:${v.wineVintageId}">Edit wine info</button>` : "";
     return `<div class="pcard"><div class="small muted">${v.isQuiz ? "Quiz question" : "Wine"}, ${esc(v.date)}, ${esc(v.status)}</div>
       <div class="serif" style="font-size:17px;margin:4px 0">${esc(v.title)}</div>${v.detail ? `<div class="muted small">${esc(v.detail)}</div>` : ""}
       <div class="ptext"><b>${esc(v.reason)}</b></div>${v.note ? `<div class="ptext">${esc(v.note)}</div>` : ""}
-      ${!v.isQuiz ? `<div class="muted small">Wine details are corrected in the database for now. Close the flag when done.</div>` : ""}
       <div class="acts">${acts}${open}</div>${R.flagError && R.flagError.id === v.id ? `<div class="err">${esc(R.flagError.message)}</div>` : ""}</div>`;
   }).join("");
   const counts = ["open", "reviewed", "closed"].map((s) => `${R.flags.filter((f) => f.status === s).length} ${s}`).join(", ");
@@ -145,7 +145,8 @@ function quizHtml(R) {
   const list = filterQuestions(R.questions, { q: R.qq, filter: R.quizFilter });
   const n = (fn) => R.questions.filter(fn).length;
   const rows = list.map((q) => `<button class="jrow" data-review="openq:${q.id}"><span class="jl"><span class="serif qline">${esc(q.question)}</span>
-      <span class="meta">${esc(q.topic)}, ${esc((DIFFS.find((d) => d.id === q.difficulty) || {}).label || q.difficulty)}</span></span>
+      <span class="meta">${esc(q.topic)}, ${esc((DIFFS.find((d) => d.id === q.difficulty) || {}).label || q.difficulty)}</span>
+      <span class="meta trunc"><span class="okmark">&#10003;</span> ${esc(q.correct_answer)}</span></span>
       <span class="pill${q.status === "verified" ? "" : " dark"}">${STATUS_LABEL[q.status] || q.status}</span></button>`).join("");
   return `<div class="jbar"><input class="field" data-review-q placeholder="Search questions" value="${esc(R.qq)}" autocomplete="off">
       <div class="chips left">${QUIZ_FILTERS.map((x) => `<button class="chip wide${R.quizFilter === x.id ? " on" : ""}" data-review="qf:${x.id}">${x.label}</button>`).join("")}</div></div>
@@ -166,11 +167,14 @@ function questionSheetHtml(R) {
   return `<div class="overlay"><div class="sheet" id="reviewPanel">
     <div class="sheethead"><div class="sheettitle"><div class="serif big">Quiz question</div><div class="muted small">${STATUS_LABEL[f.status] || f.status}. Only verified questions are shown to players.</div></div>
       <div class="sheetbtns"><button class="xbtn" data-review="close" aria-label="Close">&times;</button></div></div>
+    <div class="qlabel">Question</div>
     <textarea class="field" rows="3" data-rq="question" placeholder="Question">${esc(f.question)}</textarea>
-    <input class="field" data-rq="correct" placeholder="Correct answer" value="${esc(f.correct)}">
-    <input class="field" data-rq="d0" placeholder="Wrong answer 1" value="${esc(f.d0)}">
-    <input class="field" data-rq="d1" placeholder="Wrong answer 2" value="${esc(f.d1)}">
-    <input class="field" data-rq="d2" placeholder="Wrong answer 3" value="${esc(f.d2)}">
+    <div class="qlabel good"><span class="okmark">&#10003;</span> Correct answer</div>
+    <input class="field correct" data-rq="correct" placeholder="Correct answer" value="${esc(f.correct)}" aria-label="Correct answer">
+    <div class="qlabel bad">Wrong answers (three)</div>
+    <input class="field wrong" data-rq="d0" placeholder="Wrong answer 1" value="${esc(f.d0)}" aria-label="Wrong answer 1">
+    <input class="field wrong" data-rq="d1" placeholder="Wrong answer 2" value="${esc(f.d1)}" aria-label="Wrong answer 2">
+    <input class="field wrong" data-rq="d2" placeholder="Wrong answer 3" value="${esc(f.d2)}" aria-label="Wrong answer 3">
     <div class="two"><select class="field" data-rq="topic" aria-label="Topic">${options(TOPICS, f.topic)}</select>
       <select class="field" data-rq="difficulty" aria-label="Difficulty">${options(DIFFS, f.difficulty)}</select></div>
     <input class="field" data-rq="sourceName" placeholder="Source you checked it against (book, site, producer)" value="${esc(f.sourceName)}">
@@ -290,6 +294,7 @@ export function createReview(ctx) {
     else if (action === "fbf") { R.feedbackFilter = a; draw(); }
     else if (action === "fb") setFeedback(a, b);
     else if (action === "flag") setFlag(a, b);
+    else if (action === "editwine") { if (ctx.editWine) ctx.editWine(a); }
     else if (action === "openq") { if (ctx.gotoQuiz && R.view !== "quiz") ctx.gotoQuiz(a); else openQuestion(a); }
     else if (action === "retry") load();
     else if (action === "close") closeQuestion();
