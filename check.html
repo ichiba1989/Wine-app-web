@@ -18,27 +18,28 @@
 <script type="module">
 const FILES = {
  "index.html": {
-  "hash": "23dbc9db707fc888ad6a5bbd7d6b67964cc26b8249b703719c22900691c92cc3",
-  "chars": 24613,
+  "hash": "52cbbe9936ec4c71a3de88cccb43cf38d86f8e331aab8e10b8b4a7b68f5cbea9",
+  "chars": 25968,
   "query": null,
   "exports": []
  },
  "app.js": {
-  "hash": "e95ec13123d5003635a442bb1429a0b2d8f1ad75bafaee64e608dd19475770a2",
-  "chars": 35790,
-  "query": "15",
+  "hash": "a1c285c8ba242ad0404e85c45e78a3d70e1b8f4df2c39dec2c07d425855621dd",
+  "chars": 43084,
+  "query": "16",
   "exports": []
  },
  "logic.js": {
-  "hash": "cc6782b217bdcdaee5c6620e1c9e82061969bd05cd3c975bbb982435263a2899",
-  "chars": 23866,
-  "query": "7",
+  "hash": "06287c65f25124da975ce037be201c33460d689753c2f818c8587e593dea65b4",
+  "chars": 32895,
+  "query": "8",
   "exports": [
    "COLORS",
    "DEFAULT_STRUCTURE",
    "DIMS",
    "FAMILIARITY",
    "FLAGS",
+   "FLICK_SPEED",
    "GROUPS",
    "GROUP_PAGE",
    "INTEREST",
@@ -56,16 +57,24 @@ const FILES = {
    "choiceLabel",
    "clamp01",
    "clampDimValue",
+   "clampN",
+   "decideSwipe",
    "defaultFor",
    "dimMeta",
    "dimRange",
    "dimsFor",
+   "dragPose",
    "editorList",
    "entryCard",
+   "entryGrape",
    "entryName",
    "esc",
    "feedbackOn",
    "filterEntries",
+   "findCatalogMatch",
+   "flyPlan",
+   "grapeTextOf",
+   "grapeTextOfCard",
    "groupEntries",
    "hasFullProfile",
    "isBar",
@@ -75,17 +84,23 @@ const FILES = {
    "outsideName",
    "outsideRow",
    "photoCount",
+   "placeLine",
+   "placeTextOf",
+   "planWineEdit",
    "priceToCents",
    "queuePhoto",
    "referenceWrites",
    "refsByVintage",
+   "releaseVelocity",
    "resetDim",
+   "retargetSheet",
    "setDim",
    "setStyle",
    "sheetForCard",
    "sheetForEntry",
    "sheetForOutside",
    "shuffle",
+   "singleGrape",
    "sortCards",
    "styleInfo",
    "styleLabel",
@@ -95,7 +110,10 @@ const FILES = {
    "toggleExistingPhoto",
    "unqueuePhoto",
    "validateOutside",
+   "validateWineEdit",
    "verdictShort",
+   "vintageText",
+   "wineEditForm",
    "wineName"
   ]
  },
@@ -113,15 +131,16 @@ const FILES = {
   ]
  },
  "data.js": {
-  "hash": "cfae5a537e88f7c14e6a61de90f89b9bbc15ef24c05e8c3044b7f8e37fb1a13f",
-  "chars": 15734,
-  "query": "10",
+  "hash": "84afad32f408b920e4d2d4f1b03a82e6cb31d323da63eabb1c4f80f6a676b212",
+  "chars": 17673,
+  "query": "11",
   "exports": [
    "LEGACY_PERMISSIONS",
    "accessFrom",
    "addWithoutRating",
    "attestAge",
    "changeInterest",
+   "changeJournalWine",
    "claimGuestMerge",
    "countRows",
    "deleteJournalEntry",
@@ -141,6 +160,7 @@ const FILES = {
    "loadProfile",
    "loadReferenceRows",
    "loadStates",
+   "loadUserWine",
    "loadVintageWines",
    "loadWineInfo",
    "prepareGuestMerge",
@@ -154,9 +174,9 @@ const FILES = {
   ]
  },
  "views.js": {
-  "hash": "2e146c4f8987ec691b0ebb3c7c9ae9c8dc8b2d5427ffc1c83fa7b96b70abbed4",
-  "chars": 28035,
-  "query": "8",
+  "hash": "1ad4b1bd644d753d79e30909f071849dc7f2ce01243734ecfc4c460c880fed77",
+  "chars": 31481,
+  "query": "9",
   "exports": [
    "KEPT_NOTE",
    "SHEET_PAGES",
@@ -168,6 +188,7 @@ const FILES = {
    "confirmHtml",
    "dimControlHtml",
    "discoverHtml",
+   "footState",
    "formPhotosHtml",
    "groupIsOpen",
    "journalListHtml",
@@ -180,13 +201,15 @@ const FILES = {
    "swipesHtml",
    "syncChoiceControl",
    "thumbHtml",
+   "wineCardHtml",
+   "wineEditHtml",
    "wineFlagHtml"
   ]
  },
  "account.js": {
-  "hash": "acd9a8136e21cb7e54b1e8b5993bb0f2d12d1ad8aa4bf68ed5bb1c9ca555f2ea",
+  "hash": "6357c9ef2d5bbfb0878fe7705bb758485832aa19f1aa8804c67e6d164cb25297",
   "chars": 15809,
-  "query": "4",
+  "query": "5",
   "exports": [
    "MERGE_KEY",
    "MERGE_MAX_AGE_MS",
@@ -204,9 +227,9 @@ const FILES = {
   ]
  },
  "review.js": {
-  "hash": "cd2509331d2aad3285cb2ec2aced7609781fe3d16cc4e5673ae0f1244b118c43",
-  "chars": 21269,
-  "query": "4",
+  "hash": "9c5e2e5d126778cb414bf6f6c765ceb842aeb37b3e2b5796a384272ade0742ec",
+  "chars": 21089,
+  "query": "5",
   "exports": [
    "DIFFS",
    "FEEDBACK_FILTERS",
@@ -229,9 +252,9 @@ const FILES = {
   ]
  },
  "editor.js": {
-  "hash": "cba9a9a7ecaef165fb74c354cd81383ee7f998f41fa81e0bd8ed5925a2128b59",
-  "chars": 20570,
-  "query": "8",
+  "hash": "32962537a309850a8419380713c01db71809c3a83c94503b2899b1b8e424eb3d",
+  "chars": 20529,
+  "query": "9",
   "exports": [
    "SECTION_PERMISSIONS",
    "createEditor",
@@ -240,9 +263,9 @@ const FILES = {
   ]
  },
  "profile.js": {
-  "hash": "2690d582d73f7fae50dd8a624023865a41a7899ad7a8a7c2f0ca48e972c929fd",
+  "hash": "8be902d03d6cd8add232a3e8f3c93a314e84225c859002df8e52964080586674",
   "chars": 29455,
-  "query": "6",
+  "query": "7",
   "exports": [
    "DIFFS",
    "TIER_COLORS",
@@ -268,9 +291,9 @@ const FILES = {
   ]
  },
  "learn.js": {
-  "hash": "faf9220c69c6022292998bfca0f8c2e485b816ff358aaf617f66c75a690d2642",
+  "hash": "0cedb33f6aac23fa79ab6d84fb55b691e3ed82fdfdd476f0a2e06f747b7c990f",
   "chars": 20444,
-  "query": "2",
+  "query": "3",
   "exports": [
    "DIFFS",
    "FEEDBACK_MS",
@@ -297,9 +320,9 @@ const FILES = {
   ]
  },
  "feedback.js": {
-  "hash": "f11ba6f2feff9cca5ea7fed2b4a17cabb551d3fbc7c7843ce5d0af55fc5c08cd",
+  "hash": "6b14d6175fa57ef5f4faaf146989274073ac50825624bd53e164bc88c31a61f2",
   "chars": 5716,
-  "query": "2",
+  "query": "3",
   "exports": [
    "KINDS",
    "MAX_MESSAGE",
@@ -310,9 +333,9 @@ const FILES = {
   ]
  },
  "rules.js": {
-  "hash": "f8945b4fb1d2b7a68dc9640c088731eb056b24e81c09a30a90693426f7d2ca1b",
-  "chars": 38904,
-  "query": "3",
+  "hash": "6155cb5cd77e12cde6d74cbdd85bb73ce9f53257d75af2281a84541388257004",
+  "chars": 39295,
+  "query": "4",
   "exports": [
    "CALIBRATION",
    "CLIMATES",
@@ -347,9 +370,9 @@ const FILES = {
   ]
  },
  "wineinfo.js": {
-  "hash": "f187335fa4fca78a40c70ec1c91c0c9ae08205c24069dd5dc368fef7b59fd49b",
-  "chars": 14145,
-  "query": "3",
+  "hash": "14ed3128b0e8229349a449c9a22ef58f6012f2b2126dd198b7ba885eeb8bb261",
+  "chars": 14164,
+  "query": "4",
   "exports": [
    "createWineInfo",
    "deleteSummary",
@@ -360,9 +383,29 @@ const FILES = {
    "resolveGrapes",
    "validateInfo"
   ]
+ },
+ "grapes.js": {
+  "hash": "a590eb085fdd6c76e724a69dee2faf92a748302c59b773f787801f90cc157387",
+  "chars": 17505,
+  "query": "1",
+  "exports": [
+   "GRAPES",
+   "applySuggestion",
+   "checkGrapeInput",
+   "checkGrapeText",
+   "currentSegment",
+   "fold",
+   "grapeIndex",
+   "grapeProblem",
+   "resolveGrape",
+   "setExtraGrapes",
+   "splitGrapeText",
+   "suggestGrapes",
+   "wireGrapeInputs"
+  ]
  }
 };
-const APP_SCRIPT = "app.js?v=15";
+const APP_SCRIPT = "app.js?v=16";
 const LIBRARIES = ["https://esm.sh/@supabase/supabase-js@2.109.0", "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.109.0/+esm"];
 const out = document.getElementById("out"), sum = document.getElementById("sum");
 const lines = []; let problems = 0, first = "";
