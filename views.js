@@ -2,7 +2,7 @@
 import {
   FAMILIARITY, INTEREST, FLAGS, VERDICTS, DIMS, isChoice, GROUPS, GROUP_PAGE, SORTS, YEARS,
   esc, wineName, entryCard, entryName, verdictShort, groupEntries, filterEntries, sortCards,
-  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims, dimsFor } from "./logic.js?v=7";
+  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims, dimsFor, placeLine, entryGrape } from "./logic.js?v=8";
 
 // ---------------------------------------------------------------- drawings
 const GLASS = { white: "#5F7440", sparkling: "#3E4B38", rose: "#8A5560", neutral: "#34403A", red: "#2C1C22" };
@@ -70,7 +70,7 @@ function section(id, title, count, open, inner) {
 }
 function item(card, actions, extra = "", thumb = "") {
   actions += `<button class="delsmall" data-action="delswipe:${card.id}" aria-label="Delete this swipe">Delete</button>`;
-  const where = [card.appellation || card.grape, card.country].filter(Boolean).join(", ");
+  const where = placeLine(card);
   return `<div class="item withthumb">${thumb}<div class="ibody"><div class="iname"><span class="serif">${esc(wineName(card))}</span>${marksHtml(card, 16)}</div>
     <div class="meta">${esc(where)}${extra}</div><div class="acts">${actions}</div></div></div>`;
 }
@@ -131,7 +131,8 @@ export function journalMetaHtml(entries, filtered, j, groups) {
 // Small journals open up by default; big ones start collapsed.
 export const groupIsOpen = (j, key, total, searching, by) => searching || by === "flat" || (key in j.open ? j.open[key] : total <= 10);
 
-export function journalListHtml(entries, j, photoUrls) {
+export function journalListHtml(entries, j, photoUrls, cards = []) {
+  const cardsById = new Map(cards.map((c) => [c.id, c]));
   const filtered = filterEntries(entries, { q: j.q, verdict: j.verdict });
   const groups = groupEntries(filtered, j.by);
   const searching = j.q.trim() !== "";
@@ -143,6 +144,7 @@ export function journalListHtml(entries, j, photoUrls) {
       const c = entryCard(e); const v = verdictShort(e.verdict);
       return `<button class="jrow" data-action="entry:${e.id}">${thumbHtml(photoUrls, e.first_photo_path)}<span class="jl">
         <span class="iname"><span class="serif trunc">${esc(entryName(e))}</span>${marksHtml(c, 16)}</span>
+        ${entryGrape(e, cardsById) ? `<span class="meta grapeline trunc">${esc(entryGrape(e, cardsById))}</span>` : ""}
         <span class="meta trunc"><b class="${v ? "wine" : ""}">${esc(v || "No verdict yet")}</b>${e.consumed_on ? ", " + esc(e.consumed_on) : ""}${e.food ? ", with " + esc(e.food) : ""}${e.is_outside_wine ? ", not in catalog" : ""}</span></span>
         ${v ? "" : `<span class="pill dark">Rate</span>`}</button>`;
     }).join("");
@@ -227,6 +229,9 @@ export const SHEET_PAGES = [
   { id: "details", title: "Details" },
   { id: "notes", title: "Notes and photos" },
 ];
+// The wine this entry is about, with a way to correct it (journal entries only).
+export const wineCardHtml = (sheet) => `<div class="winecard"><div class="muted small">Wine</div><div class="serif" id="wcname">${esc(sheet.target.name)}</div>
+  <button class="link" data-sheet="editinfo">Change wine info</button></div>`;
 const styleChipsHtml = (sheet) => `<div class="stylerow" role="group" aria-label="Type of wine">${WINE_STYLES.map((st) => `<button class="chip${sheet.style === st.id ? " on" : ""}" data-sheet="style:${st.id}" aria-pressed="${sheet.style === st.id}">${esc(st.label)}</button>`).join("")}</div>`;
 // Page 2: the type of wine, then all the sliders together (acidity, body, tannin, oak).
 export function structurePageHtml(sheet) {
@@ -238,6 +243,13 @@ export function characterPageHtml(sheet) {
   const choices = choiceDims(sheet.style).filter((d) => sheet.dims[d.key]).map((d) => dimControlHtml(d, sheet.dims[d.key])).join("");
   return `<h3 class="serif">Sweetness and CO\u2082</h3><div class="muted small">Most wines are dry and still. Change only what you noticed.</div>${choices}`;
 }
+// The big button at the bottom: Next on the first four pages, Save on the last. (Save stays at the top of every page.)
+// Page 1 waits for a verdict, because choosing one is what moves on.
+export function footState(page, verdict, saving) {
+  const last = SHEET_PAGES.length - 1;
+  if (page < last) return { action: "next", label: "Next", disabled: page === 0 && !verdict };
+  return { action: "save", label: "Save to journal", disabled: !verdict || !!saving };
+}
 export function sheetHtml(sheet, { saving = false, error = "", page = 0 } = {}) {
   const verdicts = VERDICTS.map((v) => `<button class="vbtn${sheet.verdict === v.code ? " on" : ""}" data-sheet="verdict:${v.code}">${esc(v.label)}</button>`).join("");
   const canSave = !!sheet.verdict && !saving;
@@ -247,7 +259,7 @@ export function sheetHtml(sheet, { saving = false, error = "", page = 0 } = {}) 
     `<h3 class="serif">How was it?</h3><div class="verdicts">${verdicts}</div><div class="muted small">Pick one to go to the next step.</div>`,
     structurePageHtml(sheet),
     characterPageHtml(sheet),
-    `<h3 class="serif">Details</h3><div class="two"><input class="field" type="date" data-field="date" value="${esc(sheet.date)}" aria-label="Date">
+    `<h3 class="serif">Details</h3>${sheet.entryId ? wineCardHtml(sheet) : ""}<div class="two"><input class="field" type="date" data-field="date" value="${esc(sheet.date)}" aria-label="Date">
       <input class="field" inputmode="decimal" data-field="price" placeholder="Price you paid ($)" value="${esc(sheet.price)}"></div>
       <div class="two"><input class="field" data-field="food" placeholder="Food" value="${esc(sheet.food)}"><input class="field" data-field="occasion" placeholder="Occasion" value="${esc(sheet.occasion)}"></div>`,
     `<h3 class="serif">Notes and photos</h3><textarea class="field" data-field="notes" rows="4" placeholder="Notes">${esc(sheet.notes)}</textarea>
@@ -262,7 +274,7 @@ export function sheetHtml(sheet, { saving = false, error = "", page = 0 } = {}) 
     </div>
     <div class="wpages" id="wpages">${pages.map((h, i) => `<section class="wpage" data-wpage="${i}"${i === page ? "" : " hidden"}>${h}</section>`).join("")}</div>
     <div id="sheetErr" class="err">${esc(error)}</div>
-    <div class="wfoot"><button class="btn primary" data-sheet="save"${canSave ? "" : " disabled"}>Save to journal</button>${sheet.verdict ? "" : `<div class="muted small">Pick a verdict on step 1 to save.</div>`}</div>
+    <div class="wfoot">${(() => { const f = footState(page, sheet.verdict, saving); return `<button class="btn primary" id="wfootbtn" data-sheet="${f.action}"${f.disabled ? " disabled" : ""}>${f.label}</button>`; })()}${sheet.verdict ? "" : `<div class="muted small">Pick a verdict on step 1 to save.</div>`}</div>
   </div></div>`;
 }
 
@@ -297,7 +309,7 @@ export function addFormHtml(form, error = "") {
     <input class="field" data-form="producer" placeholder="Producer (required)" value="${esc(form.producer)}">
     <input class="field" data-form="wine_name" placeholder="Wine or cuvée" value="${esc(form.wine_name)}">
     <select class="field" data-form="vintage" aria-label="Vintage">${yearOpts}</select>
-    <input class="field" data-form="grape" placeholder="Grape (only if you know)" value="${esc(form.grape)}">
+    <input class="field" data-form="grape" data-grapes="multi" placeholder="Grape (only if you know)" value="${esc(form.grape)}" autocomplete="off" autocapitalize="words" spellcheck="false">
     <input class="field" data-form="region" placeholder="Region (only if you know)" value="${esc(form.region)}">
     <div class="three">${styles}</div>
     <div id="formErr" class="err">${esc(error)}</div>
@@ -315,4 +327,24 @@ export function wineFlagHtml(flag) {
     <textarea class="field" rows="3" data-wfnote placeholder="Add a note or a source (optional)">${esc(flag.note)}</textarea>
     <div id="wfErr" class="err">${esc(flag.error || "")}</div>
     <button class="btn primary" data-action="wfsend"${flag.reason && !flag.sending ? "" : " disabled"}>Send to editors</button></div></div>`;
+}
+
+// ---------------------------------------------------------------- changing a wine's info (journal)
+// form: { producer, wine_name, vintage, style, grape, region }; note says what the change will do.
+export function wineEditHtml(form, { error = "", saving = false, note = "" } = {}) {
+  const yearOpts = `<option value="">Vintage (optional)</option><option value="NV"${form.vintage === "NV" ? " selected" : ""}>Non-vintage (NV)</option>` +
+    YEARS.map((y) => `<option value="${y}"${String(y) === form.vintage ? " selected" : ""}>${y}</option>`).join("");
+  const styles = [...WINE_STYLES].map((st) => `<button class="vbtn tog${form.style === st.id ? " on" : ""}" data-wedit-style="${st.id}">${esc(st.label)}</button>`).join("");
+  return `<div class="overlay top" id="winfoLayer"><div class="sheet" id="winfoPanel">
+    <div class="sheethead"><div class="sheettitle"><div class="serif big">Change wine info</div><div class="muted small">${esc(note)}</div></div>
+      <div class="sheetbtns"><button class="xbtn" data-wedit="close" aria-label="Close">&times;</button></div></div>
+    <div class="qlabel">Producer</div><input class="field" data-wef="producer" value="${esc(form.producer)}" autocomplete="off">
+    <div class="qlabel">Wine or cuvée</div><input class="field" data-wef="wine_name" value="${esc(form.wine_name)}" autocomplete="off">
+    <div class="qlabel">Vintage</div><select class="field" data-wef="vintage" aria-label="Vintage">${yearOpts}</select>
+    <div class="qlabel">Type of wine</div><div class="three wide">${styles}</div>
+    <div class="qlabel">Grape (start typing, then pick from the list)</div><input class="field" data-wef="grape" data-grapes="multi" value="${esc(form.grape)}" placeholder="For a blend, separate grapes with commas" autocomplete="off" autocapitalize="words" spellcheck="false">
+    <div class="qlabel">Place</div><input class="field" data-wef="region" value="${esc(form.region)}" placeholder="Appellation, region, country" autocomplete="off">
+    <div id="winfoErr" class="err">${esc(error)}</div>
+    <button class="btn primary" data-wedit="save"${saving ? " disabled" : ""}>${saving ? "Saving…" : "Save wine info"}</button>
+    <button class="btn outline" data-wedit="close"${saving ? " disabled" : ""}>Cancel</button></div></div>`;
 }
