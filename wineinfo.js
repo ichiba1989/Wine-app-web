@@ -1,8 +1,9 @@
 // Wine info (editors only): change a catalog wine's details. Producer, wine name, vineyard, vintage, type of wine,
 // place, the grapes printed on the label, and other grapes in the wine (for blends the label does not list).
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
-import { esc, WINE_STYLES } from "./logic.js?v=7";
-import * as db from "./data.js?v=10";
+import { esc, WINE_STYLES } from "./logic.js?v=8";
+import { checkGrapeText, grapeProblem, grapeIndex, setExtraGrapes } from "./grapes.js?v=1";
+import * as db from "./data.js?v=11";
 
 const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 
@@ -83,15 +84,14 @@ function sheetHtml(W) {
     <div class="qlabel">Type of wine</div><div class="stylerow">${chips}</div>
     <div class="qlabel">Place</div><input class="field" list="dlPlaces" data-wif="place" value="${esc(f.place)}" placeholder="Start typing, then pick from the list" autocomplete="off">
     ${place && place.classification ? `<div class="muted small">Classification (from the place): ${esc(place.classification)}</div>` : ""}
-    <div class="qlabel">Grapes on the label, in order (separate with commas)</div><input class="field" list="dlGrapes" data-wif="labelGrapes" value="${esc(f.labelGrapes)}" autocomplete="off">
-    <div class="qlabel">Other grapes in the wine, not on the label (a blend)</div><input class="field" list="dlGrapes" data-wif="otherGrapes" value="${esc(f.otherGrapes)}" autocomplete="off">
-    ${W.unknown.length ? `<label class="addgrapes"><input type="checkbox" data-wif="addNew"${W.addNew ? " checked" : ""}> Not in the grape list: <b>${esc(W.unknown.map((u) => u.name).join(", "))}</b>. Tick to add them as new grapes.</label>` : ""}
+    <div class="qlabel">Grapes on the label, in order (separate with commas)</div><input class="field" data-grapes="multi" data-wif="labelGrapes" value="${esc(f.labelGrapes)}" placeholder="Start typing, then pick from the list" autocomplete="off" autocapitalize="words" spellcheck="false">
+    <div class="qlabel">Other grapes in the wine, not on the label (a blend)</div><input class="field" data-grapes="multi" data-wif="otherGrapes" value="${esc(f.otherGrapes)}" placeholder="Start typing, then pick from the list" autocomplete="off" autocapitalize="words" spellcheck="false">
     <div id="wiErr" class="err">${esc(W.error)}</div>
     <button class="btn primary" data-wi="save"${W.saving ? " disabled" : ""}>Save wine info</button>
     ${W.canRemove ? `<div class="dangerzone"><button class="link danger" data-wi="delask">Delete this wine</button></div>` : ""}
     <datalist id="dlProducers">${L.producers.map((p) => `<option value="${esc(p.name)}">`).join("")}</datalist>
     <datalist id="dlPlaces">${W.options.map((o) => `<option value="${esc(o.label)}">`).join("")}</datalist>
-    <datalist id="dlGrapes">${L.grapes.map((g) => `<option value="${esc(g.name)}">`).join("")}</datalist></div></div>`;
+</div></div>`;
 }
 
 // The delete confirmation replaces the form until the owner goes back or deletes.
@@ -107,7 +107,7 @@ function deleteHtml(W) {
       ? `<p>${esc(sum.reason)}</p><ul class="dellist">${list}</ul><p class="muted small">Nothing was deleted. If a wine is wrong, fix its details instead.</p><button class="btn outline" data-wi="delcancel">Back to wine info</button>`
       : `<p>This removes the wine for everyone and cannot be undone.</p><p class="muted small">What goes with it:</p><ul class="dellist">${list}</ul>
          <div class="err">${esc(d.error || "")}</div>
-         <button class="btn danger" data-wi="delgo"${d.deleting ? " disabled" : ""}>${d.deleting ? "Deleting…" : "Yes, delete this wine"}</button>
+         <button class="btn danger solid" data-wi="delgo"${d.deleting ? " disabled" : ""}>${d.deleting ? "Deleting…" : "Yes, delete this wine"}</button>
          <button class="btn outline" data-wi="delcancel"${d.deleting ? " disabled" : ""}>Keep it</button>`;
     if (sum.blocked && d.error) body += `<div class="err">${esc(d.error)}</div>`;
   }
@@ -127,6 +127,7 @@ export function createWineInfo(ctx) {
     if (o) o.innerHTML = `<div class="overlay"><div class="sheet"><p class="muted" style="padding:20px">Loading…</p></div></div>`;
     try {
       if (!W.lists) { W.lists = await db.loadEditorLists(ctx.sb()); W.options = placeOptions(W.lists.areas); }
+      setExtraGrapes(W.lists.grapes.map((x) => x.name));
       W.info = await db.loadWineInfo(ctx.sb(), card.id);
       W.form = formFromInfo(W.info, W.lists);
       draw();
@@ -166,9 +167,12 @@ export function createWineInfo(ctx) {
       if (!hit) return setError("Choose the place from the list. If it is not there, it needs to be added to the places first.");
       areaId = hit.id;
     }
-    const label = resolveGrapes(parseList(f.labelGrapes), W.lists.grapes), other = resolveGrapes(parseList(f.otherGrapes), W.lists.grapes);
+    const dbNames = W.lists.grapes.map((g) => g.name), idx = grapeIndex(dbNames);
+    const lc = checkGrapeText(f.labelGrapes, idx), oc = checkGrapeText(f.otherGrapes, idx);
+    if (!lc.ok || !oc.ok) return setError(grapeProblem([...lc.bad, ...oc.bad]));
+    // Names are on the list; the ones the database does not have yet are added (editors may add grapes).
+    const label = resolveGrapes(lc.names, W.lists.grapes), other = resolveGrapes(oc.names, W.lists.grapes);
     W.unknown = [...label.unknown.map((name) => ({ name, where: "label" })), ...other.unknown.map((name) => ({ name, where: "other" }))];
-    if (W.unknown.length && !W.addNew) { setError("Some grapes are not in the grape list. Fix the spelling, or tick the box to add them."); draw(); setError("Some grapes are not in the grape list. Fix the spelling, or tick the box to add them."); return; }
     W.saving = true; setError(""); draw();
     try {
       await db.saveWineInfo(ctx.sb(), ctx.userId(), W.info, {
@@ -198,7 +202,6 @@ export function createWineInfo(ctx) {
     if (!W.open || !W.form || !t.dataset || t.dataset.wif === undefined) return;
     const k = t.dataset.wif;
     if (k === "nonVintage") { W.form.nonVintage = t.checked; draw(); }
-    else if (k === "addNew") W.addNew = t.checked;
     else W.form[k] = t.value;
   });
   return { state: W, open, close };
