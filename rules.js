@@ -9,7 +9,12 @@
 //   3. grape + climate  the grape's typical profile, shifted for how warm or cool the place is
 //   4. style default    a plain red, white, rose, sparkling or fortified wine
 //
-// Scales: acidity, body, tannin and sweetness run 1 to 5 in steps of 0.5. Oak is 0 or 1. CO2 is 0 none, 1 frizzy, 2 sparkling.
+// Scales: acidity, body and tannin run 1 to 5 in steps of 0.5. The rest are fixed choices:
+//   sweetness 0 dry, 1 off-dry, 2 semi-sweet, 3 dessert sweet
+//   oak       0 no oak, 1 neutral oak (old or large casks, little flavor), 2 new oak (noticeable)
+//   CO2       0 none, 1 frizzy, 2 sparkling
+// Version 3: oak and sweetness moved to the new choices above, and the rules were retuned on all 35 wines scored in the first two
+// rounds. Those 35 can no longer check the rules, so a third round of 10 new wines is the honest check.
 // Version 2 (tuned on the 15 "tuning" wines of the first test, never on the held-back wines):
 //   - editors score red acidity and body about half a point higher than the first estimates, so reds get a calibration of +0.5
 //   - warm-climate reds are scored less tannic, not more (ripe tannins feel softer), so the warm tannin shift is -0.5
@@ -17,7 +22,7 @@
 //   - Brut and dry rosé are scored 1 (dry), Sauvignon Blanc and Sancerre are a little fuller
 // This file is pure: no browser, no network. Everything it uses is listed here so it can be reviewed and tuned.
 
-export const RULES_VERSION = "2";
+export const RULES_VERSION = "3";
 
 // ---------------------------------------------------------------- helpers
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -35,16 +40,16 @@ const anyPhrase = (text, phrases) => (phrases || []).some((p) => hasPhrase(text,
 const GRAPE_ROWS = {
   "Cabernet Sauvignon": ["red", 3.5, 4, 4.5], "Merlot": ["red", 3, 3.5, 3], "Cabernet Franc": ["red", 3.5, 3.5, 3.5],
   "Petit Verdot": ["red", 3.5, 4.5, 4.5], "Malbec": ["red", 3, 4, 4], "Carmenère": ["red", 3, 3.5, 3.5],
-  "Pinot Noir": ["red", 4, 2.5, 2], "Syrah": ["red", 3.5, 4, 4], "Grenache": ["red", 2.5, 3.5, 2.5],
+  "Pinot Noir": ["red", 3, 3.5, 3.5], "Syrah": ["red", 3.5, 3.5, 4], "Grenache": ["red", 2.5, 3.5, 2.5],
   "Mourvèdre": ["red", 3, 4, 4.5], "Carignan": ["red", 3.5, 3.5, 3.5], "Cinsault": ["red", 3, 2.5, 2],
   "Tempranillo": ["red", 3, 3.5, 3.5], "Sangiovese": ["red", 4, 3, 3.5], "Nebbiolo": ["red", 4.5, 3.5, 5],
   "Barbera": ["red", 4.5, 3, 2], "Dolcetto": ["red", 2.5, 3, 3], "Montepulciano": ["red", 3, 3.5, 3.5],
   "Aglianico": ["red", 4, 4, 4.5], "Nero d'Avola": ["red", 3, 4, 3.5], "Negroamaro": ["red", 3, 4, 3.5],
-  "Zinfandel": ["red", 3, 4, 3.5], "Gamay": ["red", 3.5, 2, 1.5], "Zweigelt": ["red", 3, 3, 2],
+  "Zinfandel": ["red", 3, 3.5, 3], "Gamay": ["red", 3.5, 2, 1.5], "Zweigelt": ["red", 3, 3, 2],
   "Blaufränkisch": ["red", 4, 3.5, 3.5], "Saperavi": ["red", 4, 4.5, 4.5], "Pinotage": ["red", 3.5, 4, 4],
   "Tannat": ["red", 3.5, 4.5, 5], "Touriga Nacional": ["red", 3.5, 4.5, 4.5], "Corvina": ["red", 4, 2.5, 2.5],
   "Mencía": ["red", 3.5, 3, 2.5], "Petite Sirah": ["red", 3.5, 5, 5], "Xinomavro": ["red", 4.5, 3.5, 4.5],
-  "Chardonnay": ["white", 3.5, 3.5], "Sauvignon Blanc": ["white", 4.5, 3], "Riesling": ["white", 4.5, 2.5],
+  "Chardonnay": ["white", 3.5, 4], "Sauvignon Blanc": ["white", 4, 3], "Riesling": ["white", 4, 3],
   "Chenin Blanc": ["white", 4.5, 3], "Pinot Gris": ["white", 3, 3], "Viognier": ["white", 2.5, 4],
   "Gewürztraminer": ["white", 2.5, 4], "Albariño": ["white", 4, 2.5], "Grüner Veltliner": ["white", 4, 3],
   "Vermentino": ["white", 3.5, 2.5], "Melon de Bourgogne": ["white", 4.5, 2], "Garganega": ["white", 3.5, 2.5],
@@ -108,52 +113,52 @@ export const CALIBRATION = { red: { acidity: 0.5, body: 0.5 } };
 // styles: which wine styles it applies to. conf: dimensions that are less certain than usual.
 const P = (places, set, why, opts = {}) => ({ places: places.map(norm), set, why, styles: opts.styles || null, conf: opts.conf || {}, styleHint: opts.styleHint || null });
 export const PROFILES = [
-  P(["margaux"], { acidity: 3.5, body: 3.5, tannin: 4.5, oak: 1 }, "Margaux: elegant Cabernet-based red, firm tannins, aged in barrel", { styles: ["red", "unknown"], styleHint: "red" }),
-  P(["saint julien"], { acidity: 3.5, body: 4, tannin: 4, oak: 1 }, "Saint-Julien: classic Cabernet-based red, balanced, barrel-aged", { styles: ["red", "unknown"], styleHint: "red" }),
-  P(["pauillac"], { acidity: 3.5, body: 4.5, tannin: 4.5, oak: 1 }, "Pauillac: powerful Cabernet-based red, barrel-aged", { styles: ["red", "unknown"], styleHint: "red" }),
-  P(["saint estephe"], { acidity: 3.5, body: 4, tannin: 4.5, oak: 1 }, "Saint-Estèphe: firm, structured red, barrel-aged", { styles: ["red", "unknown"], styleHint: "red" }),
-  P(["saint emilion"], { acidity: 3.5, body: 4, tannin: 3.5, oak: 1 }, "Saint-Émilion: Merlot-led red, rounder tannins, barrel-aged", { styles: ["red", "unknown"], styleHint: "red" }),
-  P(["pomerol"], { acidity: 3, body: 4, tannin: 3.5, oak: 1 }, "Pomerol: plush Merlot-led red, barrel-aged", { styles: ["red", "unknown"], styleHint: "red" }),
-  P(["pessac leognan"], { acidity: 3.5, body: 4, tannin: 4, oak: 1 }, "Pessac-Léognan red: structured Cabernet-based, barrel-aged", { styles: ["red"] }),
-  P(["pessac leognan"], { acidity: 4, body: 3.5, oak: 1, sweetness: 1 }, "Pessac-Léognan white: Sauvignon/Sémillon, usually barrel-fermented and dry", { styles: ["white"] }),
-  P(["haut medoc", "medoc"], { acidity: 3.5, body: 3.5, tannin: 4, oak: 1 }, "Médoc: Cabernet-based red, barrel-aged", { styles: ["red", "unknown"], styleHint: "red" }),
-  P(["sauternes", "barsac"], { acidity: 4, body: 4, sweetness: 5, oak: 1 }, "Sauternes: botrytis dessert wine, very sweet, barrel-aged", { styles: ["white", "unknown"] }),
-  P(["chateauneuf du pape"], { acidity: 3, body: 4.5, tannin: 3.5, oak: 0 }, "Châteauneuf-du-Pape: warm, Grenache-led, full-bodied. Many use large old casks, so oak is uncertain", { styles: ["red", "unknown"], conf: { oak: "low" }, styleHint: "red" }),
-  P(["gigondas"], { acidity: 3, body: 4.5, tannin: 4 }, "Gigondas: warm, Grenache-led, full and structured", { styles: ["red", "unknown"], styleHint: "red" }),
+  P(["margaux"], { acidity: 3.5, body: 4, tannin: 4.5, oak: 2 }, "Margaux: elegant Cabernet-based red, firm tannins, aged in barrel", { styles: ["red", "unknown"], styleHint: "red" }),
+  P(["saint julien"], { acidity: 3.5, body: 4, tannin: 4, oak: 2 }, "Saint-Julien: classic Cabernet-based red, balanced, barrel-aged", { styles: ["red", "unknown"], styleHint: "red" }),
+  P(["pauillac"], { acidity: 3.5, body: 4.5, tannin: 4.5, oak: 2 }, "Pauillac: powerful Cabernet-based red, barrel-aged", { styles: ["red", "unknown"], styleHint: "red" }),
+  P(["saint estephe"], { acidity: 3.5, body: 4, tannin: 4.5, oak: 2 }, "Saint-Estèphe: firm, structured red, barrel-aged", { styles: ["red", "unknown"], styleHint: "red" }),
+  P(["saint emilion"], { acidity: 3.5, body: 3.5, tannin: 4, oak: 2 }, "Saint-Émilion: Merlot-led red, rounder tannins, barrel-aged", { styles: ["red", "unknown"], styleHint: "red" }),
+  P(["pomerol"], { acidity: 3, body: 4, tannin: 3.5, oak: 2 }, "Pomerol: plush Merlot-led red, barrel-aged", { styles: ["red", "unknown"], styleHint: "red" }),
+  P(["pessac leognan"], { acidity: 3.5, body: 4, tannin: 4, oak: 2 }, "Pessac-Léognan red: structured Cabernet-based, barrel-aged", { styles: ["red"] }),
+  P(["pessac leognan"], { acidity: 4, body: 3.5, oak: 2, sweetness: 0 }, "Pessac-Léognan white: Sauvignon/Sémillon, usually barrel-fermented and dry", { styles: ["white"] }),
+  P(["haut medoc", "medoc"], { acidity: 3.5, body: 3.5, tannin: 4, oak: 2 }, "Médoc: Cabernet-based red, barrel-aged", { styles: ["red", "unknown"], styleHint: "red" }),
+  P(["sauternes", "barsac"], { acidity: 4, body: 4, sweetness: 3, oak: 2 }, "Sauternes: botrytis dessert wine, very sweet, barrel-aged", { styles: ["white", "unknown"] }),
+  P(["chateauneuf du pape"], { acidity: 3, body: 4.5, tannin: 3.5, oak: 1 }, "Châteauneuf-du-Pape: warm, Grenache-led, full-bodied. Many use large old casks, so oak is uncertain", { styles: ["red", "unknown"], conf: { oak: "low" }, styleHint: "red" }),
+  P(["gigondas"], { acidity: 3.5, body: 4, tannin: 3.5, oak: 1 }, "Gigondas: warm, Grenache-led, full and structured", { conf: { oak: "low" }, styles: ["red", "unknown"], styleHint: "red" }),
   P(["saint joseph"], { acidity: 3.5, body: 3.5, tannin: 3.5 }, "Saint-Joseph red: northern Rhône Syrah, medium-bodied", { styles: ["red"] }),
   P(["saint joseph"], { acidity: 3, body: 4, oak: 1 }, "Saint-Joseph white: Marsanne/Roussanne, full, often oak-aged", { styles: ["white"], conf: { oak: "low" } }),
-  P(["cote rotie", "hermitage", "cornas"], { acidity: 3.5, body: 4.5, tannin: 4.5, oak: 1 }, "Northern Rhône Syrah: full, firm, barrel-aged", { styles: ["red"] }),
+  P(["cote rotie", "hermitage", "cornas"], { acidity: 3.5, body: 4.5, tannin: 4.5, oak: 1 }, "Northern Rhône Syrah: full, firm, barrel-aged", { conf: { oak: "low" }, styles: ["red"] }),
   P(["bourgogne", "bourgogne cote d or"], { acidity: 4, body: 2.5, tannin: 2, oak: 1 }, "Regional red Burgundy: light Pinot Noir, usually some oak", { styles: ["red"], conf: { oak: "low" } }),
   P(["bourgogne", "bourgogne cote d or"], { acidity: 4, body: 3 }, "Regional white Burgundy: Chardonnay, medium body", { styles: ["white"] }),
-  P(["beaune", "gevrey chambertin", "chambolle musigny", "nuits saint georges", "vosne romanee", "pommard", "volnay", "morey saint denis", "aloxe corton"], { acidity: 4, body: 3, tannin: 3, oak: 1 }, "Côte d'Or red Burgundy: Pinot Noir, barrel-aged", { styles: ["red", "unknown"], styleHint: "red" }),
-  P(["meursault", "puligny montrachet", "chassagne montrachet", "corton charlemagne", "montrachet"], { acidity: 4, body: 4, oak: 1, sweetness: 1 }, "Côte de Beaune white Burgundy: Chardonnay, barrel-fermented", { styles: ["white", "unknown"] }),
-  P(["chablis"], { acidity: 4.5, body: 2.5, oak: 0, sweetness: 1 }, "Chablis: cool, steely Chardonnay, usually unoaked", { styles: ["white", "unknown"] }),
-  P(["sancerre", "pouilly fume", "menetou salon"], { acidity: 4.5, body: 3, oak: 0, sweetness: 1 }, "Upper Loire Sauvignon Blanc: crisp, dry, unoaked", { styles: ["white", "unknown"] }),
-  P(["muscadet"], { acidity: 4.5, body: 2, oak: 0, sweetness: 1 }, "Muscadet: very light, saline, dry, unoaked", { styles: ["white", "unknown"] }),
-  P(["savennieres"], { acidity: 5, body: 3.5, oak: 0, sweetness: 1 }, "Savennières: high-acid dry Chenin Blanc, little oak influence", { styles: ["white", "unknown"], conf: { oak: "low" } }),
+  P(["beaune", "gevrey chambertin", "chambolle musigny", "nuits saint georges", "vosne romanee", "pommard", "volnay", "morey saint denis", "aloxe corton"], { acidity: 4, body: 3, tannin: 3, oak: 1 }, "Côte d'Or red Burgundy: Pinot Noir, barrel-aged", { conf: { oak: "low" }, styles: ["red", "unknown"], styleHint: "red" }),
+  P(["meursault", "puligny montrachet", "chassagne montrachet", "corton charlemagne", "montrachet"], { acidity: 4, body: 4, oak: 2, sweetness: 0 }, "Côte de Beaune white Burgundy: Chardonnay, barrel-fermented", { styles: ["white", "unknown"] }),
+  P(["chablis"], { acidity: 4.5, body: 2.5, oak: 0, sweetness: 0 }, "Chablis: cool, steely Chardonnay, usually unoaked", { styles: ["white", "unknown"] }),
+  P(["sancerre", "pouilly fume", "menetou salon"], { acidity: 4.5, body: 3, oak: 0, sweetness: 0 }, "Upper Loire Sauvignon Blanc: crisp, dry, unoaked", { styles: ["white", "unknown"] }),
+  P(["muscadet"], { acidity: 4.5, body: 2, oak: 0, sweetness: 0 }, "Muscadet: very light, saline, dry, unoaked", { styles: ["white", "unknown"] }),
+  P(["savennieres"], { acidity: 5, body: 3.5, oak: 1, sweetness: 0 }, "Savennières: high-acid dry Chenin Blanc, little oak influence", { styles: ["white", "unknown"], conf: { oak: "low" } }),
   P(["chinon", "bourgueil", "saumur champigny"], { acidity: 4, body: 3, tannin: 3, oak: 0 }, "Loire Cabernet Franc: fresh, medium-bodied, little oak", { styles: ["red"] }),
   P(["champagne"], { co2: 2, acidity: 4.5, body: 3, oak: 0 }, "Champagne: sparkling, high acid, mostly unoaked", { styles: ["sparkling"] }),
-  P(["coteaux varois", "cotes de provence", "provence", "cassis"], { acidity: 3.5, body: 2, oak: 0 }, "Provence rosé: pale, dry, light, unoaked", { styles: ["rose"] }),
-  P(["barolo"], { acidity: 4.5, body: 4, tannin: 5, oak: 0, sweetness: 1 }, "Barolo: Nebbiolo, high acid and very firm tannin. Often aged in large old casks, so oak flavor is usually not noticeable", { styles: ["red", "unknown"], conf: { oak: "low" }, styleHint: "red" }),
-  P(["barbaresco"], { acidity: 4.5, body: 3.5, tannin: 5, oak: 0, sweetness: 1 }, "Barbaresco: Nebbiolo, high acid and very firm tannin. Often aged in large old casks, so oak flavor is usually not noticeable", { styles: ["red", "unknown"], conf: { oak: "low" }, styleHint: "red" }),
-  P(["brunello di montalcino"], { acidity: 4, body: 4, tannin: 4.5, oak: 1 }, "Brunello di Montalcino: Sangiovese, long oak aging required", { styles: ["red", "unknown"], styleHint: "red" }),
-  P(["chianti classico", "chianti rufina", "chianti"], { acidity: 4, body: 3, tannin: 4, oak: 0 }, "Chianti: Sangiovese, high acid, firm tannin. Often aged in large old casks, so oak flavor is uncertain", { styles: ["red", "unknown"], conf: { oak: "low" }, styleHint: "red" }),
-  P(["taurasi"], { acidity: 4.5, body: 4.5, tannin: 5, oak: 1 }, "Taurasi: Aglianico, powerful, long oak aging required", { styles: ["red", "unknown"], styleHint: "red" }),
-  P(["maremma toscana", "toscana", "bolgheri"], { acidity: 3.5, body: 4, tannin: 4, oak: 1 }, "Tuscan coastal red: Bordeaux-style blend, full, barrel-aged", { styles: ["red", "unknown"], conf: { acidity: "low", body: "low", tannin: "low", oak: "low" }, styleHint: "red" }),
+  P(["coteaux varois", "cotes de provence", "provence", "cassis"], { acidity: 4, body: 2.5, oak: 0 }, "Provence rosé: pale, dry, light, unoaked", { styles: ["rose"] }),
+  P(["barolo"], { acidity: 4.5, body: 4, tannin: 5, oak: 1, sweetness: 0 }, "Barolo: Nebbiolo, high acid and very firm tannin. Often aged in large old casks, so oak flavor is usually not noticeable", { styles: ["red", "unknown"], conf: { oak: "low" }, styleHint: "red" }),
+  P(["barbaresco"], { acidity: 4.5, body: 3.5, tannin: 5, oak: 1, sweetness: 0 }, "Barbaresco: Nebbiolo, high acid and very firm tannin. Often aged in large old casks, so oak flavor is usually not noticeable", { styles: ["red", "unknown"], conf: { oak: "low" }, styleHint: "red" }),
+  P(["brunello di montalcino"], { acidity: 3.5, body: 3.5, tannin: 4, oak: 1 }, "Brunello di Montalcino: Sangiovese, long oak aging required", { conf: { oak: "low" }, styles: ["red", "unknown"], styleHint: "red" }),
+  P(["chianti classico", "chianti rufina", "chianti"], { acidity: 4, body: 3.5, tannin: 4.5, oak: 1 }, "Chianti: Sangiovese, high acid, firm tannin. Often aged in large old casks, so oak flavor is uncertain", { styles: ["red", "unknown"], conf: { oak: "low" }, styleHint: "red" }),
+  P(["taurasi"], { acidity: 4.5, body: 4.5, tannin: 5, oak: 1 }, "Taurasi: Aglianico, powerful, long oak aging required", { conf: { oak: "low" }, styles: ["red", "unknown"], styleHint: "red" }),
+  P(["maremma toscana", "toscana", "bolgheri"], { acidity: 3.5, body: 4, tannin: 4, oak: 2 }, "Tuscan coastal red: Bordeaux-style blend, full, barrel-aged", { styles: ["red", "unknown"], conf: { acidity: "low", body: "low", tannin: "low", oak: "low" }, styleHint: "red" }),
   P(["valpolicella"], { acidity: 4, body: 2.5, tannin: 2.5 }, "Valpolicella: light, fresh, cherry-fruited red", { styles: ["red"] }),
-  P(["amarone"], { acidity: 3.5, body: 5, tannin: 4, oak: 1, sweetness: 1.5 }, "Amarone: dried-grape red, very full, high alcohol", { styles: ["red", "unknown"] }),
-  P(["conegliano valdobbiadene", "prosecco"], { co2: 2, acidity: 4, body: 2, oak: 0 }, "Prosecco: light, fresh sparkling, unoaked", { styles: ["sparkling"] }),
-  P(["rioja"], { acidity: 3.5, body: 3.5, tannin: 3.5 }, "Rioja red: Tempranillo, medium-full; oak depends on the aging level on the label", { styles: ["red", "unknown"], styleHint: "red" }),
+  P(["amarone"], { acidity: 3.5, body: 5, tannin: 4, oak: 1, sweetness: 0 }, "Amarone: dried-grape red, very full, high alcohol", { conf: { oak: "low" }, styles: ["red", "unknown"] }),
+  P(["conegliano valdobbiadene", "prosecco"], { co2: 2, acidity: 4, body: 2.5, oak: 0 }, "Prosecco: light, fresh sparkling, unoaked", { styles: ["sparkling"] }),
+  P(["rioja"], { acidity: 3.5, body: 4, tannin: 4 }, "Rioja red: Tempranillo, medium-full; oak depends on the aging level on the label", { styles: ["red", "unknown"], styleHint: "red" }),
   P(["rioja"], { acidity: 3.5, body: 3 }, "Rioja white: Viura, medium body", { styles: ["white"] }),
-  P(["ribera del duero"], { acidity: 3.5, body: 4.5, tannin: 4.5, oak: 1 }, "Ribera del Duero: Tempranillo, powerful, barrel-aged", { styles: ["red", "unknown"], styleHint: "red" }),
-  P(["priorat"], { acidity: 3.5, body: 4.5, tannin: 4.5, oak: 1 }, "Priorat: Garnacha and Cariñena on slate, concentrated, barrel-aged", { styles: ["red", "unknown"], styleHint: "red" }),
+  P(["ribera del duero"], { acidity: 3.5, body: 4.5, tannin: 4.5, oak: 2 }, "Ribera del Duero: Tempranillo, powerful, barrel-aged", { styles: ["red", "unknown"], styleHint: "red" }),
+  P(["priorat"], { acidity: 3.5, body: 4.5, tannin: 4.5, oak: 2 }, "Priorat: Garnacha and Cariñena on slate, concentrated, barrel-aged", { styles: ["red", "unknown"], styleHint: "red" }),
   P(["montsant"], { acidity: 3, body: 4, tannin: 3.5 }, "Montsant: warm Garnacha and Cariñena, full", { styles: ["red", "unknown"], styleHint: "red" }),
   P(["calatayud", "campo de borja"], { acidity: 3, body: 4, tannin: 3 }, "Aragón Garnacha: warm, full-bodied, softer tannins", { styles: ["red", "unknown"], styleHint: "red" }),
-  P(["rias baixas"], { acidity: 4, body: 2.5, oak: 0, sweetness: 1 }, "Rías Baixas: Albariño, fresh, unoaked", { styles: ["white", "unknown"] }),
-  P(["rueda"], { acidity: 4, body: 3, oak: 0, sweetness: 1 }, "Rueda: Verdejo, fresh, unoaked", { styles: ["white", "unknown"] }),
+  P(["rias baixas"], { acidity: 4, body: 2.5, oak: 0, sweetness: 0 }, "Rías Baixas: Albariño, fresh, unoaked", { styles: ["white", "unknown"] }),
+  P(["rueda"], { acidity: 4, body: 3, oak: 0, sweetness: 0 }, "Rueda: Verdejo, fresh, unoaked", { styles: ["white", "unknown"] }),
   P(["cava"], { co2: 2, acidity: 4, body: 2, oak: 0 }, "Cava: light, dry sparkling, unoaked", { styles: ["sparkling"] }),
   P(["douro"], { acidity: 3.5, body: 4, tannin: 4 }, "Douro red: Touriga blends, warm, structured", { styles: ["red", "unknown"], styleHint: "red" }),
-  P(["napa valley", "rutherford", "oakville", "stags leap district", "howell mountain", "spring mountain district", "mount veeder"], { oak: 1 }, "Napa reds are almost always barrel-aged", { styles: ["red"], conf: { oak: "medium" } }),
+  P(["napa valley", "rutherford", "oakville", "stags leap district", "howell mountain", "spring mountain district", "mount veeder"], { oak: 2 }, "Napa reds are almost always barrel-aged", { styles: ["red"], conf: { oak: "medium" } }),
 ];
 export function profileFor(f) {
   const places = [f.appellation, f.region].filter(Boolean);
@@ -167,57 +172,57 @@ export function profileFor(f) {
 // ---------------------------------------------------------------- label words
 // Words in the wine's name or classification that say something definite. Checked first.
 export const SWEETNESS_WORDS = [
-  { words: ["extra dry", "extra sec"], value: 2, conf: "high", why: "Extra Dry is slightly sweeter than Brut" },
-  { words: ["halbtrocken", "off dry", "demi sec", "semi secco", "abboccato"], value: 3, conf: "high", why: "label says off-dry to medium" },
-  { words: ["brut nature", "zero dosage", "pas dose", "extra brut"], value: 1, conf: "high", why: "label says bone dry" },
-  { words: ["brut"], value: 1, conf: "high", why: "Brut is dry" },
-  { words: ["kabinett"], value: 2.5, conf: "medium", why: "Kabinett Riesling is light and often slightly sweet" },
-  { words: ["spatlese"], value: 3, conf: "medium", why: "Spätlese is usually medium sweet" },
-  { words: ["auslese"], value: 4, conf: "medium", why: "Auslese is usually sweet" },
-  { words: ["beerenauslese", "trockenbeerenauslese", "eiswein", "ice wine", "sauternes", "tokaji aszu", "late harvest", "vendange tardive", "doux", "dolce", "passito"], value: 5, conf: "high", why: "dessert-style label" },
-  { words: ["pedro ximenez", "cream"], value: 5, conf: "high", why: "Pedro Ximénez and cream styles are very sweet" },
-  { words: ["tawny", "ruby", "lbv", "late bottled vintage", "vintage port", "port"], value: 4, conf: "high", why: "Port is a sweet fortified wine" },
-  { words: ["fino", "manzanilla"], value: 1, conf: "high", why: "Fino and Manzanilla Sherry are dry" },
-  { words: ["moscato d asti"], value: 4, conf: "high", why: "Moscato d'Asti is lightly sweet" },
-  { words: ["dry", "sec", "trocken"], value: 1, conf: "high", why: "label says dry" },
+  { words: ["extra dry", "extra sec"], value: 1, conf: "high", why: "Extra Dry is slightly sweet (off-dry)" },
+  { words: ["demi sec", "semi secco", "medium sweet", "medium dry"], value: 2, conf: "high", why: "label says semi-sweet" },
+  { words: ["halbtrocken", "off dry", "abboccato"], value: 1, conf: "high", why: "label says off-dry" },
+  { words: ["brut nature", "zero dosage", "pas dose", "extra brut", "brut"], value: 0, conf: "high", why: "Brut is dry" },
+  { words: ["kabinett"], value: 1, conf: "medium", why: "Kabinett Riesling is light and often slightly sweet" },
+  { words: ["spatlese"], value: 2, conf: "medium", why: "Spätlese is usually semi-sweet" },
+  { words: ["auslese"], value: 3, conf: "medium", why: "Auslese is usually sweet" },
+  { words: ["beerenauslese", "trockenbeerenauslese", "eiswein", "ice wine", "sauternes", "tokaji aszu", "late harvest", "vendange tardive", "doux", "dolce", "passito"], value: 3, conf: "high", why: "dessert-style label" },
+  { words: ["pedro ximenez", "cream"], value: 3, conf: "high", why: "Pedro Ximénez and cream styles are dessert sweet" },
+  { words: ["tawny", "ruby", "lbv", "late bottled vintage", "vintage port", "port"], value: 3, conf: "high", why: "Port is a sweet fortified wine" },
+  { words: ["fino", "manzanilla"], value: 0, conf: "high", why: "Fino and Manzanilla Sherry are dry" },
+  { words: ["moscato d asti"], value: 2, conf: "high", why: "Moscato d'Asti is lightly sweet" },
+  { words: ["dry", "sec", "trocken"], value: 0, conf: "high", why: "label says dry" },
 ];
 export const CO2_WORDS = [
   { words: ["frizzante", "petillant", "spritz", "vinho verde", "moscato d asti", "pet nat"], value: 1, conf: "medium", why: "label points to a light fizz" },
 ];
 export const OAK_WORDS = [
   { words: ["unoaked", "no oak", "stainless steel", "stainless"], value: 0, conf: "high", why: "label says unoaked" },
-  { words: ["barrique", "barrel aged", "barrel fermented", "oak aged", "oaked"], value: 1, conf: "high", why: "label mentions barrel or oak" },
-  { words: ["gran reserva", "reserva", "crianza"], value: 1, conf: "high", why: "Spanish Crianza, Reserva and Gran Reserva wines must age in oak", countries: ["spain"] },
-  { words: ["gran reserva", "grand reserve", "reserve", "reserva", "riserva", "old vine reserve", "estate reserve"], value: 1, conf: "medium", why: "a Reserve wine is usually oak-aged" },
-  { words: ["cru classe", "grand cru"], value: 1, conf: "medium", why: "classified Burgundy and Bordeaux wines are normally barrel-aged", countries: ["france"] },
+  { words: ["barrique", "barrel aged", "barrel fermented", "oak aged", "oaked"], value: 2, conf: "high", why: "label mentions barrel or oak" },
+  { words: ["gran reserva", "reserva", "crianza"], value: 2, conf: "high", why: "Spanish Crianza, Reserva and Gran Reserva wines must age in oak", countries: ["spain"] },
+  { words: ["gran reserva", "grand reserve", "reserve", "reserva", "old vine reserve", "estate reserve"], value: 2, conf: "medium", why: "a Reserve wine is usually oak-aged" },
+  { words: ["cru classe", "grand cru"], value: 2, conf: "medium", why: "classified Burgundy and Bordeaux wines are normally barrel-aged", countries: ["france"] },
 ];
 // Fortified wines have their own profile.
 export const FORTIFIED = [
-  { words: ["tawny"], set: { acidity: 3.5, body: 4.5, tannin: 2.5, oak: 0 }, why: "Tawny Port: rich and mellow, soft tannin. Aged in old casks, so no noticeable oak flavor" },
+  { words: ["tawny"], set: { acidity: 4, body: 5, tannin: 2.5, oak: 1 }, why: "Tawny Port: rich and mellow, soft tannin. Aged in old casks (neutral oak)" },
   { words: ["ruby", "lbv", "late bottled vintage", "vintage port"], set: { acidity: 3.5, body: 4.5, tannin: 4, oak: 0 }, why: "Ruby and vintage Port: young, fruity, firm tannin, little cask time" },
 ];
 
 // ---------------------------------------------------------------- oak norms for wines without a definite label word
 // First match wins. region lists are matched against the appellation, region and country.
 export const OAK_NORMS = [
-  { style: "red", places: ["napa valley", "sonoma", "paso robles", "dry creek valley", "russian river valley", "santa barbara county", "sta rita hills", "washington", "columbia valley", "walla walla", "willamette valley", "oregon", "california"], value: 1, conf: "medium", why: "quality US reds are usually barrel-aged" },
-  { style: "red", places: ["barossa", "south australia", "australia", "chile", "mendoza", "argentina", "central otago", "stellenbosch", "south africa"], value: 1, conf: "medium", why: "quality New World reds are usually barrel-aged" },
-  { style: "white", grapes: ["chardonnay"], places: ["california", "sonoma coast", "napa valley", "australia", "south africa", "oregon", "washington"], value: 1, conf: "low", why: "New World Chardonnay is often barrel-fermented, but unoaked styles exist" },
-  { style: "white", grapes: ["chenin blanc"], places: ["stellenbosch", "western cape", "south africa"], value: 1, conf: "low", why: "South African Chenin is often barrel-fermented" },
-  { style: "white", grapes: ["marsanne", "roussanne", "sémillon"], value: 1, conf: "low", why: "these grapes are often fermented or aged in barrel" },
+  { style: "red", places: ["napa valley", "sonoma", "paso robles", "dry creek valley", "russian river valley", "santa barbara county", "sta rita hills", "washington", "columbia valley", "walla walla", "willamette valley", "oregon", "california"], value: 2, conf: "medium", why: "quality US reds are usually aged in new oak" },
+  { style: "red", places: ["barossa", "south australia", "australia", "chile", "mendoza", "argentina", "central otago", "stellenbosch", "south africa"], value: 2, conf: "medium", why: "quality New World reds are usually aged in new oak" },
+  { style: "white", grapes: ["chardonnay"], places: ["california", "sonoma coast", "napa valley", "australia", "south africa", "oregon", "washington"], value: 2, conf: "low", why: "New World Chardonnay is often barrel-fermented, but unoaked styles exist" },
+  { style: "white", grapes: ["chenin blanc"], places: ["stellenbosch", "western cape", "south africa"], value: 1, conf: "low", why: "South African Chenin is often fermented in used barrels" },
+  { style: "white", grapes: ["marsanne", "roussanne", "sémillon"], value: 1, conf: "low", why: "these grapes are often fermented or aged in used barrels" },
 ];
 
 // ---------------------------------------------------------------- style defaults (last resort)
 export const STYLE_DEFAULTS = {
-  red: { acidity: 3.5, body: 3.5, tannin: 3.5, sweetness: 1, oak: 1, co2: 0 },
-  white: { acidity: 3.5, body: 3, sweetness: 1, oak: 0, co2: 0 },
-  rose: { acidity: 3.5, body: 2, sweetness: 1, oak: 0, co2: 0 },
-  sparkling: { acidity: 4, body: 2.5, sweetness: 1, oak: 0, co2: 2 },
-  fortified: { acidity: 3, body: 4, tannin: 3, sweetness: 4, oak: 1, co2: 0 },
+  red: { acidity: 3.5, body: 3.5, tannin: 3.5, sweetness: 0, oak: 1, co2: 0 },
+  white: { acidity: 3.5, body: 3, sweetness: 0, oak: 0, co2: 0 },
+  rose: { acidity: 4, body: 2.5, sweetness: 0, oak: 0, co2: 0 },
+  sparkling: { acidity: 4, body: 2.5, sweetness: 0, oak: 0, co2: 2 },
+  fortified: { acidity: 3, body: 4, tannin: 3, sweetness: 3, oak: 1, co2: 0 },
 };
 
 // How sure we are of a plain default. A red wine is almost always dry; a white or sparkling wine is less certain.
-export const SWEETNESS_DEFAULT_CONF = { red: "high", white: "medium", rose: "medium", sparkling: "low", fortified: "low", other: "low" };
+export const SWEETNESS_DEFAULT_CONF = { red: "high", white: "high", rose: "high", sparkling: "medium", fortified: "low", other: "low" };
 
 // ---------------------------------------------------------------- facts about one wine
 const WHITE_WORDS = ["blanc", "white", "bianco", "weiss"];
@@ -248,7 +253,7 @@ export function factsOf(card) {
 
 // ---------------------------------------------------------------- the engine
 const SCALE_DIMS = ["acidity", "body", "tannin", "sweetness"];
-export const dimsForStyle = (style) => (["white", "sparkling", "rose"].includes(style) ? ["acidity", "body", "co2", "sweetness", "oak"] : ["acidity", "body", "tannin", "sweetness", "oak"]);
+export const dimsForStyle = (style) => (["white", "sparkling", "rose"].includes(style) ? ["acidity", "body", "sweetness", "co2", "oak"] : ["acidity", "body", "tannin", "sweetness", "oak"]);
 
 function weightedGrape(grapes, dim) {
   let sum = 0, w = 0;
@@ -268,6 +273,9 @@ function solve(dim, f, ctx) {
 function solveRaw(dim, f, ctx) {
   const prof = ctx.prof;
   // 1. label words
+  // A red wine starts dry. Words like "Ruby", "Port" or "Cream" in a producer or wine name (Ruby Hill, Cream of the Crop) do not make it sweet.
+  // Sweet and fortified wines are their own types; an editor can still set a red wine's sweetness by hand.
+  if (dim === "sweetness" && f.effStyle === "red") return { value: 0, confidence: "high", why: ["red wines start dry"], layer: "style" };
   if (dim === "sweetness") { const h = labelHit(f, SWEETNESS_WORDS); if (h) return { value: h.value, confidence: h.conf, why: [`${h.why}`], layer: "label" }; }
   if (dim === "co2" && f.effStyle === "sparkling") { const h = labelHit(f, CO2_WORDS); if (h) return { value: 1, confidence: "medium", why: [h.why], layer: "label" }; }
   if (dim === "co2" && f.effStyle !== "sparkling") { const h = labelHit(f, CO2_WORDS); if (h) return { value: 1, confidence: h.conf, why: [h.why], layer: "label" }; }
@@ -316,7 +324,7 @@ export function suggestStructure(card) {
   const dims = {};
   for (const d of dimsForStyle(f.style)) {
     const r = solve(d, f, ctx);
-    const v = d === "oak" ? (r.value >= 0.5 ? 1 : 0) : d === "co2" ? clamp(Math.round(r.value), 0, 2) : clamp(round5(r.value), 1, 5);
+    const v = d === "oak" || d === "co2" ? clamp(Math.round(r.value), 0, 2) : d === "sweetness" ? clamp(Math.round(r.value), 0, 3) : clamp(round5(r.value), 1, 5);
     dims[d] = { ...r, value: v };
   }
   const ranks = Object.values(dims).map((x) => CONF_RANK[x.confidence]);
@@ -328,9 +336,9 @@ export const values = (s) => Object.fromEntries(Object.entries(s.dims).map(([k, 
 export const CONFIDENCE_LABEL = { high: "high", medium: "medium", low: "low" };
 
 // ---------------------------------------------------------------- the gold set: wines editors score blind
-// group "tune": the rules may be adjusted using these.
-// group "holdout": the first held-back wines. Their scores were shared in a report, so after that they can no longer check the rules honestly.
-// group "fresh": a new held-back set, scored after the version 2 rules were frozen. This is the honest check.
+// Round 1: "tune" (15) was used to tune version 2. "holdout" (10) was held back, but its scores were shared in a report.
+// Round 2: "fresh" (10) was scored after version 2 was frozen. Version 3 was tuned on all 35 of rounds 1 and 2.
+// Round 3: "fresh2" (10 new wines) is scored after version 3 is frozen. This is the honest check.
 // A wine is identified by producer, wine name and vintage year, so the list works in any copy of the catalog.
 export const GOLD = [
   ["Château Giscours", "", 2022, "tune"], ["Williams Selyem", "Eastside Road Neighbors", 2023, "holdout"], ["Produttori del Barbaresco", "", 2021, "tune"],
@@ -344,6 +352,9 @@ export const GOLD = [
   ["Lingua Franca", "Avni", 2022, "fresh"], ["Cristom", "Mt. Jefferson Cuvée", 2023, "fresh"], ["Camigliano", "", 2020, "fresh"], ["Marchesi de' Frescobaldi", "Nipozzano Riserva", 2022, "fresh"],
   ["Ravines", "Dry", 2022, "fresh"], ["Loveblock", "", 2023, "fresh"], ["Château de St.-Cosme", "", 2022, "fresh"], ["BiancaVigna", "Brut", 2023, "fresh"],
   ["Château Beau-Séjour Bécot", "", 2022, "fresh"], ["Aubert", "UV-SL Vineyard", 2023, "fresh"],
+  ["Ridge", "Lytton Springs", 2023, "fresh2"], ["Penner-Ash", "", 2022, "fresh2"], ["Duckhorn", "Three Palms Vineyard", 2022, "fresh2"], ["Etude", "", 2021, "fresh2"],
+  ["Il Poggione", "Vigna Paganelli Riserva", 2019, "fresh2"], ["Bodega Catena Zapata", "Nicasia Vineyard", 2023, "fresh2"], ["Domaine du Closel", "La Jalousie Château des Vaults", 2022, "fresh2"],
+  ["Château Smith-Haut-Lafitte", "White", 2022, "fresh2"], ["Bernhard Ott", "Fass 4", 2023, "fresh2"], ["Hugh Hamilton", "Black Ops", 2021, "fresh2"],
 ].map(([producer, wineName, year, group]) => ({ producer, wineName, year, group, key: `${norm(producer)}|${norm(wineName)}|${year || "nv"}` }));
 const GOLD_BY_KEY = new Map(GOLD.map((g) => [g.key, g]));
 export function goldKeyOf(card) {
@@ -357,15 +368,16 @@ export const goldInfo = (card) => GOLD_BY_KEY.get(goldKeyOf(card)) || null;
 export const isGold = (card) => !!goldInfo(card);
 
 // ---------------------------------------------------------------- testing the rules against what editors scored
-export const TARGETS = { scale: { good: 0.6, ok: 0.8 }, choice: { good: 0.85, ok: 0.7 } };
+export const TARGETS = { scale: { good: 0.6, ok: 0.8 }, choice: { good: 0.85, ok: 0.7 }, ordered: { good: 0.75, ok: 0.6 } };
 export const GROUPS = [
-  { id: "tune", title: "Tuning group", note: "The rules were adjusted using these wines, so they will look good." },
-  { id: "holdout", title: "Earlier held-back group", note: "Their scores were shared in a report, so they are no longer a fully honest check." },
-  { id: "fresh", title: "Fresh held-back group", note: "Scored after the version 2 rules were frozen. This is the honest check." },
+  { id: "tune", title: "Round 1: tuning group", note: "Used to tune version 2 and again for version 3, so these will look good." },
+  { id: "holdout", title: "Round 1: held back", note: "Their scores were shared in a report, so they were used for version 3. No longer an honest check." },
+  { id: "fresh", title: "Round 2", note: "Used to tune version 3. No longer an honest check." },
+  { id: "fresh2", title: "Round 3: fresh", note: "Scored after version 3 was frozen. This is the honest check." },
 ];
 // pairs: [{ editor: { dim: value }, rules: { dim: value } }]. Returns per-dimension results.
 export function evaluateRules(pairs) {
-  const keys = ["acidity", "body", "tannin", "co2", "sweetness", "oak"];
+  const keys = ["acidity", "body", "tannin", "sweetness", "co2", "oak"];
   const out = {};
   for (const k of keys) {
     const rows = pairs.filter((p) => typeof p.editor[k] === "number" && typeof p.rules[k] === "number");
@@ -373,10 +385,11 @@ export function evaluateRules(pairs) {
     const diffs = rows.map((p) => p.rules[k] - p.editor[k]);
     const abs = diffs.map(Math.abs);
     const n = rows.length;
-    if (k === "oak" || k === "co2") {
-      const right = abs.filter((a) => a === 0).length;
-      const rate = right / n;
-      out[k] = { kind: "choice", n, right, accuracy: rate, verdict: rate >= TARGETS.choice.good ? "good" : rate >= TARGETS.choice.ok ? "ok" : "needs work" };
+    if (k === "oak" || k === "co2" || k === "sweetness") {
+      // Fixed choices: the share exactly right, and the share within one step (oak and sweetness are ordered levels).
+      const right = abs.filter((a) => a === 0).length, within1 = abs.filter((a) => a <= 1).length;
+      const rate = right / n, t = k === "co2" ? TARGETS.choice : TARGETS.ordered;
+      out[k] = { kind: "choice", n, right, within1, accuracy: rate, within1Rate: within1 / n, verdict: rate >= t.good ? "good" : rate >= t.ok ? "ok" : "needs work" };
     } else {
       const mae = abs.reduce((a, b) => a + b, 0) / n;
       out[k] = {
@@ -400,7 +413,7 @@ export function reportText(results, rows) {
     for (const [k, r] of Object.entries(res)) {
       lines.push(r.kind === "scale"
         ? `  ${k}: average error ${r.mae.toFixed(2)}, bias ${r.bias >= 0 ? "+" : ""}${r.bias.toFixed(2)}, within 0.5: ${Math.round(r.within05 * 100)}%, ${r.verdict}`
-        : `  ${k}: ${r.right} of ${r.n} exactly right (${Math.round(r.accuracy * 100)}%), ${r.verdict}`);
+        : `  ${k}: ${r.right} of ${r.n} exactly right (${Math.round(r.accuracy * 100)}%), within one step ${Math.round(r.within1Rate * 100)}%, ${r.verdict}`);
     }
   }
   lines.push("", "Wine by wine (editor / rules)");
