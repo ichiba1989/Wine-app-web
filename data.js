@@ -1,5 +1,5 @@
 // Everything that talks to Supabase. Each function takes the client and throws on an error.
-import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=7";
+import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=8";
 import { BUCKET, newPhotoPath } from "./photos.js?v=4";
 
 const must = ({ data, error }) => { if (error) throw error; return data; };
@@ -260,4 +260,35 @@ export async function wineDeleteCheck(sb, wineVintageId) {
 // Deletes the vintage; the wine goes too when it was the last one. Owner only. The database refuses wines people have swiped or journaled.
 export async function deleteWineVintage(sb, wineVintageId) {
   return must(await sb.rpc("delete_wine_vintage", { p_vintage_id: wineVintageId }));
+}
+
+// ---------------------------------------------------------------- changing the wine on a journal entry
+// The wine a person typed in, as stored (to fill the form).
+export async function loadUserWine(sb, userWineId) {
+  return must(await sb.from("user_wines").select("id, producer, wine_name, vintage_year, is_non_vintage, grape_text, region_text, style").eq("id", userWineId).single());
+}
+// Carries out a plan from planWineEdit. The catalog is never changed: a correction either points the entry at a catalog wine
+// or lives on a wine that belongs to this person. Returns what the entry now points at.
+export async function changeJournalWine(sb, userId, entry, plan) {
+  if (plan.action === "none") return {};
+  if (plan.action === "update_outside") {
+    must(await sb.from("user_wines").update(plan.row).eq("id", plan.userWineId));
+    return { userWineId: plan.userWineId };
+  }
+  const oldUserWine = entry.user_wine_id || null;
+  let patch, created = null;
+  if (plan.action === "link_catalog") {
+    patch = { wine_vintage_id: plan.wineVintageId, user_wine_id: null, style_override: plan.styleOverride || null };
+  } else {
+    created = must(await sb.from("user_wines").insert({ ...plan.row, user_id: userId }).select("id").single()).id;
+    patch = { wine_vintage_id: null, user_wine_id: created, style_override: null };
+  }
+  try { must(await sb.from("consumptions").update(patch).eq("id", entry.id)); }
+  catch (e) { if (created) await sb.from("user_wines").delete().eq("id", created); throw e; }   // do not leave a stray wine behind
+  if (oldUserWine && oldUserWine !== created) {
+    // the old hand-typed wine goes if no other entry uses it
+    const rest = must(await sb.from("consumptions").select("id").eq("user_wine_id", oldUserWine).limit(1));
+    if (!rest.length) await sb.from("user_wines").delete().eq("id", oldUserWine);
+  }
+  return created ? { userWineId: created } : { wineVintageId: plan.wineVintageId };
 }
