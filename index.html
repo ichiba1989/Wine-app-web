@@ -109,6 +109,9 @@
   .bootbox b { font-size: 20px; display: block; margin-bottom: 8px; }
   .bootdetail { font: 12.5px/1.45 ui-monospace, Menlo, monospace; background: #fff; border-radius: 10px; padding: 10px; word-break: break-word; }
   .bootbox button { font: inherit; padding: 10px 16px; border-radius: 12px; border: 0; background: #14201a; color: #fff; }
+  .nudge { background: #f3f6f1; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin: 10px 0 4px; font-size: 14px; line-height: 1.4; }
+  .nudgeacts { display: flex; align-items: center; gap: 14px; margin-top: 8px; }
+  .nudgeacts .btn { margin: 0; }
   .acctfoot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-top: 14px; font-size: 13px; }
   .dangerlink { color: var(--wine); }
   /* Accounts */
@@ -230,6 +233,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=9" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=10" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>
