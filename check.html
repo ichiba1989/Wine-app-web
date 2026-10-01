@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wine app check</title>
+<style>
+  body { font: 15px/1.45 -apple-system, system-ui, sans-serif; margin: 16px; color: #14201a; background: #dfe6dd; }
+  h1 { font-size: 20px; margin: 0 0 6px; } p { margin: 6px 0 12px; color: #4b5a50; }
+  #sum { padding: 12px; border-radius: 12px; font-weight: 600; margin: 12px 0; background: #fff; }
+  #sum.good { background: #d3e8d3; } #sum.bad { background: #f1d3d3; }
+  pre { white-space: pre-wrap; word-break: break-word; background: #fff; border-radius: 12px; padding: 12px; font: 12.5px/1.5 ui-monospace, Menlo, monospace; }
+  button { font: inherit; padding: 12px 16px; border-radius: 12px; border: 0; background: #14201a; color: #fff; }
+</style></head>
+<body>
+<h1>Wine app check</h1>
+<p>This page tests every file the app needs and names the one that is wrong. It changes nothing.</p>
+<div id="sum">Running…</div>
+<pre id="out"></pre>
+<button id="copy">Copy results</button>
+<script type="module">
+const FILES = {
+ "index.html": {
+  "hash": "9414bc389f02c0642a2f30e48fdd6371623367de5304431ff6caab20eb5a0e4e",
+  "chars": 17346,
+  "query": null,
+  "exports": []
+ },
+ "app.js": {
+  "hash": "9229bfab94f4a458eeba966a7ab5d3d280d3571e414b704b34d4cdebe79c5389",
+  "chars": 30203,
+  "query": "8",
+  "exports": []
+ },
+ "logic.js": {
+  "hash": "5dee39d68f55a3c3761fb33d05f0efd9ef0385d98ca32ab0ca67d9ba2e934839",
+  "chars": 21349,
+  "query": "5",
+  "exports": [
+   "COLORS",
+   "DEFAULT_STRUCTURE",
+   "DIMS",
+   "FAMILIARITY",
+   "FLAGS",
+   "GROUPS",
+   "GROUP_PAGE",
+   "INTEREST",
+   "SORTS",
+   "THIS_YEAR",
+   "VERDICTS",
+   "WINE_FLAG_REASONS",
+   "YEARS",
+   "buildReview",
+   "cardFromRow",
+   "centsToPrice",
+   "choiceLabel",
+   "clamp01",
+   "clampDimValue",
+   "defaultFor",
+   "dimMeta",
+   "dimRange",
+   "dimsFor",
+   "editorList",
+   "entryCard",
+   "entryName",
+   "esc",
+   "feedbackOn",
+   "filterEntries",
+   "groupEntries",
+   "hasFullProfile",
+   "isChoice",
+   "nudgeDim",
+   "nudgeStep",
+   "outsideName",
+   "outsideRow",
+   "photoCount",
+   "priceToCents",
+   "queuePhoto",
+   "referenceWrites",
+   "refsByVintage",
+   "resetDim",
+   "setDim",
+   "sheetForCard",
+   "sheetForEntry",
+   "sheetForOutside",
+   "shuffle",
+   "sortCards",
+   "styleLabel",
+   "swipeKind",
+   "swipeLists",
+   "tapEdge",
+   "toggleExistingPhoto",
+   "unqueuePhoto",
+   "validateOutside",
+   "verdictShort",
+   "wineName"
+  ]
+ },
+ "photos.js": {
+  "hash": "fcc2ecdc2e85d00088e664ab3cc72b71db07c7a1aed3ef7fe331e04b5392c58b",
+  "chars": 1776,
+  "query": "4",
+  "exports": [
+   "BUCKET",
+   "MAX_SIDE",
+   "QUALITY",
+   "fitSize",
+   "newPhotoPath",
+   "shrinkImage"
+  ]
+ },
+ "data.js": {
+  "hash": "fa70a6156d25b1fef988604f7310c872e27cc7ca6c5238752a3dea83adf19e39",
+  "chars": 9554,
+  "query": "5",
+  "exports": [
+   "addWithoutRating",
+   "attestAge",
+   "changeInterest",
+   "claimGuestMerge",
+   "countRows",
+   "deleteJournalEntry",
+   "deletePhotos",
+   "deleteSwipe",
+   "ensureUser",
+   "flagWine",
+   "loadCards",
+   "loadEntryPhotos",
+   "loadFeature",
+   "loadJournal",
+   "loadPerceptions",
+   "loadProfile",
+   "loadReferenceRows",
+   "loadStates",
+   "loadVintageWines",
+   "prepareGuestMerge",
+   "recordSwipe",
+   "saveReferences",
+   "saveReview",
+   "signedUrls",
+   "uploadPhotos"
+  ]
+ },
+ "views.js": {
+  "hash": "76a4cfae0ff749b5d2124a2831d17fd532af3e399495382999b2dd49b937b47b",
+  "chars": 22230,
+  "query": "5",
+  "exports": [
+   "KEPT_NOTE",
+   "SWIPE_KEPT_NOTE",
+   "addFormHtml",
+   "bottleSvg",
+   "cardHtml",
+   "confirmHtml",
+   "dimControlHtml",
+   "discoverHtml",
+   "formPhotosHtml",
+   "groupIsOpen",
+   "journalListHtml",
+   "journalMetaHtml",
+   "journalShellHtml",
+   "marksHtml",
+   "photosHtml",
+   "sheetHtml",
+   "swipesHtml",
+   "thumbHtml",
+   "wineFlagHtml"
+  ]
+ },
+ "account.js": {
+  "hash": "6797f9ff096291b982110fd26ad4237fd163df948ec51700adbc557b25cdc33c",
+  "chars": 12933,
+  "query": "2",
+  "exports": [
+   "MERGE_KEY",
+   "MERGE_MAX_AGE_MS",
+   "RESEND_SECONDS",
+   "accountCardHtml",
+   "clearPendingMerge",
+   "createAccount",
+   "friendlyError",
+   "isGuest",
+   "mergeMessage",
+   "readPendingMerge",
+   "savePendingMerge",
+   "validCode",
+   "validEmail"
+  ]
+ },
+ "review.js": {
+  "hash": "36fa7d66b9a3643b60a323e77d399a777c2fd0b74a07fb3a23019387fdbbc4e6",
+  "chars": 16464,
+  "query": "1",
+  "exports": [
+   "DIFFS",
+   "FLAG_FILTERS",
+   "QUIZ_FILTERS",
+   "STATUS_LABEL",
+   "TOPICS",
+   "createReview",
+   "filterFlags",
+   "filterQuestions",
+   "flagActions",
+   "flagView",
+   "formFromQuestion",
+   "isDraft",
+   "questionPatch",
+   "validateQuestion"
+  ]
+ },
+ "editor.js": {
+  "hash": "cd95a2569fb60089b697856a0989087ef6dac4d26e1292eed5ee96a35eb1fb20",
+  "chars": 8696,
+  "query": "2",
+  "exports": [
+   "createEditor"
+  ]
+ },
+ "profile.js": {
+  "hash": "4855cb2c9e8873cace122c8313e84c18cc3cdd209daa6147d573d67141606b89",
+  "chars": 29375,
+  "query": "4",
+  "exports": [
+   "DIFFS",
+   "TIER_COLORS",
+   "TIER_NAMES",
+   "TOPICS",
+   "TROPHY_RANKS",
+   "UNRATED_WEIGHT",
+   "VERDICT_WEIGHTS",
+   "baselines",
+   "computePalate",
+   "computeTrophies",
+   "createProfile",
+   "exploredStats",
+   "leanWords",
+   "palateEntries",
+   "palateSummary",
+   "profileHtml",
+   "quizProgress",
+   "tiersEarned",
+   "timedStats",
+   "trophyRank",
+   "wheelSvg"
+  ]
+ },
+ "learn.js": {
+  "hash": "0d4a36329f38c6e30c95b4c936b2a8449abe8ec4612b781fa98e918ef279f866",
+  "chars": 20440,
+  "query": "1",
+  "exports": [
+   "DIFFS",
+   "FEEDBACK_MS",
+   "FLAG_REASONS",
+   "MODES",
+   "REVIEW_FILTERS",
+   "TIMED_SECONDS",
+   "advance",
+   "answer",
+   "clockText",
+   "createLearn",
+   "currentId",
+   "feedbackOn",
+   "learnHtml",
+   "newRun",
+   "optionsFor",
+   "orderFor",
+   "pct",
+   "poolFor",
+   "progressFrom",
+   "recordAnswer",
+   "removeFromArchive",
+   "resultOf"
+  ]
+ }
+};
+const APP_SCRIPT = "app.js?v=8";
+const CDN = "https://esm.sh/@supabase/supabase-js@2";
+const out = document.getElementById("out"), sum = document.getElementById("sum");
+const lines = []; let problems = 0, first = "";
+const note = (kind, text) => {
+  if (kind === "FAIL") { problems++; if (!first) first = text; }
+  lines.push(kind.padEnd(4) + " " + text); out.textContent = lines.join("\n");
+};
+const norm = (t) => t.replace(/\r\n/g, "\n").replace(/\s+$/, "");
+const sha = async (t) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(norm(t))))].map((b) => b.toString(16).padStart(2, "0")).join("");
+const msg = (e) => String((e && e.message) || e);
+
+note("INFO", "Page: " + location.href);
+note("INFO", "Time: " + new Date().toISOString());
+
+// 1. every file on the site, compared with the version in the guide
+for (const [name, f] of Object.entries(FILES)) {
+  try {
+    const r = await fetch("./" + name + "?check=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) { note("FAIL", name + ": is missing from the site (HTTP " + r.status + "). Create it from the guide."); continue; }
+    const text = await r.text();
+    const same = (await sha(text)) === f.hash;
+    if (same) note("OK", name + ": matches the guide");
+    else note("FAIL", name + ": is different from the guide (" + norm(text).length + " characters on the site, expected " + f.chars + "). Paste it again from the guide.");
+    if (name === "index.html" && !text.includes(APP_SCRIPT)) note("FAIL", "index.html: does not point at " + APP_SCRIPT + ", so it is an old version.");
+    if (same && f.query) {
+      const t2 = await (await fetch("./" + name + "?v=" + f.query)).text();
+      if ((await sha(t2)) !== f.hash) note("FAIL", name + ": the site is right, but THIS BROWSER holds an old copy. Clear this site's data (see the guide) and reload.");
+    }
+  } catch (e) { note("FAIL", name + ": could not be checked (" + msg(e) + ")"); }
+}
+
+// 2. config.js: your two connection values
+let url = "", key = "";
+try {
+  const r = await fetch("./config.js?check=" + Date.now(), { cache: "no-store" });
+  if (!r.ok) note("FAIL", "config.js: is missing from the site (HTTP " + r.status + "). The page will ask for the values instead.");
+  else {
+    const t = await r.text();
+    url = ((t.match(/SUPABASE_URL\s*=\s*"([^"]*)"/) || [])[1] || "").trim().replace(/\/+$/, "");
+    key = ((t.match(/SUPABASE_KEY\s*=\s*"([^"]*)"/) || [])[1] || "").trim();
+    if (/[\u201c\u201d\u2018\u2019]/.test(t)) note("FAIL", "config.js: contains curly quotes. Your keyboard changed the quote marks. Retype them as straight quotes (\").");
+    else if (!url || !key) note("FAIL", "config.js: could not find both values between straight quotes.");
+    else if (url.includes("PASTE") || key.includes("PASTE")) note("FAIL", "config.js: still has the PASTE placeholders. Put your project URL and publishable key in.");
+    else if (!/^https:\/\/[^\s]+\.[^\s]+$/.test(url)) note("FAIL", "config.js: the URL must start with https://");
+    else {
+      let secret = key.startsWith("sb_secret_");
+      try { const p = JSON.parse(atob(key.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))); if (p.role === "service_role") secret = true; } catch (_) {}
+      if (secret) note("FAIL", "config.js: this is a SECRET key. Remove it from config.js right away and use the publishable (anon) key. Then rotate the secret key in Supabase.");
+      else note("OK", "config.js: URL " + url.replace(/^https:\/\//, "") + ", key " + key.slice(0, 14) + "… (" + key.length + " characters)");
+    }
+  }
+} catch (e) { note("FAIL", "config.js: could not be checked (" + msg(e)); }
+
+// 3. the outside library the page loads
+try {
+  const m = await import(CDN);
+  note(typeof m.createClient === "function" ? "OK" : "FAIL", "Supabase library from esm.sh: " + (typeof m.createClient === "function" ? "loads" : "loaded but looks wrong"));
+} catch (e) { note("FAIL", "Supabase library from esm.sh did not load (" + msg(e) + "). The outside service may be down or blocked on this network. Try again later or on another network."); }
+
+// 4. each file loads and has everything the app needs (the same addresses the app uses)
+for (const [name, f] of Object.entries(FILES)) {
+  if (!f.query || !f.exports.length) continue;
+  try {
+    const m = await import("./" + name + "?v=" + f.query);
+    const missing = f.exports.filter((x) => !(x in m));
+    if (missing.length) note("FAIL", name + ": loads, but is missing " + missing.join(", ") + ". It is an old or damaged copy.");
+    else note("OK", name + ": loads and has everything the app needs");
+  } catch (e) { note("FAIL", name + ": failed to load (" + msg(e) + ")"); }
+}
+
+// 5. does the database answer to these two values
+if (url && key && !url.includes("PASTE") && !key.includes("PASTE")) {
+  try {
+    const r = await fetch(url + "/auth/v1/settings", { headers: { apikey: key } });
+    if (!r.ok) note("FAIL", "Supabase said HTTP " + r.status + " to these two values. Check the URL and the key in config.js.");
+    else {
+      const j = await r.json().catch(() => ({}));
+      note("OK", "Supabase answers to these two values");
+      note("INFO", "Email sign-in: " + (j.external && j.external.email ? "on" : "off") + ", new sign-ups: " + (j.disable_signup ? "off" : "on"));
+    }
+  } catch (e) { note("FAIL", "Could not reach Supabase at " + url + " (" + msg(e) + ")."); }
+}
+
+sum.textContent = problems ? problems + " problem" + (problems > 1 ? "s" : "") + ". First: " + first : "Everything the app needs is here and correct. If the page still does not load, close every tab of the app, clear this site's data, and reload.";
+sum.className = problems ? "bad" : "good";
+document.getElementById("copy").onclick = async () => {
+  const text = sum.textContent + "\n\n" + lines.join("\n");
+  try { await navigator.clipboard.writeText(text); document.getElementById("copy").textContent = "Copied"; }
+  catch (_) { const r = document.createRange(); r.selectNodeContents(out); const s = getSelection(); s.removeAllRanges(); s.addRange(r); document.getElementById("copy").textContent = "Selected: tap Copy in the menu"; }
+};
+</script>
+</body></html>
