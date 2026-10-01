@@ -102,6 +102,15 @@
   .round { width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%; border: 1px solid var(--line); background: #fff; font-size: 20px; line-height: 1; padding: 0; }
   .dimlabels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); padding: 0 44px; }
   textarea.field { resize: none; }
+  /* Start-up problems and account links */
+  #bootError { position: fixed; inset: 0; z-index: 100; background: var(--bg, #dfe6dd); display: flex; align-items: center; justify-content: center; padding: 24px; }
+  #bootError[hidden] { display: none; }
+  .bootbox { max-width: 420px; font-size: 15px; line-height: 1.45; }
+  .bootbox b { font-size: 20px; display: block; margin-bottom: 8px; }
+  .bootdetail { font: 12.5px/1.45 ui-monospace, Menlo, monospace; background: #fff; border-radius: 10px; padding: 10px; word-break: break-word; }
+  .bootbox button { font: inherit; padding: 10px 16px; border-radius: 12px; border: 0; background: #14201a; color: #fff; }
+  .acctfoot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-top: 14px; font-size: 13px; }
+  .dangerlink { color: var(--wine); }
   /* Accounts */
   .okbox { background: #E3EDE1; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 13px; margin: 10px 0 4px; }
   .codefield { text-align: center; font-size: 24px; letter-spacing: .3em; }
@@ -198,6 +207,29 @@
 <div id="app"></div>
 <div id="overlay"></div>
 <div id="confirm"></div>
-<script type="module" src="app.js?v=8"></script>
+<div id="bootError" hidden></div>
+<script>
+// If the app cannot start, say why on the screen instead of leaving a blank page.
+(function () {
+  window.__booted = false;
+  var shown = false;
+  function show(detail) {
+    if (window.__booted || shown) return;
+    shown = true;
+    var el = document.getElementById("bootError");
+    el.innerHTML = '<div class="bootbox"><b>The app could not start.</b><p>Reloading often fixes it. If it keeps happening, open the check page to see which file is wrong.</p><p class="bootdetail"></p><p><button onclick="location.reload()">Reload</button> &nbsp; <a href="check.html">Open the check page</a></p></div>';
+    el.querySelector(".bootdetail").textContent = detail;
+    el.hidden = false;
+  }
+  window.__bootFailed = show;
+  window.addEventListener("error", function (e) {
+    // only problems in this site's own files, so unrelated browser extensions cannot trigger it
+    if (e.filename && e.filename.indexOf(location.origin) === 0) show(e.message || "A file of the app has an error.");
+  });
+  window.addEventListener("unhandledrejection", function (e) { show(String((e.reason && e.reason.message) || e.reason || "Unknown problem")); });
+  setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
+})();
+</script>
+<script type="module" src="app.js?v=9" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>
