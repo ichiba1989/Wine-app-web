@@ -173,3 +173,15 @@ export async function prepareGuestMerge(sb) {
 export async function claimGuestMerge(sb, token) {
   return must(await sb.rpc("claim_guest_merge", { p_token: token }));
 }
+
+// ---------------------------------------------------------------- deleting the whole account
+// Photos are private files, so they are erased first. If that fails nothing else is deleted and the person can try again.
+// The database function then keeps only anonymous ratings, erases everything else, and removes the account.
+export async function deleteMyAccount(sb) {
+  const rows = await allRows(() => sb.from("journal_photos").select("storage_path"));
+  for (let i = 0; i < rows.length; i += 100) {
+    const r = await sb.storage.from(BUCKET).remove(rows.slice(i, i + 100).map((x) => x.storage_path));
+    if (r.error) throw r.error;
+  }
+  must(await sb.rpc("delete_my_account"));
+}
