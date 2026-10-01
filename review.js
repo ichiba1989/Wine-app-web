@@ -1,9 +1,9 @@
 // Editor review tools (shown inside the Editor tab):
 //   Flags: what testers reported on quiz questions and wines, to mark reviewed or closed.
 //   Feedback: general messages testers sent from the app (broken, confusing, ideas), to read and mark handled.
-//   Quiz:  edit each question, record its source, and verify it (verified questions are what players see).
+//   Quiz:  edit each question, record its source if you have one, and verify it (verified questions are what players see).
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
-import { esc, wineName } from "./logic.js?v=7";
+import { esc, wineName } from "./logic.js?v=8";
 
 export const TOPICS = ["Grapes", "Regions", "Producers", "Winemaking", "Other alcohol"];
 export const DIFFS = [
@@ -76,7 +76,7 @@ export const formFromQuestion = (q, source) => ({
   sourceName: source ? source.name : "", sourceUrl: source ? source.url || "" : "",
 });
 // Returns a message for the first problem found, or "" when the question is fine.
-export function validateQuestion(f, { needSource = false } = {}) {
+export function validateQuestion(f) {
   const t = (x) => String(x || "").trim();
   if (!t(f.question)) return "Write the question.";
   if (!t(f.correct)) return "Write the correct answer.";
@@ -86,7 +86,6 @@ export function validateQuestion(f, { needSource = false } = {}) {
   if (new Set(all).size !== 4) return "The four answers must all be different.";
   if (!TOPICS.includes(f.topic)) return "Choose a topic.";
   if (!DIFFS.some((d) => d.id === f.difficulty)) return "Choose a difficulty.";
-  if (needSource && !t(f.sourceName) && !f.sourceId) return "Add the source you checked it against before verifying.";
   return "";
 }
 // mode: save (keeps the status), verify, draft (send back), retire.
@@ -177,7 +176,7 @@ function questionSheetHtml(R) {
     <input class="field wrong" data-rq="d2" placeholder="Wrong answer 3" value="${esc(f.d2)}" aria-label="Wrong answer 3">
     <div class="two"><select class="field" data-rq="topic" aria-label="Topic">${options(TOPICS, f.topic)}</select>
       <select class="field" data-rq="difficulty" aria-label="Difficulty">${options(DIFFS, f.difficulty)}</select></div>
-    <input class="field" data-rq="sourceName" placeholder="Source you checked it against (book, site, producer)" value="${esc(f.sourceName)}">
+    <input class="field" data-rq="sourceName" placeholder="Source (optional): book, site, producer" value="${esc(f.sourceName)}">
     <input class="field" data-rq="sourceUrl" placeholder="Source link (optional)" value="${esc(f.sourceUrl)}">
     <div id="reviewErr" class="err">${esc(R.formError || "")}</div>${buttons}</div></div>`;
 }
@@ -275,7 +274,7 @@ export function createReview(ctx) {
   async function saveQuestion(mode) {
     const f = R.form;
     if (!f || R.saving) return;
-    const problem = mode === "verify" || mode === "save" ? validateQuestion(f, { needSource: mode === "verify" }) : "";
+    const problem = mode === "verify" || mode === "save" ? validateQuestion(f) : "";
     if (problem) { R.formError = problem; syncSheet(); return; }
     R.saving = true; R.formError = ""; syncSheet();
     try {
@@ -322,4 +321,3 @@ export function createReview(ctx) {
     get newFeedback() { return R.loaded && !R.feedbackError ? R.feedback.filter((f) => f.status === "new").length : null; },
   };
 }
-
