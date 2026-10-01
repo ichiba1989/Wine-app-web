@@ -12,7 +12,7 @@ import { dimsFor, defaultFor, esc, wineName, nudgeStep, editorList, hasFullProfi
 import * as db from "./data.js?v=5";
 import { marksHtml, dimControlHtml } from "./views.js?v=5";
 import { createReview } from "./review.js?v=2";
-import { suggestStructure, values as ruleValues, goldInfo, GOLD, evaluateRules, reportText, TARGETS, RULES_VERSION } from "./rules.js?v=1";
+import { suggestStructure, values as ruleValues, goldInfo, GOLD, GROUPS, evaluateRules, reportText, TARGETS, RULES_VERSION } from "./rules.js?v=2";
 
 const SECTIONS = [{ id: "structure", label: "Structure" }, { id: "flags", label: "Flags" }, { id: "quiz", label: "Quiz" }, { id: "feedback", label: "Feedback" }];
 
@@ -30,12 +30,18 @@ function ruleNote(d, x) {
   const shown = isChoice(d) ? choiceLabel(d, x.value) : x.value;
   return `<div class="rulenote"><span class="conf" title="${x.confidence} confidence">${CONF_DOTS[x.confidence]}</span> Rules suggest <b>${esc(String(shown))}</b>. ${esc(x.why.join("; "))}</div>`;
 }
+// In blind scoring every line has to be scored on purpose. A line still showing its starting value is not a score.
+const touchHtml = (d, s) => {
+  if (s.mode !== "blind") return "";
+  const shown = isChoice(d) ? choiceLabel(d, s.values[d.key]) : s.values[d.key];
+  return s.touched.has(d.key) ? `<div class="touch done">Scored</div>` : `<div class="touch">Not scored yet. <button class="link" data-editor="keep:${d.key}">Score it as ${esc(String(shown))}</button></div>`;
+};
 function sheetHtml(E) {
   const s = E.sheet;
-  const wrap = (d) => `<div class="dimwrap">${dimControlHtml(d, { value: s.values[d.key], adjusted: true }, { attr: "data-editor", slider: "data-edim", reset: false })}${s.mode === "suggest" || s.mode === "saved" ? ruleNote(d, s.suggestion && s.suggestion.dims[d.key]) : ""}</div>`;
+  const wrap = (d) => `<div class="dimwrap">${dimControlHtml(d, { value: s.values[d.key], adjusted: true }, { attr: "data-editor", slider: "data-edim", reset: false })}<div id="touch-${d.key}">${touchHtml(d, s)}</div>${s.mode === "suggest" || s.mode === "saved" ? ruleNote(d, s.suggestion && s.suggestion.dims[d.key]) : ""}</div>`;
   const dims = dimsFor(s.style).map(wrap).join("");
   const banner = s.mode === "blind"
-    ? `<div class="goldbanner"><b>Gold set wine.</b> Score it from your own knowledge. The rules\' suggestion is hidden so it cannot influence you. It is compared with your scores in the Rule test.</div>`
+    ? `<div class="goldbanner"><b>Gold set wine.</b> Score every line from your own knowledge. The rules\' suggestion is hidden so it cannot influence you. A line you have not touched does not count: tap "Score it as" if the value shown is right.</div>`
     : s.mode === "gold-saved"
       ? `<div class="goldbanner"><b>Gold set wine.</b> Your scores are saved. The rules\' suggestion stays hidden here. See the Rule test for the comparison. Changing a score now changes the test.</div>`
       : s.mode === "suggest"
@@ -88,18 +94,17 @@ function testHtml(E) {
   const rows = scoredGold(E);
   const all = evaluateRules(rows);
   const verdictClass = (v) => (v === "good" ? "vgood" : v === "ok" ? "vok" : "vbad");
-  const groupBlock = (g, title, note) => {
-    const sub = rows.filter((r) => r.group === g);
-    if (!sub.length) return `<div class="pcard"><div class="ptitle">${title}</div><p class="muted small">No wines scored in this group yet.</p></div>`;
+  const groupBlock = (grp) => {
+    const sub = rows.filter((r) => r.group === grp.id);
+    if (!sub.length) return `<div class="pcard"><div class="ptitle">${esc(grp.title)}</div><p class="muted small">${esc(grp.note)} No wines scored in this group yet.</p></div>`;
     const res = evaluateRules(sub);
     const lines = Object.entries(res).map(([k, r]) => {
-      const d = dimsFor(r.kind === "choice" ? "white" : "red").find((x) => x.key === k) || { name: k };
       const name = k === "co2" ? "CO\u2082" : k.charAt(0).toUpperCase() + k.slice(1);
       return r.kind === "scale"
         ? `<div class="kv"><span>${name}</span><span><span class="${verdictClass(r.verdict)}">${r.verdict}</span> &nbsp; avg error ${r.mae.toFixed(2)}, within 0.5: ${Math.round(r.within05 * 100)}%</span></div>`
         : `<div class="kv"><span>${name}</span><span><span class="${verdictClass(r.verdict)}">${r.verdict}</span> &nbsp; ${r.right} of ${r.n} exactly right</span></div>`;
     }).join("");
-    return `<div class="pcard"><div class="ptitle">${title} (${sub.length} wines)</div><p class="muted small">${note}</p>${lines}</div>`;
+    return `<div class="pcard"><div class="ptitle">${esc(grp.title)} (${sub.length} wines)</div><p class="muted small">${esc(grp.note)}</p>${lines}</div>`;
   };
   const wineCards = rows.map((r) => {
     const dims = dimsFor(r.style).map((d) => {
@@ -107,7 +112,7 @@ function testHtml(E) {
       const off = isChoice(d) ? e !== x : Math.abs(e - x) >= 1;
       return `<div class="cmp${off ? " off" : ""}"><span>${d.name}</span><span>${esc(fmtDim(d, e))} / ${esc(fmtDim(d, x))}</span></div>`;
     }).join("");
-    return `<div class="pcard"><div class="small muted">${r.group === "tune" ? "Tuning group" : "Held-back group"}</div><div class="serif" style="font-size:16px">${esc(r.name)}</div>
+    return `<div class="pcard"><div class="small muted">${esc((GROUPS.find((g) => g.id === r.group) || {}).title || r.group)}</div><div class="serif" style="font-size:16px">${esc(r.name)}</div>
       <div class="muted tiny">You / rules. Highlighted when they differ by a point or more.</div><div class="cmpgrid">${dims}</div></div>`;
   }).join("");
   const text = reportText(all, rows);
@@ -115,8 +120,7 @@ function testHtml(E) {
     <div class="sheethead"><div class="sheettitle"><div class="serif big">Rule test</div><div class="muted small">Rules version ${esc(RULES_VERSION)}. ${rows.length} of ${GOLD.length} gold wines scored.</div></div>
       <div class="sheetbtns"><button class="xbtn" data-editor="testclose" aria-label="Close">&times;</button></div></div>
     <p class="muted small">Targets: average error of 0.6 or less on the sliders is good, 0.8 is ok. For oak and CO\u2082, 85% exactly right is good, 70% is ok.${rows.length < GOLD.length ? " Results are rough until all " + GOLD.length + " are scored." : ""}</p>
-    ${groupBlock("tune", "Tuning group", "The rules may be adjusted using these wines.")}
-    ${groupBlock("holdout", "Held-back group", "Kept aside, never used for adjusting. This is the honest check.")}
+    ${GROUPS.map(groupBlock).join("")}
     <div class="pcard"><div class="ptitle">Share these results</div><textarea class="field" rows="6" readonly id="testText">${esc(text)}</textarea>
       <button class="btn outline slim" data-editor="copytest">Copy results</button></div>
     <h3 class="psub">Wine by wine</h3>${wineCards}</div></div>`;
@@ -176,6 +180,7 @@ export function createEditor(ctx) {
         if (r && Number(r.value) !== s.values[d.key]) r.value = s.values[d.key];
       }
     });
+    if (s.mode === "blind") dimsFor(s.style).forEach((d) => { const el = document.getElementById("touch-" + d.key); if (el) el.innerHTML = touchHtml(d, s); });
     document.querySelectorAll("[data-editor='save']").forEach((b) => { b.disabled = E.saving; });
     const err = document.getElementById("editorErr");
     if (err) err.textContent = E.error || "";
@@ -183,6 +188,10 @@ export function createEditor(ctx) {
   async function save() {
     const s = E.sheet;
     if (!s || E.saving) return;
+    if (s.mode === "blind") {
+      const left = dimsFor(s.style).filter((d) => !s.touched.has(d.key)).map((d) => d.name);
+      if (left.length) { E.error = `Score every line first. Still to score: ${left.join(", ")}.`; syncSheet(); return; }
+    }
     E.saving = true; E.error = ""; syncSheet();
     try {
       await db.saveReferences(ctx.sb(), ctx.userId(), s.wineId, s.values, E.rows);
@@ -210,13 +219,14 @@ export function createEditor(ctx) {
       const startFor = (d) => (typeof cur[d.key] === "number" ? clampDimValue(d, cur[d.key]) : suggestion ? clampDimValue(d, suggestion.dims[d.key].value) : defaultFor(d, card.style));
       E.sheet = {
         vintageId: a, wineId: E.vintageToWine.get(a), name: wineName(card), style: card.style, suggestion,
-        mode: gold ? (hasRef ? "gold-saved" : "blind") : hasRef ? "saved" : "suggest",
+        mode: gold ? (hasRef ? "gold-saved" : "blind") : hasRef ? "saved" : "suggest", touched: new Set(),
         values: Object.fromEntries(dimsFor(card.style).map((d) => [d.key, startFor(d)])),
       };
       E.error = ""; overlay().innerHTML = sheetHtml(E);
     }
-    else if (action === "nudge") { E.sheet.values[a] = nudgeStep(E.sheet.values[a], Number(b)); syncSheet(); }
-    else if (action === "choice") { E.sheet.values[a] = Number(b); syncSheet(); }
+    else if (action === "nudge") { E.sheet.values[a] = nudgeStep(E.sheet.values[a], Number(b)); E.sheet.touched.add(a); syncSheet(); }
+    else if (action === "choice") { E.sheet.values[a] = Number(b); E.sheet.touched.add(a); syncSheet(); }
+    else if (action === "keep") { E.sheet.touched.add(a); syncSheet(); }
     else if (action === "save") save();
     else if (action === "close") { E.sheet = null; overlay().innerHTML = ""; }
     else if (action === "ruletest") overlay().innerHTML = testHtml(E);
@@ -231,7 +241,7 @@ export function createEditor(ctx) {
   });
   document.addEventListener("input", (ev) => {
     const t = ev.target;
-    if (t.dataset && t.dataset.edim && E.sheet) { E.sheet.values[t.dataset.edim] = nudgeStep(Number(t.value), 0); syncSheet(); }
+    if (t.dataset && t.dataset.edim && E.sheet) { E.sheet.values[t.dataset.edim] = nudgeStep(Number(t.value), 0); E.sheet.touched.add(t.dataset.edim); syncSheet(); }
     else if (t.dataset && t.dataset.editorQ !== undefined) { E.q = t.value; drawList(); }
   });
 
