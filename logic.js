@@ -30,28 +30,44 @@ export const VERDICTS = [
 export const verdictShort = (code) => { const v = VERDICTS.find((x) => x.code === code); return v ? v.short : null; };
 
 // Wine structure dimensions (same keys as the database's structure_dimensions table).
-// Wine structure. Most dimensions are sliders from 1 to 5. Two are fixed choices with no values in between:
-// oak (0 unoaked, 1 oaked) and CO2 (0 none, 1 frizzy, 2 sparkling). Tannin only applies to red-style wines,
-// and CO2 replaces it for white, sparkling and rose wines. The same rules are enforced by the database.
+// Three are sliders from 1 to 5: acidity, body and tannin. The rest are fixed choices with no values in between:
+//   sweetness 0 dry, 1 off-dry, 2 semi-sweet, 3 dessert sweet (shown as Dry or Sweet, and Sweet opens the three levels)
+//   CO2       0 none, 1 frizzy, 2 sparkling
+//   oak       0 no oak, 1 neutral oak (old or large casks, little flavor), 2 new oak (noticeable); shown as a three-stop scale with + and -
+// The same rules are enforced by the database.
 export const DIMS = [
   { key: "acidity", name: "Acidity", lo: "soft", hi: "bright", kind: "scale" },
   { key: "body", name: "Body", lo: "light", hi: "full", kind: "scale" },
-  { key: "tannin", name: "Tannin", lo: "supple", hi: "grippy", kind: "scale", styles: ["red", "fortified", "unknown"] },
-  { key: "co2", name: "CO\u2082", lo: "still", hi: "sparkling", kind: "choice", values: [0, 1, 2], labels: ["None", "Frizzy", "Sparkling"], styles: ["white", "sparkling", "rose"] },
-  { key: "sweetness", name: "Sweetness", lo: "dry", hi: "sweet", kind: "scale" },
-  { key: "oak", name: "Oak", lo: "unoaked", hi: "oaked", kind: "choice", values: [0, 1], labels: ["Unoaked", "Oaked"] },
+  { key: "tannin", name: "Tannin", lo: "supple", hi: "grippy", kind: "scale" },
+  { key: "sweetness", name: "Sweetness", lo: "dry", hi: "sweet", kind: "choice", values: [0, 1, 2, 3], labels: ["Dry", "Off-dry", "Semi-sweet", "Dessert sweet"], ui: "drysweet" },
+  { key: "co2", name: "CO\u2082", lo: "still", hi: "sparkling", kind: "choice", values: [0, 1, 2], labels: ["None", "Frizzy", "Sparkling"] },
+  { key: "oak", name: "Oak", lo: "no oak", hi: "new oak", kind: "choice", values: [0, 1, 2], labels: ["No oak", "Neutral oak", "New oak"], ui: "steps" },
 ];
+// The kinds of wine, and which structure lines each one has. To add a kind of wine later, add one entry here
+// (and the same value to the database's wine_style list). Tannin is for reds and fortified wines, CO2 for the others.
+export const WINE_STYLES = [
+  { id: "red", label: "Red", dims: ["acidity", "body", "tannin", "sweetness", "oak"] },
+  { id: "white", label: "White", dims: ["acidity", "body", "sweetness", "co2", "oak"] },
+  { id: "sparkling", label: "Sparkling", dims: ["acidity", "body", "sweetness", "co2", "oak"] },
+  { id: "rose", label: "Ros\u00e9", dims: ["acidity", "body", "sweetness", "co2", "oak"] },
+  { id: "fortified", label: "Fortified", dims: ["acidity", "body", "tannin", "sweetness", "oak"] },
+];
+export const styleInfo = (id) => WINE_STYLES.find((x) => x.id === id) || null;
 export const DEFAULT_STRUCTURE = 3;   // scale sliders start in the middle until a wine has a reference profile
 export const dimMeta = (key) => DIMS.find((d) => d.key === key);
-// The five dimensions that apply to a wine of this style.
-export const dimsFor = (style) => DIMS.filter((d) => !d.styles || d.styles.includes(style || "unknown"));
+// The structure lines that apply to a wine of this style. An unknown style is treated as red.
+export const dimsFor = (style) => { const info = styleInfo(style) || styleInfo("red"); return DIMS.filter((d) => info.dims.includes(d.key)); };
 export const isChoice = (d) => d.kind === "choice";
+// A bar is anything drawn as a slider: the 1 to 5 scales, and oak (a slider with three stops).
+export const isBar = (d) => !isChoice(d) || d.ui === "steps";
+export const barDims = (style) => dimsFor(style).filter(isBar);          // the sliders, shown together
+export const choiceDims = (style) => dimsFor(style).filter((d) => !isBar(d));   // then the buttons (sweetness, CO2)
 // Smallest, largest and middle value, and half the span (used to turn any dimension into a -1 to 1 lean).
 export function dimRange(d) {
   const min = isChoice(d) ? d.values[0] : 1, max = isChoice(d) ? d.values[d.values.length - 1] : 5;
   return { min, max, mid: (min + max) / 2, half: (max - min) / 2 };
 }
-// What a rating starts at when editors have not set a reference value.
+// What a rating starts at when editors have not set a reference value. Dry, no oak and no bubbles are the usual case.
 export function defaultFor(d, style) {
   if (d.key === "co2") return style === "sparkling" ? 2 : 0;
   if (isChoice(d)) return d.values[0];
@@ -109,7 +125,7 @@ export function entryCard(e) {
 export const entryName = (e) => wineName(entryCard(e));
 
 export function styleLabel(style) {
-  return style === "red" ? "Red" : style === "white" ? "White" : style === "sparkling" ? "Sparkling" : "Other or unknown";
+  return style === "red" ? "Red" : style === "white" ? "White" : style === "sparkling" ? "Sparkling" : style === "rose" ? "Ros\u00e9" : style === "fortified" ? "Fortified" : "Other or unknown";
 }
 
 // ---------------------------------------------------------------- journal: search, filter, groups
@@ -182,7 +198,7 @@ export const SORTS = [
   { id: "producer", label: "Producer" },
   { id: "style", label: "Style" },
 ];
-const STYLE_ORDER = ["Red", "White", "Sparkling", "Other or unknown"];
+const STYLE_ORDER = ["Red", "White", "Sparkling", "Ros\u00e9", "Fortified", "Other or unknown"];
 
 // Sorts cards (or items that hold a card, via `get`). Missing values always go last.
 export function sortCards(list, by, order, get = (x) => x) {
@@ -243,7 +259,7 @@ const noPhotos = () => ({ existing: [], queued: [] });
 export function sheetForCard(card, today, defaults = {}) {
   return {
     target: { kind: "catalog", wineVintageId: card.id, userWineId: null, name: wineName(card), form: null },
-    entryId: null, verdict: null, date: today, price: "", food: "", occasion: "", notes: "", dims: newDims(defaults, card.style), style: card.style, photos: noPhotos(),
+    entryId: null, verdict: null, date: today, price: "", food: "", occasion: "", notes: "", dims: newDims(defaults, card.style), style: card.style, catalogStyle: card.style, hadOverride: false, photos: noPhotos(),
   };
 }
 // A rating sheet for an existing journal entry, with its saved structure ratings and photos.
@@ -260,7 +276,7 @@ export function sheetForEntry(e, perceptionRows, today, defaults = {}, photoRows
       ? { kind: "outside", wineVintageId: null, userWineId: e.user_wine_id, name: entryName(e), form: null }
       : { kind: "catalog", wineVintageId: e.wine_vintage_id, userWineId: null, name: entryName(e), form: null },
     entryId: e.id, verdict: e.verdict || null, date: e.consumed_on || today,
-    price: centsToPrice(e.purchase_price_cents), food: e.food || "", occasion: e.occasion || "", notes: e.notes || "", dims, style: e.style,
+    price: centsToPrice(e.purchase_price_cents), food: e.food || "", occasion: e.occasion || "", notes: e.notes || "", dims, style: e.style, catalogStyle: e.catalog_style || e.style, hadOverride: !!(e.catalog_style && e.catalog_style !== e.style),
     photos: { existing: photoRows.map((p) => ({ id: p.id, path: p.storage_path, url: p.url || null, removed: false })), queued: [] },
   };
 }
@@ -272,7 +288,7 @@ export function outsideName(form) {
 export function sheetForOutside(form, today) {
   return {
     target: { kind: "outside", wineVintageId: null, userWineId: null, name: outsideName(form), form },
-    entryId: null, verdict: null, date: today, price: "", food: "", occasion: "", notes: "", dims: newDims({}, form.style || "unknown"), style: form.style || "unknown",
+    entryId: null, verdict: null, date: today, price: "", food: "", occasion: "", notes: "", dims: newDims({}, form.style || "unknown"), style: form.style || "unknown", catalogStyle: form.style || "unknown", hadOverride: false,
     photos: { existing: [], queued: [...(form.photos || [])] },
   };
 }
@@ -285,6 +301,14 @@ export function setDim(sheet, key, value) {
 export function nudgeDim(sheet, key, delta) { return setDim(sheet, key, sheet.dims[key].value + delta); }
 // The same rule for a plain number on a scale (used by the editor's sliders).
 export const nudgeStep = (value, delta) => clampDimValue({ kind: "scale" }, value + delta);
+// Switch the wine type on a rating sheet. Lines both types have keep what was entered; new lines start at their defaults.
+export function setStyle(sheet, style) {
+  if (!styleInfo(style) || style === sheet.style) return sheet;
+  const fresh = newDims({}, style);
+  const dims = {};
+  Object.keys(fresh).forEach((k) => { dims[k] = sheet.dims[k] || fresh[k]; });
+  return { ...sheet, style, dims };
+}
 export function resetDim(sheet, key) {
   const d = sheet.dims[key];
   return { ...sheet, dims: { ...sheet.dims, [key]: { ...d, value: d.def, adjusted: false } } };
@@ -298,6 +322,8 @@ export function buildReview(sheet, today) {
     consumption: {
       consumed_on: date, verdict: sheet.verdict, purchase_price_cents: priceToCents(sheet.price),
       food: clean(sheet.food), occasion: clean(sheet.occasion), notes: clean(sheet.notes),
+      // Only sent when it matters, so saving still works before the database has the column.
+      ...(sheet.target.kind === "catalog" && (sheet.style !== sheet.catalogStyle || sheet.hadOverride) ? { style_override: sheet.style !== sheet.catalogStyle ? sheet.style : null } : {}),
     },
     perceptions: DIMS.filter((d) => sheet.dims[d.key]).map((d) => {
       const x = sheet.dims[d.key];
