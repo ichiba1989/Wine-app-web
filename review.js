@@ -1,5 +1,6 @@
 // Editor review tools (shown inside the Editor tab):
 //   Flags: what testers reported on quiz questions and wines, to mark reviewed or closed.
+//   Feedback: general messages testers sent from the app (broken, confusing, ideas), to read and mark handled.
 //   Quiz:  edit each question, record its source, and verify it (verified questions are what players see).
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
 import { esc, wineName } from "./logic.js?v=5";
@@ -43,6 +44,22 @@ export const flagActions = (status) => ({
   closed: [{ to: "open", label: "Reopen" }],
 }[status] || []);
 export const filterFlags = (flags, filter) => flags.filter((f) => filter === "all" || f.status === filter);
+
+// ---------------------------------------------------------------- feedback
+export const FEEDBACK_FILTERS = [
+  { id: "new", label: "New" },
+  { id: "read", label: "Read" },
+  { id: "done", label: "Done" },
+  { id: "all", label: "All" },
+];
+export const KIND_LABEL = { bug: "Broken", confusing: "Confusing", idea: "Idea", other: "Other" };
+export const filterFeedback = (list, filter) => list.filter((f) => filter === "all" || f.status === filter);
+// new -> read or done; read -> done or back to new; done -> back to new.
+export const feedbackActions = (status) => ({
+  new: [{ to: "read", label: "Mark read" }, { to: "done", label: "Done" }],
+  read: [{ to: "done", label: "Done" }, { to: "new", label: "Mark new" }],
+  done: [{ to: "new", label: "Reopen" }],
+}[status] || []);
 
 // ---------------------------------------------------------------- quiz questions
 export const isDraft = (q) => q.status === "draft" || q.status === "pending_review";
@@ -105,6 +122,23 @@ function flagsHtml(R) {
     <div class="jmeta"><span>${counts}</span></div>${rows || `<p class="muted">${R.flagFilter === "open" ? "No open flags." : "Nothing here."}</p>`}`;
 }
 
+function feedbackHtml(R) {
+  if (R.feedbackError) return `<div class="err">${esc(R.feedbackError)}</div><button class="btn outline" data-review="retry">Try again</button>`;
+  if (!R.loaded) return `<p class="muted">Loading feedback…</p>`;
+  const rows = filterFeedback(R.feedback, R.feedbackFilter).map((f) => {
+    const acts = feedbackActions(f.status).map((a) => `<button class="pill${a.to === "done" ? "" : " dark"}" data-review="fb:${f.id}:${a.to}">${a.label}</button>`).join("");
+    const reply = f.contact_email ? `<a class="pill" href="mailto:${esc(f.contact_email)}?subject=${encodeURIComponent("Your feedback on the wine app")}">Reply by email</a>` : "";
+    const meta = [String(f.created_at || "").slice(0, 10), f.screen ? "on " + f.screen : "", f.app_version ? "version " + f.app_version : ""].filter(Boolean).join(", ");
+    return `<div class="pcard"><div class="small muted">${esc(KIND_LABEL[f.kind] || f.kind)}, ${esc(meta)}, ${esc(f.status)}</div>
+      <div class="ptext" style="white-space:pre-wrap">${esc(f.message)}</div>
+      ${f.contact_email ? `<div class="muted small">Reply to: ${esc(f.contact_email)}</div>` : `<div class="muted small">No reply address left.</div>`}
+      <div class="acts">${acts}${reply}</div>${R.feedbackActionError && R.feedbackActionError.id === f.id ? `<div class="err">${esc(R.feedbackActionError.message)}</div>` : ""}</div>`;
+  }).join("");
+  const counts = ["new", "read", "done"].map((s) => `${R.feedback.filter((f) => f.status === s).length} ${s}`).join(", ");
+  return `<div class="chips left">${FEEDBACK_FILTERS.map((x) => `<button class="chip wide${R.feedbackFilter === x.id ? " on" : ""}" data-review="fbf:${x.id}">${x.label}</button>`).join("")}</div>
+    <div class="jmeta"><span>${counts}</span></div>${rows || `<p class="muted">${R.feedbackFilter === "new" ? "No new feedback." : "Nothing here."}</p>`}`;
+}
+
 function quizHtml(R) {
   if (R.error) return `<div class="err">${esc(R.error)}</div><button class="btn outline" data-review="retry">Try again</button>`;
   if (!R.loaded) return `<p class="muted">Loading questions…</p>`;
@@ -160,14 +194,19 @@ export function createReview(ctx) {
   const R = {
     ctx, loaded: false, error: null, flags: [], questions: [], sources: new Map(),
     flagFilter: "open", quizFilter: "draft", qq: "", flagError: null,
+    feedback: [], feedbackFilter: "new", feedbackError: null, feedbackActionError: null,
     form: null, formError: "", saving: false, view: "flags",
   };
   let root = null;
   const overlay = () => document.querySelector("#overlay");
-  const draw = () => { if (root) root.innerHTML = R.view === "flags" ? flagsHtml(R) : quizHtml(R); };
+  const draw = () => { if (root) root.innerHTML = R.view === "flags" ? flagsHtml(R) : R.view === "feedback" ? feedbackHtml(R) : quizHtml(R); };
 
   async function load() {
-    R.error = null; R.loaded = false; draw();
+    R.error = null; R.feedbackError = null; R.loaded = false; draw();
+    // Feedback is loaded on its own, so a missing feedback table can never stop the flags and the quiz from loading.
+    try {
+      R.feedback = await allRows(() => ctx.sb().from("app_feedback").select("id, kind, message, screen, app_version, contact_email, status, created_at").order("created_at", { ascending: false }));
+    } catch (e) { R.feedbackError = "Could not load feedback: " + (e.message || e) + " (Has the feedback update been run in Supabase?)"; R.feedback = []; }
     try {
       const sb = ctx.sb();
       const [flags, questions, sources] = await Promise.all([
@@ -192,6 +231,18 @@ export function createReview(ctx) {
       draw();
       if (ctx.onChange) ctx.onChange();
     } catch (e) { R.flagError = { id: Number(id), message: "Could not update: " + (e.message || e) }; draw(); }
+  }
+
+  async function setFeedback(id, to) {
+    R.feedbackActionError = null;
+    try {
+      const now = new Date().toISOString();
+      must(await ctx.sb().from("app_feedback").update({ status: to, handled_by: to === "new" ? null : ctx.userId(), handled_at: to === "new" ? null : now }).eq("id", Number(id)));
+      const f = R.feedback.find((x) => String(x.id) === String(id));
+      if (f) f.status = to;
+      draw();
+      if (ctx.onChange) ctx.onChange();
+    } catch (e) { R.feedbackActionError = { id: Number(id), message: "Could not update: " + (e.message || e) }; draw(); }
   }
 
   function openQuestion(id) {
@@ -236,6 +287,8 @@ export function createReview(ctx) {
     const [action, a, b] = t.dataset.review.split(":");
     if (action === "ff") { R.flagFilter = a; draw(); }
     else if (action === "qf") { R.quizFilter = a; draw(); }
+    else if (action === "fbf") { R.feedbackFilter = a; draw(); }
+    else if (action === "fb") setFeedback(a, b);
     else if (action === "flag") setFlag(a, b);
     else if (action === "openq") { if (ctx.gotoQuiz && R.view !== "quiz") ctx.gotoQuiz(a); else openQuestion(a); }
     else if (action === "retry") load();
@@ -261,5 +314,6 @@ export function createReview(ctx) {
     openQuestion,
     leave() { root = null; closeQuestion(); },
     get openFlags() { return R.loaded ? R.flags.filter((f) => f.status === "open").length : null; },
+    get newFeedback() { return R.loaded && !R.feedbackError ? R.feedback.filter((f) => f.status === "new").length : null; },
   };
 }
