@@ -28,8 +28,8 @@
   .banner[hidden] { display: none; }
   .banner.good { background: var(--slate); }
   .cardwrap { position: relative; flex: 1; min-height: 360px; }
-  .behind { position: absolute; inset: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 24px; opacity: .7; transform: scale(.95) translateY(10px); }
-  .card { position: absolute; inset: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 24px; overflow: hidden; display: flex; flex-direction: column; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; box-shadow: 0 18px 40px -22px rgba(22,38,29,.5); }
+  .behind { will-change: transform, opacity; position: absolute; inset: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 24px; opacity: .7; transform: scale(.95) translateY(10px); }
+  .card { will-change: transform; transform-origin: 50% 115%; position: absolute; inset: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 24px; overflow: hidden; display: flex; flex-direction: column; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; box-shadow: 0 18px 40px -22px rgba(22,38,29,.5); }
   .image { position: relative; height: 52%; background: linear-gradient(180deg,#E3EAE0,#CBD8C9); display: flex; align-items: flex-end; justify-content: center; }
   .image svg.bottle { height: 88%; margin-bottom: 6px; }
   .sample { position: absolute; bottom: 4px; right: 12px; font-size: 10px; color: var(--muted); }
@@ -46,8 +46,8 @@
   .marks .flag { line-height: 1; }
   .switch { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px; background: var(--line); border-radius: 999px; padding: 4px; }
   .switch button { border: 0; background: transparent; padding: 9px 0; border-radius: 999px; font-weight: 500; }
-  .switch.small { margin: 0; padding: 2px; width: 168px; flex: 0 0 auto; }
-  .switch.small button { padding: 3px 0; font-size: 11px; }
+  .switch.small { margin: 0; padding: 3px; flex: 1 1 210px; max-width: 290px; gap: 4px; }
+  .switch.small button { padding: 10px 0; font-size: 14px; }
   .belowcard { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
   body[data-tab="discover"] .top { padding: 6px 20px 2px; }
   body[data-tab="discover"] .top h1 { font-size: 16px; }
@@ -55,7 +55,7 @@
   .switch button.on { color: #fff; }
   .hint { margin: 8px 0 0; text-align: center; font-size: 11px; color: var(--muted); }
   .counts { margin: 6px 0 0; text-align: center; font-size: 11px; }
-  .fbline { margin: 0; text-align: right; font-size: 11px; }
+  .fbline { margin: 0; text-align: right; font-size: 11px; flex: 0 0 auto; }
   .fbline .link { font-size: 11px; padding: 2px 0; }
   .tabs { display: flex; background: var(--panel); border-top: 1px solid var(--line); }
   .tabs button { flex: 1; border: 0; background: transparent; padding: 12px 0; font-size: 13px; font-weight: 500; color: var(--muted); }
@@ -122,7 +122,8 @@
   .nudgeacts { display: flex; align-items: center; gap: 14px; margin-top: 8px; }
   .nudgeacts .btn { margin: 0; }
   .acctfoot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-top: 14px; font-size: 13px; }
-  .dangerlink { color: var(--wine); }
+  .link.dangerlink { color: #D32F2F; font-weight: 600; }
+  .link.dangerlink:active { color: #B71C1C; }
   /* Quiz verification: the correct answer stands out */
   .qlabel { font-size: 12px; font-weight: 600; color: var(--muted); margin: 10px 0 2px; } .qlabel.good { color: #2F6B3A; } .qlabel.bad { color: var(--wine); }
   .nvrow { display: flex; align-items: center; gap: 6px; font-size: 14px; padding-top: 22px; } .addgrapes { display: block; font-size: 13px; margin: 8px 0; }
@@ -257,8 +258,22 @@
   /* Deleting a wine (owner only) */
   .dangerzone { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line); text-align: center; }
   .link.danger { color: var(--wine); font-size: 14px; }
-  .btn.danger { background: var(--wine); color: #fff; border: 0; }
+  .btn.danger.solid { background: #C62828; color: #fff; border: 0; font-weight: 600; }
   .dellist { margin: 6px 0 12px; padding-left: 20px; font-size: 14px; line-height: 1.5; }
+  /* Grape suggestions: they come up under the field as you type */
+  .sugg { background: #fff; border: 1px solid var(--line); border-radius: 12px; margin-top: 4px; max-height: 232px; overflow-y: auto; box-shadow: 0 10px 24px -14px rgba(22,38,29,.5); }
+  .sugg[hidden], .gerr:empty { display: none; }
+  .sugg-item { display: block; width: 100%; text-align: left; border: 0; border-bottom: 1px solid #EEF2EC; background: transparent; padding: 12px 14px; font-size: 15px; }
+  .sugg-item:last-child { border-bottom: 0; }
+  .sugg-item:active { background: #E9EFE7; }
+  .gerr { color: #C62828; font-size: 12px; margin: 4px 2px 0; }
+  .field.bad { border-color: #C62828; background: #FFF6F6; }
+  /* The wine on a journal entry, with a way to correct it */
+  .winecard { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin: 6px 0 10px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+  .winecard .muted { flex: 0 0 100%; }
+  .winecard .serif { flex: 1 1 auto; font-size: 16px; }
+  .meta.grapeline { color: var(--ink); opacity: .75; }
+  .three.wide { grid-template-columns: repeat(3, 1fr); }
 </style>
 </head>
 <body>
@@ -288,6 +303,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=15" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=16" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>
