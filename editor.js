@@ -8,16 +8,17 @@
 //   Quiz:      edit, source and verify quiz questions.
 //   Feedback:  read what testers sent from the app and mark it handled.
 // Every change is logged by the database.
-import { dimsFor, dimMeta, defaultFor, esc, wineName, placeLine, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel, barDims, choiceDims, styleInfo } from "./logic.js?v=8";
-import * as db from "./data.js?v=11";
+import { dimsFor, dimMeta, defaultFor, esc, wineName, placeLine, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel, barDims, choiceDims, styleInfo } from "./logic.js?v=9";
+import * as db from "./data.js?v=12";
 import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=9";
 import { createReview } from "./review.js?v=5";
-import { createWineInfo } from "./wineinfo.js?v=4";
+import { createWineInfo, publishSummary } from "./wineinfo.js?v=5";
+import { groupSubmissions, planPromotion, duplicateGroups, rulesFrom } from "./catalog.js?v=1";
 import { suggestStructure, values as ruleValues, goldInfo, GOLD, GROUPS, evaluateRules, reportText, TARGETS, RULES_VERSION } from "./rules.js?v=4";
 
-const SECTIONS = [{ id: "structure", label: "Structure" }, { id: "flags", label: "Flags" }, { id: "quiz", label: "Quiz" }, { id: "feedback", label: "Feedback" }];
+const SECTIONS = [{ id: "structure", label: "Structure" }, { id: "catalog", label: "Catalog" }, { id: "flags", label: "Flags" }, { id: "quiz", label: "Quiz" }, { id: "feedback", label: "Feedback" }];
 // Which sections each permission opens. A quiz reviewer sees Flags too, but the database only returns the flags on quiz questions.
-export const SECTION_PERMISSIONS = { structure: ["catalog_edit"], flags: ["catalog_edit", "quiz_verify"], quiz: ["quiz_verify"], feedback: ["feedback_read"] };
+export const SECTION_PERMISSIONS = { structure: ["catalog_edit"], catalog: ["catalog_edit"], flags: ["catalog_edit", "quiz_verify"], quiz: ["quiz_verify"], feedback: ["feedback_read"] };
 // A quiz reviewer has no catalog work, so Quiz comes first for them and is where they land.
 export function sectionsFor(can) {
   const list = SECTIONS.filter((x) => SECTION_PERMISSIONS[x.id].some((p) => can(p)));
@@ -80,6 +81,41 @@ function ruleTestCard(E) {
     <p class="ptext">${rows.length} of ${GOLD.length} gold set wines scored. Score them without looking at any suggestion, then see how close the rules came.</p>
     <button class="btn outline slim" data-editor="ruletest"${rows.length ? "" : " disabled"}>See results</button></div>`;
 }
+// ---------------------------------------------------------------- Catalog: how it grows
+// What the section shows, worked out from the cards, what players submitted and what editors decided before.
+export function catalogView(E) {
+  const rules = rulesFrom(E.cat.config);
+  const g = groupSubmissions(E.cat.rows, { rules, cards: E.cards, decisions: E.cat.decisions });
+  const pending = E.cards.filter((c) => c.wineStatus === "pending_review" || c.wineStatus === "draft");
+  return { rules, candidates: g.candidates, waiting: g.waiting, pending, dups: duplicateGroups(E.cards) };
+}
+function catalogHtml(E) {
+  const C = E.cat;
+  if (C.error) return `<div class="err">${esc(C.error)}</div><button class="btn outline" data-editor="cat:retry">Try again</button>`;
+  if (!C.loaded) return `<p class="muted">Loading…</p>`;
+  const v = C.view = catalogView(E);
+  const vint = (c) => c.vintages.map((x) => `${esc(x.label)} (${x.entries})`).join(", ");
+  const cand = v.candidates.map((c, i) => `<div class="candrow"><div class="candinfo"><div class="serif">${esc(c.name)}${c.grape_text ? ` <span class="muted small">${esc(c.grape_text)}</span>` : ""}</div>
+      <div class="meta">${c.entries} journal entries from ${c.people} ${c.people === 1 ? "person" : "people"}. Vintages: ${vint(c)}</div>
+      <div class="meta">${c.kind === "new" ? "New to the catalog" : `The catalog has up to ${c.catalogNewest}; players are on a newer vintage`}${c.vintageNote ? `. ${esc(c.vintageNote)}` : ""}</div></div>
+      <div class="candbtns"><button class="btn primary slim" data-editor="cat:add:${i}"${C.busy ? " disabled" : ""}>Add</button><button class="btn outline slim" data-editor="cat:not:${i}"${C.busy ? " disabled" : ""}>Not now</button></div></div>`).join("");
+  const waiting = v.waiting.slice(0, 8).map((c) => `<div class="meta">${esc(c.name)}: ${c.entries} of ${c.need} entries (${c.people} ${c.people === 1 ? "person" : "people"})</div>`).join("");
+  const pend = v.pending.map((c) => `<div class="candrow"><div class="candinfo"><div class="serif">${esc(wineName(c))}</div><div class="meta">${c.wineStatus === "pending_review" ? "Waiting for review" : esc(c.wineStatus)}</div></div>
+      <div class="candbtns"><button class="btn outline slim" data-editor="cat:openwine:${esc(c.id)}">Open</button></div></div>`).join("");
+  const dups = v.dups.map((d, i) => `<div class="candrow"><div class="candinfo"><div class="serif">${esc(d.name)}</div>
+      <div class="meta">Vintages in the deck: ${d.years.join(", ")}. Keep ${d.years[0]}, archive ${d.archive.map((c) => c.vintage).join(", ")}.</div></div>
+      <div class="candbtns"><button class="btn outline slim" data-editor="cat:dedupe:${i}"${C.busy ? " disabled" : ""}>Archive older</button></div></div>`).join("");
+  return `${C.msg ? `<div class="notice">${esc(C.msg)}</div>` : ""}
+    <h3 class="serif">Added by players</h3>
+    <p class="muted small">Wines people added to their journals that are not in the catalog. A wine is offered here once it has ${v.rules.minEntries} journal entries${v.rules.minPeople > 1 ? ` from at least ${v.rules.minPeople} people` : ""}, whatever the vintage. Adding one creates it as <b>waiting for review</b>; players see it only after you publish it.</p>
+    ${cand || `<p class="muted">Nothing has reached ${v.rules.minEntries} entries yet.</p>`}
+    ${waiting ? `<details class="scaleguide"><summary>Getting close (${v.waiting.length})</summary>${waiting}</details>` : ""}
+    <h3 class="serif">Waiting to be published (${v.pending.length})</h3>${pend || `<p class="muted">Nothing is waiting.</p>`}
+    <h3 class="serif">Same wine, different vintages (${v.dups.length})</h3>
+    <p class="muted small">Only the most recent vintage of a wine goes in the deck. Older vintages are archived: they stay for the people who swiped or journaled them, but are not shown again.</p>
+    ${dups || `<p class="muted">No wine has more than one vintage in the deck.</p>`}`;
+}
+
 function listHtml(E) {
   if (E.loadError) return `<div class="err">${esc(E.loadError)}</div><button class="btn outline" data-editor="retry">Try again</button>`;
   if (!E.loaded) return `<p class="muted">Loading the catalog…</p>`;
@@ -137,7 +173,8 @@ function testHtml(E) {
 // ctx: { sb(), userId(), cards(), can(permission), roleLabel(), onSaved(), onWineChanged() }
 export function createEditor(ctx) {
   const can = (p) => !!(ctx.can && ctx.can(p));
-  const E = { section: (sectionsFor(can)[0] || { id: "structure" }).id, loaded: false, loadError: null, cards: [], refs: new Map(), rows: [], vintageToWine: new Map(), q: "", filter: "needs", sheet: null, saving: false, error: "" };
+  const E = { section: (sectionsFor(can)[0] || { id: "structure" }).id, loaded: false, loadError: null, cards: [], refs: new Map(), rows: [], vintageToWine: new Map(), q: "", filter: "needs", sheet: null, saving: false, error: "",
+    cat: { loaded: false, loading: false, error: "", rows: [], config: [], decisions: [], busy: false, msg: "", view: null } };
   let root = null;
   const overlay = () => document.querySelector("#overlay");
   const review = createReview({
@@ -155,11 +192,18 @@ export function createEditor(ctx) {
     sb: ctx.sb, userId: ctx.userId, can,
     onSaved: async () => { if (ctx.onWineChanged) await ctx.onWineChanged(); E.cards = ctx.cards(); E.loaded = false; if (root && E.section === "structure") draw(); },
     onDeleted: async () => { if (ctx.onWineChanged) await ctx.onWineChanged(); E.cards = ctx.cards(); E.loaded = false; if (root) draw(); },
+    cards: ctx.cards,
+    onPublished: async (r) => {
+      if (ctx.onWineChanged) await ctx.onWineChanged();
+      E.cards = ctx.cards(); E.loaded = false; E.cat.loaded = false; E.cat.msg = publishedMessage(r);
+      if (root) draw();
+    },
   });
+  const publishedMessage = (r) => { const s = publishSummary(r.plan, r.selfId); return `Published ${r.name}. ${s.lines.join(" ")}`; };
   const flagsLabel = () => { const n = review.openFlags; return n ? `Flags (${n})` : "Flags"; };
   const feedbackLabel = () => { const n = review.newFeedback; return n ? `Feedback (${n})` : "Feedback"; };
 
-  const chips = () => `${ctx.roleLabel && ctx.roleLabel() ? `<div class="muted small" style="margin:2px 0 6px">Your access: <b>${esc(ctx.roleLabel())}</b></div>` : ""}<div class="chips left">${sectionsFor(can).map((x) => `<button class="chip wide${E.section === x.id ? " on" : ""}" data-editor="sec:${x.id}">${x.id === "flags" ? flagsLabel() : x.id === "feedback" ? feedbackLabel() : x.label}</button>`).join("")}</div>`;
+  const chips = () => `${ctx.roleLabel && ctx.roleLabel() ? `<div class="muted small" style="margin:2px 0 6px">Your access: <b>${esc(ctx.roleLabel())}</b></div>` : ""}<div class="chips left">${sectionsFor(can).map((x) => `<button class="chip wide ed${E.section === x.id ? " on" : ""}" data-editor="sec:${x.id}">${x.id === "flags" ? flagsLabel() : x.id === "feedback" ? feedbackLabel() : x.label}</button>`).join("")}</div>`;
   const structureShell = () => `<div class="jbar"><input class="field" data-editor-q placeholder="Search wines" value="${esc(E.q)}" autocomplete="off">
       <div class="chips left"><button class="chip wide${E.filter === "needs" ? " on" : ""}" data-editor="filter:needs">Needs a profile</button><button class="chip wide${E.filter === "all" ? " on" : ""}" data-editor="filter:all">All wines</button><button class="chip wide${E.filter === "gold" ? " on" : ""}" data-editor="filter:gold">Gold set</button></div></div>
     <div id="editorList"></div>`;
@@ -169,9 +213,47 @@ export function createEditor(ctx) {
     root.innerHTML = `${chips()}<div id="editorSection" style="margin-top:10px"></div>`;
     const sec = document.querySelector("#editorSection");
     if (E.section === "structure") { sec.innerHTML = structureShell(); if (!E.loaded) load(); else { E.cards = ctx.cards(); drawList(); } }
+    else if (E.section === "catalog") { E.cards = ctx.cards(); sec.innerHTML = `<div id="catalogBody">${catalogHtml(E)}</div>`; if (!E.cat.loaded && !E.cat.loading) loadCatalog(); }
     else review.mount(sec, E.section);
   }
 
+  const drawCatalog = () => { const el = document.querySelector("#catalogBody"); if (el) el.innerHTML = catalogHtml(E); };
+  async function loadCatalog() {
+    const C = E.cat; C.loading = true; C.error = "";
+    try { const r = await db.loadCatalogInputs(ctx.sb()); C.rows = r.rows; C.config = r.config; C.decisions = r.decisions; C.loaded = true; }
+    catch (e) { C.error = "Could not load: " + (e.message || e); }
+    C.loading = false; drawCatalog();
+  }
+  // Adds a candidate (pending review), refreshes the catalog and opens its wine info so the editor can complete it.
+  async function catalogAdd(cand) {
+    const C = E.cat; C.busy = true; C.msg = ""; drawCatalog();
+    try {
+      const lists = await db.loadEditorLists(ctx.sb());
+      const vid = await db.addCatalogWine(ctx.sb(), ctx.userId(), planPromotion(cand, lists));
+      if (ctx.onWineChanged) await ctx.onWineChanged();
+      E.cards = ctx.cards();
+      C.msg = `${cand.name} was added and is waiting for review. Fill in its place and details, then publish it.`;
+      await loadCatalog();
+      const card = E.cards.find((c) => c.id === vid);
+      C.busy = false; drawCatalog();
+      if (card) wineinfo.open(card, wineName(card)).catch((e) => { E.error = "Could not open wine info: " + (e.message || e); });
+    } catch (e) { C.busy = false; C.error = "Could not add it. " + (e.message || e); drawCatalog(); }
+  }
+  async function catalogDismiss(cand) {
+    const C = E.cat; C.busy = true; drawCatalog();
+    try { await db.dismissCandidate(ctx.sb(), ctx.userId(), cand.key, cand.entries); await loadCatalog(); } catch (e) { C.error = "Could not save that. " + (e.message || e); }
+    C.busy = false; drawCatalog();
+  }
+  async function catalogDedupe(group) {
+    const C = E.cat; C.busy = true; C.msg = ""; drawCatalog();
+    try {
+      await db.archiveVintages(ctx.sb(), group.archive.map((c) => c.id), group.keep.id);
+      if (ctx.onWineChanged) await ctx.onWineChanged();
+      E.cards = ctx.cards(); E.loaded = false;
+      C.msg = `${group.name}: kept ${group.years[0]}, archived ${group.archive.map((c) => c.vintage).join(", ")}.`;
+    } catch (e) { C.error = "Could not archive. " + (e.message || e); }
+    C.busy = false; drawCatalog();
+  }
   async function load() {
     E.loadError = null; E.loaded = false; drawList();
     try {
@@ -221,6 +303,14 @@ export function createEditor(ctx) {
     const [action, a, b] = t.dataset.editor.split(":");
     if (action === "sec") { if (E.section !== a) { review.leave(); E.sheet = null; overlay().innerHTML = ""; E.section = a; draw(); } }
     else if (action === "filter") { E.filter = a; draw(); }
+    else if (action === "cat") {
+      const v = E.cat.view;
+      if (a === "retry") { E.cat.loaded = false; E.cat.error = ""; draw(); }
+      else if (a === "add" && v && v.candidates[Number(b)] && !E.cat.busy) catalogAdd(v.candidates[Number(b)]);
+      else if (a === "not" && v && v.candidates[Number(b)] && !E.cat.busy) catalogDismiss(v.candidates[Number(b)]);
+      else if (a === "dedupe" && v && v.dups[Number(b)] && !E.cat.busy) catalogDedupe(v.dups[Number(b)]);
+      else if (a === "openwine") { const card = E.cards.find((c) => c.id === b); if (card) wineinfo.open(card, wineName(card)).catch((e) => { E.error = "Could not open wine info: " + (e.message || e); }); }
+    }
     else if (action === "retry") load();
     else if (action === "open") {
       const card = E.cards.find((c) => c.id === a);
