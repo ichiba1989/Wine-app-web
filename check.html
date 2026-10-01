@@ -18,15 +18,15 @@
 <script type="module">
 const FILES = {
  "index.html": {
-  "hash": "9414bc389f02c0642a2f30e48fdd6371623367de5304431ff6caab20eb5a0e4e",
-  "chars": 17346,
+  "hash": "a21e595c67cfb02faf15aaf44232cb4a77d04efd79018928ac198ebc22a0a51c",
+  "chars": 19545,
   "query": null,
   "exports": []
  },
  "app.js": {
-  "hash": "9229bfab94f4a458eeba966a7ab5d3d280d3571e414b704b34d4cdebe79c5389",
-  "chars": 30203,
-  "query": "8",
+  "hash": "2a1bd81c8e50758048bce4aa2ea37076f3d5ab9e8b4c538773015f01839ea1b2",
+  "chars": 31830,
+  "query": "9",
   "exports": []
  },
  "logic.js": {
@@ -107,9 +107,9 @@ const FILES = {
   ]
  },
  "data.js": {
-  "hash": "fa70a6156d25b1fef988604f7310c872e27cc7ca6c5238752a3dea83adf19e39",
-  "chars": 9554,
-  "query": "5",
+  "hash": "da300cd31fe084a9edbddda955afa376409c0db95f96991b847df0b1ea3414e2",
+  "chars": 10243,
+  "query": "6",
   "exports": [
    "addWithoutRating",
    "attestAge",
@@ -117,6 +117,7 @@ const FILES = {
    "claimGuestMerge",
    "countRows",
    "deleteJournalEntry",
+   "deleteMyAccount",
    "deletePhotos",
    "deleteSwipe",
    "ensureUser",
@@ -165,9 +166,9 @@ const FILES = {
   ]
  },
  "account.js": {
-  "hash": "6797f9ff096291b982110fd26ad4237fd163df948ec51700adbc557b25cdc33c",
-  "chars": 12933,
-  "query": "2",
+  "hash": "5febf626de3971885b8f3fbdd67a49ecf486d8abfda0c2e0e77ce238a3ccfd2e",
+  "chars": 15809,
+  "query": "3",
   "exports": [
    "MERGE_KEY",
    "MERGE_MAX_AGE_MS",
@@ -271,8 +272,8 @@ const FILES = {
   ]
  }
 };
-const APP_SCRIPT = "app.js?v=8";
-const CDN = "https://esm.sh/@supabase/supabase-js@2";
+const APP_SCRIPT = "app.js?v=9";
+const LIBRARIES = ["https://esm.sh/@supabase/supabase-js@2.109.0", "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.109.0/+esm"];
 const out = document.getElementById("out"), sum = document.getElementById("sum");
 const lines = []; let problems = 0, first = "";
 const note = (kind, text) => {
@@ -325,11 +326,26 @@ try {
   }
 } catch (e) { note("FAIL", "config.js: could not be checked (" + msg(e)); }
 
-// 3. the outside library the page loads
+// 3. the outside library the page loads: the app tries these in order, so one working source is enough
+let working = 0;
+for (const lib of LIBRARIES) {
+  const where = lib.includes("esm.sh") ? "esm.sh" : "jsDelivr";
+  try {
+    const m = await import(lib);
+    if (typeof m.createClient === "function") { working++; note("OK", "Database library from " + where + ": loads"); }
+    else note("INFO", "Database library from " + where + ": loaded but looks wrong");
+  } catch (e) { note("INFO", "Database library from " + where + ": did not load (" + msg(e) + ")"); }
+}
+if (!working) note("FAIL", "The database library did not load from either source. The outside services may be down or blocked on this network. Try again later or on another network.");
+else if (working === 1) note("INFO", "One of the two library sources is unreachable. The app will use the other one.");
+
+// 3b. the privacy page: it must exist and have a contact email filled in
 try {
-  const m = await import(CDN);
-  note(typeof m.createClient === "function" ? "OK" : "FAIL", "Supabase library from esm.sh: " + (typeof m.createClient === "function" ? "loads" : "loaded but looks wrong"));
-} catch (e) { note("FAIL", "Supabase library from esm.sh did not load (" + msg(e) + "). The outside service may be down or blocked on this network. Try again later or on another network."); }
+  const r = await fetch("./privacy.html?check=" + Date.now(), { cache: "no-store" });
+  if (!r.ok) note("FAIL", "privacy.html: is missing from the site (HTTP " + r.status + "). Create it from the guide.");
+  else if ((await r.text()).includes("PASTE-CONTACT-EMAIL")) note("FAIL", "privacy.html: the contact email is still the PASTE-CONTACT-EMAIL placeholder. Put your email in.");
+  else note("OK", "privacy.html: present, with a contact email");
+} catch (e) { note("FAIL", "privacy.html: could not be checked (" + msg(e) + ")"); }
 
 // 4. each file loads and has everything the app needs (the same addresses the app uses)
 for (const [name, f] of Object.entries(FILES)) {
