@@ -2,8 +2,7 @@
 import {
   FAMILIARITY, INTEREST, FLAGS, VERDICTS, DIMS, isChoice, GROUPS, GROUP_PAGE, SORTS, YEARS,
   esc, wineName, entryCard, entryName, verdictShort, groupEntries, filterEntries, sortCards,
-  WINE_FLAG_REASONS, photoCount,
-} from "./logic.js?v=5";
+  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims, dimsFor } from "./logic.js?v=7";
 
 // ---------------------------------------------------------------- drawings
 const GLASS = { white: "#5F7440", sparkling: "#3E4B38", rose: "#8A5560", neutral: "#34403A", red: "#2C1C22" };
@@ -40,13 +39,12 @@ export const thumbHtml = (urls, path, size = 40) => (path && urls && urls.get(pa
 export function cardHtml(c) {
   const labels = ["recognize", "unknown", "had"].map((k) => `<div class="swipe-label" data-label="${k}" style="background:${FAMILIARITY[k].color}">${esc(FAMILIARITY[k].label)}</div>`).join("");
   return `<div class="card" id="card">
-    <div class="image">${bottleSvg(c.style)}<span class="sample">sample image, real photo goes here</span>${labels}</div>
+    <div class="image">${bottleSvg(c.style)}${labels}</div>
     <div class="body">
       ${c.vintage ? `<div class="vintage serif">${esc(c.vintage)}</div>` : ""}
       <div class="prow"><div class="producer serif">${esc(c.producer)}</div>${marksHtml(c)}</div>
       ${c.cuvee ? `<div class="cuvee serif">${esc(c.cuvee)}</div>` : ""}
       <div class="facts">${c.facts.map((f) => `<div class="${f.derived ? "derived" : ""}">${esc(f.text)}</div>`).join("")}</div>
-      <div class="legend">Dotted underline: from wine rules, not printed on the label.</div>
     </div></div>`;
 }
 export function discoverHtml({ deck, interest, banner, counts, feedback = false, flaggedId = null, nudge = false }) {
@@ -58,12 +56,9 @@ export function discoverHtml({ deck, interest, banner, counts, feedback = false,
   const sw = ["try", "nope"].map((k) => `<button data-action="interest:${k}" class="${interest === k ? "on" : ""}" style="${interest === k ? `background:${INTEREST[k].color}` : ""}">${INTEREST[k].label}</button>`).join("");
   return `${bannerHtml}
     <div class="cardwrap">${deck.length > 1 ? '<div class="behind"></div>' : ""}${cardHtml(deck[0])}</div>
-    <div class="switch">${sw}</div>
-    <p class="hint">Swipe or double-tap an edge of the card: left if you don't know it, right if you recognize it, top if you've had this bottle.</p>
+    <div class="belowcard"><div class="switch small">${sw}</div>${feedback ? `<span class="fbline">${flaggedId === deck[0].id ? '<span class="muted">Thanks, an editor will review it.</span>' : '<button class="link" data-action="wineflag" aria-label="Report a problem with this wine">Report a problem</button>'}</span>` : ""}</div>
     ${nudge ? `<div class="nudge"><b>Don't lose your journal.</b> Save it with an email so it follows you to any phone.
-      <div class="nudgeacts"><button class="btn primary slim" data-account="open:save">Save with email</button><button class="link" data-action="nudgeoff">Not now</button></div></div>` : ""}
-    ${feedback ? `<p class="fbline">${flaggedId === deck[0].id ? '<span class="muted">Thanks, an editor will review it.</span>' : '<button class="link" data-action="wineflag">Report a problem with this wine</button>'}</p>` : ""}
-    <p class="counts">Saved so far: ${counts.swipes} swipes, ${counts.journal} journal entries</p>`;
+      <div class="nudgeacts"><button class="btn primary slim" data-account="open:save">Save with email</button><button class="link" data-action="nudgeoff">Not now</button></div></div>` : ""}`;
 }
 
 // ---------------------------------------------------------------- Swipes
@@ -74,7 +69,7 @@ function section(id, title, count, open, inner) {
   return `<div class="sect"><button class="sect-head" data-action="toggle:${id}" aria-expanded="${open}"><span>${esc(title)} (${count})</span><span class="chev">${open ? "▲" : "▼"}</span></button>${open ? `<div class="sect-body">${inner}</div>` : ""}</div>`;
 }
 function item(card, actions, extra = "", thumb = "") {
-  actions += `<button class="pill danger" data-action="delswipe:${card.id}">Delete swipe</button>`;
+  actions += `<button class="delsmall" data-action="delswipe:${card.id}" aria-label="Delete this swipe">Delete</button>`;
   const where = [card.appellation || card.grape, card.country].filter(Boolean).join(", ");
   return `<div class="item withthumb">${thumb}<div class="ibody"><div class="iname"><span class="serif">${esc(wineName(card))}</span>${marksHtml(card, 16)}</div>
     <div class="meta">${esc(where)}${extra}</div><div class="acts">${actions}</div></div></div>`;
@@ -175,8 +170,27 @@ export function photosHtml(sheet) {
 // slider: the attribute that identifies the range input. reset: whether to show the Reset link.
 export function dimControlHtml(d, x, { attr = "data-sheet", slider = "data-dim", reset = true } = {}) {
   const resetLink = reset ? `<button id="reset-${d.key}" class="link" ${attr}="reset:${d.key}" style="visibility:${x.adjusted ? "visible" : "hidden"}">Reset</button>` : "";
+  const segbtn = (v, k, extra = "") => `<button class="segbtn${x.value === v ? " on" : ""}${x.value === v && !x.adjusted ? " def" : ""}${extra}" ${attr}="choice:${d.key}:${v}" aria-pressed="${x.value === v}">${esc(d.labels[k])}</button>`;
+  if (d.ui === "drysweet") {
+    // Most wines are dry, so the first question is only Dry or Sweet. Sweet then opens the three levels.
+    const sweet = x.value > 0;
+    const levels = d.values.map((v, k) => (v > 0 ? segbtn(v, k) : "")).join("");
+    return `<div class="dim"><div class="dimtop"><span>${d.name}</span>${resetLink}</div>
+      <div class="seg" role="group" aria-label="${d.name}">${segbtn(0, 0)}<button class="segbtn${sweet ? " on" : ""}${sweet && !x.adjusted ? " def" : ""}" ${attr}="sweet:${d.key}" aria-pressed="${sweet}">Sweet</button></div>
+      <div class="seg sub" data-sweetsub${sweet ? "" : " hidden"} role="group" aria-label="How sweet">${levels}</div></div>`;
+  }
+  if (d.ui === "steps") {
+    // A slider with a few fixed stops (oak). The + and - buttons move one stop; the labels show where it is.
+    const at = d.values.indexOf(x.value);
+    const stops = d.labels.map((l, k) => `<span data-steplabel="${d.key}:${k}" class="${k === at ? "on" : ""}">${esc(l)}</span>`).join("");
+    return `<div class="dim"><div class="dimtop"><span>${d.name}</span>${resetLink}</div>
+      <div class="dimrow"><button class="round" ${attr}="nudge:${d.key}:-1" aria-label="Less ${d.name.toLowerCase()}">&minus;</button>
+        <input type="range" min="${d.values[0]}" max="${d.values[d.values.length - 1]}" step="1" value="${x.value}" ${slider}="${d.key}" aria-label="${d.name}: ${d.labels.join(", ")}">
+        <button class="round" ${attr}="nudge:${d.key}:1" aria-label="More ${d.name.toLowerCase()}">+</button></div>
+      <div class="steplabels">${stops}</div></div>`;
+  }
   if (isChoice(d)) {
-    const btns = d.values.map((v, k) => `<button class="segbtn${x.value === v ? " on" : ""}${x.value === v && !x.adjusted ? " def" : ""}" ${attr}="choice:${d.key}:${v}" aria-pressed="${x.value === v}">${esc(d.labels[k])}</button>`).join("");
+    const btns = d.values.map((v, k) => segbtn(v, k)).join("");
     return `<div class="dim"><div class="dimtop"><span>${d.name}</span>${resetLink}</div><div class="seg" role="group" aria-label="${d.name}">${btns}</div></div>`;
   }
   return `<div class="dim"><div class="dimtop"><span>${d.name}</span>${resetLink}</div>
@@ -185,29 +199,79 @@ export function dimControlHtml(d, x, { attr = "data-sheet", slider = "data-dim",
         <button class="round" ${attr}="nudge:${d.key}:0.5" aria-label="More ${d.name.toLowerCase()}">+</button></div>
       <div class="dimlabels"><span>${d.lo}</span><span>${d.hi}</span></div></div>`;
 }
-export function sheetHtml(sheet, { saving = false, error = "" } = {}) {
+// Keeps a fixed-choice control in step with its value (used by the rating sheet and the editor, which differ only in the data attribute).
+export function syncChoiceControl(d, x, attr = "data-sheet", root = document) {
+  if (d.ui === "steps") {
+    const r = root.querySelector(`[data-dim="${d.key}"], [data-edim="${d.key}"]`);
+    if (r && Number(r.value) !== x.value) r.value = x.value;
+    root.querySelectorAll(`[data-steplabel^="${d.key}:"]`).forEach((el) => el.classList.toggle("on", Number(el.dataset.steplabel.split(":")[1]) === d.values.indexOf(x.value)));
+    return;
+  }
+  root.querySelectorAll(`[${attr}^="choice:${d.key}:"]`).forEach((b) => {
+    const on = Number(b.getAttribute(attr).split(":")[2]) === x.value;
+    b.classList.toggle("on", on); b.classList.toggle("def", on && !x.adjusted); b.setAttribute("aria-pressed", String(on));
+  });
+  if (d.ui === "drysweet") {
+    const sweet = x.value > 0;
+    const sw = root.querySelector(`[${attr}^="sweet:"]`);
+    if (sw) { sw.classList.toggle("on", sweet); sw.classList.toggle("def", sweet && !x.adjusted); sw.setAttribute("aria-pressed", String(sweet)); }
+    const sub = root.querySelector("[data-sweetsub]");
+    if (sub) sub.hidden = !sweet;
+  }
+}
+// The rating window is a short run of numbered pages. Swipe, use the corner arrows, or tap a number. Save is on every page.
+export const SHEET_PAGES = [
+  { id: "verdict", title: "Verdict" },
+  { id: "structure", title: "Structure" },
+  { id: "character", title: "Sweetness and CO\u2082" },
+  { id: "details", title: "Details" },
+  { id: "notes", title: "Notes and photos" },
+];
+const styleChipsHtml = (sheet) => `<div class="stylerow" role="group" aria-label="Type of wine">${WINE_STYLES.map((st) => `<button class="chip${sheet.style === st.id ? " on" : ""}" data-sheet="style:${st.id}" aria-pressed="${sheet.style === st.id}">${esc(st.label)}</button>`).join("")}</div>`;
+// Page 2: the type of wine, then all the sliders together (acidity, body, tannin, oak).
+export function structurePageHtml(sheet) {
+  const bars = barDims(sheet.style).filter((d) => sheet.dims[d.key]).map((d) => dimControlHtml(d, sheet.dims[d.key])).join("");
+  return `<h3 class="serif">Wine structure</h3><div class="muted small">What kind of wine is it?</div>${styleChipsHtml(sheet)}${sheet.style === "unknown" ? `<div class="muted small">The type of this wine is not known yet. Choose one.</div>` : ""}${bars}`;
+}
+// Page 3: the buttons together (sweetness, and CO2 for wines that are not red).
+export function characterPageHtml(sheet) {
+  const choices = choiceDims(sheet.style).filter((d) => sheet.dims[d.key]).map((d) => dimControlHtml(d, sheet.dims[d.key])).join("");
+  return `<h3 class="serif">Sweetness and CO\u2082</h3><div class="muted small">Most wines are dry and still. Change only what you noticed.</div>${choices}`;
+}
+export function sheetHtml(sheet, { saving = false, error = "", page = 0 } = {}) {
   const verdicts = VERDICTS.map((v) => `<button class="vbtn${sheet.verdict === v.code ? " on" : ""}" data-sheet="verdict:${v.code}">${esc(v.label)}</button>`).join("");
-  const dims = DIMS.filter((d) => sheet.dims[d.key]).map((d) => dimControlHtml(d, sheet.dims[d.key])).join("");
   const canSave = !!sheet.verdict && !saving;
-  return `<div class="overlay"><div class="sheet" id="sheetPanel">
-    <div class="sheethead"><div class="sheettitle"><div class="serif big">${esc(sheet.target.name)}</div><div class="muted small">How was it?</div></div>
-      <div class="sheetbtns"><button class="pill wine" data-sheet="save"${canSave ? "" : " disabled"}>Save</button><button class="xbtn" data-sheet="close" aria-label="Close">&times;</button></div></div>
-    <div class="verdicts">${verdicts}</div>
-    <h3 class="serif">Wine structure</h3>${dims}
-    <div class="two"><input class="field" type="date" data-field="date" value="${esc(sheet.date)}" aria-label="Date">
+  const n = SHEET_PAGES.length;
+  const steps = SHEET_PAGES.map((p, i) => `<button class="wstep${i === page ? " on" : ""}" data-sheet="page:${i}" aria-label="Step ${i + 1} of ${n}, ${esc(p.title)}">${i + 1}</button>`).join("");
+  const pages = [
+    `<h3 class="serif">How was it?</h3><div class="verdicts">${verdicts}</div><div class="muted small">Pick one to go to the next step.</div>`,
+    structurePageHtml(sheet),
+    characterPageHtml(sheet),
+    `<h3 class="serif">Details</h3><div class="two"><input class="field" type="date" data-field="date" value="${esc(sheet.date)}" aria-label="Date">
       <input class="field" inputmode="decimal" data-field="price" placeholder="Price you paid ($)" value="${esc(sheet.price)}"></div>
-    <div class="two"><input class="field" data-field="food" placeholder="Food" value="${esc(sheet.food)}"><input class="field" data-field="occasion" placeholder="Occasion" value="${esc(sheet.occasion)}"></div>
-    <textarea class="field" data-field="notes" rows="3" placeholder="Notes">${esc(sheet.notes)}</textarea>
-    <div id="sheetPhotos" class="photoarea">${photosHtml(sheet)}</div>
+      <div class="two"><input class="field" data-field="food" placeholder="Food" value="${esc(sheet.food)}"><input class="field" data-field="occasion" placeholder="Occasion" value="${esc(sheet.occasion)}"></div>`,
+    `<h3 class="serif">Notes and photos</h3><textarea class="field" data-field="notes" rows="4" placeholder="Notes">${esc(sheet.notes)}</textarea>
+      <div id="sheetPhotos" class="photoarea">${photosHtml(sheet)}</div>
+      ${sheet.entryId ? `<div class="deleterow"><button class="deletelink" data-sheet="delete">Delete this entry</button></div>` : ""}`,
+  ];
+  return `<div class="overlay"><div class="sheet" id="sheetPanel" data-page="${page}">
+    <div class="wtop">
+      <div class="wnav"><button class="wcorner" data-sheet="prev" aria-label="Back">&lsaquo;</button><div class="wsteps" role="group" aria-label="Steps">${steps}</div><button class="wcorner" data-sheet="next" aria-label="Next">&rsaquo;</button></div>
+      <div class="sheethead"><div class="sheettitle"><div class="serif big">${esc(sheet.target.name)}</div><div class="muted small" id="wtitle">Step ${page + 1} of ${n}: ${esc(SHEET_PAGES[page].title)}</div></div>
+        <div class="sheetbtns"><button class="pill wine" data-sheet="save"${canSave ? "" : " disabled"}>Save</button><button class="xbtn" data-sheet="close" aria-label="Close">&times;</button></div></div>
+    </div>
+    <div class="wpages" id="wpages">${pages.map((h, i) => `<section class="wpage" data-wpage="${i}"${i === page ? "" : " hidden"}>${h}</section>`).join("")}</div>
     <div id="sheetErr" class="err">${esc(error)}</div>
-    <button class="btn primary" data-sheet="save"${canSave ? "" : " disabled"}>Save to journal</button>
-    ${sheet.entryId ? `<button class="btn danger" data-sheet="delete">Delete this entry</button>` : ""}</div></div>`;
+    <div class="wfoot"><button class="btn primary" data-sheet="save"${canSave ? "" : " disabled"}>Save to journal</button>${sheet.verdict ? "" : `<div class="muted small">Pick a verdict on step 1 to save.</div>`}</div>
+  </div></div>`;
 }
 
 // A confirmation that sits on top of whatever is open. Buttons carry data-confirm="yes" or "no".
-export function confirmHtml({ title, body, yes = "Delete", error = "", busy = false }) {
+// Short on purpose: the title, which wine, and the two buttons. What is kept is one small tap away.
+export function confirmHtml({ title, body = "", more = "", yes = "Delete", error = "", busy = false }) {
   return `<div class="overlay top"><div class="sheet small" role="alertdialog" aria-label="${esc(title)}">
-    <div class="serif big">${esc(title)}</div><p class="ptext">${body}</p>
+    <div class="serif big">${esc(title)}</div>${body ? `<div class="serif confirmname">${body}</div>` : ""}
+    ${more ? `<details class="whatkept"><summary>What is kept?</summary><p class="muted small">${more}</p></details>` : ""}
     <div id="confirmErr" class="err">${esc(error)}</div>
     <div class="two"><button class="btn outline" data-confirm="no"${busy ? " disabled" : ""}>Cancel</button><button class="btn danger" data-confirm="yes"${busy ? " disabled" : ""}>${esc(yes)}</button></div></div></div>`;
 }
@@ -225,7 +289,7 @@ export function formPhotosHtml(form) {
 export function addFormHtml(form, error = "") {
   const yearOpts = `<option value="">Vintage (optional)</option><option value="NV"${form.vintage === "NV" ? " selected" : ""}>Non-vintage (NV)</option>` +
     YEARS.map((y) => `<option value="${y}"${String(y) === form.vintage ? " selected" : ""}>${y}</option>`).join("");
-  const styles = [["red", "Red"], ["white", "White"], ["sparkling", "Sparkling"]].map(([k, l]) => `<button class="vbtn tog${form.style === k ? " on" : ""}" data-action="formstyle:${k}">${l}</button>`).join("");
+  const styles = WINE_STYLES.map((st) => [st.id, st.label]).map(([k, l]) => `<button class="vbtn tog${form.style === k ? " on" : ""}" data-action="formstyle:${k}">${l}</button>`).join("");
   return `<div class="overlay"><div class="sheet" id="sheetPanel">
     <div class="sheethead"><div class="sheettitle"><div class="serif big">Add a wine you drank</div><div class="muted small">Enter what is on the bottle.</div></div>
       <div class="sheetbtns"><button class="xbtn" data-action="closeform" aria-label="Close">&times;</button></div></div>
