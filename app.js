@@ -4,22 +4,20 @@
 import {
   FAMILIARITY, wineName, esc, clamp01, shuffle, tapEdge, swipeKind, cardFromRow, filterEntries, groupEntries, swipeLists,
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS,
-  queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, dimMeta, isChoice,
-} from "./logic.js?v=5";
-import * as db from "./data.js?v=7";
+  queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, dimMeta, isChoice, setStyle, choiceDims, barDims } from "./logic.js?v=7";
+import * as db from "./data.js?v=9";
 import { shrinkImage } from "./photos.js?v=4";
 import {
-  discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE,
-} from "./views.js?v=6";
-import { createLearn } from "./learn.js?v=1";
-import { createProfile } from "./profile.js?v=5";
-import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=3";
-import { createFeedback } from "./feedback.js?v=1";
-import { createEditor } from "./editor.js?v=5";
+  discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=8";
+import { createLearn } from "./learn.js?v=2";
+import { createProfile } from "./profile.js?v=6";
+import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=4";
+import { createFeedback } from "./feedback.js?v=2";
+import { createEditor } from "./editor.js?v=7";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
-const APP_VERSION = "13";   // shown to editors with each piece of feedback
+const APP_VERSION = "14";   // shown to editors with each piece of feedback
 const SUPABASE_JS_VERSION = "2.109.0";
 const LIBRARY_URLS = [
   `https://esm.sh/@supabase/supabase-js@${SUPABASE_JS_VERSION}`,
@@ -93,7 +91,7 @@ const feedback = createFeedback({ sb: () => state.sb, user: () => state.user, sc
 // A gentle reminder for guests who have started building a journal, shown on Discover until they save it or say "not now".
 const showNudge = () => !!state.user && state.user.is_anonymous === true && !store.get("wine.nudgeOff") && (state.journal.length >= 1 || state.states.length >= 5);
 // The Editor tab (editors only) lives in editor.js.
-const editorTab = createEditor({ sb: () => state.sb, userId: () => state.user.id, cards: () => state.cards, onSaved: () => loadReferences() });
+const editorTab = createEditor({ sb: () => state.sb, userId: () => state.user.id, cards: () => state.cards, onSaved: () => loadReferences(), onWineChanged: async () => { state.cards = await db.loadCards(state.sb); state.deck = state.deck.map((c) => state.cards.find((x) => x.id === c.id) || c); } });
 
 // Counts for the Discover screen. Only swipes count as swipes (not later changes of interest).
 async function loadCounts() {
@@ -180,6 +178,7 @@ function shellHtml() {
 function renderBody() {
   const body = $("#tabbody");
   if (!body) return;
+  document.body.dataset.tab = state.tab;   // lets Discover use a slimmer header so the card is bigger
   if (state.tab === "discover") {
     body.innerHTML = discoverHtml({ deck: state.deck, interest: state.interest, banner: null, counts: state.counts, feedback: state.feedback, flaggedId: state.wfDone, nudge: showNudge() });
     const card = $("#card");
@@ -304,10 +303,6 @@ function attachCard(el) {
 }
 
 // ---------------------------------------------------------------- the rating sheet
-function openSheet() {
-  state.sheetUi = { saving: false, error: "" };
-  $("#overlay").innerHTML = sheetHtml(state.sheet, state.sheetUi);
-}
 function closeOverlay() { state.sheet = null; state.form = null; $("#overlay").innerHTML = ""; }
 // Updates the parts of the open sheet that change, without redrawing it (so typing and scrolling are not disturbed).
 function syncSheet() {
@@ -316,12 +311,8 @@ function syncSheet() {
   document.querySelectorAll("[data-sheet^='verdict:']").forEach((b) => b.classList.toggle("on", b.dataset.sheet === "verdict:" + s.verdict));
   DIMS.filter((d) => s.dims[d.key]).forEach((d) => {
     const x = s.dims[d.key];
-    if (isChoice(d)) {
-      document.querySelectorAll(`[data-sheet^="choice:${d.key}:"]`).forEach((b) => {
-        const on = Number(b.dataset.sheet.split(":")[2]) === x.value;
-        b.classList.toggle("on", on); b.classList.toggle("def", on && !x.adjusted); b.setAttribute("aria-pressed", String(on));
-      });
-    } else {
+    if (isChoice(d)) syncChoiceControl(d, x);
+    else {
       const r = document.querySelector(`[data-dim="${d.key}"]`);
       if (r && Number(r.value) !== x.value) r.value = x.value;
     }
@@ -329,8 +320,29 @@ function syncSheet() {
     if (rs) rs.style.visibility = x.adjusted ? "visible" : "hidden";
   });
   document.querySelectorAll("[data-sheet='save']").forEach((b) => { b.disabled = !s.verdict || state.sheetUi.saving; });
+  const hint = document.querySelector(".wfoot .muted"); if (hint) hint.hidden = !!s.verdict;
   const err = $("#sheetErr");
   if (err) err.textContent = state.sheetUi.error || "";
+}
+function openSheet() {
+  state.sheetUi = { ...state.sheetUi, saving: false, error: "", page: 0 };
+  $("#overlay").innerHTML = sheetHtml(state.sheet, state.sheetUi);
+}
+// Go to page n of the rating window (0 to 4). Everything stays on the page, so nothing entered is lost.
+function showSheetPage(n) {
+  const last = SHEET_PAGES.length - 1;
+  const page = Math.max(0, Math.min(last, n));
+  state.sheetUi.page = page;
+  document.querySelectorAll("#wpages .wpage").forEach((el) => { el.hidden = Number(el.dataset.wpage) !== page; });
+  document.querySelectorAll(".wstep").forEach((b, i) => b.classList.toggle("on", i === page));
+  const t = $("#wtitle"); if (t) t.textContent = `Step ${page + 1} of ${SHEET_PAGES.length}: ${SHEET_PAGES[page].title}`;
+  const panel = $("#sheetPanel"); if (panel) { panel.dataset.page = String(page); panel.scrollTop = 0; }
+}
+// Changing the wine type changes which lines apply, so pages 2 and 3 are drawn again.
+function redrawStructurePages() {
+  const a = document.querySelector('[data-wpage="1"]'), b = document.querySelector('[data-wpage="2"]');
+  if (a) a.innerHTML = structurePageHtml(state.sheet);
+  if (b) b.innerHTML = characterPageHtml(state.sheet);
 }
 async function openEntry(entry) {
   const [rows, photos] = await Promise.all([db.loadPerceptions(state.sb, entry.id), db.loadEntryPhotos(state.sb, entry.id).catch(() => [])]);
@@ -348,7 +360,7 @@ async function takePictures(files, add, fail) {
 async function saveSheet() {
   const s0 = state.sheet;
   if (!s0 || !s0.verdict || state.sheetUi.saving) return;
-  state.sheetUi = { saving: true, error: "" };
+  state.sheetUi = { ...state.sheetUi, saving: true, error: "" };
   syncSheet();
   try {
     // 1. the rating itself. From here on the entry exists, so a retry updates it instead of adding a second one.
@@ -367,7 +379,7 @@ async function saveSheet() {
       };
       showPhotos();
       const first = (failedUp[0] || failedDel[0]).message;
-      state.sheetUi = { saving: false, error: `Your rating is saved, but ${failedUp.length + failedDel.length} photo change(s) did not go through: ${first}. Tap Save to try again.` };
+      state.sheetUi = { ...state.sheetUi, saving: false, error: `Your rating is saved, but ${failedUp.length + failedDel.length} photo change(s) did not go through: ${first}. Tap Save to try again.` };
       syncSheet();
       return;
     }
@@ -375,7 +387,7 @@ async function saveSheet() {
     state.tab = "journal";
     render();
   } catch (e) {
-    state.sheetUi = { saving: false, error: "Could not save: " + (e.message || e) };
+    state.sheetUi = { ...state.sheetUi, saving: false, error: "Could not save: " + (e.message || e) };
     syncSheet();
   }
 }
@@ -388,7 +400,8 @@ function askDeleteEntry() {
   if (!id) return;
   askConfirm({
     title: "Delete this entry?",
-    body: `It is removed from your journal, along with its photos and notes. ${esc(KEPT_NOTE)}`,
+    body: esc(state.sheet.target.name),
+    more: esc(KEPT_NOTE),
     run: async () => { await db.deleteJournalEntry(state.sb, id); closeOverlay(); await refreshData(); state.tab = "journal"; render(); },
   });
 }
@@ -397,7 +410,8 @@ function askDeleteSwipe(wineId) {
   if (!card) return;
   askConfirm({
     title: "Delete this swipe?",
-    body: `${esc(wineName(card))} goes back into Discover. ${esc(SWIPE_KEPT_NOTE)}`,
+    body: esc(wineName(card)),
+    more: esc(SWIPE_KEPT_NOTE),
     run: async () => {
       await db.deleteSwipe(state.sb, wineId);
       await refreshData();
@@ -417,12 +431,36 @@ document.addEventListener("click", async (ev) => {
   catch (e) { c.busy = false; c.error = "Could not delete: " + (e.message || e); $("#confirm").innerHTML = confirmHtml(c); }
 });
 
+// ---------------------------------------------------------------- swiping between the pages of the rating window
+let pageSwipe = null;
+document.addEventListener("pointerdown", (ev) => {
+  pageSwipe = null;
+  if (!state.sheet || !ev.target.closest("#wpages")) return;
+  if (ev.target.closest("input, textarea, select, label")) return;   // never while moving a slider or typing; buttons and empty space can start a swipe
+  pageSwipe = { x: ev.clientX, y: ev.clientY };
+});
+document.addEventListener("pointerup", (ev) => {
+  if (!pageSwipe || !state.sheet) return;
+  const dx = ev.clientX - pageSwipe.x, dy = ev.clientY - pageSwipe.y;
+  pageSwipe = null;
+  if (Math.abs(dx) > 60 && Math.abs(dy) < 45) showSheetPage(state.sheetUi.page + (dx < 0 ? 1 : -1));
+});
+document.addEventListener("pointercancel", () => { pageSwipe = null; });
+
 // ---------------------------------------------------------------- clicks and typing
 document.addEventListener("click", async (ev) => {
   const sheetBtn = ev.target.closest("[data-sheet]");
   if (sheetBtn) {
     const [action, a, b] = sheetBtn.dataset.sheet.split(":");
-    if (action === "verdict") { state.sheet.verdict = a; syncSheet(); }
+    if (action === "verdict") {
+      state.sheet.verdict = a; syncSheet();
+      if (state.sheetUi.page === 0) setTimeout(() => { if (state.sheet && state.sheet.verdict === a && state.sheetUi.page === 0) showSheetPage(1); }, 220);   // choosing a verdict moves on
+    }
+    else if (action === "prev") showSheetPage(state.sheetUi.page - 1);
+    else if (action === "next") showSheetPage(state.sheetUi.page + 1);
+    else if (action === "page") showSheetPage(Number(a));
+    else if (action === "style") { state.sheet = setStyle(state.sheet, a); redrawStructurePages(); syncSheet(); }
+    else if (action === "sweet") { if (state.sheet.dims[a] && state.sheet.dims[a].value === 0) state.sheet = setDim(state.sheet, a, 1); syncSheet(); }
     else if (action === "nudge") { state.sheet = nudgeDim(state.sheet, a, Number(b)); syncSheet(); }
     else if (action === "choice") { state.sheet = setDim(state.sheet, a, Number(b)); syncSheet(); }
     else if (action === "reset") { state.sheet = resetDim(state.sheet, a); syncSheet(); }
