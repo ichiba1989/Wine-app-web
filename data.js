@@ -34,7 +34,7 @@ export async function attestAge(sb, userId) {
 }
 
 // ---------------------------------------------------------------- reading
-export async function loadCards(sb) { return must(await sb.from("v_catalog_cards").select("*")).map(cardFromRow); }
+export async function loadCards(sb) { return must(await sb.from("v_catalog_cards").select("*")).map((r) => ({ ...cardFromRow(r), raw: r })); }   // raw: the full catalog row, used by the structure rules
 export async function loadStates(sb) {
   return must(await sb.from("v_user_wine_state").select("wine_vintage_id, familiarity, interest, last_swiped_at"));
 }
