@@ -1,9 +1,10 @@
 // Wine info (editors only): change a catalog wine's details. Producer, wine name, vineyard, vintage, type of wine,
 // place, the grapes printed on the label, and other grapes in the wine (for blends the label does not list).
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
-import { esc, WINE_STYLES } from "./logic.js?v=8";
+import { esc, WINE_STYLES } from "./logic.js?v=9";
 import { checkGrapeText, grapeProblem, grapeIndex, setExtraGrapes } from "./grapes.js?v=1";
-import * as db from "./data.js?v=11";
+import { archivePlanFor } from "./catalog.js?v=1";
+import * as db from "./data.js?v=12";
 
 const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 
@@ -54,6 +55,8 @@ export function validateInfo(v) {
   return "";
 }
 // The form starts from what the database holds.
+// How easy a wine is to find. The Discover deck uses it as the starting point for "will this person recognize it".
+export const REACH_CHOICES = [["5", "Everywhere: supermarkets"], ["4", "Common: chain stores"], ["3", "Wine shops and restaurants"], ["2", "Specialist wine shops"], ["1", "Rare: hard to find"]];
 export function formFromInfo(info, lists) {
   const label = info.grapes.filter((g) => g.basis === "label").sort((a, b) => a.position - b.position);
   const other = info.grapes.filter((g) => g.basis === "editor").sort((a, b) => a.position - b.position);
@@ -62,6 +65,7 @@ export function formFromInfo(info, lists) {
   return {
     producerName: producer ? producer.name : "", wineName: info.wine.name || "", vineyard: info.wine.vineyard || "",
     year: info.vintage.vintage_year ? String(info.vintage.vintage_year) : "", nonVintage: !!info.vintage.is_non_vintage,
+    reach: info.wine.reach != null ? String(info.wine.reach) : "",   // empty before database update 15
     style: info.wine.style || "unknown", place: info.wine.appellation_id ? placeLabel(lists.areas, info.wine.appellation_id) : "",
     labelGrapes: label.map(nameOf).filter(Boolean).join(", "), otherGrapes: other.map(nameOf).filter(Boolean).join(", "),
   };
@@ -82,16 +86,41 @@ function sheetHtml(W) {
     <div class="two"><div><div class="qlabel">Vintage</div><input class="field" inputmode="numeric" maxlength="4" data-wif="year" value="${esc(f.year)}"${f.nonVintage ? " disabled" : ""}></div>
       <label class="nvrow"><input type="checkbox" data-wif="nonVintage"${f.nonVintage ? " checked" : ""}> Non-vintage</label></div>
     <div class="qlabel">Type of wine</div><div class="stylerow">${chips}</div>
+    ${f.reach ? `<div class="qlabel">How easy to find (helps decide who is likely to recognize it)</div><select class="field" data-wif="reach" aria-label="How easy to find">${REACH_CHOICES.map(([v, l]) => `<option value="${v}"${f.reach === v ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>` : ""}
     <div class="qlabel">Place</div><input class="field" list="dlPlaces" data-wif="place" value="${esc(f.place)}" placeholder="Start typing, then pick from the list" autocomplete="off">
     ${place && place.classification ? `<div class="muted small">Classification (from the place): ${esc(place.classification)}</div>` : ""}
     <div class="qlabel">Grapes on the label, in order (separate with commas)</div><input class="field" data-grapes="multi" data-wif="labelGrapes" value="${esc(f.labelGrapes)}" placeholder="Start typing, then pick from the list" autocomplete="off" autocapitalize="words" spellcheck="false">
     <div class="qlabel">Other grapes in the wine, not on the label (a blend)</div><input class="field" data-grapes="multi" data-wif="otherGrapes" value="${esc(f.otherGrapes)}" placeholder="Start typing, then pick from the list" autocomplete="off" autocapitalize="words" spellcheck="false">
     <div id="wiErr" class="err">${esc(W.error)}</div>
     <button class="btn primary" data-wi="save"${W.saving ? " disabled" : ""}>Save wine info</button>
+    ${W.card && W.card.wineStatus && W.card.wineStatus !== "verified" ? `<div class="pubzone"><div class="muted small">This wine is <b>${W.card.wineStatus === "pending_review" ? "waiting for review" : esc(W.card.wineStatus)}</b>. Players do not see it yet.</div><button class="btn outline" data-wi="pubask">Publish to Discover</button></div>` : ""}
     ${W.canRemove ? `<div class="dangerzone"><button class="link danger" data-wi="delask">Delete this wine</button></div>` : ""}
     <datalist id="dlProducers">${L.producers.map((p) => `<option value="${esc(p.name)}">`).join("")}</datalist>
     <datalist id="dlPlaces">${W.options.map((o) => `<option value="${esc(o.label)}">`).join("")}</datalist>
 </div></div>`;
+}
+
+// Publishing puts the wine in everyone's deck, and archives older vintages of the same wine. This says exactly what will happen first.
+export function publishSummary(plan, selfId) {
+  if (!plan) return { lines: ["It joins everyone's Discover deck."], archivesSelf: false };
+  const yr = (c) => c.vintage || "?";
+  const lines = [];
+  if (plan.keep.id === selfId) lines.push("It joins everyone's Discover deck as the most recent vintage.");
+  else lines.push(`A newer vintage (${yr(plan.keep)}) of this wine is already in the deck, so this one is archived straight away.`);
+  const others = plan.archive.filter((c) => c.id !== selfId);
+  if (others.length) lines.push(`Older vintages archived: ${others.map(yr).join(", ")}. They leave the deck; players' swipes and journals are not changed.`);
+  return { lines, archivesSelf: plan.archive.some((c) => c.id === selfId) };
+}
+function publishHtml(W) {
+  const p = W.pub;
+  const head = `<div class="sheethead"><div class="sheettitle"><div class="serif big">Publish this wine?</div><div class="muted small">${esc(W.title)}</div></div>
+      <div class="sheetbtns"><button class="xbtn" data-wi="pubcancel" aria-label="Back">&times;</button></div></div>`;
+  const list = publishSummary(p.plan, W.card.id).lines.map((x) => `<li>${esc(x)}</li>`).join("");
+  return `<div class="overlay"><div class="sheet" id="winePublishPanel">${head}<ul class="dellist">${list}</ul>
+    <p class="muted small">Check the place, grapes and structure first. Once it is published, players will swipe it.</p>
+    <div class="err">${esc(p.error || "")}</div>
+    <button class="btn primary" data-wi="pubgo"${p.busy ? " disabled" : ""}>${p.busy ? "Publishing…" : "Yes, publish"}</button>
+    <button class="btn outline" data-wi="pubcancel"${p.busy ? " disabled" : ""}>Not yet</button></div></div>`;
 }
 
 // The delete confirmation replaces the form until the owner goes back or deletes.
@@ -116,14 +145,14 @@ function deleteHtml(W) {
 
 // ctx: { sb(), userId(), can(permission), onSaved(), onDeleted() }
 export function createWineInfo(ctx) {
-  const W = { open: false, title: "", card: null, info: null, lists: null, options: [], form: null, unknown: [], addNew: false, error: "", saving: false, del: null, canRemove: false };
+  const W = { open: false, title: "", card: null, info: null, lists: null, options: [], form: null, unknown: [], addNew: false, error: "", saving: false, del: null, pub: null, canRemove: false };
   const overlay = () => document.querySelector("#overlay");
-  const draw = () => { const o = overlay(); if (o && W.open) { W.canRemove = !!(ctx.can && ctx.can("remove_content")); o.innerHTML = W.del ? deleteHtml(W) : sheetHtml(W); } };
+  const draw = () => { const o = overlay(); if (o && W.open) { W.canRemove = !!(ctx.can && ctx.can("remove_content")); o.innerHTML = W.del ? deleteHtml(W) : W.pub ? publishHtml(W) : sheetHtml(W); } };
   const setError = (m) => { W.error = m; const e = document.getElementById("wiErr"); if (e) e.textContent = m; };
 
   async function open(card, title) {
     const o = overlay();
-    W.open = true; W.title = title || ""; W.card = card; W.error = ""; W.unknown = []; W.addNew = false; W.saving = false; W.del = null;
+    W.open = true; W.title = title || ""; W.card = card; W.error = ""; W.unknown = []; W.addNew = false; W.saving = false; W.del = null; W.pub = null;
     if (o) o.innerHTML = `<div class="overlay"><div class="sheet"><p class="muted" style="padding:20px">Loading…</p></div></div>`;
     try {
       if (!W.lists) { W.lists = await db.loadEditorLists(ctx.sb()); W.options = placeOptions(W.lists.areas); }
@@ -133,8 +162,25 @@ export function createWineInfo(ctx) {
       draw();
     } catch (e) { W.open = false; if (o) o.innerHTML = ""; throw e; }
   }
-  const close = () => { W.open = false; W.del = null; const o = overlay(); if (o) o.innerHTML = ""; };
+  const close = () => { W.open = false; W.del = null; W.pub = null; const o = overlay(); if (o) o.innerHTML = ""; };
 
+  function askPublish() {
+    const all = (ctx.cards ? ctx.cards() : []).map((c) => (c.id === W.card.id ? { ...c, wineStatus: "verified", archived: false } : c));
+    W.pub = { plan: archivePlanFor(all, W.card.id), busy: false, error: "" };
+    draw();
+  }
+  async function doPublish() {
+    const p = W.pub;
+    if (!p || p.busy) return;
+    p.busy = true; p.error = ""; draw();
+    try {
+      await db.publishWine(ctx.sb(), W.card.id);
+      if (p.plan && p.plan.archive.length) await db.archiveVintages(ctx.sb(), p.plan.archive.map((c) => c.id), p.plan.keep.id);
+      const result = { name: W.title, plan: p.plan, selfId: W.card.id };
+      W.lists = null; close();
+      if (ctx.onPublished) await ctx.onPublished(result);
+    } catch (e) { p.busy = false; p.error = "Could not publish: " + (e.message || e); draw(); }
+  }
   async function askDelete() {
     if (!ctx.can || !ctx.can("remove_content")) return;
     W.del = { loading: true, check: null, error: "", deleting: false };
@@ -176,7 +222,7 @@ export function createWineInfo(ctx) {
     W.saving = true; setError(""); draw();
     try {
       await db.saveWineInfo(ctx.sb(), ctx.userId(), W.info, {
-        producerName: f.producerName, wineName: f.wineName, vineyard: f.vineyard, year: f.year, nonVintage: f.nonVintage, style: f.style, areaId,
+        producerName: f.producerName, wineName: f.wineName, vineyard: f.vineyard, year: f.year, nonVintage: f.nonVintage, style: f.style, areaId, reach: f.reach,
         labelGrapes: label.ids, otherGrapes: other.ids, newGrapes: W.unknown,
       }, W.lists);
       W.lists = null;   // producers and grapes may have changed
@@ -189,10 +235,13 @@ export function createWineInfo(ctx) {
     const t = ev.target.closest("[data-wi]");
     if (!t || !W.open || !W.form) return;
     const [action, arg] = t.dataset.wi.split(":");
-    if (action === "delask") askDelete();
+    if (action === "pubask") askPublish();
+    else if (action === "pubgo") doPublish();
+    else if (action === "pubcancel") { W.pub = null; draw(); }
+    else if (action === "delask") askDelete();
     else if (action === "delgo") doDelete();
     else if (action === "delcancel") { W.del = null; draw(); }
-    else if (W.del) return;
+    else if (W.del || W.pub) return;
     else if (action === "style") { W.form.style = arg; draw(); }
     else if (action === "save") save();
     else if (action === "close") close();
