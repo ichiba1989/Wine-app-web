@@ -2,7 +2,7 @@
 import {
   FAMILIARITY, INTEREST, FLAGS, VERDICTS, DIMS, isChoice, GROUPS, GROUP_PAGE, SORTS, YEARS,
   esc, wineName, entryCard, entryName, verdictShort, groupEntries, filterEntries, sortCards,
-  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims, dimsFor, placeLine, entryGrape } from "./logic.js?v=8";
+  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims, dimsFor, placeLine, entryGrape } from "./logic.js?v=9";
 
 // ---------------------------------------------------------------- drawings
 const GLASS = { white: "#5F7440", sparkling: "#3E4B38", rose: "#8A5560", neutral: "#34403A", red: "#2C1C22" };
