@@ -1,5 +1,5 @@
 // Everything that talks to Supabase. Each function takes the client and throws on an error.
-import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=8";
+import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=9";
 import { BUCKET, newPhotoPath } from "./photos.js?v=4";
 
 const must = ({ data, error }) => { if (error) throw error; return data; };
@@ -201,7 +201,9 @@ export async function loadEditorLists(sb) {
 // One wine as the database stores it, for the editor's form.
 export async function loadWineInfo(sb, wineVintageId) {
   const vintage = must(await sb.from("wine_vintages").select("id, wine_id, vintage_year, is_non_vintage").eq("id", wineVintageId).single());
-  const wine = must(await sb.from("wines").select("id, producer_id, name, vineyard, style, appellation_id").eq("id", vintage.wine_id).single());
+  let wine;
+  try { wine = must(await sb.from("wines").select("id, producer_id, name, vineyard, style, appellation_id, reach, status").eq("id", vintage.wine_id).single()); }
+  catch (_) { wine = must(await sb.from("wines").select("id, producer_id, name, vineyard, style, appellation_id").eq("id", vintage.wine_id).single()); }   // before update 15
   const grapes = must(await sb.from("wine_grapes").select("grape_id, basis, position").eq("wine_id", wine.id).order("position", { ascending: true }));
   return { vintage, wine, grapes };
 }
@@ -222,6 +224,7 @@ export async function saveWineInfo(sb, userId, info, values, lists) {
   await step("Wine", async () => must(await sb.from("wines").update({
     producer_id: producerId, name: values.wineName.trim() || null, vineyard: values.vineyard.trim() || null,
     style: values.style, style_basis: "editor", appellation_id: values.areaId || null,
+    ...(values.reach && info.wine.reach !== undefined ? { reach: Number(values.reach) } : {}),   // "how easy to find" exists after update 15
   }).eq("id", info.wine.id)));
   await step("Vintage", async () => must(await sb.from("wine_vintages").update({
     vintage_year: values.nonVintage ? null : Number(values.year), is_non_vintage: !!values.nonVintage,
@@ -291,4 +294,72 @@ export async function changeJournalWine(sb, userId, entry, plan) {
     if (!rest.length) await sb.from("user_wines").delete().eq("id", oldUserWine);
   }
   return created ? { userWineId: created } : { wineVintageId: plan.wineVintageId };
+}
+
+// ---------------------------------------------------------------- the deck: what the person knows, and what other players know
+// How the person did on the quiz, by topic: { Grapes: { correct, answered }, ... }. Skipped questions do not count as answered.
+export async function loadQuizKnowledge(sb) {
+  const [qs, latest] = await Promise.all([sb.from("quiz_questions").select("id, topic"), sb.from("v_quiz_latest").select("question_id, result")]);
+  const topic = new Map(must(qs).map((q) => [q.id, q.topic]));
+  const out = {};
+  must(latest).forEach((r) => {
+    const t = topic.get(r.question_id); if (!t || r.result === "unknown") return;
+    out[t] = out[t] || { correct: 0, answered: 0 };
+    out[t].answered += 1; if (r.result === "correct") out[t].correct += 1;
+  });
+  return out;
+}
+// Share of players who recognized each wine, once at least 3 have swiped it (update 15). Empty before that.
+export async function loadCrowd(sb) {
+  const { data, error } = await sb.from("v_wine_crowd").select("wine_vintage_id, people_seen, people_recognized");
+  if (error) return new Map();
+  return new Map(data.map((r) => [r.wine_vintage_id, { seen: r.people_seen, recognized: r.people_recognized }]));
+}
+
+// ---------------------------------------------------------------- how the catalog grows (editors)
+// The wines players typed in, the rule, and what editors decided before. Needs database update 15.
+export async function loadCatalogInputs(sb) {
+  const rows = await sb.rpc("submitted_wine_rows");
+  if (rows.error) throw new Error(rows.error.message && /submitted_wine_rows/.test(rows.error.message) ? "Database update 15 has not been run yet." : rows.error.message);
+  const [cfg, dec] = await Promise.all([
+    sb.from("app_config").select("key, value").in("key", ["catalog_candidate_min_entries", "catalog_candidate_min_people"]),
+    sb.from("catalog_candidates").select("key, decision, entries_at_decision"),
+  ]);
+  return { rows: rows.data || [], config: must(cfg), decisions: must(dec) };
+}
+// Adds a candidate to the catalog as a wine that is PENDING REVIEW: editors see it, players do not, until it is published.
+// Returns the new wine's vintage id.
+export async function addCatalogWine(sb, userId, plan) {
+  const step = async (label, fn) => { try { return await fn(); } catch (e) { throw new Error(`${label}: ${e.message || e}`); } };
+  const producerId = plan.existingProducerId || await step("Producer", async () => must(await sb.from("producers").insert({ name: plan.producerName }).select("id").single()).id);
+  const wineId = await step("Wine", async () => must(await sb.from("wines").insert({ producer_id: producerId, name: plan.wineName, style: plan.style, status: "pending_review" }).select("id").single()).id);
+  const vintageId = await step("Vintage", async () => must(await sb.from("wine_vintages").insert({ wine_id: wineId, vintage_year: plan.vintageYear, is_non_vintage: plan.nonVintage }).select("id").single()).id);
+  await step("Grapes", async () => {
+    const rows = [];
+    for (const [i, g] of plan.grapes.entries()) {
+      const id = g.id || must(await sb.from("grapes").insert({ name: g.name }).select("id").single()).id;
+      rows.push({ wine_id: wineId, grape_id: id, basis: "label", position: i + 1 });
+    }
+    if (rows.length) must(await sb.from("wine_grapes").insert(rows));
+  });
+  await step("Source", async () => {
+    let src = must(await sb.from("sources").select("id").eq("name", "Player submissions (needs review)").limit(1));
+    const sourceId = src.length ? src[0].id : must(await sb.from("sources").insert({ kind: "other", name: "Player submissions (needs review)", license_note: "Wines players added to their journals. Details are as players typed them and need an editor's check." }).select("id").single()).id;
+    must(await sb.from("wine_source_records").insert({ wine_vintage_id: vintageId, source_id: sourceId, source_ref: plan.key.slice(0, 120), listed_as: plan.listedAs }));
+  });
+  await step("Decision", async () => must(await sb.from("catalog_candidates").upsert({ key: plan.key, decision: "added", entries_at_decision: plan.entries, wine_id: wineId, decided_by: userId, decided_at: new Date().toISOString() }, { onConflict: "key" })));
+  return vintageId;
+}
+export async function dismissCandidate(sb, userId, key, entries) {
+  must(await sb.from("catalog_candidates").upsert({ key, decision: "dismissed", entries_at_decision: entries, wine_id: null, decided_by: userId, decided_at: new Date().toISOString() }, { onConflict: "key" }));
+}
+// Puts a wine in the deck: it becomes verified.
+export async function publishWine(sb, wineVintageId) {
+  const v = must(await sb.from("wine_vintages").select("wine_id").eq("id", wineVintageId).single());
+  must(await sb.from("wines").update({ status: "verified" }).eq("id", v.wine_id));
+}
+// Archives older vintages of a wine that a newer vintage replaced: they stay (swipes and journals keep pointing at them) but leave the deck.
+export async function archiveVintages(sb, ids, keepId) {
+  if (!ids.length) return;
+  must(await sb.from("wine_vintages").update({ archived_at: new Date().toISOString(), superseded_by: keepId }).in("id", ids));
 }
