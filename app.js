@@ -10,14 +10,16 @@ import * as db from "./data.js?v=6";
 import { shrinkImage } from "./photos.js?v=4";
 import {
   discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE,
-} from "./views.js?v=5";
+} from "./views.js?v=6";
 import { createLearn } from "./learn.js?v=1";
-import { createProfile } from "./profile.js?v=4";
+import { createProfile } from "./profile.js?v=5";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=3";
-import { createEditor } from "./editor.js?v=2";
+import { createFeedback } from "./feedback.js?v=1";
+import { createEditor } from "./editor.js?v=3";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
+const APP_VERSION = "11";   // shown to editors with each piece of feedback
 const SUPABASE_JS_VERSION = "2.109.0";
 const LIBRARY_URLS = [
   `https://esm.sh/@supabase/supabase-js@${SUPABASE_JS_VERSION}`,
@@ -84,8 +86,12 @@ const account = createAccount({
   prepareMerge: () => db.prepareGuestMerge(state.sb),
   deleteAccount: () => db.deleteMyAccount(state.sb),
   reload: () => location.replace(location.pathname + location.search),
-  onClose: () => { if (state.tab === "profile" && state.status === "main") render(); },
+  onClose: () => { if (state.status === "main") render(); },
 });
+// Feedback from testers lives in feedback.js. Editors read it in the Editor tab.
+const feedback = createFeedback({ sb: () => state.sb, user: () => state.user, screen: () => state.tab, version: () => APP_VERSION });
+// A gentle reminder for guests who have started building a journal, shown on Discover until they save it or say "not now".
+const showNudge = () => !!state.user && state.user.is_anonymous === true && !store.get("wine.nudgeOff") && (state.journal.length >= 1 || state.states.length >= 5);
 // The Editor tab (editors only) lives in editor.js.
 const editorTab = createEditor({ sb: () => state.sb, userId: () => state.user.id, cards: () => state.cards, onSaved: () => loadReferences() });
 
@@ -175,7 +181,7 @@ function renderBody() {
   const body = $("#tabbody");
   if (!body) return;
   if (state.tab === "discover") {
-    body.innerHTML = discoverHtml({ deck: state.deck, interest: state.interest, banner: null, counts: state.counts, feedback: state.feedback, flaggedId: state.wfDone });
+    body.innerHTML = discoverHtml({ deck: state.deck, interest: state.interest, banner: null, counts: state.counts, feedback: state.feedback, flaggedId: state.wfDone, nudge: showNudge() });
     const card = $("#card");
     if (card) attachCard(card);
   } else if (state.tab === "swipes") {
@@ -435,6 +441,7 @@ document.addEventListener("click", async (ev) => {
     else if (action === "under") { state.underage = true; render(); }
     else if (action === "retry") { state.status = "loading"; render(); init(); }
     else if (action === "dismiss") setBanner(null);
+    else if (action === "nudgeoff") { store.set("wine.nudgeOff", "1"); renderBody(); }
     else if (action === "savecfg") {
       const u = cleanProjectUrl($("#cfgUrl").value), k = ($("#cfgKey").value || "").trim();
       if (!u || !k) { state.banner = "Paste both values. The URL should look like https://yourproject.supabase.co"; render(); return; }
@@ -536,5 +543,5 @@ document.addEventListener("change", async (ev) => {
   }
 });
 
-window.__wine = { state, fly, render, init, learn, profile: profileTab, editor: editorTab, account };
+window.__wine = { state, fly, render, init, learn, profile: profileTab, editor: editorTab, account, feedback };
 init();
