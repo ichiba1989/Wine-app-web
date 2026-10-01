@@ -49,7 +49,7 @@ export function cardHtml(c) {
       <div class="legend">Dotted underline: from wine rules, not printed on the label.</div>
     </div></div>`;
 }
-export function discoverHtml({ deck, interest, banner, counts, feedback = false, flaggedId = null }) {
+export function discoverHtml({ deck, interest, banner, counts, feedback = false, flaggedId = null, nudge = false }) {
   const bannerHtml = banner ? `<div class="banner" data-action="dismiss">${esc(banner)} (tap to dismiss)</div>` : "";
   if (!deck.length) {
     return `${bannerHtml}<div class="center"><div class="serif" style="font-size:22px">No more wines to show.</div>
@@ -60,6 +60,8 @@ export function discoverHtml({ deck, interest, banner, counts, feedback = false,
     <div class="cardwrap">${deck.length > 1 ? '<div class="behind"></div>' : ""}${cardHtml(deck[0])}</div>
     <div class="switch">${sw}</div>
     <p class="hint">Swipe or double-tap an edge of the card: left if you don't know it, right if you recognize it, top if you've had this bottle.</p>
+    ${nudge ? `<div class="nudge"><b>Don't lose your journal.</b> Save it with an email so it follows you to any phone.
+      <div class="nudgeacts"><button class="btn primary slim" data-account="open:save">Save with email</button><button class="link" data-action="nudgeoff">Not now</button></div></div>` : ""}
     ${feedback ? `<p class="fbline">${flaggedId === deck[0].id ? '<span class="muted">Thanks, an editor will review it.</span>' : '<button class="link" data-action="wineflag">Report a problem with this wine</button>'}</p>` : ""}
     <p class="counts">Saved so far: ${counts.swipes} swipes, ${counts.journal} journal entries</p>`;
 }
