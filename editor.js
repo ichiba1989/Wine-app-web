@@ -8,12 +8,12 @@
 //   Quiz:      edit, source and verify quiz questions.
 //   Feedback:  read what testers sent from the app and mark it handled.
 // Every change is logged by the database.
-import { dimsFor, dimMeta, defaultFor, esc, wineName, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel, barDims, choiceDims, styleInfo } from "./logic.js?v=7";
-import * as db from "./data.js?v=10";
-import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=8";
-import { createReview } from "./review.js?v=4";
-import { createWineInfo } from "./wineinfo.js?v=3";
-import { suggestStructure, values as ruleValues, goldInfo, GOLD, GROUPS, evaluateRules, reportText, TARGETS, RULES_VERSION } from "./rules.js?v=3";
+import { dimsFor, dimMeta, defaultFor, esc, wineName, placeLine, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel, barDims, choiceDims, styleInfo } from "./logic.js?v=8";
+import * as db from "./data.js?v=11";
+import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=9";
+import { createReview } from "./review.js?v=5";
+import { createWineInfo } from "./wineinfo.js?v=4";
+import { suggestStructure, values as ruleValues, goldInfo, GOLD, GROUPS, evaluateRules, reportText, TARGETS, RULES_VERSION } from "./rules.js?v=4";
 
 const SECTIONS = [{ id: "structure", label: "Structure" }, { id: "flags", label: "Flags" }, { id: "quiz", label: "Quiz" }, { id: "feedback", label: "Feedback" }];
 // Which sections each permission opens. A quiz reviewer sees Flags too, but the database only returns the flags on quiz questions.
@@ -90,7 +90,7 @@ function listHtml(E) {
     const has = hasFullProfile(E.refs.get(c.id), c.style);
     const gold = goldInfo(c);
     return `<button class="jrow" data-editor="open:${c.id}"><span class="jl"><span class="iname"><span class="serif trunc">${esc(wineName(c))}</span>${marksHtml(c, 16)}</span>
-      <span class="meta trunc">${gold ? '<span class="goldtag">Gold set</span> ' : ""}${esc([c.appellation || c.grape, c.country].filter(Boolean).join(", "))}</span></span>
+      <span class="meta trunc">${gold ? '<span class="goldtag">Gold set</span> ' : ""}${esc(placeLine(c))}</span></span>
       <span class="pill${has ? "" : " dark"}">${has ? "Edit" : "Set"}</span></button>`;
   }).join("");
   const empty = E.filter === "needs" ? "Every wine has a profile." : "No wines match.";
