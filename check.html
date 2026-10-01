@@ -18,21 +18,21 @@
 <script type="module">
 const FILES = {
  "index.html": {
-  "hash": "16512e6a8ec9bfb4111e7329fa37fe0d11bff4753fa6abd02250d8d12d153eee",
-  "chars": 21285,
+  "hash": "a453baf254d54e65976cb0746faa90429486ec7679b921193fdae7780ef15f84",
+  "chars": 24253,
   "query": null,
   "exports": []
  },
  "app.js": {
-  "hash": "4667a87bbf820cb4da3ee6a3f55b7761d6db77a5dd66aac30ed11baf3e0436fb",
-  "chars": 32552,
-  "query": "12",
+  "hash": "740751359dfac989964f60db51a1e468e85eccd6e74e2bccb74b35edeb7a06d4",
+  "chars": 35282,
+  "query": "14",
   "exports": []
  },
  "logic.js": {
-  "hash": "5dee39d68f55a3c3761fb33d05f0efd9ef0385d98ca32ab0ca67d9ba2e934839",
-  "chars": 21349,
-  "query": "5",
+  "hash": "cc6782b217bdcdaee5c6620e1c9e82061969bd05cd3c975bbb982435263a2899",
+  "chars": 23842,
+  "query": "7",
   "exports": [
    "COLORS",
    "DEFAULT_STRUCTURE",
@@ -46,10 +46,13 @@ const FILES = {
    "THIS_YEAR",
    "VERDICTS",
    "WINE_FLAG_REASONS",
+   "WINE_STYLES",
    "YEARS",
+   "barDims",
    "buildReview",
    "cardFromRow",
    "centsToPrice",
+   "choiceDims",
    "choiceLabel",
    "clamp01",
    "clampDimValue",
@@ -65,6 +68,7 @@ const FILES = {
    "filterEntries",
    "groupEntries",
    "hasFullProfile",
+   "isBar",
    "isChoice",
    "nudgeDim",
    "nudgeStep",
@@ -77,11 +81,13 @@ const FILES = {
    "refsByVintage",
    "resetDim",
    "setDim",
+   "setStyle",
    "sheetForCard",
    "sheetForEntry",
    "sheetForOutside",
    "shuffle",
    "sortCards",
+   "styleInfo",
    "styleLabel",
    "swipeKind",
    "swipeLists",
@@ -107,9 +113,9 @@ const FILES = {
   ]
  },
  "data.js": {
-  "hash": "0567108d10ef4e1140e5c05a0a28420fa85ed4f063cc1a611726e4ce9d572642",
-  "chars": 10330,
-  "query": "7",
+  "hash": "af9f626bd95a54ccc95d416aef1b8b06ea4dce65d2ff26f2fdcb6fe21c62f313",
+  "chars": 14088,
+  "query": "9",
   "exports": [
    "addWithoutRating",
    "attestAge",
@@ -123,6 +129,7 @@ const FILES = {
    "ensureUser",
    "flagWine",
    "loadCards",
+   "loadEditorLists",
    "loadEntryPhotos",
    "loadFeature",
    "loadJournal",
@@ -131,24 +138,28 @@ const FILES = {
    "loadReferenceRows",
    "loadStates",
    "loadVintageWines",
+   "loadWineInfo",
    "prepareGuestMerge",
    "recordSwipe",
    "saveReferences",
    "saveReview",
+   "saveWineInfo",
    "signedUrls",
    "uploadPhotos"
   ]
  },
  "views.js": {
-  "hash": "ed6c01669c34637277e7cff77d94e40a595e55a2b64f7920549049a5a59706dd",
-  "chars": 22556,
-  "query": "6",
+  "hash": "2e146c4f8987ec691b0ebb3c7c9ae9c8dc8b2d5427ffc1c83fa7b96b70abbed4",
+  "chars": 28035,
+  "query": "8",
   "exports": [
    "KEPT_NOTE",
+   "SHEET_PAGES",
    "SWIPE_KEPT_NOTE",
    "addFormHtml",
    "bottleSvg",
    "cardHtml",
+   "characterPageHtml",
    "confirmHtml",
    "dimControlHtml",
    "discoverHtml",
@@ -160,15 +171,17 @@ const FILES = {
    "marksHtml",
    "photosHtml",
    "sheetHtml",
+   "structurePageHtml",
    "swipesHtml",
+   "syncChoiceControl",
    "thumbHtml",
    "wineFlagHtml"
   ]
  },
  "account.js": {
-  "hash": "5febf626de3971885b8f3fbdd67a49ecf486d8abfda0c2e0e77ce238a3ccfd2e",
+  "hash": "acd9a8136e21cb7e54b1e8b5993bb0f2d12d1ad8aa4bf68ed5bb1c9ca555f2ea",
   "chars": 15809,
-  "query": "3",
+  "query": "4",
   "exports": [
    "MERGE_KEY",
    "MERGE_MAX_AGE_MS",
@@ -186,9 +199,9 @@ const FILES = {
   ]
  },
  "review.js": {
-  "hash": "d9d4562d4c9228979ae4cf052f5b28f304a3d6f0545ce2d42cd8a0a7ac637a53",
-  "chars": 20693,
-  "query": "2",
+  "hash": "cd2509331d2aad3285cb2ec2aced7609781fe3d16cc4e5673ae0f1244b118c43",
+  "chars": 21269,
+  "query": "4",
   "exports": [
    "DIFFS",
    "FEEDBACK_FILTERS",
@@ -211,18 +224,18 @@ const FILES = {
   ]
  },
  "editor.js": {
-  "hash": "a8b763e6b647cf3f5f45b8dae778a71ab600f67d425210728921521315c7f28f",
-  "chars": 18131,
-  "query": "5",
+  "hash": "38846441059f91b6d17933d5860bd9d34c202417e61da674b09a5de109613606",
+  "chars": 19424,
+  "query": "7",
   "exports": [
    "createEditor",
    "scoredGold"
   ]
  },
  "profile.js": {
-  "hash": "ba20d1f2cf91ad23ee335d0f4d902fec3f96f3e7784f5a7273cba287177c3b20",
+  "hash": "2690d582d73f7fae50dd8a624023865a41a7899ad7a8a7c2f0ca48e972c929fd",
   "chars": 29455,
-  "query": "5",
+  "query": "6",
   "exports": [
    "DIFFS",
    "TIER_COLORS",
@@ -248,9 +261,9 @@ const FILES = {
   ]
  },
  "learn.js": {
-  "hash": "0d4a36329f38c6e30c95b4c936b2a8449abe8ec4612b781fa98e918ef279f866",
-  "chars": 20440,
-  "query": "1",
+  "hash": "faf9220c69c6022292998bfca0f8c2e485b816ff358aaf617f66c75a690d2642",
+  "chars": 20444,
+  "query": "2",
   "exports": [
    "DIFFS",
    "FEEDBACK_MS",
@@ -277,9 +290,9 @@ const FILES = {
   ]
  },
  "feedback.js": {
-  "hash": "999c9080fd4bd18eec10a74a680fab2d141014a15b630cc544e30d0866e738ff",
+  "hash": "f11ba6f2feff9cca5ea7fed2b4a17cabb551d3fbc7c7843ce5d0af55fc5c08cd",
   "chars": 5716,
-  "query": "1",
+  "query": "2",
   "exports": [
    "KINDS",
    "MAX_MESSAGE",
@@ -290,9 +303,9 @@ const FILES = {
   ]
  },
  "rules.js": {
-  "hash": "382f2748eba32ffd3c2dcce984cfbd096b3cd573039d3f590ff0cff4b08d99f1",
-  "chars": 37342,
-  "query": "2",
+  "hash": "f8945b4fb1d2b7a68dc9640c088731eb056b24e81c09a30a90693426f7d2ca1b",
+  "chars": 38904,
+  "query": "3",
   "exports": [
    "CALIBRATION",
    "CLIMATES",
@@ -325,9 +338,23 @@ const FILES = {
    "suggestStructure",
    "values"
   ]
+ },
+ "wineinfo.js": {
+  "hash": "9a96e6fb557951a6a7fc00abb21e32cfbb0f2e8073255eb1be2ca399c1984b05",
+  "chars": 9813,
+  "query": "2",
+  "exports": [
+   "createWineInfo",
+   "formFromInfo",
+   "parseList",
+   "placeLabel",
+   "placeOptions",
+   "resolveGrapes",
+   "validateInfo"
+  ]
  }
 };
-const APP_SCRIPT = "app.js?v=12";
+const APP_SCRIPT = "app.js?v=14";
 const LIBRARIES = ["https://esm.sh/@supabase/supabase-js@2.109.0", "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.109.0/+esm"];
 const out = document.getElementById("out"), sum = document.getElementById("sum");
 const lines = []; let problems = 0, first = "";
