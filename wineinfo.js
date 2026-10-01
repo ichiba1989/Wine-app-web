@@ -2,7 +2,7 @@
 // place, the grapes printed on the label, and other grapes in the wine (for blends the label does not list).
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
 import { esc, WINE_STYLES } from "./logic.js?v=7";
-import * as db from "./data.js?v=9";
+import * as db from "./data.js?v=10";
 
 const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 
@@ -24,6 +24,23 @@ export function resolveGrapes(names, grapes) {
   const ids = [], unknown = [];
   names.forEach((n) => { const g = grapes.find((x) => fold(x.name) === fold(n)); if (g) ids.push(g.id); else unknown.push(n); });
   return { ids, unknown };
+}
+// What the delete confirmation says, from the database's answer. Nothing here decides anything: the database refuses what it must.
+export function deleteSummary(check) {
+  if (!check) return { blocked: true, reason: "", lines: [] };
+  const n = (x, one, many) => `${x} ${x === 1 ? one : many}`;
+  if (!check.can_delete) {
+    const lines = [];
+    if (check.swipers) lines.push(`Swiped by ${n(check.swipers, "person", "people")}`);
+    if (check.journal_entries) lines.push(`In ${n(check.journal_entries, "journal entry", "journal entries")}`);
+    if (check.matched_outside_wines) lines.push(`Matched to ${n(check.matched_outside_wines, "wine added by a person", "wines added by people")}`);
+    if (check.linked_quiz_questions) lines.push(`Linked to ${n(check.linked_quiz_questions, "quiz question", "quiz questions")}`);
+    return { blocked: true, reason: check.reason || "This wine cannot be deleted.", lines };
+  }
+  const lines = [check.deletes_whole_wine ? "The wine, its grapes, structure values, source records and images" : "This vintage, its source records and images"];
+  if (check.reports) lines.push(`${n(check.reports, "report", "reports")} from testers about this wine`);
+  if (!check.deletes_whole_wine && check.other_vintages) lines.push(`The wine stays: it has ${n(check.other_vintages, "other vintage", "other vintages")}`);
+  return { blocked: false, reason: "", lines };
 }
 // The first problem with the form, or "".
 export function validateInfo(v) {
@@ -71,21 +88,42 @@ function sheetHtml(W) {
     ${W.unknown.length ? `<label class="addgrapes"><input type="checkbox" data-wif="addNew"${W.addNew ? " checked" : ""}> Not in the grape list: <b>${esc(W.unknown.map((u) => u.name).join(", "))}</b>. Tick to add them as new grapes.</label>` : ""}
     <div id="wiErr" class="err">${esc(W.error)}</div>
     <button class="btn primary" data-wi="save"${W.saving ? " disabled" : ""}>Save wine info</button>
+    ${W.canRemove ? `<div class="dangerzone"><button class="link danger" data-wi="delask">Delete this wine</button></div>` : ""}
     <datalist id="dlProducers">${L.producers.map((p) => `<option value="${esc(p.name)}">`).join("")}</datalist>
     <datalist id="dlPlaces">${W.options.map((o) => `<option value="${esc(o.label)}">`).join("")}</datalist>
     <datalist id="dlGrapes">${L.grapes.map((g) => `<option value="${esc(g.name)}">`).join("")}</datalist></div></div>`;
 }
 
-// ctx: { sb(), userId(), onSaved() }
+// The delete confirmation replaces the form until the owner goes back or deletes.
+function deleteHtml(W) {
+  const d = W.del, head = `<div class="sheethead"><div class="sheettitle"><div class="serif big">Delete this wine?</div><div class="muted small">${esc(W.title)}</div></div>
+      <div class="sheetbtns"><button class="xbtn" data-wi="delcancel" aria-label="Back">&times;</button></div></div>`;
+  let body;
+  if (d.loading) body = `<p class="muted">Checking what uses this wine…</p>`;
+  else if (!d.check) body = `<div class="err">${esc(d.error || "Could not check this wine.")}</div><button class="btn outline" data-wi="delcancel">Back to wine info</button>`;
+  else {
+    const sum = deleteSummary(d.check), list = sum.lines.map((x) => `<li>${esc(x)}</li>`).join("");
+    body = sum.blocked
+      ? `<p>${esc(sum.reason)}</p><ul class="dellist">${list}</ul><p class="muted small">Nothing was deleted. If a wine is wrong, fix its details instead.</p><button class="btn outline" data-wi="delcancel">Back to wine info</button>`
+      : `<p>This removes the wine for everyone and cannot be undone.</p><p class="muted small">What goes with it:</p><ul class="dellist">${list}</ul>
+         <div class="err">${esc(d.error || "")}</div>
+         <button class="btn danger" data-wi="delgo"${d.deleting ? " disabled" : ""}>${d.deleting ? "Deleting…" : "Yes, delete this wine"}</button>
+         <button class="btn outline" data-wi="delcancel"${d.deleting ? " disabled" : ""}>Keep it</button>`;
+    if (sum.blocked && d.error) body += `<div class="err">${esc(d.error)}</div>`;
+  }
+  return `<div class="overlay"><div class="sheet" id="wineDeletePanel">${head}${body}</div></div>`;
+}
+
+// ctx: { sb(), userId(), can(permission), onSaved(), onDeleted() }
 export function createWineInfo(ctx) {
-  const W = { open: false, title: "", card: null, info: null, lists: null, options: [], form: null, unknown: [], addNew: false, error: "", saving: false };
+  const W = { open: false, title: "", card: null, info: null, lists: null, options: [], form: null, unknown: [], addNew: false, error: "", saving: false, del: null, canRemove: false };
   const overlay = () => document.querySelector("#overlay");
-  const draw = () => { const o = overlay(); if (o && W.open) o.innerHTML = sheetHtml(W); };
+  const draw = () => { const o = overlay(); if (o && W.open) { W.canRemove = !!(ctx.can && ctx.can("remove_content")); o.innerHTML = W.del ? deleteHtml(W) : sheetHtml(W); } };
   const setError = (m) => { W.error = m; const e = document.getElementById("wiErr"); if (e) e.textContent = m; };
 
   async function open(card, title) {
     const o = overlay();
-    W.open = true; W.title = title || ""; W.card = card; W.error = ""; W.unknown = []; W.addNew = false; W.saving = false;
+    W.open = true; W.title = title || ""; W.card = card; W.error = ""; W.unknown = []; W.addNew = false; W.saving = false; W.del = null;
     if (o) o.innerHTML = `<div class="overlay"><div class="sheet"><p class="muted" style="padding:20px">Loading…</p></div></div>`;
     try {
       if (!W.lists) { W.lists = await db.loadEditorLists(ctx.sb()); W.options = placeOptions(W.lists.areas); }
@@ -94,7 +132,28 @@ export function createWineInfo(ctx) {
       draw();
     } catch (e) { W.open = false; if (o) o.innerHTML = ""; throw e; }
   }
-  const close = () => { W.open = false; const o = overlay(); if (o) o.innerHTML = ""; };
+  const close = () => { W.open = false; W.del = null; const o = overlay(); if (o) o.innerHTML = ""; };
+
+  async function askDelete() {
+    if (!ctx.can || !ctx.can("remove_content")) return;
+    W.del = { loading: true, check: null, error: "", deleting: false };
+    draw();
+    try { W.del.check = await db.wineDeleteCheck(ctx.sb(), W.card.id); }
+    catch (e) { W.del.error = "Could not check this wine. " + (e.message || e); }
+    W.del.loading = false;
+    draw();
+  }
+  async function doDelete() {
+    const d = W.del;
+    if (!d || d.deleting || !d.check || !d.check.can_delete) return;
+    d.deleting = true; d.error = ""; draw();
+    try {
+      await db.deleteWineVintage(ctx.sb(), W.card.id);
+      W.lists = null;
+      close();
+      if (ctx.onDeleted) await ctx.onDeleted();
+    } catch (e) { d.deleting = false; d.error = e.message || String(e); draw(); }
+  }
 
   async function save() {
     if (W.saving) return;
@@ -126,7 +185,11 @@ export function createWineInfo(ctx) {
     const t = ev.target.closest("[data-wi]");
     if (!t || !W.open || !W.form) return;
     const [action, arg] = t.dataset.wi.split(":");
-    if (action === "style") { W.form.style = arg; draw(); }
+    if (action === "delask") askDelete();
+    else if (action === "delgo") doDelete();
+    else if (action === "delcancel") { W.del = null; draw(); }
+    else if (W.del) return;
+    else if (action === "style") { W.form.style = arg; draw(); }
     else if (action === "save") save();
     else if (action === "close") close();
   });
