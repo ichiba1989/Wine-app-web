@@ -1,5 +1,5 @@
 // Everything that talks to Supabase. Each function takes the client and throws on an error.
-import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=5";
+import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=7";
 import { BUCKET, newPhotoPath } from "./photos.js?v=4";
 
 const must = ({ data, error }) => { if (error) throw error; return data; };
@@ -69,7 +69,9 @@ export async function saveReview(sb, userId, sheet, today) {
   const { consumption, perceptions } = buildReview(sheet, today);
   let userWineId = sheet.target.userWineId;
   if (sheet.target.kind === "outside" && !userWineId && !sheet.entryId) {
-    userWineId = must(await sb.from("user_wines").insert(outsideRow(sheet.target.form, userId)).select("id").single()).id;
+    userWineId = must(await sb.from("user_wines").insert(outsideRow({ ...sheet.target.form, style: sheet.style }, userId)).select("id").single()).id;
+  } else if (sheet.target.kind === "outside" && userWineId && sheet.style !== sheet.catalogStyle) {
+    must(await sb.from("user_wines").update({ style: sheet.style }).eq("id", userWineId));   // the person owns this wine, so its type is theirs to change
   }
   let id = sheet.entryId;
   if (id) {
@@ -184,4 +186,52 @@ export async function deleteMyAccount(sb) {
     if (r.error) throw r.error;
   }
   must(await sb.rpc("delete_my_account"));
+}
+
+// ---------------------------------------------------------------- editing wine info (editors)
+// Everything an editor may pick from: producers, grapes and places (with their parents, so "Barolo, Piedmont, Italy" can be shown).
+export async function loadEditorLists(sb) {
+  const [producers, grapes, areas] = await Promise.all([
+    allRows(() => sb.from("producers").select("id, name")),
+    allRows(() => sb.from("grapes").select("id, name")),
+    allRows(() => sb.from("geo_areas").select("id, name, level, parent_id, classification")),
+  ]);
+  return { producers, grapes, areas };
+}
+// One wine as the database stores it, for the editor's form.
+export async function loadWineInfo(sb, wineVintageId) {
+  const vintage = must(await sb.from("wine_vintages").select("id, wine_id, vintage_year, is_non_vintage").eq("id", wineVintageId).single());
+  const wine = must(await sb.from("wines").select("id, producer_id, name, vineyard, style, appellation_id").eq("id", vintage.wine_id).single());
+  const grapes = must(await sb.from("wine_grapes").select("grape_id, basis, position").eq("wine_id", wine.id).order("position", { ascending: true }));
+  return { vintage, wine, grapes };
+}
+// Saves the form. Steps run in order; if one fails the message says which, and what was saved before it stays saved.
+// values: { producerName, wineName, vineyard, year, nonVintage, style, areaId, labelGrapes: [id], otherGrapes: [id], newGrapes: [name] }
+export async function saveWineInfo(sb, userId, info, values, lists) {
+  const step = async (label, fn) => { try { return await fn(); } catch (e) { throw new Error(`${label}: ${e.message || e}`); } };
+  let producerId = info.wine.producer_id;
+  const name = values.producerName.trim();
+  const known = lists.producers.find((p) => p.name.trim().toLowerCase() === name.toLowerCase());
+  if (known) producerId = known.id;
+  else producerId = await step("Producer", async () => must(await sb.from("producers").insert({ name }).select("id").single()).id);
+  const grapeIds = { label: [...values.labelGrapes], other: [...values.otherGrapes] };
+  for (const g of values.newGrapes || []) {
+    const id = await step("New grape " + g.name, async () => must(await sb.from("grapes").insert({ name: g.name }).select("id").single()).id);
+    grapeIds[g.where].push(id);
+  }
+  await step("Wine", async () => must(await sb.from("wines").update({
+    producer_id: producerId, name: values.wineName.trim() || null, vineyard: values.vineyard.trim() || null,
+    style: values.style, style_basis: "editor", appellation_id: values.areaId || null,
+  }).eq("id", info.wine.id)));
+  await step("Vintage", async () => must(await sb.from("wine_vintages").update({
+    vintage_year: values.nonVintage ? null : Number(values.year), is_non_vintage: !!values.nonVintage,
+  }).eq("id", info.vintage.id)));
+  await step("Grapes", async () => {
+    must(await sb.from("wine_grapes").delete().eq("wine_id", info.wine.id).eq("basis", "label"));
+    must(await sb.from("wine_grapes").delete().eq("wine_id", info.wine.id).eq("basis", "editor"));
+    const rows = [];
+    grapeIds.label.forEach((id, i) => rows.push({ wine_id: info.wine.id, grape_id: id, basis: "label", position: i + 1 }));
+    grapeIds.other.filter((id) => !grapeIds.label.includes(id)).forEach((id, i) => rows.push({ wine_id: info.wine.id, grape_id: id, basis: "editor", position: i + 1 }));
+    if (rows.length) must(await sb.from("wine_grapes").upsert(rows, { onConflict: "wine_id,grape_id" }));
+  });
 }
