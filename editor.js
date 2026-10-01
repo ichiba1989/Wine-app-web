@@ -9,13 +9,20 @@
 //   Feedback:  read what testers sent from the app and mark it handled.
 // Every change is logged by the database.
 import { dimsFor, dimMeta, defaultFor, esc, wineName, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel, barDims, choiceDims, styleInfo } from "./logic.js?v=7";
-import * as db from "./data.js?v=9";
+import * as db from "./data.js?v=10";
 import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=8";
 import { createReview } from "./review.js?v=4";
-import { createWineInfo } from "./wineinfo.js?v=2";
+import { createWineInfo } from "./wineinfo.js?v=3";
 import { suggestStructure, values as ruleValues, goldInfo, GOLD, GROUPS, evaluateRules, reportText, TARGETS, RULES_VERSION } from "./rules.js?v=3";
 
 const SECTIONS = [{ id: "structure", label: "Structure" }, { id: "flags", label: "Flags" }, { id: "quiz", label: "Quiz" }, { id: "feedback", label: "Feedback" }];
+// Which sections each permission opens. A quiz reviewer sees Flags too, but the database only returns the flags on quiz questions.
+export const SECTION_PERMISSIONS = { structure: ["catalog_edit"], flags: ["catalog_edit", "quiz_verify"], quiz: ["quiz_verify"], feedback: ["feedback_read"] };
+// A quiz reviewer has no catalog work, so Quiz comes first for them and is where they land.
+export function sectionsFor(can) {
+  const list = SECTIONS.filter((x) => SECTION_PERMISSIONS[x.id].some((p) => can(p)));
+  return can("catalog_edit") ? list : [...list.filter((x) => x.id === "quiz"), ...list.filter((x) => x.id !== "quiz")];
+}
 
 const SCALE_GUIDE = `<details class="scaleguide"><summary>How to score (anchor wines)</summary>
   <p><b>Acidity:</b> 1 soft and round, 3 balanced, 5 sharp and mouth-watering (Mosel Riesling, Muscadet).</p>
@@ -127,9 +134,10 @@ function testHtml(E) {
     <h3 class="psub">Wine by wine</h3>${wineCards}</div></div>`;
 }
 
-// ctx: { sb(), userId(), cards(), onSaved(), onWineChanged() }
+// ctx: { sb(), userId(), cards(), can(permission), roleLabel(), onSaved(), onWineChanged() }
 export function createEditor(ctx) {
-  const E = { section: "structure", loaded: false, loadError: null, cards: [], refs: new Map(), rows: [], vintageToWine: new Map(), q: "", filter: "needs", sheet: null, saving: false, error: "" };
+  const can = (p) => !!(ctx.can && ctx.can(p));
+  const E = { section: (sectionsFor(can)[0] || { id: "structure" }).id, loaded: false, loadError: null, cards: [], refs: new Map(), rows: [], vintageToWine: new Map(), q: "", filter: "needs", sheet: null, saving: false, error: "" };
   let root = null;
   const overlay = () => document.querySelector("#overlay");
   const review = createReview({
@@ -144,13 +152,14 @@ export function createEditor(ctx) {
     gotoQuiz: (id) => { review.leave(); E.section = "quiz"; draw(); const wait = setInterval(() => { if (review.state.loaded) { clearInterval(wait); review.openQuestion(id); } }, 50); setTimeout(() => clearInterval(wait), 5000); },
   });
   const wineinfo = createWineInfo({
-    sb: ctx.sb, userId: ctx.userId,
+    sb: ctx.sb, userId: ctx.userId, can,
     onSaved: async () => { if (ctx.onWineChanged) await ctx.onWineChanged(); E.cards = ctx.cards(); E.loaded = false; if (root && E.section === "structure") draw(); },
+    onDeleted: async () => { if (ctx.onWineChanged) await ctx.onWineChanged(); E.cards = ctx.cards(); E.loaded = false; if (root) draw(); },
   });
   const flagsLabel = () => { const n = review.openFlags; return n ? `Flags (${n})` : "Flags"; };
   const feedbackLabel = () => { const n = review.newFeedback; return n ? `Feedback (${n})` : "Feedback"; };
 
-  const chips = () => `<div class="chips left">${SECTIONS.map((x) => `<button class="chip wide${E.section === x.id ? " on" : ""}" data-editor="sec:${x.id}">${x.id === "flags" ? flagsLabel() : x.id === "feedback" ? feedbackLabel() : x.label}</button>`).join("")}</div>`;
+  const chips = () => `${ctx.roleLabel && ctx.roleLabel() ? `<div class="muted small" style="margin:2px 0 6px">Your access: <b>${esc(ctx.roleLabel())}</b></div>` : ""}<div class="chips left">${sectionsFor(can).map((x) => `<button class="chip wide${E.section === x.id ? " on" : ""}" data-editor="sec:${x.id}">${x.id === "flags" ? flagsLabel() : x.id === "feedback" ? feedbackLabel() : x.label}</button>`).join("")}</div>`;
   const structureShell = () => `<div class="jbar"><input class="field" data-editor-q placeholder="Search wines" value="${esc(E.q)}" autocomplete="off">
       <div class="chips left"><button class="chip wide${E.filter === "needs" ? " on" : ""}" data-editor="filter:needs">Needs a profile</button><button class="chip wide${E.filter === "all" ? " on" : ""}" data-editor="filter:all">All wines</button><button class="chip wide${E.filter === "gold" ? " on" : ""}" data-editor="filter:gold">Gold set</button></div></div>
     <div id="editorList"></div>`;
@@ -256,7 +265,7 @@ export function createEditor(ctx) {
 
   return {
     state: E, review,
-    mount(el) { root = el; draw(); },
+    mount(el) { root = el; const ok = sectionsFor(can); if (ok.length && !ok.some((x) => x.id === E.section)) E.section = ok[0].id; draw(); },
     leave() { root = null; review.leave(); E.sheet = null; const o = overlay(); if (o) o.innerHTML = ""; },
   };
 }
