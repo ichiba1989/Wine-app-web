@@ -114,6 +114,19 @@
   .nudgeacts .btn { margin: 0; }
   .acctfoot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-top: 14px; font-size: 13px; }
   .dangerlink { color: var(--wine); }
+  /* Structure rules: suggestions, the gold set and the rule test */
+  .goldtag { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #fff; background: #B08A3E; border-radius: 6px; padding: 1px 6px; vertical-align: 1px; }
+  .goldbanner, .rulebanner { border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.4; margin: 8px 0; }
+  .goldbanner { background: #F1E6CC; border: 1px solid #D8C592; }
+  .rulebanner { background: #E3EDE1; border: 1px solid var(--line); }
+  .rulenote { font-size: 12px; color: var(--muted); margin: -2px 0 8px; line-height: 1.35; }
+  .conf { color: var(--slate); letter-spacing: 1px; font-size: 10px; }
+  .scaleguide { margin: 10px 0 4px; font-size: 13px; } .scaleguide summary { cursor: pointer; color: var(--slate); font-weight: 600; } .scaleguide p { margin: 6px 0; }
+  .cmpgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin-top: 6px; }
+  .cmp { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; padding: 3px 6px; border-radius: 8px; }
+  .cmp.off { background: #F3D9D9; }
+  .vgood { color: #2F6B3A; font-weight: 600; } .vok { color: #9A7B1E; font-weight: 600; } .vbad { color: var(--wine); font-weight: 600; }
+  #testText { font: 11.5px/1.45 ui-monospace, Menlo, monospace; }
   /* Accounts */
   .okbox { background: #E3EDE1; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 13px; margin: 10px 0 4px; }
   .codefield { text-align: center; font-size: 24px; letter-spacing: .3em; }
@@ -233,6 +246,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=10" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=11" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>
