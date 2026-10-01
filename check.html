@@ -18,15 +18,15 @@
 <script type="module">
 const FILES = {
  "index.html": {
-  "hash": "a21e595c67cfb02faf15aaf44232cb4a77d04efd79018928ac198ebc22a0a51c",
-  "chars": 19545,
+  "hash": "f1257380b2734fb983b3f6b3c9522667b271a1b607bca5686e2ce4b3d91a64f4",
+  "chars": 19821,
   "query": null,
   "exports": []
  },
  "app.js": {
-  "hash": "2a1bd81c8e50758048bce4aa2ea37076f3d5ab9e8b4c538773015f01839ea1b2",
-  "chars": 31830,
-  "query": "9",
+  "hash": "09d993eaf39e2e16f07959cc9f57844e428a85425d234e2a4313781cd6489948",
+  "chars": 32552,
+  "query": "10",
   "exports": []
  },
  "logic.js": {
@@ -140,9 +140,9 @@ const FILES = {
   ]
  },
  "views.js": {
-  "hash": "76a4cfae0ff749b5d2124a2831d17fd532af3e399495382999b2dd49b937b47b",
-  "chars": 22230,
-  "query": "5",
+  "hash": "ed6c01669c34637277e7cff77d94e40a595e55a2b64f7920549049a5a59706dd",
+  "chars": 22556,
+  "query": "6",
   "exports": [
    "KEPT_NOTE",
    "SWIPE_KEPT_NOTE",
@@ -186,16 +186,20 @@ const FILES = {
   ]
  },
  "review.js": {
-  "hash": "36fa7d66b9a3643b60a323e77d399a777c2fd0b74a07fb3a23019387fdbbc4e6",
-  "chars": 16464,
-  "query": "1",
+  "hash": "d9d4562d4c9228979ae4cf052f5b28f304a3d6f0545ce2d42cd8a0a7ac637a53",
+  "chars": 20693,
+  "query": "2",
   "exports": [
    "DIFFS",
+   "FEEDBACK_FILTERS",
    "FLAG_FILTERS",
+   "KIND_LABEL",
    "QUIZ_FILTERS",
    "STATUS_LABEL",
    "TOPICS",
    "createReview",
+   "feedbackActions",
+   "filterFeedback",
    "filterFlags",
    "filterQuestions",
    "flagActions",
@@ -207,17 +211,17 @@ const FILES = {
   ]
  },
  "editor.js": {
-  "hash": "cd95a2569fb60089b697856a0989087ef6dac4d26e1292eed5ee96a35eb1fb20",
-  "chars": 8696,
-  "query": "2",
+  "hash": "4364e94ffe85ef3d3123f8fc1cd91b2a255eb6a1e1ca3a1b41f975482ec91646",
+  "chars": 9078,
+  "query": "3",
   "exports": [
    "createEditor"
   ]
  },
  "profile.js": {
-  "hash": "4855cb2c9e8873cace122c8313e84c18cc3cdd209daa6147d573d67141606b89",
-  "chars": 29375,
-  "query": "4",
+  "hash": "ba20d1f2cf91ad23ee335d0f4d902fec3f96f3e7784f5a7273cba287177c3b20",
+  "chars": 29455,
+  "query": "5",
   "exports": [
    "DIFFS",
    "TIER_COLORS",
@@ -270,9 +274,22 @@ const FILES = {
    "removeFromArchive",
    "resultOf"
   ]
+ },
+ "feedback.js": {
+  "hash": "999c9080fd4bd18eec10a74a680fab2d141014a15b630cc544e30d0866e738ff",
+  "chars": 5716,
+  "query": "1",
+  "exports": [
+   "KINDS",
+   "MAX_MESSAGE",
+   "createFeedback",
+   "feedbackCardHtml",
+   "feedbackRow",
+   "validateFeedback"
+  ]
  }
 };
-const APP_SCRIPT = "app.js?v=9";
+const APP_SCRIPT = "app.js?v=10";
 const LIBRARIES = ["https://esm.sh/@supabase/supabase-js@2.109.0", "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.109.0/+esm"];
 const out = document.getElementById("out"), sum = document.getElementById("sum");
 const lines = []; let problems = 0, first = "";
