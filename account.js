@@ -6,6 +6,27 @@
 import { esc } from "./logic.js?v=5";
 
 export const RESEND_SECONDS = 60;
+export const MERGE_KEY = "wine.pendingMerge";    // where the carry-over code waits while the person signs in
+export const MERGE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+// The carry-over code is kept in this browser between asking for it (as a guest) and using it (after sign-in).
+export function savePendingMerge(storage, token, guestId, now = Date.now()) { storage.setItem(MERGE_KEY, JSON.stringify({ token, guestId, at: now })); }
+export function readPendingMerge(storage, now = Date.now()) {
+  try {
+    const v = JSON.parse(storage.getItem(MERGE_KEY) || "null");
+    if (!v || !v.token || now - v.at > MERGE_MAX_AGE_MS) { storage.removeItem(MERGE_KEY); return null; }
+    return v;
+  } catch (_) { storage.removeItem(MERGE_KEY); return null; }
+}
+export const clearPendingMerge = (storage) => storage.removeItem(MERGE_KEY);
+// What to tell the person after their guest progress was carried over. Returns "" when there was nothing to carry.
+export function mergeMessage(r) {
+  const parts = [];
+  if (r && r.journal) parts.push(`${r.journal} journal ${r.journal === 1 ? "entry" : "entries"}`);
+  if (r && r.swiped) parts.push(`${r.swiped} swiped ${r.swiped === 1 ? "wine" : "wines"}`);
+  if (r && r.answers) parts.push(`${r.answers} quiz ${r.answers === 1 ? "answer" : "answers"}`);
+  return parts.length ? `Carried over from this phone to your account: ${parts.join(", ")}.` : "";
+}
 export const validEmail = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(s || "").trim());
 export const validCode = (s) => /^\d{6,10}$/.test(String(s || "").trim());
 export const isGuest = (user) => !!user && user.is_anonymous === true;
@@ -16,7 +37,7 @@ export function friendlyError(err, mode) {
   const m = raw.toLowerCase();
   const code = String((err && err.code) || "").toLowerCase();
   if (code === "email_exists" || m.includes("already been registered") || m.includes("already registered"))
-    return "That email already has an account. Choose \"Sign in instead\". Note that what you did as a guest on this phone is not copied into that account.";
+    return "That email already has an account. Choose \"Sign in instead\". What you did as a guest on this phone will be carried over into it.";
   if (code.includes("rate_limit") || (err && err.status === 429) || m.includes("rate limit") || m.includes("security purposes"))
     return "Too many emails were requested just now. Wait a minute and try again.";
   if (code === "otp_disabled" || m.includes("signups not allowed") || m.includes("user not found"))
@@ -57,7 +78,7 @@ function sheetHtml(A, user, canSave) {
       <button class="btn primary" data-account="close">Done</button>`;
   } else if (A.step === "email") {
     body = `<input class="field" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" data-acct-email placeholder="Your email" value="${esc(A.email)}">
-      ${!save && isGuest(user) && canSave ? `<p class="muted small">What you did as a guest on this phone is not copied into the account you sign in to.</p>` : ""}
+      ${!save && isGuest(user) && canSave ? `<p class="muted small">What you have done as a guest on this phone will be carried over into the account you sign in to.</p>` : ""}
       <div id="acctErr" class="err">${esc(A.error)}</div>
       <button class="btn primary" data-account="send"${A.busy ? " disabled" : ""}>Send me a code</button>
       <div style="margin-top:10px">${save
@@ -79,7 +100,7 @@ function sheetHtml(A, user, canSave) {
 }
 
 // ---------------------------------------------------------------- controller
-// ctx: { sb(), user(), setUser(user), reload(), onClose(), canSave() }
+// ctx: { sb(), user(), setUser(user), reload(), onClose(), canSave(), prepareMerge() }
 export function createAccount(ctx) {
   const A = { open: false, mode: "save", step: "email", email: "", code: "", busy: false, error: "", info: "", resendAt: 0 };
   let timer = null;
@@ -101,6 +122,13 @@ export function createAccount(ctx) {
     if (!validEmail(email)) return setError("Enter a valid email address.");
     setBusy(true); setError("");
     try {
+      // Signing in from a guest session switches accounts. Ask for a carry-over code first, while we can still prove this guest is ours.
+      // If that fails we stop here, because carrying on would leave the guest's progress behind.
+      if (A.mode === "signin" && isGuest(ctx.user()) && ctx.canSave() && ctx.prepareMerge) {
+        let token;
+        try { token = await ctx.prepareMerge(); } catch (e) { throw new Error("Your progress on this phone cannot be carried over right now, so signing in is paused. (" + (e.message || e) + ")"); }
+        savePendingMerge(localStorage, token, ctx.user().id);
+      }
       const auth = ctx.sb().auth;
       const res = A.mode === "save" ? await auth.updateUser({ email }) : await auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
       if (res.error) throw res.error;
