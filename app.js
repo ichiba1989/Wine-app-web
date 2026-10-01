@@ -4,20 +4,22 @@
 import {
   FAMILIARITY, wineName, esc, clamp01, shuffle, tapEdge, swipeKind, cardFromRow, filterEntries, groupEntries, swipeLists,
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS,
-  queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, dimMeta, isChoice, setStyle, choiceDims, barDims } from "./logic.js?v=7";
-import * as db from "./data.js?v=10";
+  queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, dimMeta, isChoice, setStyle, choiceDims, barDims,
+  dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=8";
+import * as db from "./data.js?v=11";
 import { shrinkImage } from "./photos.js?v=4";
 import {
-  discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=8";
-import { createLearn } from "./learn.js?v=2";
-import { createProfile } from "./profile.js?v=6";
-import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=4";
-import { createFeedback } from "./feedback.js?v=2";
-import { createEditor } from "./editor.js?v=8";
+  discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=9";
+import { createLearn } from "./learn.js?v=3";
+import { wireGrapeInputs, checkGrapeInput } from "./grapes.js?v=1";
+import { createProfile } from "./profile.js?v=7";
+import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=5";
+import { createFeedback } from "./feedback.js?v=3";
+import { createEditor } from "./editor.js?v=9";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
-const APP_VERSION = "15";   // shown to editors with each piece of feedback
+const APP_VERSION = "16";   // shown to editors with each piece of feedback
 const SUPABASE_JS_VERSION = "2.109.0";
 const LIBRARY_URLS = [
   `https://esm.sh/@supabase/supabase-js@${SUPABASE_JS_VERSION}`,
@@ -68,6 +70,7 @@ const state = {
   feedback: false,                      // feedback switch (feature_access), on for everyone for now
   wf: null, wfDone: null,               // "report a problem with this wine"
   confirm: null,                        // the delete confirmation that is open, if any
+  wedit: null,                          // the "change wine info" form that is open, if any
 };
 // What this person may do in the Editor tab comes from the database (staff roles, update 13).
 const can = (permission) => !!state.access && state.access.permissions.includes(permission);
@@ -109,6 +112,7 @@ async function loadCounts() {
 
 // ---------------------------------------------------------------- start up
 async function init() {
+  wireGrapeInputs();   // suggestions under every grape field
   try {
     // config.js (created once in the site's folder) carries the connection details for everyone who opens the link.
     try {
@@ -206,7 +210,7 @@ function renderJournalList() {
   const groups = groupEntries(filtered, state.j.by);
   const meta = $("#jmeta"), list = $("#jlist");
   if (meta) meta.innerHTML = journalMetaHtml(state.journal, filtered, state.j, groups);
-  if (list) list.innerHTML = journalListHtml(state.journal, state.j, state.photoUrls);
+  if (list) list.innerHTML = journalListHtml(state.journal, state.j, state.photoUrls, state.cards);
 }
 function render() {
   const app = $("#app");
@@ -239,14 +243,35 @@ function render() {
 }
 
 // ---------------------------------------------------------------- swiping (Discover)
-async function fly(el, kind) {
+const reduceMotion = () => !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+const behindOf = (el) => (el && el.parentElement ? el.parentElement.querySelector(".behind") : null);
+// The card underneath rises toward the front as the top card is pulled away.
+function paintBehind(el, progress, ms = 0) {
+  const b = behindOf(el); if (!b) return;
+  b.style.transition = ms ? `transform ${ms}ms cubic-bezier(.2,.9,.3,1), opacity ${ms}ms` : "none";
+  b.style.transform = `scale(${0.95 + 0.05 * progress}) translateY(${10 - 10 * progress}px)`;
+  b.style.opacity = String(0.7 + 0.3 * progress);
+}
+// The card leaves the way it was thrown, at the speed it was thrown. A tap or a double-tap sends it with a gentler push.
+async function fly(el, kind, v = { dx: 0, dy: 0, vx: 0, vy: 0 }) {
   if (state.busy || !state.deck.length) return;
   state.busy = true;
   const card = state.deck[0];
-  const W = window.innerWidth, H = window.innerHeight;
-  const to = kind === "recognize" ? [W * 1.3, 0] : kind === "unknown" ? [-W * 1.3, 0] : [0, -H];
-  if (el) { el.style.transition = "transform 220ms ease-in"; el.style.transform = `translate(${to[0]}px, ${to[1]}px) rotate(${to[0] / 20}deg)`; }
-  await sleep(el ? 230 : 0);
+  if (el) {
+    el.classList.remove("dragging"); el.classList.add("leaving");
+    const plan = flyPlan(kind, v.dx, v.dy, v.vx || (kind === "recognize" ? 0.9 : kind === "unknown" ? -0.9 : 0), v.vy || (kind === "had" ? -1.1 : 0), window.innerWidth, window.innerHeight);
+    paintBehind(el, 1, plan.duration);
+    if (el.animate && !reduceMotion()) {
+      const from = el.style.transform || "translate3d(0px, 0px, 0)";
+      const anim = el.animate([{ transform: from }, { transform: `translate3d(${plan.to[0]}px, ${plan.to[1]}px, 0) rotate(${plan.rot}deg) scale(1)` }],
+        { duration: plan.duration, easing: "cubic-bezier(0.25, 0.6, 0.35, 1)", fill: "forwards" });
+      try { await anim.finished; } catch (_) {}
+    } else {
+      el.style.transition = "transform 200ms ease-in"; el.style.transform = `translate(${plan.to[0]}px, ${plan.to[1]}px) rotate(${plan.rot}deg)`;
+      await sleep(210);
+    }
+    if (navigator.vibrate) { try { navigator.vibrate(8); } catch (_) {} }
+  }
   try {
     await db.recordSwipe(state.sb, card.id, kind, state.interest);
     state.deck.shift();
@@ -257,13 +282,18 @@ async function fly(el, kind) {
     setBanner("Could not save that swipe: " + (e.message || e));
   }
   state.busy = false;
-  if (state.tab === "discover") renderBody();
+  if (state.tab === "discover") {
+    renderBody();
+    // The next card starts where the one underneath was, then settles forward.
+    const nc = $("#card");
+    if (nc && nc.animate && !reduceMotion()) nc.animate([{ transform: "scale(0.95) translateY(10px)", opacity: 0.85 }, { transform: "none", opacity: 1 }], { duration: 260, easing: "cubic-bezier(0.2, 0.9, 0.3, 1.15)" });
+  }
 }
 
 function attachCard(el) {
   // Forgiving double-tap: fingers may wobble a little, and the second tap can be slower or a bit off.
   const TAP_MOVE = 18, DOUBLE_TAP_MS = 500, TAP_APART = 70;
-  let start = null, dx = 0, dy = 0, lastTap = null, hintTimer = null;
+  let start = null, dx = 0, dy = 0, lastTap = null, hintTimer = null, samples = [];
   const label = (k) => el.querySelector(`[data-label="${k}"]`);
   const clearHint = () => { clearTimeout(hintTimer); ["recognize", "unknown", "had"].forEach((k) => { label(k).style.opacity = 0; }); };
   const showHint = (edge) => { clearHint(); if (edge) { label(edge).style.opacity = 0.55; hintTimer = setTimeout(clearHint, DOUBLE_TAP_MS + 50); } };
@@ -272,24 +302,33 @@ function attachCard(el) {
     label("unknown").style.opacity = clamp01((-dx - 40) / 80);
     label("had").style.opacity = clamp01((-dy - 40) / 80);
   };
-  const settle = () => { el.style.transition = "transform 200ms ease-out"; el.style.transform = ""; dx = dy = 0; paint(); };
+  // Not far enough: the card springs back past the middle and settles, like something with weight.
+  const settle = () => {
+    el.classList.remove("dragging");
+    el.style.transition = reduceMotion() ? "transform 150ms ease-out" : "transform 460ms cubic-bezier(0.34, 1.6, 0.5, 1)";
+    el.style.transform = ""; dx = dy = 0; paint(); paintBehind(el, 0, reduceMotion() ? 150 : 380);
+  };
   el.addEventListener("pointerdown", (e) => {
     if (state.busy) return;
-    start = { x: e.clientX, y: e.clientY }; dx = dy = 0;
+    start = { x: e.clientX, y: e.clientY }; dx = dy = 0; samples = [{ x: e.clientX, y: e.clientY, t: performance.now() }];
     try { el.setPointerCapture(e.pointerId); } catch (_) {}
-    el.style.transition = "none";
+    el.style.transition = "none"; el.classList.add("dragging");
   });
   el.addEventListener("pointermove", (e) => {
     if (!start) return;
     dx = e.clientX - start.x; dy = e.clientY - start.y;
-    el.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx / 20}deg)`;
+    samples.push({ x: e.clientX, y: e.clientY, t: performance.now() }); if (samples.length > 8) samples.shift();
+    const pose = dragPose(dx, dy);
+    el.style.transform = pose.transform;
+    paintBehind(el, pose.progress);
     paint();
   });
   el.addEventListener("pointerup", (e) => {
     if (!start) return;
     const from = start; start = null;
-    const kind = swipeKind(dx, dy);
-    if (kind) { fly(el, kind); return; }
+    const { vx, vy } = releaseVelocity(samples);
+    const kind = decideSwipe(dx, dy, vx, vy);
+    if (kind) { fly(el, kind, { dx, dy, vx, vy }); return; }
     settle();
     if (Math.hypot(e.clientX - from.x, e.clientY - from.y) < TAP_MOVE) {      // a tap that barely moved
       const now = Date.now();
@@ -325,8 +364,16 @@ function syncSheet() {
   });
   document.querySelectorAll("[data-sheet='save']").forEach((b) => { b.disabled = !s.verdict || state.sheetUi.saving; });
   const hint = document.querySelector(".wfoot .muted"); if (hint) hint.hidden = !!s.verdict;
+  syncFoot();
   const err = $("#sheetErr");
   if (err) err.textContent = state.sheetUi.error || "";
+}
+// The big button at the bottom is Next on every page but the last, where it saves.
+function syncFoot() {
+  const b = document.getElementById("wfootbtn");
+  if (!b || !state.sheet) return;
+  const f = footState(state.sheetUi.page || 0, state.sheet.verdict, state.sheetUi.saving);
+  b.dataset.sheet = f.action; b.textContent = f.label; b.disabled = f.disabled;
 }
 function openSheet() {
   state.sheetUi = { ...state.sheetUi, saving: false, error: "", page: 0 };
@@ -341,7 +388,51 @@ function showSheetPage(n) {
   document.querySelectorAll(".wstep").forEach((b, i) => b.classList.toggle("on", i === page));
   const t = $("#wtitle"); if (t) t.textContent = `Step ${page + 1} of ${SHEET_PAGES.length}: ${SHEET_PAGES[page].title}`;
   const panel = $("#sheetPanel"); if (panel) { panel.dataset.page = String(page); panel.scrollTop = 0; }
+  syncFoot();
 }
+// ---------------------------------------------------------------- changing the wine on a journal entry
+// A person can correct what the wine is. The catalog is never changed: the entry either points at the right catalog wine or at a wine of their own.
+async function openWineEdit() {
+  const s = state.sheet;
+  if (!s || !s.entryId) return;
+  const entry = state.journal.find((e) => e.id === s.entryId);
+  if (!entry) return;
+  let userWine = null;
+  try { if (entry.is_outside_wine) userWine = await db.loadUserWine(state.sb, entry.user_wine_id); }
+  catch (e) { state.sheetUi.error = "Could not open wine info: " + (e.message || e); syncSheet(); return; }
+  const card = entry.is_outside_wine ? null : state.cards.find((c) => c.id === entry.wine_vintage_id) || null;
+  const before = wineEditForm(entry, card, userWine);
+  state.wedit = { entry, before, form: { ...before }, saving: false, error: "",
+    note: entry.is_outside_wine ? "This wine is yours. If it matches a catalog wine, this entry moves to that wine." : "This changes your journal only. The catalog stays as it is." };
+  drawWineEdit();
+}
+const drawWineEdit = () => { const w = state.wedit; $("#confirm").innerHTML = w ? wineEditHtml(w.form, { error: w.error, saving: w.saving, note: w.note }) : ""; };
+const closeWineEdit = () => { state.wedit = null; $("#confirm").innerHTML = ""; };
+function showWineChange() {
+  const s = state.sheet; if (!s) return;
+  const t = document.querySelector("#sheetPanel .sheettitle .big"); if (t) t.textContent = s.target.name;
+  const c = document.getElementById("wcname"); if (c) c.textContent = s.target.name;
+  redrawStructurePages(); syncSheet();
+}
+async function saveWineEdit() {
+  const w = state.wedit;
+  if (!w || w.saving) return;
+  const gi = document.querySelector('[data-wef="grape"]'); if (gi) checkGrapeInput(gi);
+  const problem = validateWineEdit(w.form);
+  if (problem) { w.error = problem; const e = document.getElementById("winfoErr"); if (e) e.textContent = problem; return; }
+  const plan = planWineEdit(w.entry, w.before, w.form, state.cards);
+  if (plan.action === "none") { closeWineEdit(); return; }
+  w.saving = true; w.error = ""; drawWineEdit();
+  try {
+    await db.changeJournalWine(state.sb, state.user.id, w.entry, plan);
+    await refreshData();
+    const updated = state.journal.find((e) => e.id === w.entry.id);
+    if (updated && state.sheet && state.sheet.entryId === updated.id) { state.sheet = retargetSheet(state.sheet, updated); showWineChange(); }
+    closeWineEdit();
+    if (state.tab === "journal") renderJournalList();
+  } catch (e) { w.saving = false; w.error = "Could not save: " + (e.message || e); drawWineEdit(); }
+}
+
 // Changing the wine type changes which lines apply, so pages 2 and 3 are drawn again.
 function redrawStructurePages() {
   const a = document.querySelector('[data-wpage="1"]'), b = document.querySelector('[data-wpage="2"]');
@@ -435,6 +526,16 @@ document.addEventListener("click", async (ev) => {
   catch (e) { c.busy = false; c.error = "Could not delete: " + (e.message || e); $("#confirm").innerHTML = confirmHtml(c); }
 });
 
+// ---------------------------------------------------------------- tapping outside the rating window closes it
+let downOnBackdrop = false;
+const isRatingBackdrop = (el) => !!(state.sheet && el && el.classList && el.classList.contains("overlay") && !el.classList.contains("top") && el.querySelector("#sheetPanel[data-page]"));
+document.addEventListener("pointerdown", (ev) => { downOnBackdrop = isRatingBackdrop(ev.target); }, true);
+document.addEventListener("click", (ev) => {
+  const was = downOnBackdrop; downOnBackdrop = false;
+  // Both the press and the release must be on the dimmed area, so dragging a slider past the edge of the window never closes it.
+  if (was && isRatingBackdrop(ev.target)) closeOverlay();
+}, true);
+
 // ---------------------------------------------------------------- swiping between the pages of the rating window
 let pageSwipe = null;
 document.addEventListener("pointerdown", (ev) => {
@@ -453,6 +554,15 @@ document.addEventListener("pointercancel", () => { pageSwipe = null; });
 
 // ---------------------------------------------------------------- clicks and typing
 document.addEventListener("click", async (ev) => {
+  const wb = ev.target.closest("[data-wedit], [data-wedit-style]");
+  if (wb && state.wedit) {
+    if (wb.dataset.weditStyle) {
+      state.wedit.form.style = wb.dataset.weditStyle;
+      document.querySelectorAll("[data-wedit-style]").forEach((b) => b.classList.toggle("on", b.dataset.weditStyle === state.wedit.form.style));
+    } else if (wb.dataset.wedit === "save") await saveWineEdit();
+    else if (wb.dataset.wedit === "close") closeWineEdit();
+    return;
+  }
   const sheetBtn = ev.target.closest("[data-sheet]");
   if (sheetBtn) {
     const [action, a, b] = sheetBtn.dataset.sheet.split(":");
@@ -468,6 +578,7 @@ document.addEventListener("click", async (ev) => {
     else if (action === "nudge") { state.sheet = nudgeDim(state.sheet, a, Number(b)); syncSheet(); }
     else if (action === "choice") { state.sheet = setDim(state.sheet, a, Number(b)); syncSheet(); }
     else if (action === "reset") { state.sheet = resetDim(state.sheet, a); syncSheet(); }
+    else if (action === "editinfo") await openWineEdit();
     else if (action === "delete") askDeleteEntry();
     else if (action === "save") await saveSheet();
     else if (action === "close") closeOverlay();
@@ -543,6 +654,7 @@ document.addEventListener("click", async (ev) => {
     else if (action === "formstyle") { state.form.style = state.form.style === a ? "" : a; $("#overlay").innerHTML = addFormHtml(state.form); }
     else if (action === "formunqueue") { state.form.photos = state.form.photos.filter((p) => p.key !== a); showFormPhotos(); }
     else if (action === "addrate" || action === "addnorate") {
+      const gi = document.querySelector('[data-form="grape"]'); if (gi) checkGrapeInput(gi);   // marks a grape that is not on the list
       const problem = validateOutside(state.form);
       if (problem) { $("#formErr").textContent = problem; return; }
       if (action === "addrate") { state.sheet = sheetForOutside(state.form, today()); state.form = null; openSheet(); }
@@ -565,6 +677,7 @@ document.addEventListener("input", (ev) => {
   if (t.dataset.dim) { state.sheet = setDim(state.sheet, t.dataset.dim, Number(t.value)); syncSheet(); }
   else if (t.dataset.field && state.sheet) state.sheet[t.dataset.field] = t.value;
   else if (t.dataset.form && state.form) state.form[t.dataset.form] = t.value;
+  else if (t.dataset.wef && state.wedit) state.wedit.form[t.dataset.wef] = t.value;
   else if (t.dataset.jq !== undefined) { state.j.q = t.value; renderJournalList(); }
   else if (t.dataset.jby !== undefined) { state.j.by = t.value; renderJournalList(); }
   else if (t.dataset.jverdict !== undefined) { state.j.verdict = t.value; renderJournalList(); }
