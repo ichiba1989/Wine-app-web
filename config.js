@@ -5,5 +5,5 @@
 // what your database's row-level security rules allow. NEVER put a "secret" or "service_role" key here.
 //
 // Find them in Supabase: Project Settings, then API (or API Keys).
-export const SUPABASE_URL = "https://vjfahkefqsraqzwvghvo.supabase.co/rest/v1/";
+export const SUPABASE_URL = "https://vjfahkefqsraqzwvghvo.supabase.co";
 export const SUPABASE_KEY = "sb_publishable_z1WXp2RAfuUMc-x25xYr7A_f9C9gJkp";
