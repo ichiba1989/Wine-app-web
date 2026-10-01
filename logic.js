@@ -1,3 +1,4 @@
+import { fold, splitGrapeText, checkGrapeText, grapeProblem } from "./grapes.js?v=1";
 // Pure logic for the wine app web page. No browser and no network in this file,
 // so every rule here can be tested on its own.
 
@@ -97,6 +98,39 @@ export function swipeKind(dx, dy, t = 100) {
   return null;
 }
 
+// How the card looks while a finger holds it: it follows the finger, tilts about a point below it (like a card held at the bottom),
+// and lifts a little. `progress` (0 to 1) says how far it has been pulled, so the card underneath can rise to meet it.
+export const clampN = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+export function dragPose(dx, dy) {
+  const rot = clampN(dx / 14, -24, 24);
+  return { rot, transform: `translate3d(${dx}px, ${dy}px, 0) rotate(${rot}deg) scale(1.03)`, progress: clampN(Math.hypot(dx, dy) / 150, 0, 1) };
+}
+// Speed of the finger over its last moments, in pixels per millisecond. samples: [{ x, y, t }] oldest first.
+export function releaseVelocity(samples, windowMs = 110) {
+  if (!samples || samples.length < 2) return { vx: 0, vy: 0 };
+  const last = samples[samples.length - 1];
+  let first = samples[0];
+  for (const p of samples) { if (last.t - p.t <= windowMs) { first = p; break; } }
+  const dt = Math.max(1, last.t - first.t);
+  return { vx: (last.x - first.x) / dt, vy: (last.y - first.y) / dt };
+}
+// A swipe is a long enough pull, or a quick flick that would have carried the card far enough.
+export const FLICK_SPEED = 0.5, FLICK_MIN = 40, FLICK_CARRY_MS = 140;
+export function decideSwipe(dx, dy, vx = 0, vy = 0, t = 100) {
+  const far = swipeKind(dx, dy, t);
+  if (far) return far;
+  const speed = Math.hypot(vx, vy);
+  if (speed >= FLICK_SPEED && Math.hypot(dx, dy) >= FLICK_MIN) return swipeKind(dx + vx * FLICK_CARRY_MS, dy + vy * FLICK_CARRY_MS, t);
+  return null;
+}
+// Where a released card flies to and how long it takes: it keeps going the way it was thrown, at the speed it was thrown.
+export function flyPlan(kind, dx, dy, vx, vy, W, H) {
+  const to = kind === "recognize" ? [W * 1.3, dy + vy * 120] : kind === "unknown" ? [-W * 1.3, dy + vy * 120] : [dx + vx * 120, -H * 1.1];
+  const left = Math.hypot(to[0] - dx, to[1] - dy);
+  const duration = Math.round(clampN(left / Math.max(Math.hypot(vx, vy), 1.1), 190, 400));
+  return { to, rot: clampN(to[0] / 14, -30, 30), duration };
+}
+
 // ---------------------------------------------------------------- cards and names
 export function cardFromRow(r) {
   const vintage = r.is_non_vintage ? "NV" : r.vintage_year ? String(r.vintage_year) : "";
@@ -111,8 +145,32 @@ export function cardFromRow(r) {
     id: r.wine_vintage_id, vintage, producer: r.producer, cuvee: r.wine_name || "", style: r.style, country: r.country,
     region: r.region || "", appellation: r.appellation || "",
     grape: (r.label_grapes && r.label_grapes.length ? r.label_grapes.join("-") : (r.rule_grapes || []).join(", ")),
+    grapes: [...(r.label_grapes || [])], ruleGrapes: [...(r.rule_grapes || [])],
     facts,
   };
+}
+// The grape to always show when a wine has exactly one: the one printed on the label, or, with none printed, the one the appellation requires.
+// Blends return "" (their grapes are listed on the wine's own card).
+export function singleGrape(c) {
+  if (!c) return "";
+  const label = c.grapes || [], rule = c.ruleGrapes || [];
+  if (label.length === 1) return label[0];
+  if (!label.length && rule.length === 1) return rule[0];
+  return "";
+}
+// "Pinot Noir, Dundee Hills, USA": the one grape (if there is one), then the place. Used on every list row.
+export function placeLine(c) {
+  const g = singleGrape(c);
+  const place = [c.appellation, c.country].filter(Boolean);
+  if (g) return [g, ...place].join(", ");
+  return [c.appellation || c.grape, c.country].filter(Boolean).join(", ");
+}
+// The same for a journal row. Catalog wines use their card; wines typed in by hand use the grape text when it names one grape.
+export function entryGrape(e, cardsById) {
+  if (!e) return "";
+  if (!e.is_outside_wine) { const c = cardsById && cardsById.get(e.wine_vintage_id); return c ? singleGrape(c) : (e.grape || ""); }
+  const names = splitGrapeText(e.grape || e.grape_text || "");
+  return names.length === 1 ? names[0] : "";
 }
 // A wine's name always starts with its vintage.
 export const wineName = (c) => `${c.vintage ? c.vintage + " " : ""}${c.producer}${c.cuvee ? " " + c.cuvee : ""}`;
@@ -393,14 +451,80 @@ export function referenceWrites(values, existingRows, wineId, userId, nowIso) {
 // ---------------------------------------------------------------- wines typed in by hand
 export function validateOutside(form) {
   if (!form || !(form.producer || "").trim()) return "Enter the producer.";
+  const g = checkGrapeText(form.grape || "");
+  if (!g.ok) return grapeProblem(g.bad);
   return null;
 }
+// The grape field as saved: the names as they are on the list, separated by commas. Empty stays empty.
+export function grapeTextOf(text) { const r = checkGrapeText(text || ""); return r.names.length ? r.names.join(", ") : null; }
 export function outsideRow(form, userId) {
   return {
     user_id: userId, producer: form.producer.trim(), wine_name: clean(form.wine_name),
     vintage_year: /^\d{4}$/.test(form.vintage || "") ? Number(form.vintage) : null,
     is_non_vintage: form.vintage === "NV",
-    grape_text: clean(form.grape), region_text: clean(form.region),
-    style: ["red", "white", "sparkling"].includes(form.style) ? form.style : "unknown",
+    grape_text: grapeTextOf(form.grape), region_text: clean(form.region),
+    style: styleInfo(form.style) ? form.style : "unknown",
   };
+}
+
+// ---------------------------------------------------------------- changing a wine's info from the journal
+// A person can correct the wine on a journal entry. The catalog is never touched. What happens:
+//   - nothing changed          -> nothing
+//   - a corrected wine that IS a catalog wine (the same one, or another vintage or cuvee of it)
+//                              -> the entry points at that catalog wine (a changed wine type is kept as their own choice)
+//   - a wine they typed in, and it is not a catalog wine -> that wine is updated in place
+//   - a catalog wine, and the corrected wine is not in the catalog (or their grape or place differs from the catalog's)
+//                              -> a new wine is created for them and the entry points at it
+export const vintageText = (form) => (form.vintage === "NV" ? "NV" : /^\d{4}$/.test(String(form.vintage || "")) ? String(form.vintage) : "");
+const same = (a, b) => fold(a) === fold(b);
+const grapeSetKey = (text) => checkGrapeText(text || "").names.map(fold).sort().join("|") || fold(text);
+export const placeTextOf = (c) => [c.appellation, c.region && c.region !== c.appellation ? c.region : "", c.country].filter(Boolean).join(", ");
+export const grapeTextOfCard = (c) => ((c.grapes && c.grapes.length ? c.grapes : c.ruleGrapes) || []).join(", ");
+// The form a person edits, filled from the entry's wine. `card` is the catalog card (catalog wines) and `userWine` the row (wines typed in).
+export function wineEditForm(entry, card, userWine) {
+  if (entry.is_outside_wine) {
+    const u = userWine || {};
+    return { producer: u.producer || entry.producer || "", wine_name: u.wine_name || entry.wine_name || "", vintage: u.is_non_vintage || entry.is_non_vintage ? "NV" : (u.vintage_year || entry.vintage_year ? String(u.vintage_year || entry.vintage_year) : ""),
+      style: u.style || entry.style || "unknown", grape: u.grape_text || "", region: u.region_text || entry.region || "" };
+  }
+  const c = card || { producer: entry.producer, cuvee: entry.wine_name || "", vintage: entry.is_non_vintage ? "NV" : entry.vintage_year ? String(entry.vintage_year) : "", appellation: "", region: entry.region || "", country: entry.country || "", grapes: entry.grape ? [entry.grape] : [], ruleGrapes: [] };
+  return { producer: c.producer || "", wine_name: c.cuvee || "", vintage: c.vintage || "", style: entry.style || c.style || "unknown", grape: grapeTextOfCard(c), region: placeTextOf(c) };
+}
+export function validateWineEdit(form) {
+  if (!(form.producer || "").trim()) return "Enter the producer.";
+  const g = checkGrapeText(form.grape || "");
+  if (!g.ok) return grapeProblem(g.bad);
+  return "";
+}
+export function findCatalogMatch(cards, form) {
+  const v = vintageText(form);
+  return (cards || []).find((c) => same(c.producer, form.producer) && same(c.cuvee || "", form.wine_name || "") && String(c.vintage || "") === v) || null;
+}
+const wineFields = (form) => ({
+  producer: form.producer.trim(), wine_name: clean(form.wine_name),
+  vintage_year: /^\d{4}$/.test(vintageText(form)) ? Number(vintageText(form)) : null, is_non_vintage: vintageText(form) === "NV",
+  grape_text: grapeTextOf(form.grape), region_text: clean(form.region),
+  style: styleInfo(form.style) ? form.style : "unknown",
+});
+export function planWineEdit(entry, before, after, cards) {
+  const unchanged = same(before.producer, after.producer) && same(before.wine_name, after.wine_name) && vintageText(before) === vintageText(after)
+    && before.style === after.style && grapeSetKey(before.grape) === grapeSetKey(after.grape) && same(before.region, after.region);
+  if (unchanged) return { action: "none" };
+  const identityChanged = !(same(before.producer, after.producer) && same(before.wine_name, after.wine_name) && vintageText(before) === vintageText(after));
+  const match = identityChanged ? findCatalogMatch(cards, after) : (entry.is_outside_wine ? null : (cards || []).find((c) => c.id === entry.wine_vintage_id) || null);
+  if (match) {
+    const grapesOk = !(after.grape || "").trim() || grapeSetKey(after.grape) === grapeSetKey(grapeTextOfCard(match));
+    const placeOk = !(after.region || "").trim() || same(after.region, placeTextOf(match));
+    if (grapesOk && placeOk) return { action: "link_catalog", wineVintageId: match.id, styleOverride: styleInfo(after.style) && after.style !== match.style ? after.style : null, name: wineName(match) };
+  }
+  if (entry.is_outside_wine) return { action: "update_outside", userWineId: entry.user_wine_id, row: wineFields(after) };
+  return { action: "create_outside", row: wineFields(after) };
+}
+// After the entry's wine changed, the open rating window follows it (the saved rating stays; the wine and its type change).
+export function retargetSheet(sheet, entry) {
+  const target = entry.is_outside_wine
+    ? { kind: "outside", wineVintageId: null, userWineId: entry.user_wine_id, name: entryName(entry), form: null }
+    : { kind: "catalog", wineVintageId: entry.wine_vintage_id, userWineId: null, name: entryName(entry), form: null };
+  const next = { ...sheet, target, catalogStyle: entry.catalog_style || entry.style, hadOverride: !!(entry.catalog_style && entry.catalog_style !== entry.style) };
+  return entry.style && entry.style !== sheet.style ? setStyle(next, entry.style) : next;
 }
