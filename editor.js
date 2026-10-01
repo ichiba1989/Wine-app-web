@@ -4,13 +4,14 @@
 //              rating sliders start from it, and the palate compares each person's own ratings against it.
 //   Flags:     review what testers reported on quiz questions and wines.
 //   Quiz:      edit, source and verify quiz questions.
+//   Feedback:  read what testers sent from the app and mark it handled.
 // Every change is logged by the database.
 import { dimsFor, defaultFor, esc, wineName, nudgeStep, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice } from "./logic.js?v=5";
 import * as db from "./data.js?v=5";
 import { marksHtml, dimControlHtml } from "./views.js?v=5";
-import { createReview } from "./review.js?v=1";
+import { createReview } from "./review.js?v=2";
 
-const SECTIONS = [{ id: "structure", label: "Structure" }, { id: "flags", label: "Flags" }, { id: "quiz", label: "Quiz" }];
+const SECTIONS = [{ id: "structure", label: "Structure" }, { id: "flags", label: "Flags" }, { id: "quiz", label: "Quiz" }, { id: "feedback", label: "Feedback" }];
 
 function sheetHtml(E) {
   const s = E.sheet;
@@ -44,13 +45,17 @@ export function createEditor(ctx) {
   const overlay = () => document.querySelector("#overlay");
   const review = createReview({
     sb: ctx.sb, userId: ctx.userId, cards: ctx.cards,
-    onChange: () => { const b = document.querySelector("[data-editor='sec:flags']"); if (b) b.textContent = flagsLabel(); },
+    onChange: () => {
+      const f = document.querySelector("[data-editor='sec:flags']"); if (f) f.textContent = flagsLabel();
+      const k = document.querySelector("[data-editor='sec:feedback']"); if (k) k.textContent = feedbackLabel();
+    },
     // "Open question" on a flag: switch to the Quiz section and open that question once it has loaded.
     gotoQuiz: (id) => { review.leave(); E.section = "quiz"; draw(); const wait = setInterval(() => { if (review.state.loaded) { clearInterval(wait); review.openQuestion(id); } }, 50); setTimeout(() => clearInterval(wait), 5000); },
   });
   const flagsLabel = () => { const n = review.openFlags; return n ? `Flags (${n})` : "Flags"; };
+  const feedbackLabel = () => { const n = review.newFeedback; return n ? `Feedback (${n})` : "Feedback"; };
 
-  const chips = () => `<div class="chips left">${SECTIONS.map((x) => `<button class="chip wide${E.section === x.id ? " on" : ""}" data-editor="sec:${x.id}">${x.id === "flags" ? flagsLabel() : x.label}</button>`).join("")}</div>`;
+  const chips = () => `<div class="chips left">${SECTIONS.map((x) => `<button class="chip wide${E.section === x.id ? " on" : ""}" data-editor="sec:${x.id}">${x.id === "flags" ? flagsLabel() : x.id === "feedback" ? feedbackLabel() : x.label}</button>`).join("")}</div>`;
   const structureShell = () => `<div class="jbar"><input class="field" data-editor-q placeholder="Search wines" value="${esc(E.q)}" autocomplete="off">
       <div class="chips left"><button class="chip wide${E.filter === "needs" ? " on" : ""}" data-editor="filter:needs">Needs a profile</button><button class="chip wide${E.filter === "all" ? " on" : ""}" data-editor="filter:all">All wines</button></div></div>
     <div id="editorList"></div>`;
