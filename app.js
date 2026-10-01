@@ -5,7 +5,7 @@ import {
   FAMILIARITY, wineName, esc, clamp01, shuffle, tapEdge, swipeKind, cardFromRow, filterEntries, groupEntries, swipeLists,
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, dimMeta, isChoice, setStyle, choiceDims, barDims } from "./logic.js?v=7";
-import * as db from "./data.js?v=9";
+import * as db from "./data.js?v=10";
 import { shrinkImage } from "./photos.js?v=4";
 import {
   discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=8";
@@ -13,11 +13,11 @@ import { createLearn } from "./learn.js?v=2";
 import { createProfile } from "./profile.js?v=6";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=4";
 import { createFeedback } from "./feedback.js?v=2";
-import { createEditor } from "./editor.js?v=7";
+import { createEditor } from "./editor.js?v=8";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
-const APP_VERSION = "14";   // shown to editors with each piece of feedback
+const APP_VERSION = "15";   // shown to editors with each piece of feedback
 const SUPABASE_JS_VERSION = "2.109.0";
 const LIBRARY_URLS = [
   `https://esm.sh/@supabase/supabase-js@${SUPABASE_JS_VERSION}`,
@@ -63,12 +63,15 @@ const state = {
   sheet: null, sheetUi: { saving: false, error: "" },
   form: null,
   photoUrls: new Map(),                 // signed links for the photos shown in Journal and Swipes
+  access: { role: null, label: null, permissions: [] },   // what this person may do as staff: from the database
   refs: new Map(),                      // wine_vintage_id -> reference structure values set by editors
   feedback: false,                      // feedback switch (feature_access), on for everyone for now
   wf: null, wfDone: null,               // "report a problem with this wine"
   confirm: null,                        // the delete confirmation that is open, if any
 };
-const isEditor = () => !!state.profile && ["editor", "admin"].includes(state.profile.role);
+// What this person may do in the Editor tab comes from the database (staff roles, update 13).
+const can = (permission) => !!state.access && state.access.permissions.includes(permission);
+const isEditor = () => can("catalog_edit") || can("quiz_verify");
 const TITLES = { discover: "Discover", swipes: "Swipes", journal: "Journal", profile: "Profile", learn: "Learn", editor: "Editor" };
 
 // The Learn tab lives in learn.js. It saves quiz answers itself and reports save problems through the banner.
@@ -91,7 +94,7 @@ const feedback = createFeedback({ sb: () => state.sb, user: () => state.user, sc
 // A gentle reminder for guests who have started building a journal, shown on Discover until they save it or say "not now".
 const showNudge = () => !!state.user && state.user.is_anonymous === true && !store.get("wine.nudgeOff") && (state.journal.length >= 1 || state.states.length >= 5);
 // The Editor tab (editors only) lives in editor.js.
-const editorTab = createEditor({ sb: () => state.sb, userId: () => state.user.id, cards: () => state.cards, onSaved: () => loadReferences(), onWineChanged: async () => { state.cards = await db.loadCards(state.sb); state.deck = state.deck.map((c) => state.cards.find((x) => x.id === c.id) || c); } });
+const editorTab = createEditor({ sb: () => state.sb, userId: () => state.user.id, cards: () => state.cards, can, roleLabel: () => (state.access && state.access.label) || "", onSaved: () => loadReferences(), onWineChanged: async () => { state.cards = await db.loadCards(state.sb); state.deck = state.deck.flatMap((c) => { const fresh = state.cards.find((x) => x.id === c.id); return fresh ? [fresh] : []; }); } });   // a deleted wine leaves the Discover deck too
 
 // Counts for the Discover screen. Only swipes count as swipes (not later changes of interest).
 async function loadCounts() {
@@ -124,6 +127,7 @@ async function init() {
     if (linkError) state.banner = "That email link did not work: " + linkError.replace(/\+/g, " ") + " Ask for a new code.";
     const carried = await carryOverGuest();
     state.profile = await db.loadProfile(state.sb, state.user.id);
+    state.access = await db.loadAccess(state.sb, state.profile.role);
     if (state.profile.age_attested_at) await enterMain(); else { state.status = "age"; render(); }
     if (carried && carried.error) setBanner(carried.error);
     else if (carried) setBanner(carried, true);
