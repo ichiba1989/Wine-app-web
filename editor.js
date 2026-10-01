@@ -8,11 +8,12 @@
 //   Quiz:      edit, source and verify quiz questions.
 //   Feedback:  read what testers sent from the app and mark it handled.
 // Every change is logged by the database.
-import { dimsFor, defaultFor, esc, wineName, nudgeStep, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel } from "./logic.js?v=5";
-import * as db from "./data.js?v=5";
-import { marksHtml, dimControlHtml } from "./views.js?v=5";
-import { createReview } from "./review.js?v=2";
-import { suggestStructure, values as ruleValues, goldInfo, GOLD, GROUPS, evaluateRules, reportText, TARGETS, RULES_VERSION } from "./rules.js?v=2";
+import { dimsFor, dimMeta, defaultFor, esc, wineName, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel, barDims, choiceDims, styleInfo } from "./logic.js?v=7";
+import * as db from "./data.js?v=9";
+import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=8";
+import { createReview } from "./review.js?v=4";
+import { createWineInfo } from "./wineinfo.js?v=2";
+import { suggestStructure, values as ruleValues, goldInfo, GOLD, GROUPS, evaluateRules, reportText, TARGETS, RULES_VERSION } from "./rules.js?v=3";
 
 const SECTIONS = [{ id: "structure", label: "Structure" }, { id: "flags", label: "Flags" }, { id: "quiz", label: "Quiz" }, { id: "feedback", label: "Feedback" }];
 
@@ -20,8 +21,8 @@ const SCALE_GUIDE = `<details class="scaleguide"><summary>How to score (anchor w
   <p><b>Acidity:</b> 1 soft and round, 3 balanced, 5 sharp and mouth-watering (Mosel Riesling, Muscadet).</p>
   <p><b>Body:</b> 1 light and delicate (Pinot Grigio, Beaujolais), 3 medium (Merlot, Chardonnay), 5 full and heavy (Amarone, Barossa Shiraz).</p>
   <p><b>Tannin:</b> 1 almost none (Beaujolais), 3 medium (Merlot), 5 very grippy (young Barolo, Tannat).</p>
-  <p><b>Sweetness:</b> 1 bone dry, 2 a hint of sweetness, 3 medium sweet (Spätlese), 5 dessert (Sauternes).</p>
-  <p><b>Oak:</b> Oaked if you can notice oak influence (vanilla, toast, spice), otherwise Unoaked.</p>
+  <p><b>Sweetness:</b> Dry unless you can taste sugar. Then Off-dry (a hint, Kabinett), Semi-sweet (Spätlese), or Dessert sweet (Sauternes, Port).</p>
+  <p><b>Oak:</b> No oak (steel or concrete), Neutral oak (old or large casks, little flavor), New oak (you can notice vanilla, toast or spice).</p>
   <p><b>CO\u2082:</b> None for still, Frizzy for a light spritz, Sparkling for full bubbles.</p></details>`;
 const CONF_DOTS = { high: "\u25CF\u25CF\u25CF", medium: "\u25CF\u25CF\u25CB", low: "\u25CF\u25CB\u25CB" };
 // What the rules said for one dimension, shown under its control.
@@ -39,7 +40,7 @@ const touchHtml = (d, s) => {
 function sheetHtml(E) {
   const s = E.sheet;
   const wrap = (d) => `<div class="dimwrap">${dimControlHtml(d, { value: s.values[d.key], adjusted: true }, { attr: "data-editor", slider: "data-edim", reset: false })}<div id="touch-${d.key}">${touchHtml(d, s)}</div>${s.mode === "suggest" || s.mode === "saved" ? ruleNote(d, s.suggestion && s.suggestion.dims[d.key]) : ""}</div>`;
-  const dims = dimsFor(s.style).map(wrap).join("");
+  const dims = `${barDims(s.style).map(wrap).join("")}<div class="qlabel" style="margin-top:12px">Sweetness and CO\u2082</div>${choiceDims(s.style).map(wrap).join("")}`;
   const banner = s.mode === "blind"
     ? `<div class="goldbanner"><b>Gold set wine.</b> Score every line from your own knowledge. The rules\' suggestion is hidden so it cannot influence you. A line you have not touched does not count: tap "Score it as" if the value shown is right.</div>`
     : s.mode === "gold-saved"
@@ -48,7 +49,7 @@ function sheetHtml(E) {
         ? `<div class="rulebanner"><b>Suggested by the rules.</b> These are starting points, not facts. Check each one against what you know, change what is wrong, then save to confirm.</div>`
         : "";
   return `<div class="overlay"><div class="sheet" id="editorPanel">
-    <div class="sheethead"><div class="sheettitle"><div class="serif big">${esc(s.name)}</div><div class="muted small">Reference structure for a ${esc(s.style === "unknown" ? "wine of unknown style" : s.style + " wine")}. A baseline, not a correct answer.</div></div>
+    <div class="sheethead"><div class="sheettitle"><div class="serif big">${esc(s.name)}</div><div class="muted small">Reference structure for a ${esc(s.style === "unknown" ? "wine of unknown style" : ((styleInfo(s.style) || {}).label || s.style).toLowerCase() + " wine")}. A baseline, not a correct answer.</div><button class="pill infobtn" data-editor="info:${s.vintageId}">Edit wine info</button></div>
       <div class="sheetbtns"><button class="pill wine" data-editor="save"${E.saving ? " disabled" : ""}>Save</button><button class="xbtn" data-editor="close" aria-label="Close">&times;</button></div></div>
     ${banner}${dims}${SCALE_GUIDE}<div id="editorErr" class="err">${esc(E.error || "")}</div>
     <button class="btn primary" data-editor="save"${E.saving ? " disabled" : ""}>Save reference</button></div></div>`;
@@ -119,14 +120,14 @@ function testHtml(E) {
   return `<div class="overlay"><div class="sheet" id="testPanel">
     <div class="sheethead"><div class="sheettitle"><div class="serif big">Rule test</div><div class="muted small">Rules version ${esc(RULES_VERSION)}. ${rows.length} of ${GOLD.length} gold wines scored.</div></div>
       <div class="sheetbtns"><button class="xbtn" data-editor="testclose" aria-label="Close">&times;</button></div></div>
-    <p class="muted small">Targets: average error of 0.6 or less on the sliders is good, 0.8 is ok. For oak and CO\u2082, 85% exactly right is good, 70% is ok.${rows.length < GOLD.length ? " Results are rough until all " + GOLD.length + " are scored." : ""}</p>
+    <p class="muted small">Targets: average error of 0.6 or less on the sliders is good, 0.8 is ok. For sweetness and oak, 75% exactly right is good and 60% is ok. For CO\u2082, 85% and 70%.${rows.length < GOLD.length ? " Results are rough until all " + GOLD.length + " are scored." : ""}</p>
     ${GROUPS.map(groupBlock).join("")}
     <div class="pcard"><div class="ptitle">Share these results</div><textarea class="field" rows="6" readonly id="testText">${esc(text)}</textarea>
       <button class="btn outline slim" data-editor="copytest">Copy results</button></div>
     <h3 class="psub">Wine by wine</h3>${wineCards}</div></div>`;
 }
 
-// ctx: { sb(), userId(), cards(), onSaved() }
+// ctx: { sb(), userId(), cards(), onSaved(), onWineChanged() }
 export function createEditor(ctx) {
   const E = { section: "structure", loaded: false, loadError: null, cards: [], refs: new Map(), rows: [], vintageToWine: new Map(), q: "", filter: "needs", sheet: null, saving: false, error: "" };
   let root = null;
@@ -138,7 +139,13 @@ export function createEditor(ctx) {
       const k = document.querySelector("[data-editor='sec:feedback']"); if (k) k.textContent = feedbackLabel();
     },
     // "Open question" on a flag: switch to the Quiz section and open that question once it has loaded.
+    // "Edit wine info" on a wine flag opens the same wine info form as the structure sheet.
+    editWine: (id) => { const card = E.cards.find((c) => c.id === id); if (card) wineinfo.open(card, wineName(card)).catch((e) => { E.error = "Could not open wine info: " + (e.message || e); overlay().innerHTML = ""; }); },
     gotoQuiz: (id) => { review.leave(); E.section = "quiz"; draw(); const wait = setInterval(() => { if (review.state.loaded) { clearInterval(wait); review.openQuestion(id); } }, 50); setTimeout(() => clearInterval(wait), 5000); },
+  });
+  const wineinfo = createWineInfo({
+    sb: ctx.sb, userId: ctx.userId,
+    onSaved: async () => { if (ctx.onWineChanged) await ctx.onWineChanged(); E.cards = ctx.cards(); E.loaded = false; if (root && E.section === "structure") draw(); },
   });
   const flagsLabel = () => { const n = review.openFlags; return n ? `Flags (${n})` : "Flags"; };
   const feedbackLabel = () => { const n = review.newFeedback; return n ? `Feedback (${n})` : "Feedback"; };
@@ -170,12 +177,8 @@ export function createEditor(ctx) {
     const s = E.sheet;
     if (!s) return;
     dimsFor(s.style).forEach((d) => {
-      if (isChoice(d)) {
-        document.querySelectorAll(`[data-editor^="choice:${d.key}:"]`).forEach((b) => {
-          const on = Number(b.dataset.editor.split(":")[2]) === s.values[d.key];
-          b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on));
-        });
-      } else {
+      if (isChoice(d)) syncChoiceControl(d, { value: s.values[d.key], adjusted: true }, "data-editor");
+      else {
         const r = document.querySelector(`[data-edim="${d.key}"]`);
         if (r && Number(r.value) !== s.values[d.key]) r.value = s.values[d.key];
       }
@@ -224,8 +227,14 @@ export function createEditor(ctx) {
       };
       E.error = ""; overlay().innerHTML = sheetHtml(E);
     }
-    else if (action === "nudge") { E.sheet.values[a] = nudgeStep(E.sheet.values[a], Number(b)); E.sheet.touched.add(a); syncSheet(); }
+    else if (action === "nudge") { E.sheet.values[a] = clampDimValue(dimMeta(a), E.sheet.values[a] + Number(b)); E.sheet.touched.add(a); syncSheet(); }
     else if (action === "choice") { E.sheet.values[a] = Number(b); E.sheet.touched.add(a); syncSheet(); }
+    else if (action === "sweet") { if (E.sheet.values[a] === 0) E.sheet.values[a] = 1; E.sheet.touched.add(a); syncSheet(); }
+    else if (action === "info") {
+      const card = E.cards.find((c) => c.id === a);
+      E.sheet = null;
+      wineinfo.open(card, wineName(card)).catch((e) => { E.error = "Could not open wine info: " + (e.message || e); overlay().innerHTML = ""; });
+    }
     else if (action === "keep") { E.sheet.touched.add(a); syncSheet(); }
     else if (action === "save") save();
     else if (action === "close") { E.sheet = null; overlay().innerHTML = ""; }
@@ -241,7 +250,7 @@ export function createEditor(ctx) {
   });
   document.addEventListener("input", (ev) => {
     const t = ev.target;
-    if (t.dataset && t.dataset.edim && E.sheet) { E.sheet.values[t.dataset.edim] = nudgeStep(Number(t.value), 0); E.sheet.touched.add(t.dataset.edim); syncSheet(); }
+    if (t.dataset && t.dataset.edim && E.sheet) { E.sheet.values[t.dataset.edim] = clampDimValue(dimMeta(t.dataset.edim), Number(t.value)); E.sheet.touched.add(t.dataset.edim); syncSheet(); }
     else if (t.dataset && t.dataset.editorQ !== undefined) { E.q = t.value; drawList(); }
   });
 
