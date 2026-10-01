@@ -5,21 +5,22 @@ import {
   FAMILIARITY, wineName, esc, clamp01, shuffle, tapEdge, swipeKind, cardFromRow, filterEntries, groupEntries, swipeLists,
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, dimMeta, isChoice, setStyle, choiceDims, barDims,
-  dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=8";
-import * as db from "./data.js?v=11";
+  dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=9";
+import * as db from "./data.js?v=12";
 import { shrinkImage } from "./photos.js?v=4";
 import {
   discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=9";
 import { createLearn } from "./learn.js?v=3";
 import { wireGrapeInputs, checkGrapeInput } from "./grapes.js?v=1";
+import { buildDeck } from "./deck.js?v=1";
 import { createProfile } from "./profile.js?v=7";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=5";
 import { createFeedback } from "./feedback.js?v=3";
-import { createEditor } from "./editor.js?v=9";
+import { createEditor } from "./editor.js?v=10";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
-const APP_VERSION = "16";   // shown to editors with each piece of feedback
+const APP_VERSION = "17";   // shown to editors with each piece of feedback
 const SUPABASE_JS_VERSION = "2.109.0";
 const LIBRARY_URLS = [
   `https://esm.sh/@supabase/supabase-js@${SUPABASE_JS_VERSION}`,
@@ -65,6 +66,10 @@ const state = {
   sheet: null, sheetUi: { saving: false, error: "" },
   form: null,
   photoUrls: new Map(),                 // signed links for the photos shown in Journal and Swipes
+  quiz: null,                           // quiz results by topic, used to judge what the person knows
+  crowd: new Map(),                     // how many players recognized each wine
+  deckInfo: new Map(),                  // wine id -> { tier, fam, pref }: which deck each wine is in and why
+  sinceDeck: 0,                         // swipes since the deck was last re-ranked
   access: { role: null, label: null, permissions: [] },   // what this person may do as staff: from the database
   refs: new Map(),                      // wine_vintage_id -> reference structure values set by editors
   feedback: false,                      // feedback switch (feature_access), on for everyone for now
@@ -97,7 +102,7 @@ const feedback = createFeedback({ sb: () => state.sb, user: () => state.user, sc
 // A gentle reminder for guests who have started building a journal, shown on Discover until they save it or say "not now".
 const showNudge = () => !!state.user && state.user.is_anonymous === true && !store.get("wine.nudgeOff") && (state.journal.length >= 1 || state.states.length >= 5);
 // The Editor tab (editors only) lives in editor.js.
-const editorTab = createEditor({ sb: () => state.sb, userId: () => state.user.id, cards: () => state.cards, can, roleLabel: () => (state.access && state.access.label) || "", onSaved: () => loadReferences(), onWineChanged: async () => { state.cards = await db.loadCards(state.sb); state.deck = state.deck.flatMap((c) => { const fresh = state.cards.find((x) => x.id === c.id); return fresh ? [fresh] : []; }); } });   // a deleted wine leaves the Discover deck too
+const editorTab = createEditor({ sb: () => state.sb, userId: () => state.user.id, cards: () => state.cards, can, roleLabel: () => (state.access && state.access.label) || "", onSaved: () => loadReferences(), onWineChanged: async () => { state.cards = await db.loadCards(state.sb); rebuildDeck(); } });   // a deleted, archived, published or edited wine changes the Discover deck too
 
 // Counts for the Discover screen. Only swipes count as swipes (not later changes of interest).
 async function loadCounts() {
@@ -155,9 +160,16 @@ async function enterMain() {
   state.cards = await db.loadCards(state.sb);
   await Promise.all([refreshData(), loadReferences()]);
   try { state.feedback = feedbackOn(await db.loadFeature(state.sb, "contentFeedback"), (state.profile || {}).tier || "default"); } catch (_) { state.feedback = false; }
-  const swiped = new Set(state.states.map((s) => s.wine_vintage_id));
-  state.deck = shuffle(state.cards.filter((c) => !swiped.has(c.id)));
+  // What the person knows and what other players know both help decide the deck. Neither is essential.
+  try { state.quiz = await db.loadQuizKnowledge(state.sb); } catch (_) { state.quiz = null; }
+  try { state.crowd = await db.loadCrowd(state.sb); } catch (_) { state.crowd = new Map(); }
+  rebuildDeck();
   state.status = "main"; render();
+}
+// The Discover deck: three decks (familiar, getting warmer, new territory) mixed by what the person knows and likes. See deck.js.
+function rebuildDeck() {
+  const r = buildDeck({ cards: state.cards, states: state.states, journal: state.journal, quiz: state.quiz, refs: state.refs, crowd: state.crowd });
+  state.deck = r.deck; state.deckInfo = r.info; state.deckMix = r.mix; state.sinceDeck = 0;
 }
 
 // ---------------------------------------------------------------- drawing the page
@@ -273,9 +285,14 @@ async function fly(el, kind, v = { dx: 0, dy: 0, vx: 0, vy: 0 }) {
     if (navigator.vibrate) { try { navigator.vibrate(8); } catch (_) {} }
   }
   try {
-    await db.recordSwipe(state.sb, card.id, kind, state.interest);
+    const interestUsed = state.interest;
+    await db.recordSwipe(state.sb, card.id, kind, interestUsed);
     state.deck.shift();
     state.interest = "try";
+    // What this swipe taught us counts straight away; every 8 swipes (or when the deck runs low) the rest of the deck is re-ranked.
+    state.states = [...state.states.filter((x) => x.wine_vintage_id !== card.id), { wine_vintage_id: card.id, familiarity: kind, interest: interestUsed, last_swiped_at: new Date().toISOString() }];
+    state.sinceDeck += 1;
+    if (state.sinceDeck >= 8 || state.deck.length < 4) rebuildDeck();
     setBanner(null);
     state.counts = await loadCounts();
   } catch (e) {
@@ -698,5 +715,5 @@ document.addEventListener("change", async (ev) => {
   }
 });
 
-window.__wine = { state, fly, render, init, learn, profile: profileTab, editor: editorTab, account, feedback };
+window.__wine = { state, fly, render, init, learn, rebuildDeck, profile: profileTab, editor: editorTab, account, feedback };
 init();
