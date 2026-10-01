@@ -235,3 +235,29 @@ export async function saveWineInfo(sb, userId, info, values, lists) {
     if (rows.length) must(await sb.from("wine_grapes").upsert(rows, { onConflict: "wine_id,grape_id" }));
   });
 }
+
+// ---------------------------------------------------------------- staff access and deleting wines
+// What the signed-in person may do in the Editor tab. Before database update 13 is run the function does not exist,
+// so the old rule applies: admins and editors can edit and verify, but nobody can delete.
+export const LEGACY_PERMISSIONS = ["catalog_edit", "quiz_verify", "feedback_read"];
+export function accessFrom(profileRole, rpcData) {
+  if (rpcData && typeof rpcData === "object" && Array.isArray(rpcData.permissions)) {
+    return { role: rpcData.role || null, label: rpcData.label || null, permissions: rpcData.permissions, legacy: false };
+  }
+  const old = profileRole === "admin" || profileRole === "editor";
+  return { role: old ? profileRole : null, label: old ? (profileRole === "admin" ? "Owner" : "Editor") : null, permissions: old ? [...LEGACY_PERMISSIONS] : [], legacy: true };
+}
+export async function loadAccess(sb, profileRole) {
+  try {
+    const { data, error } = await sb.rpc("my_staff_access");
+    return accessFrom(profileRole, error ? null : data);
+  } catch (_) { return accessFrom(profileRole, null); }
+}
+// What deleting this wine would do (and whether it is allowed). Owner only.
+export async function wineDeleteCheck(sb, wineVintageId) {
+  return must(await sb.rpc("wine_delete_check", { p_vintage_id: wineVintageId }));
+}
+// Deletes the vintage; the wine goes too when it was the last one. Owner only. The database refuses wines people have swiped or journaled.
+export async function deleteWineVintage(sb, wineVintageId) {
+  return must(await sb.rpc("delete_wine_vintage", { p_vintage_id: wineVintageId }));
+}
