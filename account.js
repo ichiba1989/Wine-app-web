@@ -3,7 +3,7 @@
 // same, so nothing has to be copied. Someone who already has an account can sign in to it instead.
 // Both use a code sent by email (the email also contains a link that does the same thing).
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
-import { esc } from "./logic.js?v=5";
+import { esc } from "./logic.js?v=7";
 
 export const RESEND_SECONDS = 60;
 export const MERGE_KEY = "wine.pendingMerge";    // where the carry-over code waits while the person signs in
