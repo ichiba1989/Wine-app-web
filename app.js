@@ -1,6 +1,6 @@
 // The wine app for a phone browser. State, screens and events live here.
 // Rules are in logic.js, database calls in data.js, and HTML in views.js.
-// The first time, the page asks for your two Supabase values and remembers them in this browser.
+// The two Supabase values come from config.js. If that file is missing or still has placeholders, the page asks for them and remembers them in this browser.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   FAMILIARITY, wineName, esc, clamp01, shuffle, tapEdge, swipeKind, cardFromRow, filterEntries, groupEntries, swipeLists,
@@ -14,7 +14,7 @@ import {
 } from "./views.js?v=5";
 import { createLearn } from "./learn.js?v=1";
 import { createProfile } from "./profile.js?v=4";
-import { createAccount } from "./account.js?v=1";
+import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=2";
 import { createEditor } from "./editor.js?v=2";
 
 let SUPABASE_URL = "PASTE-YOUR-PROJECT-URL-HERE";
@@ -59,6 +59,7 @@ const account = createAccount({
   sb: () => state.sb, user: () => state.user,
   setUser: (u) => { state.user = u; },
   canSave: () => state.status === "main",
+  prepareMerge: () => db.prepareGuestMerge(state.sb),
   reload: () => location.replace(location.pathname + location.search),
   onClose: () => { if (state.tab === "profile" && state.status === "main") render(); },
 });
@@ -79,6 +80,12 @@ async function loadCounts() {
 // ---------------------------------------------------------------- start up
 async function init() {
   try {
+    // config.js (created once in the site's folder) carries the connection details for everyone who opens the link.
+    try {
+      const cfg = await import("./config.js?v=1");
+      const u = String(cfg.SUPABASE_URL || "").trim().replace(/\/+$/, ""), k = String(cfg.SUPABASE_KEY || "").trim();
+      if (/^https:\/\/[^\s]+\.[^\s]+$/.test(u) && !u.includes("PASTE") && k && !k.includes("PASTE")) { SUPABASE_URL = u; SUPABASE_KEY = k; }
+    } catch (_) { /* no config.js: use what this browser saved, or ask */ }
     if (SUPABASE_URL.startsWith("PASTE") || SUPABASE_KEY.startsWith("PASTE")) { state.status = "setup"; return render(); }
     // An emailed link brings the person back to this page with a sign-in (or an error) in the address. Read it, then tidy the address.
     const back = new URLSearchParams(location.hash.replace(/^#/, ""));
@@ -87,8 +94,11 @@ async function init() {
     state.user = await db.ensureUser(state.sb);
     if (location.hash) history.replaceState(null, "", location.pathname + location.search);
     if (linkError) state.banner = "That email link did not work: " + linkError.replace(/\+/g, " ") + " Ask for a new code.";
+    const carried = await carryOverGuest();
     state.profile = await db.loadProfile(state.sb, state.user.id);
     if (state.profile.age_attested_at) await enterMain(); else { state.status = "age"; render(); }
+    if (carried && carried.error) setBanner(carried.error);
+    else if (carried) setBanner(carried, true);
   } catch (e) {
     state.status = "error"; state.error = e.message || String(e); render();
   }
@@ -115,10 +125,19 @@ async function enterMain() {
 }
 
 // ---------------------------------------------------------------- drawing the page
-function setBanner(msg) {
-  state.banner = msg;
+function setBanner(msg, good = false) {
+  state.banner = msg; state.bannerGood = good;
   const el = $("#gbanner");
-  if (el) { el.textContent = msg ? `${msg} (tap to dismiss)` : ""; el.hidden = !msg; }
+  if (el) { el.textContent = msg ? `${msg} (tap to dismiss)` : ""; el.hidden = !msg; el.classList.toggle("good", !!good); }
+}
+// After signing in to an account from a guest session, bring the guest's progress along.
+// Runs before the profile loads, so the account's data (and age confirmation) are complete when the app opens.
+async function carryOverGuest() {
+  const pending = readPendingMerge(localStorage);
+  if (!pending || state.user.is_anonymous) return null;   // still a guest: keep the code until sign-in finishes or it expires
+  clearPendingMerge(localStorage);                          // a code is only ever tried once
+  try { return mergeMessage(await db.claimGuestMerge(state.sb, pending.token)); }
+  catch (e) { return { error: "Could not carry over what you did as a guest: " + (e.message || e) }; }
 }
 function shellHtml() {
   const tab = (id, label) => `<button data-action="tab:${id}">${label}</button>`;
@@ -162,13 +181,14 @@ function render() {
     if (!$("#tabbody")) app.innerHTML = shellHtml();
     $("#title").textContent = TITLES[state.tab];
     document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.action === "tab:" + state.tab));
-    setBanner(state.banner);
+    setBanner(state.banner, state.bannerGood);
     return renderBody();
   }
   let html = "";
   if (state.status === "loading") html = `<div class="center muted">Loading…</div>`;
   else if (state.status === "setup") html = `<div class="center"><div class="serif" style="font-size:24px">Connect to your database</div>
       <div class="muted small">In Supabase, open Project Settings, then API. Copy the project URL and the publishable key (it starts with sb_publishable_) and paste them here. This browser remembers them.</div>
+      <div class="muted small">Testing someone else's app? Ask the person who sent you the link. This screen should not appear for you.</div>
       <input id="cfgUrl" class="field" placeholder="Project URL (https://...supabase.co)" autocapitalize="off" autocomplete="off" spellcheck="false">
       <input id="cfgKey" class="field" placeholder="Publishable key (sb_publishable_...)" autocapitalize="off" autocomplete="off" spellcheck="false">
       ${state.banner ? `<div class="err">${esc(state.banner)}</div>` : ""}
