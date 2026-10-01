@@ -18,15 +18,15 @@
 <script type="module">
 const FILES = {
  "index.html": {
-  "hash": "f1257380b2734fb983b3f6b3c9522667b271a1b607bca5686e2ce4b3d91a64f4",
-  "chars": 19821,
+  "hash": "fba6f332c6b6205d792e42880261ac6ae7733a5988180c3053a0f6e9a238a696",
+  "chars": 21153,
   "query": null,
   "exports": []
  },
  "app.js": {
-  "hash": "09d993eaf39e2e16f07959cc9f57844e428a85425d234e2a4313781cd6489948",
+  "hash": "28596a89744020199c2cbcc3b940bac0e0d64bb5263e497e4a897111dab44df5",
   "chars": 32552,
-  "query": "10",
+  "query": "11",
   "exports": []
  },
  "logic.js": {
@@ -107,9 +107,9 @@ const FILES = {
   ]
  },
  "data.js": {
-  "hash": "da300cd31fe084a9edbddda955afa376409c0db95f96991b847df0b1ea3414e2",
-  "chars": 10243,
-  "query": "6",
+  "hash": "0567108d10ef4e1140e5c05a0a28420fa85ed4f063cc1a611726e4ce9d572642",
+  "chars": 10330,
+  "query": "7",
   "exports": [
    "addWithoutRating",
    "attestAge",
@@ -211,11 +211,12 @@ const FILES = {
   ]
  },
  "editor.js": {
-  "hash": "4364e94ffe85ef3d3123f8fc1cd91b2a255eb6a1e1ca3a1b41f975482ec91646",
-  "chars": 9078,
-  "query": "3",
+  "hash": "8611df082eb12c90cd7d9067008c3d9ae90bdf92e30c2548a7093647ae3adc85",
+  "chars": 17182,
+  "query": "4",
   "exports": [
-   "createEditor"
+   "createEditor",
+   "scoredGold"
   ]
  },
  "profile.js": {
@@ -287,9 +288,44 @@ const FILES = {
    "feedbackRow",
    "validateFeedback"
   ]
+ },
+ "rules.js": {
+  "hash": "53f2a86d6eaa5e17e05109a20de89d6a2a98ba8bf7feb825d9a11e0a343f5650",
+  "chars": 34810,
+  "query": "1",
+  "exports": [
+   "CLIMATES",
+   "CLIMATE_SHIFT",
+   "CO2_WORDS",
+   "CONFIDENCE_LABEL",
+   "FORTIFIED",
+   "GOLD",
+   "GRAPES",
+   "OAK_NORMS",
+   "OAK_WORDS",
+   "PROFILES",
+   "RULES_VERSION",
+   "STYLE_DEFAULTS",
+   "SWEETNESS_DEFAULT_CONF",
+   "SWEETNESS_WORDS",
+   "TARGETS",
+   "climateOf",
+   "dimsForStyle",
+   "evaluateRules",
+   "factsOf",
+   "goldInfo",
+   "goldKeyOf",
+   "grapeFor",
+   "isGold",
+   "norm",
+   "profileFor",
+   "reportText",
+   "suggestStructure",
+   "values"
+  ]
  }
 };
-const APP_SCRIPT = "app.js?v=10";
+const APP_SCRIPT = "app.js?v=11";
 const LIBRARIES = ["https://esm.sh/@supabase/supabase-js@2.109.0", "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.109.0/+esm"];
 const out = document.getElementById("out"), sum = document.getElementById("sum");
 const lines = []; let problems = 0, first = "";
