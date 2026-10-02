@@ -8,7 +8,7 @@ import {
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=10";
 import * as db from "./data.js?v=15";
 import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=1";
-import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults, setStructureRules } from "./structure.js?v=1";
+import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=2";
 import { shrinkImage } from "./photos.js?v=5";
 import {
   discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=10";
@@ -18,11 +18,11 @@ import { buildDeck } from "./deck.js?v=1";
 import { createProfile } from "./profile.js?v=8";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=5";
 import { createFeedback } from "./feedback.js?v=3";
-import { createEditor } from "./editor.js?v=13";
+import { createEditor } from "./editor.js?v=14";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
-const APP_VERSION = "20";   // shown to editors with each piece of feedback
+const APP_VERSION = "21";   // shown to editors with each piece of feedback
 const SUPABASE_JS_VERSION = "2.109.0";
 const LIBRARY_URLS = [
   `https://esm.sh/@supabase/supabase-js@${SUPABASE_JS_VERSION}`,
@@ -74,7 +74,6 @@ const state = {
   sinceDeck: 0,                         // swipes since the deck was last re-ranked
   access: { role: null, label: null, permissions: [] },   // what this person may do as staff: from the database
   refs: new Map(),                      // wine_vintage_id -> reference structure values set by editors
-  rulesOn: false,                       // the structure rules are switched on for rating sliders, the palate and the deck (database switch structureRules)
   feedback: false,                      // feedback switch (feature_access), on for everyone for now
   wf: null, wfDone: null,               // "report a problem with this wine"
   confirm: null,                        // the delete confirmation that is open, if any
@@ -83,15 +82,12 @@ const state = {
 // What this person may do in the Editor tab comes from the database (staff roles, update 13).
 const can = (permission) => !!state.access && state.access.permissions.includes(permission);
 const isEditor = () => can("catalog_edit") || can("quiz_verify");
-// Where a wine's starting structure comes from: an editor's score first, then the rules (when they are on). See structure.js.
+// Where a wine's starting structure comes from: an editor's score first, then the structure rules. See structure.js.
 const cardById = (id) => state.cards.find((c) => c.id === id) || null;
-const startFor = (card) => startingValues(card, card && state.refs.get(card.id), state.rulesOn);
-const startForEntry = (entry) => {
-  if (entry.wine_vintage_id) return startFor(cardById(entry.wine_vintage_id));
-  return state.rulesOn ? startingValues(entryAsCard(entry), null, true) : {};
-};
+const startFor = (card) => startingValues(card, card && state.refs.get(card.id));
+const startForEntry = (entry) => (entry.wine_vintage_id ? startFor(cardById(entry.wine_vintage_id)) : startingValues(entryAsCard(entry), null));
 // What the palate uses as a baseline from the rules alone (the editor's own scores are added in profile.js).
-const ruleBase = (wineVintageId, entry) => (!state.rulesOn ? null : rulesFor(wineVintageId ? cardById(wineVintageId) : entryAsCard(entry)));
+const ruleBase = (wineVintageId, entry) => rulesFor(wineVintageId ? cardById(wineVintageId) : entryAsCard(entry));
 const TITLES = { discover: "Discover", swipes: "Swipes", journal: "Journal", profile: "Profile", learn: "Learn", editor: "Editor" };
 
 // The Learn tab lives in learn.js. It saves quiz answers itself and reports save problems through the banner.
@@ -114,7 +110,7 @@ const feedback = createFeedback({ sb: () => state.sb, user: () => state.user, sc
 // A gentle reminder for guests who have started building a journal, shown on Discover until they save it or say "not now".
 const showNudge = () => !!state.user && state.user.is_anonymous === true && !store.get("wine.nudgeOff") && (state.journal.length >= 1 || state.states.length >= 5);
 // The Editor tab (editors only) lives in editor.js.
-const editorTab = createEditor({ rules: { on: () => state.rulesOn, set: async (on) => { await setStructureRules(state.sb, on); state.rulesOn = !!on; rebuildDeck(); } }, sb: () => state.sb, userId: () => state.user.id, cards: () => state.cards, can, roleLabel: () => (state.access && state.access.label) || "", onSaved: () => loadReferences(), onWineChanged: async () => { state.cards = await db.loadCards(state.sb); rebuildDeck(); } });   // a deleted, archived, published or edited wine changes the Discover deck too
+const editorTab = createEditor({ sb: () => state.sb, userId: () => state.user.id, cards: () => state.cards, can, roleLabel: () => (state.access && state.access.label) || "", onSaved: () => loadReferences(), onWineChanged: async () => { state.cards = await db.loadCards(state.sb); rebuildDeck(); } });   // a deleted, archived, published or edited wine changes the Discover deck too
 
 // Counts for the Discover screen. Only swipes count as swipes (not later changes of interest).
 async function loadCounts() {
@@ -172,7 +168,6 @@ async function enterMain() {
   state.cards = await db.loadCards(state.sb);
   await Promise.all([refreshData(), loadReferences()]);
   try { state.feedback = feedbackOn(await db.loadFeature(state.sb, "contentFeedback"), (state.profile || {}).tier || "default"); } catch (_) { state.feedback = false; }
-  try { state.rulesOn = feedbackOn(await db.loadFeature(state.sb, "structureRules"), (state.profile || {}).tier || "default"); } catch (_) { state.rulesOn = false; }   // off until database update 19 is run
   // What the person knows and what other players know both help decide the deck. Neither is essential.
   try { state.quiz = await db.loadQuizKnowledge(state.sb); } catch (_) { state.quiz = null; }
   try { state.crowd = await db.loadCrowd(state.sb); } catch (_) { state.crowd = new Map(); }
@@ -198,7 +193,7 @@ function preloadPhotos(n = 4) {
   while (photoCache.size > 16) photoCache.delete(photoCache.keys().next().value);
 }
 function rebuildDeck() {
-  const r = buildDeck({ cards: state.cards, states: state.states, journal: state.journal, quiz: state.quiz, refs: structureMap(state.cards, state.refs, state.rulesOn), crowd: state.crowd });
+  const r = buildDeck({ cards: state.cards, states: state.states, journal: state.journal, quiz: state.quiz, refs: structureMap(state.cards, state.refs), crowd: state.crowd });
   state.deck = r.deck; state.deckInfo = r.info; state.deckMix = r.mix; state.sinceDeck = 0;
   preloadPhotos();
 }
@@ -713,7 +708,7 @@ document.addEventListener("click", async (ev) => {
       const gi = document.querySelector('[data-form="grape"]'); if (gi) checkGrapeInput(gi);   // marks a grape that is not on the list
       const problem = validateOutside(state.form);
       if (problem) { $("#formErr").textContent = problem; return; }
-      if (action === "addrate") { state.sheet = applyDefaults(sheetForOutside(state.form, today()), state.rulesOn ? startingValues(entryAsCard(state.form), null, true) : null); state.form = null; openSheet(); }
+      if (action === "addrate") { state.sheet = applyDefaults(sheetForOutside(state.form, today()), startingValues(entryAsCard(state.form), null)); state.form = null; openSheet(); }
       else {
         const photos = state.form.photos || [];
         const id = await db.addWithoutRating(state.sb, state.user.id, state.form, today());
