@@ -17,10 +17,10 @@ async function decode(file) {
 const newKey = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 
 // Returns { key, blob, url }: a JPEG no larger than MAX_SIDE on its longest side, plus a preview URL.
-export async function shrinkImage(file) {
+export async function shrinkImage(file, maxSide = MAX_SIDE) {
   let src;
   try { src = await decode(file); } catch (_) { throw new Error("Could not read that picture."); }
-  const { w, h } = fitSize(src.width || src.naturalWidth, src.height || src.naturalHeight);
+  const { w, h } = fitSize(src.width || src.naturalWidth, src.height || src.naturalHeight, maxSide);
   const canvas = document.createElement("canvas");
   canvas.width = w; canvas.height = h;
   canvas.getContext("2d").drawImage(src, 0, 0, w, h);
