@@ -8,17 +8,18 @@
 //   Quiz:      edit, source and verify quiz questions.
 //   Feedback:  read what testers sent from the app and mark it handled.
 // Every change is logged by the database.
-import { dimsFor, dimMeta, defaultFor, esc, wineName, placeLine, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel, barDims, choiceDims, styleInfo } from "./logic.js?v=9";
-import * as db from "./data.js?v=12";
-import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=9";
+import { dimsFor, dimMeta, defaultFor, esc, wineName, placeLine, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel, barDims, choiceDims, styleInfo } from "./logic.js?v=10";
+import * as db from "./data.js?v=13";
+import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=10";
 import { createReview } from "./review.js?v=5";
-import { createWineInfo, publishSummary } from "./wineinfo.js?v=5";
+import { createWineInfo, publishSummary } from "./wineinfo.js?v=6";
 import { groupSubmissions, planPromotion, duplicateGroups, rulesFrom } from "./catalog.js?v=1";
+import { PHOTO_KINDS, photoSummary, photoList, uploadWinePhoto, removeWinePhoto } from "./winephotos.js?v=1";
 import { suggestStructure, values as ruleValues, goldInfo, GOLD, GROUPS, evaluateRules, reportText, TARGETS, RULES_VERSION } from "./rules.js?v=4";
 
-const SECTIONS = [{ id: "structure", label: "Structure" }, { id: "catalog", label: "Catalog" }, { id: "flags", label: "Flags" }, { id: "quiz", label: "Quiz" }, { id: "feedback", label: "Feedback" }];
+const SECTIONS = [{ id: "structure", label: "Structure" }, { id: "catalog", label: "Catalog" }, { id: "photos", label: "Photos" }, { id: "flags", label: "Flags" }, { id: "quiz", label: "Quiz" }, { id: "feedback", label: "Feedback" }];
 // Which sections each permission opens. A quiz reviewer sees Flags too, but the database only returns the flags on quiz questions.
-export const SECTION_PERMISSIONS = { structure: ["catalog_edit"], catalog: ["catalog_edit"], flags: ["catalog_edit", "quiz_verify"], quiz: ["quiz_verify"], feedback: ["feedback_read"] };
+export const SECTION_PERMISSIONS = { structure: ["catalog_edit"], catalog: ["catalog_edit"], photos: ["catalog_edit"], flags: ["catalog_edit", "quiz_verify"], quiz: ["quiz_verify"], feedback: ["feedback_read"] };
 // A quiz reviewer has no catalog work, so Quiz comes first for them and is where they land.
 export function sectionsFor(can) {
   const list = SECTIONS.filter((x) => SECTION_PERMISSIONS[x.id].some((p) => can(p)));
@@ -116,6 +117,32 @@ function catalogHtml(E) {
     ${dups || `<p class="muted">No wine has more than one vintage in the deck.</p>`}`;
 }
 
+// ---------------------------------------------------------------- Photos: real bottle photos for the Discover cards
+const PHOTO_PAGE = 40;
+function photosHtml(E) {
+  const P = E.ph, sum = photoSummary(E.cards);
+  const list = photoList(E.cards, { filter: P.filter, query: P.q });
+  const shown = list.slice(0, P.show);
+  const chip = (id, label, n) => `<button class="chip wide ed${P.filter === id ? " on" : ""}" data-editor="phfilter:${id}">${label}${n == null ? "" : ` (${n})`}</button>`;
+  const kinds = PHOTO_KINDS.map((k) => `<button class="chip wide ed${P.kind === k.id ? " on" : ""}" data-editor="phkind:${k.id}">${esc(k.label)}</button>`).join("");
+  const rows = shown.map((c) => {
+    const busy = P.busy === c.id;
+    const thumb = c.photo ? `<img class="rowthumb" src="${esc(c.photo)}" alt="" loading="lazy">` : `<div class="rowthumb empty" aria-hidden="true"></div>`;
+    const remove = c.image ? (P.confirm === c.id ? `<button class="link danger" data-editor="phremove:${esc(c.id)}">Tap again to remove</button>` : `<button class="link" data-editor="phremove:${esc(c.id)}">Remove</button>`) : "";
+    return `<div class="candrow photorow">${thumb}<div class="candinfo"><div class="serif">${esc(wineName(c))}</div>
+      <div class="meta">${esc(placeLine(c))}${c.wineStatus && c.wineStatus !== "verified" ? " (waiting for review)" : ""}</div>${remove}</div>
+      <div class="candbtns"><label class="btn ${c.image ? "outline" : "primary"} slim photobtn${busy || P.busy ? " disabled" : ""}">${busy ? "Saving…" : c.image ? "Replace" : "Add photo"}<input type="file" accept="image/*" data-photofor="${esc(c.id)}"${P.busy ? " disabled" : ""} hidden></label></div></div>`;
+  }).join("");
+  return `${P.msg ? `<div class="notice">${esc(P.msg)}</div>` : ""}${P.error ? `<div class="err">${esc(P.error)}</div>` : ""}
+    <div class="photoprogress"><div class="serif big">${sum.withPhoto} of ${sum.total} wines have a photo</div><div class="lbar thin"><div style="width:${sum.pct}%"></div></div></div>
+    <p class="muted small">A real photo makes the Discover card come alive. Stand the bottle upright, label facing the camera, on a plain background in good light. Photos are saved small (about 900 px) so they load fast.</p>
+    <div class="qlabel">Where are these photos from?</div><div class="chips left grid3">${kinds}</div>
+    <div class="jbar"><input class="field" data-photo-q placeholder="Search wines" value="${esc(P.q)}" autocomplete="off"></div>
+    <div class="chips left grid3">${chip("needs", "Needs a photo", sum.without)}${chip("has", "Has a photo", sum.withPhoto)}${chip("all", "All wines", sum.total)}</div>
+    ${rows || `<p class="muted">${P.filter === "needs" ? "Every wine has a photo." : "No wines match."}</p>`}
+    ${list.length > shown.length ? `<button class="btn outline" data-editor="phmore">Show more (${list.length - shown.length} left)</button>` : ""}`;
+}
+
 function listHtml(E) {
   if (E.loadError) return `<div class="err">${esc(E.loadError)}</div><button class="btn outline" data-editor="retry">Try again</button>`;
   if (!E.loaded) return `<p class="muted">Loading the catalog…</p>`;
@@ -174,6 +201,7 @@ function testHtml(E) {
 export function createEditor(ctx) {
   const can = (p) => !!(ctx.can && ctx.can(p));
   const E = { section: (sectionsFor(can)[0] || { id: "structure" }).id, loaded: false, loadError: null, cards: [], refs: new Map(), rows: [], vintageToWine: new Map(), q: "", filter: "needs", sheet: null, saving: false, error: "",
+    ph: { filter: "needs", q: "", kind: "own_photography", show: PHOTO_PAGE, busy: null, confirm: null, msg: "", error: "" },
     cat: { loaded: false, loading: false, error: "", rows: [], config: [], decisions: [], busy: false, msg: "", view: null } };
   let root = null;
   const overlay = () => document.querySelector("#overlay");
@@ -192,7 +220,8 @@ export function createEditor(ctx) {
     sb: ctx.sb, userId: ctx.userId, can,
     onSaved: async () => { if (ctx.onWineChanged) await ctx.onWineChanged(); E.cards = ctx.cards(); E.loaded = false; if (root && E.section === "structure") draw(); },
     onDeleted: async () => { if (ctx.onWineChanged) await ctx.onWineChanged(); E.cards = ctx.cards(); E.loaded = false; if (root) draw(); },
-    cards: ctx.cards,
+    cards: ctx.cards, photoKind: () => E.ph.kind,
+    onPhotoSaved: async () => { if (ctx.onWineChanged) await ctx.onWineChanged(); E.cards = ctx.cards(); },
     onPublished: async (r) => {
       if (ctx.onWineChanged) await ctx.onWineChanged();
       E.cards = ctx.cards(); E.loaded = false; E.cat.loaded = false; E.cat.msg = publishedMessage(r);
@@ -203,7 +232,7 @@ export function createEditor(ctx) {
   const flagsLabel = () => { const n = review.openFlags; return n ? `Flags (${n})` : "Flags"; };
   const feedbackLabel = () => { const n = review.newFeedback; return n ? `Feedback (${n})` : "Feedback"; };
 
-  const chips = () => `${ctx.roleLabel && ctx.roleLabel() ? `<div class="muted small" style="margin:2px 0 6px">Your access: <b>${esc(ctx.roleLabel())}</b></div>` : ""}<div class="chips left">${sectionsFor(can).map((x) => `<button class="chip wide ed${E.section === x.id ? " on" : ""}" data-editor="sec:${x.id}">${x.id === "flags" ? flagsLabel() : x.id === "feedback" ? feedbackLabel() : x.label}</button>`).join("")}</div>`;
+  const chips = () => `${ctx.roleLabel && ctx.roleLabel() ? `<div class="muted small" style="margin:2px 0 6px">Your access: <b>${esc(ctx.roleLabel())}</b></div>` : ""}<div class="chips left edtabs">${sectionsFor(can).map((x) => `<button class="chip wide ed${E.section === x.id ? " on" : ""}" data-editor="sec:${x.id}">${x.id === "flags" ? flagsLabel() : x.id === "feedback" ? feedbackLabel() : x.label}</button>`).join("")}</div>`;
   const structureShell = () => `<div class="jbar"><input class="field" data-editor-q placeholder="Search wines" value="${esc(E.q)}" autocomplete="off">
       <div class="chips left"><button class="chip wide${E.filter === "needs" ? " on" : ""}" data-editor="filter:needs">Needs a profile</button><button class="chip wide${E.filter === "all" ? " on" : ""}" data-editor="filter:all">All wines</button><button class="chip wide${E.filter === "gold" ? " on" : ""}" data-editor="filter:gold">Gold set</button></div></div>
     <div id="editorList"></div>`;
@@ -213,6 +242,7 @@ export function createEditor(ctx) {
     root.innerHTML = `${chips()}<div id="editorSection" style="margin-top:10px"></div>`;
     const sec = document.querySelector("#editorSection");
     if (E.section === "structure") { sec.innerHTML = structureShell(); if (!E.loaded) load(); else { E.cards = ctx.cards(); drawList(); } }
+    else if (E.section === "photos") { E.cards = ctx.cards(); sec.innerHTML = `<div id="photosBody">${photosHtml(E)}</div>`; }
     else if (E.section === "catalog") { E.cards = ctx.cards(); sec.innerHTML = `<div id="catalogBody">${catalogHtml(E)}</div>`; if (!E.cat.loaded && !E.cat.loading) loadCatalog(); }
     else review.mount(sec, E.section);
   }
@@ -253,6 +283,28 @@ export function createEditor(ctx) {
       C.msg = `${group.name}: kept ${group.years[0]}, archived ${group.archive.map((c) => c.vintage).join(", ")}.`;
     } catch (e) { C.error = "Could not archive. " + (e.message || e); }
     C.busy = false; drawCatalog();
+  }
+  const drawPhotos = () => { const el = document.querySelector("#photosBody"); if (el) { const q = el.querySelector("[data-photo-q]"); const keep = q && document.activeElement === q ? q.selectionStart : null; el.innerHTML = photosHtml(E); if (keep != null) { const n = el.querySelector("[data-photo-q]"); n.focus(); n.setSelectionRange(keep, keep); } } };
+  async function photoAdd(id, file) {
+    const P = E.ph, card = E.cards.find((c) => c.id === id);
+    if (!card || !file || P.busy) return;
+    P.busy = id; P.msg = ""; P.error = ""; P.confirm = null; drawPhotos();
+    try {
+      await uploadWinePhoto(ctx.sb(), id, file, P.kind);
+      if (ctx.onWineChanged) await ctx.onWineChanged();
+      E.cards = ctx.cards();
+      P.msg = `${wineName(card)}: photo saved.`;
+    } catch (e) { P.error = `${wineName(card)}: ${e.message || e}`; }
+    P.busy = null; drawPhotos();
+  }
+  async function photoRemove(id) {
+    const P = E.ph, card = E.cards.find((c) => c.id === id);
+    if (!card || P.busy) return;
+    if (P.confirm !== id) { P.confirm = id; drawPhotos(); return; }
+    P.busy = id; P.confirm = null; P.msg = ""; P.error = ""; drawPhotos();
+    try { await removeWinePhoto(ctx.sb(), id); if (ctx.onWineChanged) await ctx.onWineChanged(); E.cards = ctx.cards(); P.msg = `${wineName(card)}: photo removed.`; }
+    catch (e) { P.error = `${wineName(card)}: ${e.message || e}`; }
+    P.busy = null; drawPhotos();
   }
   async function load() {
     E.loadError = null; E.loaded = false; drawList();
@@ -303,6 +355,10 @@ export function createEditor(ctx) {
     const [action, a, b] = t.dataset.editor.split(":");
     if (action === "sec") { if (E.section !== a) { review.leave(); E.sheet = null; overlay().innerHTML = ""; E.section = a; draw(); } }
     else if (action === "filter") { E.filter = a; draw(); }
+    else if (action === "phfilter") { E.ph.filter = a; E.ph.show = PHOTO_PAGE; E.ph.confirm = null; drawPhotos(); }
+    else if (action === "phkind") { E.ph.kind = a; drawPhotos(); }
+    else if (action === "phmore") { E.ph.show += PHOTO_PAGE; drawPhotos(); }
+    else if (action === "phremove") photoRemove(a);
     else if (action === "cat") {
       const v = E.cat.view;
       if (a === "retry") { E.cat.loaded = false; E.cat.error = ""; draw(); }
@@ -351,6 +407,12 @@ export function createEditor(ctx) {
     const t = ev.target;
     if (t.dataset && t.dataset.edim && E.sheet) { E.sheet.values[t.dataset.edim] = clampDimValue(dimMeta(t.dataset.edim), Number(t.value)); E.sheet.touched.add(t.dataset.edim); syncSheet(); }
     else if (t.dataset && t.dataset.editorQ !== undefined) { E.q = t.value; drawList(); }
+    else if (t.dataset && t.dataset.photoQ !== undefined) { E.ph.q = t.value; E.ph.show = PHOTO_PAGE; drawPhotos(); }
+  });
+  // A picture chosen (or taken) for a wine in the Photos list.
+  document.addEventListener("change", (ev) => {
+    const t = ev.target;
+    if (t && t.dataset && t.dataset.photofor && root) { const f = t.files && t.files[0]; t.value = ""; photoAdd(t.dataset.photofor, f); }
   });
 
   return {
