@@ -4,6 +4,7 @@
 //   Quiz:  edit each question, record its source if you have one, and verify it (verified questions are what players see).
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
 import { esc, wineName } from "./logic.js?v=10";
+import { sortFlags, sortFeedback, sortQuestions, sortSelectHtml, FLAG_SORTS, FEEDBACK_SORTS, QUESTION_SORTS } from "./sorting.js?v=1";
 
 export const TOPICS = ["Grapes", "Regions", "Producers", "Winemaking", "Other alcohol"];
 export const DIFFS = [
@@ -107,7 +108,7 @@ function flagsHtml(R) {
   if (!R.loaded) return `<p class="muted">Loading flags…</p>`;
   const qById = new Map(R.questions.map((q) => [q.id, q]));
   const cById = new Map(R.ctx.cards().map((c) => [c.id, c]));
-  const rows = filterFlags(R.flags, R.flagFilter).map((f) => flagView(f, qById, cById)).map((v) => {
+  const rows = sortFlags(filterFlags(R.flags, R.flagFilter), R.sort.flags).map((f) => flagView(f, qById, cById)).map((v) => {
     const acts = flagActions(v.status).map((a) => `<button class="pill${a.to === "closed" ? "" : " dark"}" data-review="flag:${v.id}:${a.to}">${a.label}</button>`).join("");
     const open = v.isQuiz && v.questionId && qById.has(v.questionId) ? `<button class="pill" data-review="openq:${v.questionId}">Open question</button>`
       : !v.isQuiz && v.wineVintageId && cById.has(v.wineVintageId) && R.ctx.editWine ? `<button class="pill" data-review="editwine:${v.wineVintageId}">Edit wine info</button>` : "";
@@ -118,13 +119,14 @@ function flagsHtml(R) {
   }).join("");
   const counts = ["open", "reviewed", "closed"].map((s) => `${R.flags.filter((f) => f.status === s).length} ${s}`).join(", ");
   return `<div class="chips left">${FLAG_FILTERS.map((x) => `<button class="chip wide${R.flagFilter === x.id ? " on" : ""}" data-review="ff:${x.id}">${x.label}</button>`).join("")}</div>
+    ${sortSelectHtml("data-review-sort", FLAG_SORTS, R.sort.flags, "flags")}
     <div class="jmeta"><span>${counts}</span></div>${rows || `<p class="muted">${R.flagFilter === "open" ? "No open flags." : "Nothing here."}</p>`}`;
 }
 
 function feedbackHtml(R) {
   if (R.feedbackError) return `<div class="err">${esc(R.feedbackError)}</div><button class="btn outline" data-review="retry">Try again</button>`;
   if (!R.loaded) return `<p class="muted">Loading feedback…</p>`;
-  const rows = filterFeedback(R.feedback, R.feedbackFilter).map((f) => {
+  const rows = sortFeedback(filterFeedback(R.feedback, R.feedbackFilter), R.sort.feedback).map((f) => {
     const acts = feedbackActions(f.status).map((a) => `<button class="pill${a.to === "done" ? "" : " dark"}" data-review="fb:${f.id}:${a.to}">${a.label}</button>`).join("");
     const reply = f.contact_email ? `<a class="pill" href="mailto:${esc(f.contact_email)}?subject=${encodeURIComponent("Your feedback on the wine app")}">Reply by email</a>` : "";
     const meta = [String(f.created_at || "").slice(0, 10), f.screen ? "on " + f.screen : "", f.app_version ? "version " + f.app_version : ""].filter(Boolean).join(", ");
@@ -135,20 +137,22 @@ function feedbackHtml(R) {
   }).join("");
   const counts = ["new", "read", "done"].map((s) => `${R.feedback.filter((f) => f.status === s).length} ${s}`).join(", ");
   return `<div class="chips left">${FEEDBACK_FILTERS.map((x) => `<button class="chip wide${R.feedbackFilter === x.id ? " on" : ""}" data-review="fbf:${x.id}">${x.label}</button>`).join("")}</div>
+    ${sortSelectHtml("data-review-sort", FEEDBACK_SORTS, R.sort.feedback, "feedback")}
     <div class="jmeta"><span>${counts}</span></div>${rows || `<p class="muted">${R.feedbackFilter === "new" ? "No new feedback." : "Nothing here."}</p>`}`;
 }
 
 function quizHtml(R) {
   if (R.error) return `<div class="err">${esc(R.error)}</div><button class="btn outline" data-review="retry">Try again</button>`;
   if (!R.loaded) return `<p class="muted">Loading questions…</p>`;
-  const list = filterQuestions(R.questions, { q: R.qq, filter: R.quizFilter });
+  const list = sortQuestions(filterQuestions(R.questions, { q: R.qq, filter: R.quizFilter }), R.sort.quiz);
   const n = (fn) => R.questions.filter(fn).length;
   const rows = list.map((q) => `<button class="jrow" data-review="openq:${q.id}"><span class="jl"><span class="serif qline">${esc(q.question)}</span>
       <span class="meta">${esc(q.topic)}, ${esc((DIFFS.find((d) => d.id === q.difficulty) || {}).label || q.difficulty)}</span>
       <span class="meta trunc"><span class="okmark">&#10003;</span> ${esc(q.correct_answer)}</span></span>
       <span class="pill${q.status === "verified" ? "" : " dark"}">${STATUS_LABEL[q.status] || q.status}</span></button>`).join("");
   return `<div class="jbar"><input class="field" data-review-q placeholder="Search questions" value="${esc(R.qq)}" autocomplete="off">
-      <div class="chips left">${QUIZ_FILTERS.map((x) => `<button class="chip wide${R.quizFilter === x.id ? " on" : ""}" data-review="qf:${x.id}">${x.label}</button>`).join("")}</div></div>
+      <div class="chips left">${QUIZ_FILTERS.map((x) => `<button class="chip wide${R.quizFilter === x.id ? " on" : ""}" data-review="qf:${x.id}">${x.label}</button>`).join("")}</div>
+      ${sortSelectHtml("data-review-sort", QUESTION_SORTS, R.sort.quiz, "quiz")}</div>
     <div class="jmeta"><span>${n(isDraft)} drafts, ${n((q) => q.status === "verified")} verified, ${n((q) => q.status === "retired")} retired</span></div>
     ${rows || `<p class="muted">No questions match.</p>`}`;
 }
@@ -195,7 +199,7 @@ async function allRows(makeQuery) {
 // ctx: { sb(), userId(), cards(), onChange(), gotoQuiz(questionId) }. The Editor tab owns the screen; this fills a container.
 export function createReview(ctx) {
   const R = {
-    ctx, loaded: false, error: null, flags: [], questions: [], sources: new Map(),
+    ctx, loaded: false, error: null, flags: [], questions: [], sources: new Map(), sort: { flags: "newest", feedback: "newest", quiz: "orig" },
     flagFilter: "open", quizFilter: "draft", qq: "", flagError: null,
     feedback: [], feedbackFilter: "new", feedbackError: null, feedbackActionError: null,
     form: null, formError: "", saving: false, view: "flags",
@@ -303,6 +307,7 @@ export function createReview(ctx) {
     const t = ev.target;
     if (!t.dataset) return;
     if (t.dataset.rq && R.form) { R.form[t.dataset.rq] = t.value; }
+    else if (t.dataset.reviewSort) { R.sort[t.dataset.reviewSort] = t.value; draw(); }
     else if (t.dataset.reviewQ !== undefined) {
       R.qq = t.value;
       draw();   // the search box is redrawn with the list, so put the cursor back
