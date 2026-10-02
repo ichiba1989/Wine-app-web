@@ -37,7 +37,7 @@ export async function attestAge(sb, userId) {
 export const PHOTO_BUCKET = "wine-images";   // real bottle photos, public to read, editors only to change
 export const photoUrl = (sb, path) => (path ? sb.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl : null);
 export async function loadCards(sb) {
-  return must(await sb.from("v_catalog_cards").select("*")).map((r) => { const c = cardFromRow(r); c.photo = photoUrl(sb, c.image); return { ...c, raw: r }; });   // raw: the full catalog row, used by the structure editor
+  return must(await sb.from("v_catalog_cards").select("*")).map((r) => { const c = cardFromRow(r); c.photo = photoUrl(sb, c.image); c.imageKind = r.image_kind || null; c.imageNote = r.image_note || null; return { ...c, raw: r }; });   // raw: the full catalog row, used by the structure editor
 }   // raw: the full catalog row, used by the structure rules
 export async function loadStates(sb) {
   return must(await sb.from("v_user_wine_state").select("wine_vintage_id, familiarity, interest, last_swiped_at"));
@@ -407,3 +407,34 @@ export async function removeWinePhoto(sb, wineVintageId) {
 }
 // Files left behind when a wine was deleted (the database removes the records; the files are removed here).
 export async function removePhotoFiles(sb, paths) { if (paths.length) await sb.storage.from(PHOTO_BUCKET).remove(paths); }
+
+// Gives a vintage the photo of another vintage of the same wine. The picture FILE is copied, so replacing or removing one vintage's photo
+// never changes the other's. With replace, the vintage's current photo is swapped for the copy (used to refresh carried-over copies).
+// Returns the new storage path.
+export async function reuseWinePhoto(sb, fromVintageId, toVintageId, note, { replace = false } = {}) {
+  const src = must(await sb.from("wine_images").select("storage_path, kind").eq("wine_vintage_id", fromVintageId).eq("is_primary", true).limit(1));
+  if (!src.length) throw new Error("That vintage has no photo to reuse.");
+  const have = must(await sb.from("wine_images").select("id, storage_path").eq("wine_vintage_id", toVintageId));
+  if (have.length && !replace) throw new Error("This wine already has a photo.");
+  const to = must(await sb.from("wine_vintages").select("wine_id").eq("id", toVintageId).single());
+  const key = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+  const path = `${to.wine_id}/${toVintageId}-${key}.jpg`;
+  const cp = await sb.storage.from(PHOTO_BUCKET).copy(src[0].storage_path, path);
+  if (cp.error) throw cp.error;
+  let rowId = null;
+  try {
+    rowId = must(await sb.from("wine_images").insert({ wine_id: to.wine_id, wine_vintage_id: toVintageId, kind: src[0].kind, storage_path: path, license_note: note || null, is_primary: false, status: "verified" }).select("id").single()).id;
+    if (have.length) must(await sb.from("wine_images").update({ is_primary: false }).in("id", have.map((h) => h.id)));
+    must(await sb.from("wine_images").update({ is_primary: true }).eq("id", rowId));
+  } catch (e) {
+    if (rowId) await sb.from("wine_images").delete().eq("id", rowId);
+    if (have.length) await sb.from("wine_images").update({ is_primary: true }).in("id", have.map((h) => h.id));
+    await sb.storage.from(PHOTO_BUCKET).remove([path]);
+    throw e;
+  }
+  if (have.length) {   // the replaced copy goes; if this fails the new photo is still in place
+    await sb.from("wine_images").delete().in("id", have.map((h) => h.id));
+    await sb.storage.from(PHOTO_BUCKET).remove(have.map((h) => h.storage_path));
+  }
+  return path;
+}
