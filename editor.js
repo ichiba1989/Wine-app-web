@@ -9,12 +9,13 @@
 //   Feedback:  read what testers sent from the app and mark it handled.
 // Every change is logged by the database.
 import { dimsFor, dimMeta, defaultFor, esc, wineName, placeLine, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel, barDims, choiceDims, styleInfo } from "./logic.js?v=10";
-import * as db from "./data.js?v=14";
+import * as db from "./data.js?v=15";
 import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=10";
 import { createReview } from "./review.js?v=5";
-import { createWineInfo, publishSummary } from "./wineinfo.js?v=7";
+import { createWineInfo, publishSummary } from "./wineinfo.js?v=8";
 import { groupSubmissions, planPromotion, duplicateGroups, rulesFrom } from "./catalog.js?v=2";
-import { visibleKinds, FOUND_ONLINE_PERMISSION, photoSummary, photoList, photoTag, pullSource, shareWinePhoto, shareNote, uploadWinePhoto, removeWinePhoto, reuseWinePhoto } from "./winephotos.js?v=2";
+import { visibleKinds, FOUND_ONLINE_PERMISSION, photoSummary, photoList, photoTag, pullSource, shareWinePhoto, shareNote, uploadWinePhoto, removeWinePhoto, reuseWinePhoto } from "./winephotos.js?v=3";
+import { communityHtml, loadSubmissionState, approvalPlan } from "./sharing.js?v=1";
 import { suggestStructure, values as ruleValues, goldInfo, GOLD, GROUPS, evaluateRules, reportText, TARGETS, RULES_VERSION } from "./rules.js?v=4";
 
 const SECTIONS = [{ id: "structure", label: "Structure" }, { id: "catalog", label: "Catalog" }, { id: "photos", label: "Photos" }, { id: "flags", label: "Flags" }, { id: "quiz", label: "Quiz" }, { id: "feedback", label: "Feedback" }];
@@ -76,6 +77,19 @@ export function scoredGold(E) {
   }
   return rows;
 }
+// The Owner's switch: whether players' rating sliders, palate and Discover deck start from the rules for wines nobody has scored yet.
+function rulesSwitchCard(E, ctx) {
+  if (!ctx.rules) return "";
+  const on = ctx.rules.on(), U = E.rulesUi, canSwitch = E.can("settings_edit");
+  const scored = scoredGold(E).length;
+  return `<div class="pcard"><div class="ptitle">Structure rules for players: ${on ? "On" : "Off"}</div>
+    <p class="ptext">${on
+      ? "Rating sliders, the palate and the Discover deck start from the rules for any wine you have not scored yourself. Your own scores always win."
+      : "The rules are not used for players. Rating sliders start in the middle until a wine has your score."}</p>
+    <div class="muted small">Rules version ${esc(RULES_VERSION)}. ${scored} of ${GOLD.length} gold set wines scored (see the Rule test below). A wrong suggestion only sets where a slider starts; players can move it, and the palate averages their input with it.</div>
+    ${U.msg ? `<div class="notice">${esc(U.msg)}</div>` : ""}${U.error ? `<div class="err">${esc(U.error)}</div>` : ""}
+    ${canSwitch ? `<button class="btn ${on ? "outline" : "primary"} slim" data-editor="rules:${on ? "off" : "on"}"${U.busy ? " disabled" : ""}>${U.busy ? "Saving…" : on ? "Turn the rules off" : "Turn the rules on"}</button>` : `<div class="muted small">Only the Owner can change this.</div>`}</div>`;
+}
 function ruleTestCard(E) {
   const rows = scoredGold(E);
   return `<div class="pcard"><div class="ptitle">Rule test</div>
@@ -136,7 +150,7 @@ function photosHtml(E) {
       <div class="meta">${esc(placeLine(c))}${c.wineStatus && c.wineStatus !== "verified" ? " (waiting for review)" : ""}</div>${tag ? `<div class="muted tiny">Photo: ${esc(tag)}</div>` : ""}${remove}${reuse}</div>
       <div class="candbtns"><label class="btn ${c.image ? "outline" : "primary"} slim photobtn${busy || P.busy ? " disabled" : ""}">${busy ? "Saving…" : c.image ? "Replace" : "Add photo"}<input type="file" accept="image/*" data-photofor="${esc(c.id)}"${P.busy ? " disabled" : ""} hidden></label></div></div>`;
   }).join("");
-  return `${P.msg ? `<div class="notice">${esc(P.msg)}</div>` : ""}${P.error ? `<div class="err">${esc(P.error)}</div>` : ""}
+  return `${communityHtml(E.sub, E.cards)}${P.msg ? `<div class="notice">${esc(P.msg)}</div>` : ""}${P.error ? `<div class="err">${esc(P.error)}</div>` : ""}
     <div class="photoprogress"><div class="serif big">${sum.withPhoto} of ${sum.total} wines have a photo</div><div class="lbar thin"><div style="width:${sum.pct}%"></div></div></div>
     <p class="muted small">A photo saved for one vintage is also used for the other vintages of the same wine that do not have their own. Licensed and community photos take priority over everything else.${E.can(FOUND_ONLINE_PERMISSION) ? " Photos marked Found online are temporary: a licensed or community photo replaces them." : ""} A real photo makes the Discover card come alive. Stand the bottle upright, label facing the camera, on a plain background in good light. Photos are saved small (about 900 px) so they load fast.</p>
     <div class="qlabel">Where are these photos from?</div><div class="chips left grid3">${kinds}</div>
@@ -160,7 +174,7 @@ function listHtml(E) {
       <span class="pill${has ? "" : " dark"}">${has ? "Edit" : "Set"}</span></button>`;
   }).join("");
   const empty = E.filter === "needs" ? "Every wine has a profile." : "No wines match.";
-  return `${ruleTestCard(E)}<div class="jmeta"><span>${done} of ${E.cards.length} wines have a profile</span></div>${rows || `<p class="muted">${empty}</p>`}`;
+  return `${rulesSwitchCard(E, E.ctx)}${ruleTestCard(E)}<div class="jmeta"><span>${done} of ${E.cards.length} wines have a profile</span></div>${rows || `<p class="muted">${empty}</p>`}`;
 }
 
 // The Rule test screen: how close the rules came to what editors scored on the gold set.
@@ -203,7 +217,7 @@ function testHtml(E) {
 // ctx: { sb(), userId(), cards(), can(permission), roleLabel(), onSaved(), onWineChanged() }
 export function createEditor(ctx) {
   const can = (p) => !!(ctx.can && ctx.can(p));
-  const E = { can, section: (sectionsFor(can)[0] || { id: "structure" }).id, loaded: false, loadError: null, cards: [], refs: new Map(), rows: [], vintageToWine: new Map(), q: "", filter: "needs", sheet: null, saving: false, error: "",
+  const E = { ctx, can, rulesUi: { busy: false, msg: "", error: "" }, sub: { loaded: false, loading: false, error: "", items: [], busy: null, msg: "" }, section: (sectionsFor(can)[0] || { id: "structure" }).id, loaded: false, loadError: null, cards: [], refs: new Map(), rows: [], vintageToWine: new Map(), q: "", filter: "needs", sheet: null, saving: false, error: "",
     ph: { filter: "needs", q: "", kind: "own_photography", show: PHOTO_PAGE, busy: null, confirm: null, msg: "", error: "" },
     cat: { loaded: false, loading: false, error: "", rows: [], config: [], decisions: [], busy: false, msg: "", view: null } };
   let root = null;
@@ -245,7 +259,7 @@ export function createEditor(ctx) {
     root.innerHTML = `${chips()}<div id="editorSection" style="margin-top:10px"></div>`;
     const sec = document.querySelector("#editorSection");
     if (E.section === "structure") { sec.innerHTML = structureShell(); if (!E.loaded) load(); else { E.cards = ctx.cards(); drawList(); } }
-    else if (E.section === "photos") { E.cards = ctx.cards(); if (!visibleKinds(can).some((k) => k.id === E.ph.kind)) E.ph.kind = "own_photography"; if (E.ph.filter === "found" && !can(FOUND_ONLINE_PERMISSION)) E.ph.filter = "needs"; sec.innerHTML = `<div id="photosBody">${photosHtml(E)}</div>`; }
+    else if (E.section === "photos") { E.cards = ctx.cards(); if (!visibleKinds(can).some((k) => k.id === E.ph.kind)) E.ph.kind = "own_photography"; if (E.ph.filter === "found" && !can(FOUND_ONLINE_PERMISSION)) E.ph.filter = "needs"; if (!E.sub.loaded && !E.sub.loading) loadSubs(); sec.innerHTML = `<div id="photosBody">${photosHtml(E)}</div>`; }
     else if (E.section === "catalog") { E.cards = ctx.cards(); sec.innerHTML = `<div id="catalogBody">${catalogHtml(E)}</div>`; if (!E.cat.loaded && !E.cat.loading) loadCatalog(); }
     else review.mount(sec, E.section);
   }
@@ -303,6 +317,45 @@ export function createEditor(ctx) {
       if (share.failed.length) P.error = `Saved, but ${share.failed.length} other ${share.failed.length === 1 ? "vintage" : "vintages"} could not get it: ${share.failed[0].message}`;
     } catch (e) { P.error = `${wineName(card)}: ${e.message || e}`; }
     P.busy = null; drawPhotos();
+  }
+  async function loadSubs() {
+    const S = E.sub; S.loading = true; S.error = "";
+    const r = await loadSubmissionState(ctx.sb());
+    S.loaded = r.loaded; S.error = r.error; S.items = r.items; S.loading = false;
+    if (E.section === "photos") drawPhotos();
+  }
+  async function toggleRules(on) {
+    const U = E.rulesUi;
+    if (!ctx.rules || U.busy || !can("settings_edit")) return;
+    U.busy = true; U.msg = ""; U.error = ""; drawList();
+    try { await ctx.rules.set(on); U.msg = on ? "The rules are on for players." : "The rules are off. Rating sliders start in the middle again."; }
+    catch (e) { U.error = String((e && e.message) || e); }
+    U.busy = false; drawList();
+  }
+  async function subApprove(id) {
+    const S = E.sub, item = S.items.find((x) => x.id === id), card = item && E.cards.find((c) => c.id === item.wine_vintage_id);
+    if (!item || !card || S.busy) return;
+    S.busy = id; S.msg = ""; S.error = ""; drawPhotos();
+    try {
+      const plan = approvalPlan(card.imageKind);
+      await db.approveSubmission(ctx.sb(), item, plan.replaces);
+      // E.cards still describes the wines before this approval, which is what the sharing rule needs.
+      const share = plan.replaces ? await shareWinePhoto(ctx.sb(), E.cards, card.id, "verified_user", { canFound: can(FOUND_ONLINE_PERMISSION) }) : { done: [], failed: [] };
+      S.items = S.items.filter((x) => x.id !== id);
+      if (ctx.onWineChanged) await ctx.onWineChanged();
+      E.cards = ctx.cards();
+      S.msg = `${wineName(card)}: ${plan.replaces ? "the community photo is now on the card." : "approved. The licensed photo stays on the card."}${shareNote(share.done)}`;
+      if (share.failed.length) S.error = `Approved, but ${share.failed.length} other ${share.failed.length === 1 ? "vintage" : "vintages"} could not get it: ${share.failed[0].message}`;
+    } catch (e) { S.error = `${wineName(card)}: ${e.message || e}`; }
+    S.busy = null; drawPhotos();
+  }
+  async function subReject(id) {
+    const S = E.sub, item = S.items.find((x) => x.id === id);
+    if (!item || S.busy) return;
+    S.busy = id; S.msg = ""; S.error = ""; drawPhotos();
+    try { await db.rejectSubmission(ctx.sb(), id); S.items = S.items.filter((x) => x.id !== id); S.msg = "Photo rejected. The player is not told, and it is never shown."; }
+    catch (e) { S.error = String(e.message || e); }
+    S.busy = null; drawPhotos();
   }
   async function photoReuse(id, fromId) {
     const P = E.ph, card = E.cards.find((c) => c.id === id), from = E.cards.find((c) => c.id === fromId);
@@ -377,8 +430,12 @@ export function createEditor(ctx) {
     else if (action === "phfilter") { E.ph.filter = a; E.ph.show = PHOTO_PAGE; E.ph.confirm = null; drawPhotos(); }
     else if (action === "phkind") { E.ph.kind = a; drawPhotos(); }
     else if (action === "phmore") { E.ph.show += PHOTO_PAGE; drawPhotos(); }
+    else if (action === "rules") toggleRules(a === "on");
     else if (action === "phremove") photoRemove(a);
     else if (action === "phreuse") photoReuse(a, b);
+    else if (action === "subok") subApprove(a);
+    else if (action === "subno") subReject(a);
+    else if (action === "subretry") { E.sub.loaded = false; E.sub.error = ""; loadSubs(); }
     else if (action === "cat") {
       const v = E.cat.view;
       if (a === "retry") { E.cat.loaded = false; E.cat.error = ""; draw(); }
