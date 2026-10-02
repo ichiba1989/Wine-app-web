@@ -9,12 +9,12 @@
 //   Feedback:  read what testers sent from the app and mark it handled.
 // Every change is logged by the database.
 import { dimsFor, dimMeta, defaultFor, esc, wineName, placeLine, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel, barDims, choiceDims, styleInfo } from "./logic.js?v=10";
-import * as db from "./data.js?v=13";
+import * as db from "./data.js?v=14";
 import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=10";
 import { createReview } from "./review.js?v=5";
-import { createWineInfo, publishSummary } from "./wineinfo.js?v=6";
-import { groupSubmissions, planPromotion, duplicateGroups, rulesFrom } from "./catalog.js?v=1";
-import { PHOTO_KINDS, photoSummary, photoList, uploadWinePhoto, removeWinePhoto } from "./winephotos.js?v=1";
+import { createWineInfo, publishSummary } from "./wineinfo.js?v=7";
+import { groupSubmissions, planPromotion, duplicateGroups, rulesFrom } from "./catalog.js?v=2";
+import { visibleKinds, FOUND_ONLINE_PERMISSION, photoSummary, photoList, photoTag, pullSource, shareWinePhoto, shareNote, uploadWinePhoto, removeWinePhoto, reuseWinePhoto } from "./winephotos.js?v=2";
 import { suggestStructure, values as ruleValues, goldInfo, GOLD, GROUPS, evaluateRules, reportText, TARGETS, RULES_VERSION } from "./rules.js?v=4";
 
 const SECTIONS = [{ id: "structure", label: "Structure" }, { id: "catalog", label: "Catalog" }, { id: "photos", label: "Photos" }, { id: "flags", label: "Flags" }, { id: "quiz", label: "Quiz" }, { id: "feedback", label: "Feedback" }];
@@ -124,21 +124,24 @@ function photosHtml(E) {
   const list = photoList(E.cards, { filter: P.filter, query: P.q });
   const shown = list.slice(0, P.show);
   const chip = (id, label, n) => `<button class="chip wide ed${P.filter === id ? " on" : ""}" data-editor="phfilter:${id}">${label}${n == null ? "" : ` (${n})`}</button>`;
-  const kinds = PHOTO_KINDS.map((k) => `<button class="chip wide ed${P.kind === k.id ? " on" : ""}" data-editor="phkind:${k.id}">${esc(k.label)}</button>`).join("");
+  const kinds = visibleKinds(E.can).map((k) => `<button class="chip wide ed${P.kind === k.id ? " on" : ""}" data-editor="phkind:${k.id}">${esc(k.label)}</button>`).join("");
   const rows = shown.map((c) => {
     const busy = P.busy === c.id;
     const thumb = c.photo ? `<img class="rowthumb" src="${esc(c.photo)}" alt="" loading="lazy">` : `<div class="rowthumb empty" aria-hidden="true"></div>`;
     const remove = c.image ? (P.confirm === c.id ? `<button class="link danger" data-editor="phremove:${esc(c.id)}">Tap again to remove</button>` : `<button class="link" data-editor="phremove:${esc(c.id)}">Remove</button>`) : "";
+    const re = c.image ? null : pullSource(E.cards, c, E.can(FOUND_ONLINE_PERMISSION));
+    const tag = photoTag(c);
+    const reuse = re ? `<button class="link" data-editor="phreuse:${esc(c.id)}:${esc(re.id)}">Use the ${esc(re.vintage || "earlier")} photo</button>` : "";
     return `<div class="candrow photorow">${thumb}<div class="candinfo"><div class="serif">${esc(wineName(c))}</div>
-      <div class="meta">${esc(placeLine(c))}${c.wineStatus && c.wineStatus !== "verified" ? " (waiting for review)" : ""}</div>${remove}</div>
+      <div class="meta">${esc(placeLine(c))}${c.wineStatus && c.wineStatus !== "verified" ? " (waiting for review)" : ""}</div>${tag ? `<div class="muted tiny">Photo: ${esc(tag)}</div>` : ""}${remove}${reuse}</div>
       <div class="candbtns"><label class="btn ${c.image ? "outline" : "primary"} slim photobtn${busy || P.busy ? " disabled" : ""}">${busy ? "Saving…" : c.image ? "Replace" : "Add photo"}<input type="file" accept="image/*" data-photofor="${esc(c.id)}"${P.busy ? " disabled" : ""} hidden></label></div></div>`;
   }).join("");
   return `${P.msg ? `<div class="notice">${esc(P.msg)}</div>` : ""}${P.error ? `<div class="err">${esc(P.error)}</div>` : ""}
     <div class="photoprogress"><div class="serif big">${sum.withPhoto} of ${sum.total} wines have a photo</div><div class="lbar thin"><div style="width:${sum.pct}%"></div></div></div>
-    <p class="muted small">A real photo makes the Discover card come alive. Stand the bottle upright, label facing the camera, on a plain background in good light. Photos are saved small (about 900 px) so they load fast.</p>
+    <p class="muted small">A photo saved for one vintage is also used for the other vintages of the same wine that do not have their own. Licensed and community photos take priority over everything else.${E.can(FOUND_ONLINE_PERMISSION) ? " Photos marked Found online are temporary: a licensed or community photo replaces them." : ""} A real photo makes the Discover card come alive. Stand the bottle upright, label facing the camera, on a plain background in good light. Photos are saved small (about 900 px) so they load fast.</p>
     <div class="qlabel">Where are these photos from?</div><div class="chips left grid3">${kinds}</div>
     <div class="jbar"><input class="field" data-photo-q placeholder="Search wines" value="${esc(P.q)}" autocomplete="off"></div>
-    <div class="chips left grid3">${chip("needs", "Needs a photo", sum.without)}${chip("has", "Has a photo", sum.withPhoto)}${chip("all", "All wines", sum.total)}</div>
+    <div class="chips left grid3">${chip("needs", "Needs a photo", sum.without)}${chip("has", "Has a photo", sum.withPhoto)}${E.can(FOUND_ONLINE_PERMISSION) ? chip("found", "Found online", sum.found) : ""}${chip("all", "All wines", sum.total)}</div>
     ${rows || `<p class="muted">${P.filter === "needs" ? "Every wine has a photo." : "No wines match."}</p>`}
     ${list.length > shown.length ? `<button class="btn outline" data-editor="phmore">Show more (${list.length - shown.length} left)</button>` : ""}`;
 }
@@ -200,7 +203,7 @@ function testHtml(E) {
 // ctx: { sb(), userId(), cards(), can(permission), roleLabel(), onSaved(), onWineChanged() }
 export function createEditor(ctx) {
   const can = (p) => !!(ctx.can && ctx.can(p));
-  const E = { section: (sectionsFor(can)[0] || { id: "structure" }).id, loaded: false, loadError: null, cards: [], refs: new Map(), rows: [], vintageToWine: new Map(), q: "", filter: "needs", sheet: null, saving: false, error: "",
+  const E = { can, section: (sectionsFor(can)[0] || { id: "structure" }).id, loaded: false, loadError: null, cards: [], refs: new Map(), rows: [], vintageToWine: new Map(), q: "", filter: "needs", sheet: null, saving: false, error: "",
     ph: { filter: "needs", q: "", kind: "own_photography", show: PHOTO_PAGE, busy: null, confirm: null, msg: "", error: "" },
     cat: { loaded: false, loading: false, error: "", rows: [], config: [], decisions: [], busy: false, msg: "", view: null } };
   let root = null;
@@ -242,7 +245,7 @@ export function createEditor(ctx) {
     root.innerHTML = `${chips()}<div id="editorSection" style="margin-top:10px"></div>`;
     const sec = document.querySelector("#editorSection");
     if (E.section === "structure") { sec.innerHTML = structureShell(); if (!E.loaded) load(); else { E.cards = ctx.cards(); drawList(); } }
-    else if (E.section === "photos") { E.cards = ctx.cards(); sec.innerHTML = `<div id="photosBody">${photosHtml(E)}</div>`; }
+    else if (E.section === "photos") { E.cards = ctx.cards(); if (!visibleKinds(can).some((k) => k.id === E.ph.kind)) E.ph.kind = "own_photography"; if (E.ph.filter === "found" && !can(FOUND_ONLINE_PERMISSION)) E.ph.filter = "needs"; sec.innerHTML = `<div id="photosBody">${photosHtml(E)}</div>`; }
     else if (E.section === "catalog") { E.cards = ctx.cards(); sec.innerHTML = `<div id="catalogBody">${catalogHtml(E)}</div>`; if (!E.cat.loaded && !E.cat.loading) loadCatalog(); }
     else review.mount(sec, E.section);
   }
@@ -288,12 +291,28 @@ export function createEditor(ctx) {
   async function photoAdd(id, file) {
     const P = E.ph, card = E.cards.find((c) => c.id === id);
     if (!card || !file || P.busy) return;
+    if (P.kind === "found_online" && !can(FOUND_ONLINE_PERMISSION)) { P.error = "Only the owner can add photos found online. Choose another source."; drawPhotos(); return; }
     P.busy = id; P.msg = ""; P.error = ""; P.confirm = null; drawPhotos();
     try {
       await uploadWinePhoto(ctx.sb(), id, file, P.kind);
+      // E.cards still describes the wines before this upload, which is what the sharing rule needs.
+      const share = await shareWinePhoto(ctx.sb(), E.cards, id, P.kind, { canFound: can(FOUND_ONLINE_PERMISSION) });
       if (ctx.onWineChanged) await ctx.onWineChanged();
       E.cards = ctx.cards();
-      P.msg = `${wineName(card)}: photo saved.`;
+      P.msg = `${wineName(card)}: photo saved.${shareNote(share.done)}`;
+      if (share.failed.length) P.error = `Saved, but ${share.failed.length} other ${share.failed.length === 1 ? "vintage" : "vintages"} could not get it: ${share.failed[0].message}`;
+    } catch (e) { P.error = `${wineName(card)}: ${e.message || e}`; }
+    P.busy = null; drawPhotos();
+  }
+  async function photoReuse(id, fromId) {
+    const P = E.ph, card = E.cards.find((c) => c.id === id), from = E.cards.find((c) => c.id === fromId);
+    if (!card || !from || P.busy) return;
+    P.busy = id; P.msg = ""; P.error = ""; P.confirm = null; drawPhotos();
+    try {
+      await reuseWinePhoto(ctx.sb(), fromId, id, from.vintage);
+      if (ctx.onWineChanged) await ctx.onWineChanged();
+      E.cards = ctx.cards();
+      P.msg = `${wineName(card)}: now uses the ${from.vintage || "earlier"} photo.`;
     } catch (e) { P.error = `${wineName(card)}: ${e.message || e}`; }
     P.busy = null; drawPhotos();
   }
@@ -359,6 +378,7 @@ export function createEditor(ctx) {
     else if (action === "phkind") { E.ph.kind = a; drawPhotos(); }
     else if (action === "phmore") { E.ph.show += PHOTO_PAGE; drawPhotos(); }
     else if (action === "phremove") photoRemove(a);
+    else if (action === "phreuse") photoReuse(a, b);
     else if (action === "cat") {
       const v = E.cat.view;
       if (a === "retry") { E.cat.loaded = false; E.cat.error = ""; draw(); }
