@@ -10,12 +10,13 @@
 // Every change is logged by the database.
 import { dimsFor, dimMeta, defaultFor, esc, wineName, placeLine, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel, barDims, choiceDims, styleInfo } from "./logic.js?v=10";
 import * as db from "./data.js?v=15";
-import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=10";
-import { createReview } from "./review.js?v=5";
+import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=11";
+import { createReview } from "./review.js?v=6";
 import { createWineInfo, publishSummary } from "./wineinfo.js?v=8";
 import { groupSubmissions, planPromotion, duplicateGroups, rulesFrom } from "./catalog.js?v=2";
 import { visibleKinds, FOUND_ONLINE_PERMISSION, photoSummary, photoList, photoTag, pullSource, shareWinePhoto, shareNote, uploadWinePhoto, removeWinePhoto, reuseWinePhoto } from "./winephotos.js?v=3";
 import { communityHtml, loadSubmissionState, approvalPlan } from "./sharing.js?v=1";
+import { sortWines, sortSelectHtml, STRUCTURE_SORTS, PHOTO_SORTS } from "./sorting.js?v=1";
 import { suggestStructure, values as ruleValues, goldInfo, GOLD, GROUPS, evaluateRules, reportText, TARGETS, RULES_VERSION } from "./rules.js?v=4";
 
 const SECTIONS = [{ id: "structure", label: "Structure" }, { id: "catalog", label: "Catalog" }, { id: "photos", label: "Photos" }, { id: "flags", label: "Flags" }, { id: "quiz", label: "Quiz" }, { id: "feedback", label: "Feedback" }];
@@ -123,7 +124,7 @@ function catalogHtml(E) {
 const PHOTO_PAGE = 40;
 function photosHtml(E) {
   const P = E.ph, sum = photoSummary(E.cards);
-  const list = photoList(E.cards, { filter: P.filter, query: P.q });
+  const list = sortWines(photoList(E.cards, { filter: P.filter, query: P.q }), P.sort);
   const shown = list.slice(0, P.show);
   const chip = (id, label, n) => `<button class="chip wide ed${P.filter === id ? " on" : ""}" data-editor="phfilter:${id}">${label}${n == null ? "" : ` (${n})`}</button>`;
   const kinds = visibleKinds(E.can).map((k) => `<button class="chip wide ed${P.kind === k.id ? " on" : ""}" data-editor="phkind:${k.id}">${esc(k.label)}</button>`).join("");
@@ -142,7 +143,8 @@ function photosHtml(E) {
     <div class="photoprogress"><div class="serif big">${sum.withPhoto} of ${sum.total} wines have a photo</div><div class="lbar thin"><div style="width:${sum.pct}%"></div></div></div>
     <p class="muted small">A photo saved for one vintage is also used for the other vintages of the same wine that do not have their own. Licensed and community photos take priority over everything else.${E.can(FOUND_ONLINE_PERMISSION) ? " Photos marked Found online are temporary: a licensed or community photo replaces them." : ""} A real photo makes the Discover card come alive. Stand the bottle upright, label facing the camera, on a plain background in good light. Photos are saved small (about 900 px) so they load fast.</p>
     <div class="qlabel">Where are these photos from?</div><div class="chips left grid3">${kinds}</div>
-    <div class="jbar"><input class="field" data-photo-q placeholder="Search wines" value="${esc(P.q)}" autocomplete="off"></div>
+    <div class="jbar"><input class="field" data-photo-q placeholder="Search wines" value="${esc(P.q)}" autocomplete="off">
+      ${sortSelectHtml("data-photo-sort", PHOTO_SORTS, P.sort, "photos")}</div>
     <div class="chips left grid3">${chip("needs", "Needs a photo", sum.without)}${chip("has", "Has a photo", sum.withPhoto)}${E.can(FOUND_ONLINE_PERMISSION) ? chip("found", "Found online", sum.found) : ""}${chip("all", "All wines", sum.total)}</div>
     ${rows || `<p class="muted">${P.filter === "needs" ? "Every wine has a photo." : "No wines match."}</p>`}
     ${list.length > shown.length ? `<button class="btn outline" data-editor="phmore">Show more (${list.length - shown.length} left)</button>` : ""}`;
@@ -154,6 +156,7 @@ function listHtml(E) {
   const done = E.cards.filter((c) => hasFullProfile(E.refs.get(c.id), c.style)).length;
   let list = editorList(E.cards, E.refs, { q: E.q, filter: E.filter === "gold" ? "all" : E.filter });
   if (E.filter === "gold") list = list.filter((c) => goldInfo(c));
+  list = sortWines(list, E.sort);
   const rows = list.map((c) => {
     const has = hasFullProfile(E.refs.get(c.id), c.style);
     const gold = goldInfo(c);
@@ -205,8 +208,8 @@ function testHtml(E) {
 // ctx: { sb(), userId(), cards(), can(permission), roleLabel(), onSaved(), onWineChanged() }
 export function createEditor(ctx) {
   const can = (p) => !!(ctx.can && ctx.can(p));
-  const E = { can, sub: { loaded: false, loading: false, error: "", items: [], busy: null, msg: "" }, section: (sectionsFor(can)[0] || { id: "structure" }).id, loaded: false, loadError: null, cards: [], refs: new Map(), rows: [], vintageToWine: new Map(), q: "", filter: "needs", sheet: null, saving: false, error: "",
-    ph: { filter: "needs", q: "", kind: "own_photography", show: PHOTO_PAGE, busy: null, confirm: null, msg: "", error: "" },
+  const E = { can, sort: "producer", sub: { loaded: false, loading: false, error: "", items: [], busy: null, msg: "" }, section: (sectionsFor(can)[0] || { id: "structure" }).id, loaded: false, loadError: null, cards: [], refs: new Map(), rows: [], vintageToWine: new Map(), q: "", filter: "needs", sheet: null, saving: false, error: "",
+    ph: { sort: "default", filter: "needs", q: "", kind: "own_photography", show: PHOTO_PAGE, busy: null, confirm: null, msg: "", error: "" },
     cat: { loaded: false, loading: false, error: "", rows: [], config: [], decisions: [], busy: false, msg: "", view: null } };
   let root = null;
   const overlay = () => document.querySelector("#overlay");
@@ -239,6 +242,7 @@ export function createEditor(ctx) {
 
   const chips = () => `${ctx.roleLabel && ctx.roleLabel() ? `<div class="muted small" style="margin:2px 0 6px">Your access: <b>${esc(ctx.roleLabel())}</b></div>` : ""}<div class="chips left edtabs">${sectionsFor(can).map((x) => `<button class="chip wide ed${E.section === x.id ? " on" : ""}" data-editor="sec:${x.id}">${x.id === "flags" ? flagsLabel() : x.id === "feedback" ? feedbackLabel() : x.label}</button>`).join("")}</div>`;
   const structureShell = () => `<div class="jbar"><input class="field" data-editor-q placeholder="Search wines" value="${esc(E.q)}" autocomplete="off">
+      ${sortSelectHtml("data-editor-sort", STRUCTURE_SORTS, E.sort, "structure")}
       <div class="chips left"><button class="chip wide${E.filter === "needs" ? " on" : ""}" data-editor="filter:needs">Needs a profile</button><button class="chip wide${E.filter === "all" ? " on" : ""}" data-editor="filter:all">All wines</button><button class="chip wide${E.filter === "gold" ? " on" : ""}" data-editor="filter:gold">Gold set</button></div></div>
     <div id="editorList"></div>`;
   const drawList = () => { const el = document.querySelector("#editorList"); if (el) el.innerHTML = listHtml(E); };
@@ -464,6 +468,8 @@ export function createEditor(ctx) {
     if (t.dataset && t.dataset.edim && E.sheet) { E.sheet.values[t.dataset.edim] = clampDimValue(dimMeta(t.dataset.edim), Number(t.value)); E.sheet.touched.add(t.dataset.edim); syncSheet(); }
     else if (t.dataset && t.dataset.editorQ !== undefined) { E.q = t.value; drawList(); }
     else if (t.dataset && t.dataset.photoQ !== undefined) { E.ph.q = t.value; E.ph.show = PHOTO_PAGE; drawPhotos(); }
+    else if (t.dataset && t.dataset.editorSort !== undefined) { E.sort = t.value; drawList(); }
+    else if (t.dataset && t.dataset.photoSort !== undefined) { E.ph.sort = t.value; E.ph.show = PHOTO_PAGE; drawPhotos(); }
   });
   // A picture chosen (or taken) for a wine in the Photos list.
   document.addEventListener("change", (ev) => {
