@@ -1,6 +1,6 @@
 // Everything that talks to Supabase. Each function takes the client and throws on an error.
-import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=9";
-import { BUCKET, newPhotoPath } from "./photos.js?v=4";
+import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=10";
+import { BUCKET, newPhotoPath } from "./photos.js?v=5";
 
 const must = ({ data, error }) => { if (error) throw error; return data; };
 // Reads every row, 1000 at a time (Supabase returns at most 1000 rows per request).
@@ -34,7 +34,11 @@ export async function attestAge(sb, userId) {
 }
 
 // ---------------------------------------------------------------- reading
-export async function loadCards(sb) { return must(await sb.from("v_catalog_cards").select("*")).map((r) => ({ ...cardFromRow(r), raw: r })); }   // raw: the full catalog row, used by the structure rules
+export const PHOTO_BUCKET = "wine-images";   // real bottle photos, public to read, editors only to change
+export const photoUrl = (sb, path) => (path ? sb.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl : null);
+export async function loadCards(sb) {
+  return must(await sb.from("v_catalog_cards").select("*")).map((r) => { const c = cardFromRow(r); c.photo = photoUrl(sb, c.image); return { ...c, raw: r }; });   // raw: the full catalog row, used by the structure editor
+}   // raw: the full catalog row, used by the structure rules
 export async function loadStates(sb) {
   return must(await sb.from("v_user_wine_state").select("wine_vintage_id, familiarity, interest, last_swiped_at"));
 }
@@ -363,3 +367,43 @@ export async function archiveVintages(sb, ids, keepId) {
   if (!ids.length) return;
   must(await sb.from("wine_vintages").update({ archived_at: new Date().toISOString(), superseded_by: keepId }).in("id", ids));
 }
+
+// ---------------------------------------------------------------- bottle photos (editors)
+// Adds or replaces the bottle photo of a vintage. The new picture goes in first; the old one is only removed once the new one is in place.
+// kind: 'own_photography' | 'producer' | 'official' (where the picture came from). Returns the new storage path.
+export async function saveWinePhoto(sb, wineVintageId, blob, kind, note) {
+  const v = must(await sb.from("wine_vintages").select("wine_id").eq("id", wineVintageId).single());
+  const key = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+  const path = `${v.wine_id}/${wineVintageId}-${key}.jpg`;   // a new path every time, so phones never show an old copy
+  const up = await sb.storage.from(PHOTO_BUCKET).upload(path, blob, { contentType: "image/jpeg", upsert: false });
+  if (up.error) throw up.error;
+  let rowId = null, old = [];
+  try {
+    old = must(await sb.from("wine_images").select("id, storage_path").eq("wine_vintage_id", wineVintageId));
+    rowId = must(await sb.from("wine_images").insert({ wine_id: v.wine_id, wine_vintage_id: wineVintageId, kind, storage_path: path, license_note: note || null, is_primary: false, status: "verified" }).select("id").single()).id;
+    if (old.length) must(await sb.from("wine_images").update({ is_primary: false }).in("id", old.map((o) => o.id)));
+    must(await sb.from("wine_images").update({ is_primary: true }).eq("id", rowId));
+  } catch (e) {
+    if (rowId) await sb.from("wine_images").delete().eq("id", rowId);
+    if (old.length) await sb.from("wine_images").update({ is_primary: true }).in("id", old.map((o) => o.id));
+    await sb.storage.from(PHOTO_BUCKET).remove([path]);
+    throw e;
+  }
+  if (old.length) {   // the replaced pictures go; if this fails the new photo is still in place
+    await sb.from("wine_images").delete().in("id", old.map((o) => o.id));
+    await sb.storage.from(PHOTO_BUCKET).remove(old.map((o) => o.storage_path));
+  }
+  return path;
+}
+export async function winePhotoPaths(sb, wineVintageId) {
+  const { data } = await sb.from("wine_images").select("storage_path").eq("wine_vintage_id", wineVintageId);
+  return (data || []).map((r) => r.storage_path);
+}
+export async function removeWinePhoto(sb, wineVintageId) {
+  const rows = must(await sb.from("wine_images").select("id, storage_path").eq("wine_vintage_id", wineVintageId));
+  if (!rows.length) return;
+  must(await sb.from("wine_images").delete().in("id", rows.map((r) => r.id)));
+  await sb.storage.from(PHOTO_BUCKET).remove(rows.map((r) => r.storage_path));
+}
+// Files left behind when a wine was deleted (the database removes the records; the files are removed here).
+export async function removePhotoFiles(sb, paths) { if (paths.length) await sb.storage.from(PHOTO_BUCKET).remove(paths); }
