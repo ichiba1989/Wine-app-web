@@ -77,23 +77,11 @@ export function scoredGold(E) {
   }
   return rows;
 }
-// The Owner's switch: whether players' rating sliders, palate and Discover deck start from the rules for wines nobody has scored yet.
-function rulesSwitchCard(E, ctx) {
-  if (!ctx.rules) return "";
-  const on = ctx.rules.on(), U = E.rulesUi, canSwitch = E.can("settings_edit");
-  const scored = scoredGold(E).length;
-  return `<div class="pcard"><div class="ptitle">Structure rules for players: ${on ? "On" : "Off"}</div>
-    <p class="ptext">${on
-      ? "Rating sliders, the palate and the Discover deck start from the rules for any wine you have not scored yourself. Your own scores always win."
-      : "The rules are not used for players. Rating sliders start in the middle until a wine has your score."}</p>
-    <div class="muted small">Rules version ${esc(RULES_VERSION)}. ${scored} of ${GOLD.length} gold set wines scored (see the Rule test below). A wrong suggestion only sets where a slider starts; players can move it, and the palate averages their input with it.</div>
-    ${U.msg ? `<div class="notice">${esc(U.msg)}</div>` : ""}${U.error ? `<div class="err">${esc(U.error)}</div>` : ""}
-    ${canSwitch ? `<button class="btn ${on ? "outline" : "primary"} slim" data-editor="rules:${on ? "off" : "on"}"${U.busy ? " disabled" : ""}>${U.busy ? "Saving…" : on ? "Turn the rules off" : "Turn the rules on"}</button>` : `<div class="muted small">Only the Owner can change this.</div>`}</div>`;
-}
 function ruleTestCard(E) {
   const rows = scoredGold(E);
   return `<div class="pcard"><div class="ptitle">Rule test</div>
     <p class="ptext">${rows.length} of ${GOLD.length} gold set wines scored. Score them without looking at any suggestion, then see how close the rules came.</p>
+    <p class="muted small">Players' rating sliders, palate and Discover deck start from these rules (version ${esc(RULES_VERSION)}) for any wine you have not scored. Your own scores always win.</p>
     <button class="btn outline slim" data-editor="ruletest"${rows.length ? "" : " disabled"}>See results</button></div>`;
 }
 // ---------------------------------------------------------------- Catalog: how it grows
@@ -174,7 +162,7 @@ function listHtml(E) {
       <span class="pill${has ? "" : " dark"}">${has ? "Edit" : "Set"}</span></button>`;
   }).join("");
   const empty = E.filter === "needs" ? "Every wine has a profile." : "No wines match.";
-  return `${rulesSwitchCard(E, E.ctx)}${ruleTestCard(E)}<div class="jmeta"><span>${done} of ${E.cards.length} wines have a profile</span></div>${rows || `<p class="muted">${empty}</p>`}`;
+  return `${ruleTestCard(E)}<div class="jmeta"><span>${done} of ${E.cards.length} wines have a profile</span></div>${rows || `<p class="muted">${empty}</p>`}`;
 }
 
 // The Rule test screen: how close the rules came to what editors scored on the gold set.
@@ -217,7 +205,7 @@ function testHtml(E) {
 // ctx: { sb(), userId(), cards(), can(permission), roleLabel(), onSaved(), onWineChanged() }
 export function createEditor(ctx) {
   const can = (p) => !!(ctx.can && ctx.can(p));
-  const E = { ctx, can, rulesUi: { busy: false, msg: "", error: "" }, sub: { loaded: false, loading: false, error: "", items: [], busy: null, msg: "" }, section: (sectionsFor(can)[0] || { id: "structure" }).id, loaded: false, loadError: null, cards: [], refs: new Map(), rows: [], vintageToWine: new Map(), q: "", filter: "needs", sheet: null, saving: false, error: "",
+  const E = { can, sub: { loaded: false, loading: false, error: "", items: [], busy: null, msg: "" }, section: (sectionsFor(can)[0] || { id: "structure" }).id, loaded: false, loadError: null, cards: [], refs: new Map(), rows: [], vintageToWine: new Map(), q: "", filter: "needs", sheet: null, saving: false, error: "",
     ph: { filter: "needs", q: "", kind: "own_photography", show: PHOTO_PAGE, busy: null, confirm: null, msg: "", error: "" },
     cat: { loaded: false, loading: false, error: "", rows: [], config: [], decisions: [], busy: false, msg: "", view: null } };
   let root = null;
@@ -324,14 +312,6 @@ export function createEditor(ctx) {
     S.loaded = r.loaded; S.error = r.error; S.items = r.items; S.loading = false;
     if (E.section === "photos") drawPhotos();
   }
-  async function toggleRules(on) {
-    const U = E.rulesUi;
-    if (!ctx.rules || U.busy || !can("settings_edit")) return;
-    U.busy = true; U.msg = ""; U.error = ""; drawList();
-    try { await ctx.rules.set(on); U.msg = on ? "The rules are on for players." : "The rules are off. Rating sliders start in the middle again."; }
-    catch (e) { U.error = String((e && e.message) || e); }
-    U.busy = false; drawList();
-  }
   async function subApprove(id) {
     const S = E.sub, item = S.items.find((x) => x.id === id), card = item && E.cards.find((c) => c.id === item.wine_vintage_id);
     if (!item || !card || S.busy) return;
@@ -430,7 +410,6 @@ export function createEditor(ctx) {
     else if (action === "phfilter") { E.ph.filter = a; E.ph.show = PHOTO_PAGE; E.ph.confirm = null; drawPhotos(); }
     else if (action === "phkind") { E.ph.kind = a; drawPhotos(); }
     else if (action === "phmore") { E.ph.show += PHOTO_PAGE; drawPhotos(); }
-    else if (action === "rules") toggleRules(a === "on");
     else if (action === "phremove") photoRemove(a);
     else if (action === "phreuse") photoReuse(a, b);
     else if (action === "subok") subApprove(a);
@@ -498,4 +477,3 @@ export function createEditor(ctx) {
     leave() { root = null; review.leave(); E.sheet = null; const o = overlay(); if (o) o.innerHTML = ""; },
   };
 }
-
