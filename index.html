@@ -305,6 +305,17 @@
   .photoblock { display: flex; gap: 12px; align-items: center; margin: 4px 0 10px; }
   .photoctl { flex: 1 1 auto; }
   .photobtns { display: flex; gap: 14px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+  /* Sharing journal photos with the community */
+  .phwrap { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 92px; }
+  .sharechip { width: 100%; border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 5px 6px; font-size: 11px; line-height: 1.25; text-align: left; }
+  .sharechip.on { background: var(--slate); color: #fff; border-color: var(--slate); }
+  .sharechip.off { background: transparent; border-style: dashed; color: var(--muted); }
+  .shareopt { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.4; margin-top: 12px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  .shareopt input { flex: 0 0 auto; width: 20px; height: 20px; margin-top: 2px; }
+  .shareopt a { color: var(--slate); white-space: nowrap; }
+  .subrow { align-items: flex-start; }
+  .subthumb { flex: 0 0 auto; width: 84px; height: 112px; object-fit: contain; background: linear-gradient(180deg,#E3EAE0,#CBD8C9); border-radius: 8px; border: 1px solid var(--line); }
+  .subthumb.empty { display: block; }
 </style>
 </head>
 <body>
@@ -334,6 +345,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=18" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=20" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>
