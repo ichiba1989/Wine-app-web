@@ -18,15 +18,15 @@
 <script type="module">
 const FILES = {
  "index.html": {
-  "hash": "d0904dbb2dd3b4f47ce81df5fe409db9b449a96665fcd69d0aae5b905c6dd6de",
+  "hash": "dc0b715d0878b5bd1d53c69c73a821d4c8c10008faf1be7f9da8a3617ba5f242",
   "chars": 28778,
   "query": null,
   "exports": []
  },
  "app.js": {
-  "hash": "c9010410c62d1457c1ce3000476c8c17445533f4c7cd7a24e72f5ca5b7146a3d",
+  "hash": "9ec7bbb6d863c4bf5b3360175af92dc513ab0cea289b051beb56d8b9da19aff5",
   "chars": 45954,
-  "query": "18",
+  "query": "19",
   "exports": []
  },
  "logic.js": {
@@ -131,9 +131,9 @@ const FILES = {
   ]
  },
  "data.js": {
-  "hash": "73797937515702141030e331df21832cda303a0a37b5538633b6c01a5a8f9cef",
-  "chars": 26334,
-  "query": "13",
+  "hash": "aa398136c52b349ccd2fcb6dfc70837bd4cc8789f6994ce916c7d14cc6fa047d",
+  "chars": 28614,
+  "query": "14",
   "exports": [
    "LEGACY_PERMISSIONS",
    "PHOTO_BUCKET",
@@ -176,6 +176,7 @@ const FILES = {
    "recordSwipe",
    "removePhotoFiles",
    "removeWinePhoto",
+   "reuseWinePhoto",
    "saveReferences",
    "saveReview",
    "saveWineInfo",
@@ -265,9 +266,9 @@ const FILES = {
   ]
  },
  "editor.js": {
-  "hash": "61390d7638f6ea728bc795168c15fbf82d17b1ec6dbb44903c2bebe921acc99a",
-  "chars": 33852,
-  "query": "11",
+  "hash": "fc58b1fb0f373c44823ffbf5f564e773939fadc39462c21112e9e912691fe0f3",
+  "chars": 36129,
+  "query": "12",
   "exports": [
    "SECTION_PERMISSIONS",
    "catalogView",
@@ -384,9 +385,9 @@ const FILES = {
   ]
  },
  "wineinfo.js": {
-  "hash": "9e8574aaffae0066490060414a84a3393c09426ba87376d830f57b1de625aa77",
-  "chars": 20736,
-  "query": "6",
+  "hash": "9d146ad5bbf378ae1a59ff14cdd94d9dd9840971ee1d0edbc1208ca3ac029d24",
+  "chars": 22911,
+  "query": "7",
   "exports": [
    "REACH_CHOICES",
    "createWineInfo",
@@ -421,9 +422,9 @@ const FILES = {
   ]
  },
  "catalog.js": {
-  "hash": "d97908ef27faaac81bc14b517008006d4c99c6d25a5cbdcc98a2be6c24f5bf59",
-  "chars": 9873,
-  "query": "1",
+  "hash": "588a24b27e320f297931e7633e56ce873a52af34c71d9b01c8a3472fd528d5d0",
+  "chars": 11086,
+  "query": "2",
   "exports": [
    "DEFAULT_RULES",
    "archivePlanFor",
@@ -433,6 +434,7 @@ const FILES = {
    "looseKey",
    "nameKey",
    "planPromotion",
+   "reusablePhoto",
    "rulesFrom",
    "strictKey"
   ]
@@ -463,23 +465,36 @@ const FILES = {
   ]
  },
  "winephotos.js": {
-  "hash": "ed84165109e780476a45d13107fb3d6f60a289063ad7d7ccb3904f0e8ca1c8eb",
-  "chars": 3210,
-  "query": "1",
+  "hash": "f8b86141b885900a2a64c341137b01349d8c994bd21108144ea5ff6ffa274240",
+  "chars": 8683,
+  "query": "2",
   "exports": [
+   "CARRIED",
    "DECK_PHOTO_SIDE",
+   "FOUND_ONLINE_PERMISSION",
+   "KIND_RANK",
+   "KIND_SHORT",
    "PHOTO_KINDS",
+   "isCarried",
    "isKind",
    "kindNote",
    "photoCandidates",
    "photoList",
    "photoSummary",
+   "photoTag",
+   "pullSource",
+   "rankOf",
    "removeWinePhoto",
-   "uploadWinePhoto"
+   "reuseWinePhoto",
+   "shareNote",
+   "shareTargets",
+   "shareWinePhoto",
+   "uploadWinePhoto",
+   "visibleKinds"
   ]
  }
 };
-const APP_SCRIPT = "app.js?v=18";
+const APP_SCRIPT = "app.js?v=19";
 const LIBRARIES = ["https://esm.sh/@supabase/supabase-js@2.109.0", "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.109.0/+esm"];
 const out = document.getElementById("out"), sum = document.getElementById("sum");
 const lines = []; let problems = 0, first = "";
