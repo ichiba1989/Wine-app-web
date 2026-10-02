@@ -3,7 +3,7 @@
 //   Feedback: general messages testers sent from the app (broken, confusing, ideas), to read and mark handled.
 //   Quiz:  edit each question, record its source if you have one, and verify it (verified questions are what players see).
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
-import { esc, wineName } from "./logic.js?v=9";
+import { esc, wineName } from "./logic.js?v=10";
 
 export const TOPICS = ["Grapes", "Regions", "Producers", "Winemaking", "Other alcohol"];
 export const DIFFS = [
