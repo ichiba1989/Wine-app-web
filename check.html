@@ -18,15 +18,15 @@
 <script type="module">
 const FILES = {
  "index.html": {
-  "hash": "dc0b715d0878b5bd1d53c69c73a821d4c8c10008faf1be7f9da8a3617ba5f242",
-  "chars": 28778,
+  "hash": "4b8b17526047110ae85f11c92ba100e81ec46a37e6a0868e4189a0ef3689a1cc",
+  "chars": 29891,
   "query": null,
   "exports": []
  },
  "app.js": {
-  "hash": "9ec7bbb6d863c4bf5b3360175af92dc513ab0cea289b051beb56d8b9da19aff5",
-  "chars": 45954,
-  "query": "19",
+  "hash": "5d5e5cbf8f3f85ca83d99b968c1feab43a0b89c140e52f05185a003527cf637a",
+  "chars": 48812,
+  "query": "20",
   "exports": []
  },
  "logic.js": {
@@ -131,15 +131,16 @@ const FILES = {
   ]
  },
  "data.js": {
-  "hash": "aa398136c52b349ccd2fcb6dfc70837bd4cc8789f6994ce916c7d14cc6fa047d",
-  "chars": 28614,
-  "query": "14",
+  "hash": "6b7a8abb8f447198b76bab6e85095ae0e255542a9552f166a3301da81b8a88ef",
+  "chars": 34554,
+  "query": "15",
   "exports": [
    "LEGACY_PERMISSIONS",
    "PHOTO_BUCKET",
    "accessFrom",
    "addCatalogWine",
    "addWithoutRating",
+   "approveSubmission",
    "archiveVintages",
    "attestAge",
    "changeInterest",
@@ -167,6 +168,7 @@ const FILES = {
    "loadQuizKnowledge",
    "loadReferenceRows",
    "loadStates",
+   "loadSubmissions",
    "loadUserWine",
    "loadVintageWines",
    "loadWineInfo",
@@ -174,6 +176,7 @@ const FILES = {
    "prepareGuestMerge",
    "publishWine",
    "recordSwipe",
+   "rejectSubmission",
    "removePhotoFiles",
    "removeWinePhoto",
    "reuseWinePhoto",
@@ -181,10 +184,14 @@ const FILES = {
    "saveReview",
    "saveWineInfo",
    "saveWinePhoto",
+   "shareMyPhoto",
    "signedUrls",
+   "takeDownSubmissions",
+   "unshareMyPhoto",
    "uploadPhotos",
    "wineDeleteCheck",
-   "winePhotoPaths"
+   "winePhotoPaths",
+   "withdrawShared"
   ]
  },
  "views.js": {
@@ -266,9 +273,9 @@ const FILES = {
   ]
  },
  "editor.js": {
-  "hash": "fc58b1fb0f373c44823ffbf5f564e773939fadc39462c21112e9e912691fe0f3",
-  "chars": 36129,
-  "query": "12",
+  "hash": "d5725caa1dc840f7b217f7ad47cf12ef17da947378b6b19bf3f0ff2be141efa4",
+  "chars": 40509,
+  "query": "13",
   "exports": [
    "SECTION_PERMISSIONS",
    "catalogView",
@@ -278,9 +285,9 @@ const FILES = {
   ]
  },
  "profile.js": {
-  "hash": "918d28411727cb02458d7b66afe1213c219672a4d584b31ad6c2fd42e81b3d11",
-  "chars": 29457,
-  "query": "7",
+  "hash": "55ca99fd49ba977d75ed2d3375307150100dd47ae9171692d0367a59b71fcf54",
+  "chars": 29830,
+  "query": "8",
   "exports": [
    "DIFFS",
    "TIER_COLORS",
@@ -385,9 +392,9 @@ const FILES = {
   ]
  },
  "wineinfo.js": {
-  "hash": "9d146ad5bbf378ae1a59ff14cdd94d9dd9840971ee1d0edbc1208ca3ac029d24",
+  "hash": "212c90064d0f28c1e8bc2d25cfb7ba6d0fe5f499392cbd738618ab25d21e0e8b",
   "chars": 22911,
-  "query": "7",
+  "query": "8",
   "exports": [
    "REACH_CHOICES",
    "createWineInfo",
@@ -465,9 +472,9 @@ const FILES = {
   ]
  },
  "winephotos.js": {
-  "hash": "f8b86141b885900a2a64c341137b01349d8c994bd21108144ea5ff6ffa274240",
-  "chars": 8683,
-  "query": "2",
+  "hash": "bec4e8f9cd00d9c8d84e73d79cb75f55a6d34a83237635faa339fc4ac3b5bac2",
+  "chars": 8813,
+  "query": "3",
   "exports": [
    "CARRIED",
    "DECK_PHOTO_SIDE",
@@ -492,9 +499,40 @@ const FILES = {
    "uploadWinePhoto",
    "visibleKinds"
   ]
+ },
+ "sharing.js": {
+  "hash": "b35ca654557c9e98861b51b906c2b386fc733d96306bd495f04c4964f9823285",
+  "chars": 7485,
+  "query": "1",
+  "exports": [
+   "SHARE_PROMISE",
+   "applyShareChanges",
+   "approvalPlan",
+   "canToggle",
+   "chipLabel",
+   "communityHtml",
+   "isLive",
+   "loadSubmissionState",
+   "pendingShareChanges",
+   "sheetPhotosHtml"
+  ]
+ },
+ "structure.js": {
+  "hash": "c62ebf9eb99bf09ebe13be51df7bd17fa41a819b8136b3df3401a8b00d744558",
+  "chars": 4078,
+  "query": "1",
+  "exports": [
+   "FEATURE",
+   "applyDefaults",
+   "entryAsCard",
+   "rulesFor",
+   "setStructureRules",
+   "startingValues",
+   "structureMap"
+  ]
  }
 };
-const APP_SCRIPT = "app.js?v=19";
+const APP_SCRIPT = "app.js?v=20";
 const LIBRARIES = ["https://esm.sh/@supabase/supabase-js@2.109.0", "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.109.0/+esm"];
 const out = document.getElementById("out"), sum = document.getElementById("sum");
 const lines = []; let problems = 0, first = "";
