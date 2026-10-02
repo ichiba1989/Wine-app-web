@@ -6,21 +6,23 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, dimMeta, isChoice, setStyle, choiceDims, barDims,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=10";
-import * as db from "./data.js?v=14";
+import * as db from "./data.js?v=15";
+import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=1";
+import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults, setStructureRules } from "./structure.js?v=1";
 import { shrinkImage } from "./photos.js?v=5";
 import {
   discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=10";
 import { createLearn } from "./learn.js?v=3";
 import { wireGrapeInputs, checkGrapeInput } from "./grapes.js?v=1";
 import { buildDeck } from "./deck.js?v=1";
-import { createProfile } from "./profile.js?v=7";
+import { createProfile } from "./profile.js?v=8";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=5";
 import { createFeedback } from "./feedback.js?v=3";
-import { createEditor } from "./editor.js?v=12";
+import { createEditor } from "./editor.js?v=13";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
-const APP_VERSION = "19";   // shown to editors with each piece of feedback
+const APP_VERSION = "20";   // shown to editors with each piece of feedback
 const SUPABASE_JS_VERSION = "2.109.0";
 const LIBRARY_URLS = [
   `https://esm.sh/@supabase/supabase-js@${SUPABASE_JS_VERSION}`,
@@ -72,6 +74,7 @@ const state = {
   sinceDeck: 0,                         // swipes since the deck was last re-ranked
   access: { role: null, label: null, permissions: [] },   // what this person may do as staff: from the database
   refs: new Map(),                      // wine_vintage_id -> reference structure values set by editors
+  rulesOn: false,                       // the structure rules are switched on for rating sliders, the palate and the deck (database switch structureRules)
   feedback: false,                      // feedback switch (feature_access), on for everyone for now
   wf: null, wfDone: null,               // "report a problem with this wine"
   confirm: null,                        // the delete confirmation that is open, if any
@@ -80,12 +83,21 @@ const state = {
 // What this person may do in the Editor tab comes from the database (staff roles, update 13).
 const can = (permission) => !!state.access && state.access.permissions.includes(permission);
 const isEditor = () => can("catalog_edit") || can("quiz_verify");
+// Where a wine's starting structure comes from: an editor's score first, then the rules (when they are on). See structure.js.
+const cardById = (id) => state.cards.find((c) => c.id === id) || null;
+const startFor = (card) => startingValues(card, card && state.refs.get(card.id), state.rulesOn);
+const startForEntry = (entry) => {
+  if (entry.wine_vintage_id) return startFor(cardById(entry.wine_vintage_id));
+  return state.rulesOn ? startingValues(entryAsCard(entry), null, true) : {};
+};
+// What the palate uses as a baseline from the rules alone (the editor's own scores are added in profile.js).
+const ruleBase = (wineVintageId, entry) => (!state.rulesOn ? null : rulesFor(wineVintageId ? cardById(wineVintageId) : entryAsCard(entry)));
 const TITLES = { discover: "Discover", swipes: "Swipes", journal: "Journal", profile: "Profile", learn: "Learn", editor: "Editor" };
 
 // The Learn tab lives in learn.js. It saves quiz answers itself and reports save problems through the banner.
 const learn = createLearn({ sb: () => state.sb, user: () => state.user, profile: () => state.profile, onError: (m) => setBanner(m) });
 // The Profile tab lives in profile.js. It reads the journal and swipes the app already loaded.
-const profileTab = createProfile({ sb: () => state.sb, userId: () => state.user.id, user: () => state.user, journal: () => state.journal, states: () => state.states, cards: () => state.cards });
+const profileTab = createProfile({ ruleBase: (vid, entry) => ruleBase(vid, entry), sb: () => state.sb, userId: () => state.user.id, user: () => state.user, journal: () => state.journal, states: () => state.states, cards: () => state.cards });
 // Email accounts live in account.js: a guest can attach an email, or sign in to an account they already have.
 // Signing in or out reloads the page so everything starts clean for the right person.
 const account = createAccount({
@@ -102,7 +114,7 @@ const feedback = createFeedback({ sb: () => state.sb, user: () => state.user, sc
 // A gentle reminder for guests who have started building a journal, shown on Discover until they save it or say "not now".
 const showNudge = () => !!state.user && state.user.is_anonymous === true && !store.get("wine.nudgeOff") && (state.journal.length >= 1 || state.states.length >= 5);
 // The Editor tab (editors only) lives in editor.js.
-const editorTab = createEditor({ sb: () => state.sb, userId: () => state.user.id, cards: () => state.cards, can, roleLabel: () => (state.access && state.access.label) || "", onSaved: () => loadReferences(), onWineChanged: async () => { state.cards = await db.loadCards(state.sb); rebuildDeck(); } });   // a deleted, archived, published or edited wine changes the Discover deck too
+const editorTab = createEditor({ rules: { on: () => state.rulesOn, set: async (on) => { await setStructureRules(state.sb, on); state.rulesOn = !!on; rebuildDeck(); } }, sb: () => state.sb, userId: () => state.user.id, cards: () => state.cards, can, roleLabel: () => (state.access && state.access.label) || "", onSaved: () => loadReferences(), onWineChanged: async () => { state.cards = await db.loadCards(state.sb); rebuildDeck(); } });   // a deleted, archived, published or edited wine changes the Discover deck too
 
 // Counts for the Discover screen. Only swipes count as swipes (not later changes of interest).
 async function loadCounts() {
@@ -160,6 +172,7 @@ async function enterMain() {
   state.cards = await db.loadCards(state.sb);
   await Promise.all([refreshData(), loadReferences()]);
   try { state.feedback = feedbackOn(await db.loadFeature(state.sb, "contentFeedback"), (state.profile || {}).tier || "default"); } catch (_) { state.feedback = false; }
+  try { state.rulesOn = feedbackOn(await db.loadFeature(state.sb, "structureRules"), (state.profile || {}).tier || "default"); } catch (_) { state.rulesOn = false; }   // off until database update 19 is run
   // What the person knows and what other players know both help decide the deck. Neither is essential.
   try { state.quiz = await db.loadQuizKnowledge(state.sb); } catch (_) { state.quiz = null; }
   try { state.crowd = await db.loadCrowd(state.sb); } catch (_) { state.crowd = new Map(); }
@@ -185,7 +198,7 @@ function preloadPhotos(n = 4) {
   while (photoCache.size > 16) photoCache.delete(photoCache.keys().next().value);
 }
 function rebuildDeck() {
-  const r = buildDeck({ cards: state.cards, states: state.states, journal: state.journal, quiz: state.quiz, refs: state.refs, crowd: state.crowd });
+  const r = buildDeck({ cards: state.cards, states: state.states, journal: state.journal, quiz: state.quiz, refs: structureMap(state.cards, state.refs, state.rulesOn), crowd: state.crowd });
   state.deck = r.deck; state.deckInfo = r.info; state.deckMix = r.mix; state.sinceDeck = 0;
   preloadPhotos();
 }
@@ -414,6 +427,7 @@ function syncFoot() {
 function openSheet() {
   state.sheetUi = { ...state.sheetUi, saving: false, error: "", page: 0 };
   $("#overlay").innerHTML = sheetHtml(state.sheet, state.sheetUi);
+  showPhotos();   // the photos block with the sharing choices (sharing.js)
 }
 // Go to page n of the rating window (0 to 4). Everything stays on the page, so nothing entered is lost.
 function showSheetPage(n) {
@@ -448,7 +462,7 @@ function showWineChange() {
   const s = state.sheet; if (!s) return;
   const t = document.querySelector("#sheetPanel .sheettitle .big"); if (t) t.textContent = s.target.name;
   const c = document.getElementById("wcname"); if (c) c.textContent = s.target.name;
-  redrawStructurePages(); syncSheet();
+  redrawStructurePages(); showPhotos(); syncSheet();   // the photos block follows the wine: sharing is only for catalog wines
 }
 async function saveWineEdit() {
   const w = state.wedit;
@@ -477,10 +491,11 @@ function redrawStructurePages() {
 }
 async function openEntry(entry) {
   const [rows, photos] = await Promise.all([db.loadPerceptions(state.sb, entry.id), db.loadEntryPhotos(state.sb, entry.id).catch(() => [])]);
-  state.sheet = sheetForEntry(entry, rows, today(), (entry.wine_vintage_id && state.refs.get(entry.wine_vintage_id)) || {}, photos);
+  state.sheet = sheetForEntry(entry, rows, today(), startForEntry(entry), photos);
+  state.sheet.photos.existing.forEach((p) => { const row = photos.find((r) => String(r.id) === String(p.id)); p.status = (row && row.share_status) || "private"; p.want = p.status === "submitted" || p.status === "approved"; });
   openSheet();
 }
-const showPhotos = () => { const el = $("#sheetPhotos"); if (el && state.sheet) el.innerHTML = photosHtml(state.sheet); };
+const showPhotos = () => { const el = $("#sheetPhotos"); if (el && state.sheet) el.innerHTML = sheetPhotosHtml(state.sheet); };
 const showFormPhotos = () => { const el = $("#formPhotos"); if (el && state.form) el.innerHTML = formPhotosHtml(state.form); };
 // Shrinks each chosen picture, then hands it to `add`. A picture that cannot be read is skipped with a message.
 async function takePictures(files, add, fail) {
@@ -499,24 +514,28 @@ async function saveSheet() {
     state.sheet.entryId = id;
     // 2. pictures: upload the new ones, delete the ones marked for removal
     const removed = state.sheet.photos.existing.filter((p) => p.removed);
-    const failedUp = await db.uploadPhotos(state.sb, state.user.id, id, state.sheet.photos.queued);
+    const shareNew = !!(state.sheet.shareNew && state.sheet.target.kind === "catalog");   // sharing is only for wines in the catalog, and only when the person chose it
+    const failedUp = await db.uploadPhotos(state.sb, state.user.id, id, state.sheet.photos.queued, shareNew);
     const failedDel = await db.deletePhotos(state.sb, removed);
+    const failedShare = await applyShareChanges(state.sb, state.sheet.photos.existing.filter((p) => !p.removed || failedDel.some((f) => f.photo.id === p.id)));
     await refreshData();
-    if (failedUp.length || failedDel.length) {
+    if (failedUp.length || failedDel.length || failedShare.length) {
       const stillThere = new Set(failedDel.map((f) => f.photo.id));
       state.sheet.photos = {
         existing: state.sheet.photos.existing.filter((p) => !p.removed || stillThere.has(p.id)),
         queued: failedUp.map((f) => f.photo),
       };
       showPhotos();
-      const first = (failedUp[0] || failedDel[0]).message;
-      state.sheetUi = { ...state.sheetUi, saving: false, error: `Your rating is saved, but ${failedUp.length + failedDel.length} photo change(s) did not go through: ${first}. Tap Save to try again.` };
+      const first = (failedUp[0] || failedDel[0] || failedShare[0]).message;
+      state.sheetUi = { ...state.sheetUi, saving: false, error: `Your rating is saved, but ${failedUp.length + failedDel.length + failedShare.length} photo change(s) did not go through: ${first}. Tap Save to try again.` };
       syncSheet();
       return;
     }
+    const notShared = failedUp.shareErrors || [];
     closeOverlay();
     state.tab = "journal";
     render();
+    if (notShared.length) setBanner(`Saved. ${notShared.length} photo(s) could not be offered to the community (${notShared[0]}). They are still in your journal: open the entry and tap Share to try again.`);
   } catch (e) {
     state.sheetUi = { ...state.sheetUi, saving: false, error: "Could not save: " + (e.message || e) };
     syncSheet();
@@ -620,6 +639,7 @@ document.addEventListener("click", async (ev) => {
     else if (action === "close") closeOverlay();
     else if (action === "togglephoto") { state.sheet = toggleExistingPhoto(state.sheet, a); showPhotos(); }
     else if (action === "unqueue") { state.sheet = unqueuePhoto(state.sheet, a); showPhotos(); }
+    else if (action === "sharephoto") { const p = state.sheet.photos.existing.find((x) => String(x.id) === String(a)); if (p) { p.want = !p.want; showPhotos(); } }
     return;
   }
   const t = ev.target.closest("[data-action]");
@@ -657,7 +677,7 @@ document.addEventListener("click", async (ev) => {
     else if (action === "review") {
       const entry = state.journal.find((j) => j.wine_vintage_id === a);
       if (entry) await openEntry(entry);
-      else { state.sheet = sheetForCard(state.cards.find((c) => c.id === a), today(), state.refs.get(a) || {}); openSheet(); }
+      else { state.sheet = sheetForCard(cardById(a), today(), startFor(cardById(a))); openSheet(); }
     }
     else if (action === "entry") { const entry = state.journal.find((j) => j.id === a); if (entry) await openEntry(entry); }
     else if (action === "jtoggle") {
@@ -693,7 +713,7 @@ document.addEventListener("click", async (ev) => {
       const gi = document.querySelector('[data-form="grape"]'); if (gi) checkGrapeInput(gi);   // marks a grape that is not on the list
       const problem = validateOutside(state.form);
       if (problem) { $("#formErr").textContent = problem; return; }
-      if (action === "addrate") { state.sheet = sheetForOutside(state.form, today()); state.form = null; openSheet(); }
+      if (action === "addrate") { state.sheet = applyDefaults(sheetForOutside(state.form, today()), state.rulesOn ? startingValues(entryAsCard(state.form), null, true) : null); state.form = null; openSheet(); }
       else {
         const photos = state.form.photos || [];
         const id = await db.addWithoutRating(state.sb, state.user.id, state.form, today());
@@ -710,7 +730,8 @@ document.addEventListener("click", async (ev) => {
 
 document.addEventListener("input", (ev) => {
   const t = ev.target;
-  if (t.dataset.dim) { state.sheet = setDim(state.sheet, t.dataset.dim, Number(t.value)); syncSheet(); }
+  if (t.dataset.sharenew !== undefined && state.sheet) { state.sheet.shareNew = !!t.checked; }
+  else if (t.dataset.dim) { state.sheet = setDim(state.sheet, t.dataset.dim, Number(t.value)); syncSheet(); }
   else if (t.dataset.field && state.sheet) state.sheet[t.dataset.field] = t.value;
   else if (t.dataset.form && state.form) state.form[t.dataset.form] = t.value;
   else if (t.dataset.wef && state.wedit) state.wedit.form[t.dataset.wef] = t.value;
