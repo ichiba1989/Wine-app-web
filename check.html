@@ -18,15 +18,15 @@
 <script type="module">
 const FILES = {
  "index.html": {
-  "hash": "c94a4dc4067dcef85f94afd3661fbf91a339020a71c71e03abb66be328cffb23",
-  "chars": 29891,
+  "hash": "0dd6cf16bb88459403bf69a774a52c34ba30274ad54a8765aa3bbbc3fbac3134",
+  "chars": 30193,
   "query": null,
   "exports": []
  },
  "app.js": {
-  "hash": "860cf3fe3a6f80344451f54a739d0ae4e9dd984c9a358fb7d01e19586d2acde8",
-  "chars": 48150,
-  "query": "21",
+  "hash": "62e01daaf9e12c1dcdf0dc72033c4fa2e6011ecba908618fef355bf14efa3b33",
+  "chars": 51345,
+  "query": "22",
   "exports": []
  },
  "logic.js": {
@@ -195,9 +195,9 @@ const FILES = {
   ]
  },
  "views.js": {
-  "hash": "eca91db62f633f2c1efc29208c928dcb534867080ed3a191edad1d30e41f2827",
-  "chars": 31647,
-  "query": "10",
+  "hash": "76eec6358136962c6b38e29167f583a51ffe793da5a665e28312599added7183",
+  "chars": 31559,
+  "query": "11",
   "exports": [
    "KEPT_NOTE",
    "SHEET_PAGES",
@@ -248,9 +248,9 @@ const FILES = {
   ]
  },
  "review.js": {
-  "hash": "c9a3760e89aa164e912ed4bd72c64293b07a94587205c3ba960184d60d4bbf1e",
-  "chars": 21090,
-  "query": "5",
+  "hash": "e1202c9af0a2f004c3b871e5f37da18b644ab763bb4d60991fae218018499b0d",
+  "chars": 21702,
+  "query": "6",
   "exports": [
    "DIFFS",
    "FEEDBACK_FILTERS",
@@ -273,9 +273,9 @@ const FILES = {
   ]
  },
  "editor.js": {
-  "hash": "de51dc0cb61798fa11530f960d6d9c48fa3baf27264fbaa7aa909c851194e8fb",
-  "chars": 38742,
-  "query": "14",
+  "hash": "8c4aa9851b6c615ca9cfe719f1d5c93dfc5698800774ccb426aba48468beee91",
+  "chars": 39298,
+  "query": "15",
   "exports": [
    "SECTION_PERMISSIONS",
    "catalogView",
@@ -285,9 +285,9 @@ const FILES = {
   ]
  },
  "profile.js": {
-  "hash": "55ca99fd49ba977d75ed2d3375307150100dd47ae9171692d0367a59b71fcf54",
-  "chars": 29830,
-  "query": "8",
+  "hash": "3a2d785e81cd8ad14f1e6926929cb75edec33b9668139975937a7f6830324652",
+  "chars": 29809,
+  "query": "9",
   "exports": [
    "DIFFS",
    "TIER_COLORS",
@@ -447,13 +447,14 @@ const FILES = {
   ]
  },
  "deck.js": {
-  "hash": "30ded0f28b7924fc668dbc879c2da6de18ddda50f5e5e99dfaedd26ee9825792",
-  "chars": 13005,
-  "query": "1",
+  "hash": "f517544fada9b9d5c8026641364008eee42787e6017941e6c434a6bb42da91c7",
+  "chars": 13934,
+  "query": "2",
   "exports": [
    "DEFAULT_REACH",
    "HIGH_AT",
    "MIN_SHARE",
+   "PHOTO_BONUS",
    "TIERS",
    "TIER_LABEL",
    "UNRATED_WEIGHT",
@@ -463,6 +464,7 @@ const FILES = {
    "cardKeys",
    "clamp01",
    "famOf",
+   "hasPhoto",
    "isLive",
    "mixFor",
    "prefOf",
@@ -528,9 +530,27 @@ const FILES = {
    "startingValues",
    "structureMap"
   ]
+ },
+ "sorting.js": {
+  "hash": "50b361b7c0796d5553a42b8c07063b59ac07ba9f261ac784ff5bbfb0fe917988",
+  "chars": 5946,
+  "query": "1",
+  "exports": [
+   "FEEDBACK_SORTS",
+   "FLAG_SORTS",
+   "PHOTO_SORTS",
+   "QUESTION_SORTS",
+   "SOURCE_ORDER",
+   "STRUCTURE_SORTS",
+   "sortFeedback",
+   "sortFlags",
+   "sortQuestions",
+   "sortSelectHtml",
+   "sortWines"
+  ]
  }
 };
-const APP_SCRIPT = "app.js?v=21";
+const APP_SCRIPT = "app.js?v=22";
 const LIBRARIES = ["https://esm.sh/@supabase/supabase-js@2.109.0", "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.109.0/+esm"];
 const out = document.getElementById("out"), sum = document.getElementById("sum");
 const lines = []; let problems = 0, first = "";
