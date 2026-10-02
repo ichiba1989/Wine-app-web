@@ -11,18 +11,18 @@ import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=1";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=2";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=10";
+  discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=11";
 import { createLearn } from "./learn.js?v=3";
 import { wireGrapeInputs, checkGrapeInput } from "./grapes.js?v=1";
-import { buildDeck } from "./deck.js?v=1";
-import { createProfile } from "./profile.js?v=8";
+import { buildDeck } from "./deck.js?v=2";
+import { createProfile } from "./profile.js?v=9";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=5";
 import { createFeedback } from "./feedback.js?v=3";
-import { createEditor } from "./editor.js?v=14";
+import { createEditor } from "./editor.js?v=15";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
-const APP_VERSION = "21";   // shown to editors with each piece of feedback
+const APP_VERSION = "22";   // shown to editors with each piece of feedback
 const SUPABASE_JS_VERSION = "2.109.0";
 const LIBRARY_URLS = [
   `https://esm.sh/@supabase/supabase-js@${SUPABASE_JS_VERSION}`,
@@ -61,7 +61,7 @@ const state = {
   status: "loading",            // loading | setup | error | age | main
   error: null, banner: null, tab: "discover", underage: false,
   user: null, profile: null, sb: null,
-  cards: [], deck: [], interest: "try", busy: false, counts: { swipes: 0, journal: 0 },
+  cards: [], deck: [], busy: false, counts: { swipes: 0, journal: 0 },
   states: [], journal: [],
   sw: { open: { rec: true }, sort: {} },
   j: { q: "", by: "verdict", verdict: "all", open: {}, limits: {} },
@@ -152,8 +152,25 @@ async function init() {
     state.status = "error"; state.error = e.message || String(e); render();
   }
 }
+// A wine that was only marked "not interested" has no swipe date in the database view. Date it by that moment, so "recently swiped" sorts it correctly.
+async function dateStates(states) {
+  const open = states.filter((s) => !s.last_swiped_at);
+  if (!open.length) return states;
+  try {
+    const last = new Map();
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await state.sb.from("encounters").select("wine_vintage_id, created_at").eq("event", "interest_change").order("created_at", { ascending: true }).range(from, from + 999);
+      if (error) throw error;
+      data.forEach((r) => last.set(r.wine_vintage_id, r.created_at));   // oldest first, so the latest wins
+      if (data.length < 1000) break;
+    }
+    open.forEach((s) => { s.last_swiped_at = last.get(s.wine_vintage_id) || null; });
+  } catch (_) { /* the wines are still listed; they just sort by name */ }
+  return states;
+}
 async function refreshData() {
-  const [states, journal, counts] = await Promise.all([db.loadStates(state.sb), db.loadJournal(state.sb), loadCounts()]);
+  const [states0, journal, counts] = await Promise.all([db.loadStates(state.sb), db.loadJournal(state.sb), loadCounts()]);
+  const states = await dateStates(states0);
   state.states = states; state.journal = journal; state.counts = counts;
   // A photo link that cannot be made only means that picture is not shown; it never blocks the app.
   try { state.photoUrls = await db.signedUrls(state.sb, journal.map((j) => j.first_photo_path)); } catch (_) { state.photoUrls = new Map(); }
@@ -226,12 +243,12 @@ function renderBody() {
   if (!body) return;
   document.body.dataset.tab = state.tab;   // lets Discover use a slimmer header so the card is bigger
   if (state.tab === "discover") {
-    body.innerHTML = discoverHtml({ deck: state.deck, interest: state.interest, banner: null, counts: state.counts, feedback: state.feedback, flaggedId: state.wfDone, nudge: showNudge() });
+    body.innerHTML = discoverHtml({ deck: state.deck, banner: null, counts: state.counts, feedback: state.feedback, flaggedId: state.wfDone, nudge: showNudge() });
     const card = $("#card");
     if (card) attachCard(card);
     settlePhotos(); preloadPhotos();
   } else if (state.tab === "swipes") {
-    body.innerHTML = swipesHtml(swipeLists(state.cards, state.states, state.journal), state.sw, state.photoUrls);
+    body.innerHTML = swipesHtml(swipeLists(state.cards, state.states, state.journal), { ...state.sw, noFam: new Set(state.states.filter((x) => !x.familiarity).map((x) => x.wine_vintage_id)) }, state.photoUrls);
   } else if (state.tab === "learn") {
     learn.mount(body);
   } else if (state.tab === "profile") {
@@ -312,10 +329,9 @@ async function fly(el, kind, v = { dx: 0, dy: 0, vx: 0, vy: 0 }) {
     if (navigator.vibrate) { try { navigator.vibrate(8); } catch (_) {} }
   }
   try {
-    const interestUsed = state.interest;
+    const interestUsed = "try";   // interest is implied: a wine the person swipes is a wine they are open to
     await db.recordSwipe(state.sb, card.id, kind, interestUsed);
     state.deck.shift();
-    state.interest = "try";
     // What this swipe taught us counts straight away; every 8 swipes (or when the deck runs low) the rest of the deck is re-ranked.
     state.states = [...state.states.filter((x) => x.wine_vintage_id !== card.id), { wine_vintage_id: card.id, familiarity: kind, interest: interestUsed, last_swiped_at: new Date().toISOString() }];
     state.sinceDeck += 1;
@@ -329,6 +345,38 @@ async function fly(el, kind, v = { dx: 0, dy: 0, vx: 0, vy: 0 }) {
   if (state.tab === "discover") {
     renderBody();
     // The next card starts where the one underneath was, then settles forward.
+    const nc = $("#card");
+    if (nc && nc.animate && !reduceMotion()) nc.animate([{ transform: "scale(0.95) translateY(10px)", opacity: 0.85 }, { transform: "none", opacity: 1 }], { duration: 260, easing: "cubic-bezier(0.2, 0.9, 0.3, 1.15)" });
+  }
+}
+
+// "Not interested": the button turns on for this one wine and the wine is filed under Not interested in Swipes straight away.
+// It records that interest only (no "I recognize it" or "don't know it" is claimed), so it says nothing about what the person knows.
+async function notInterested() {
+  if (state.busy || !state.deck.length) return;
+  state.busy = true;
+  const card = state.deck[0], el = $("#card"), btn = document.querySelector("[data-action='notint']");
+  if (btn) { btn.classList.add("on"); btn.setAttribute("aria-pressed", "true"); }
+  if (el) {
+    el.classList.remove("dragging"); el.classList.add("leaving");
+    paintBehind(el, 1, 260);
+    if (el.animate && !reduceMotion()) {
+      const anim = el.animate([{ transform: "translate3d(0px, 0px, 0)", opacity: 1 }, { transform: `translate3d(0px, ${window.innerHeight * 0.9}px, 0) rotate(4deg)`, opacity: 0.2 }],
+        { duration: 280, easing: "cubic-bezier(0.4, 0, 0.8, 0.6)", fill: "forwards" });
+      try { await anim.finished; } catch (_) {}
+    } else await sleep(120);
+  }
+  try {
+    await db.changeInterest(state.sb, state.user.id, card.id, "nope");
+    state.deck.shift();
+    state.states = [...state.states.filter((x) => x.wine_vintage_id !== card.id), { wine_vintage_id: card.id, familiarity: null, interest: "nope", last_swiped_at: new Date().toISOString() }];
+    state.sinceDeck += 1;
+    if (state.sinceDeck >= 8 || state.deck.length < 4) rebuildDeck();
+    setBanner(null);
+  } catch (e) { setBanner("Could not save that: " + (e.message || e)); }
+  state.busy = false;
+  if (state.tab === "discover") {
+    renderBody();
     const nc = $("#card");
     if (nc && nc.animate && !reduceMotion()) nc.animate([{ transform: "scale(0.95) translateY(10px)", opacity: 0.85 }, { transform: "none", opacity: 1 }], { duration: 260, easing: "cubic-bezier(0.2, 0.9, 0.3, 1.15)" });
   }
@@ -652,7 +700,13 @@ document.addEventListener("click", async (ev) => {
       SUPABASE_URL = u; SUPABASE_KEY = k; store.set("wine_url", SUPABASE_URL); store.set("wine_key", SUPABASE_KEY);
       state.banner = null; state.status = "loading"; render(); init();
     }
-    else if (action === "interest") { if (!state.busy) { state.interest = a; renderBody(); } }
+    else if (action === "notint") notInterested();
+    else if (action === "unswipe") {   // "Put back" on a wine that was only marked not interested: it returns to the deck
+      const card = cardById(a);
+      await db.deleteSwipe(state.sb, a); await refreshData();
+      if (card) state.deck = [card, ...state.deck.filter((c) => c.id !== a)];
+      renderBody();
+    }
     else if (action === "tab") {
       if (state.tab === "learn" && a !== "learn") learn.leave();
       if (state.tab === "profile" && a !== "profile") profileTab.leave();
