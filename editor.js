@@ -12,7 +12,7 @@ import { dimsFor, dimMeta, defaultFor, esc, wineName, placeLine, editorList, has
 import * as db from "./data.js?v=15";
 import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=11";
 import { createReview } from "./review.js?v=6";
-import { createWineInfo, publishSummary } from "./wineinfo.js?v=8";
+import { createWineInfo, publishSummary } from "./wineinfo.js?v=9";
 import { groupSubmissions, planPromotion, duplicateGroups, rulesFrom } from "./catalog.js?v=2";
 import { visibleKinds, FOUND_ONLINE_PERMISSION, photoSummary, photoList, photoTag, pullSource, shareWinePhoto, shareNote, uploadWinePhoto, removeWinePhoto, reuseWinePhoto } from "./winephotos.js?v=3";
 import { communityHtml, loadSubmissionState, approvalPlan } from "./sharing.js?v=1";
@@ -136,7 +136,8 @@ function photosHtml(E) {
     const tag = photoTag(c);
     const reuse = re ? `<button class="link" data-editor="phreuse:${esc(c.id)}:${esc(re.id)}">Use the ${esc(re.vintage || "earlier")} photo</button>` : "";
     return `<div class="candrow photorow">${thumb}<div class="candinfo"><div class="serif">${esc(wineName(c))}</div>
-      <div class="meta">${esc(placeLine(c))}${c.wineStatus && c.wineStatus !== "verified" ? " (waiting for review)" : ""}</div>${tag ? `<div class="muted tiny">Photo: ${esc(tag)}</div>` : ""}${remove}${reuse}</div>
+      <div class="meta">${esc(placeLine(c))}${c.wineStatus && c.wineStatus !== "verified" ? " (waiting for review)" : ""}</div>
+      <button class="link" data-editor="phinfo:${esc(c.id)}">Edit wine info</button>${tag ? `<div class="muted tiny">Photo: ${esc(tag)}</div>` : ""}${remove}${reuse}</div>
       <div class="candbtns"><label class="btn ${c.image ? "outline" : "primary"} slim photobtn${busy || P.busy ? " disabled" : ""}">${busy ? "Saving…" : c.image ? "Replace" : "Add photo"}<input type="file" accept="image/*" data-photofor="${esc(c.id)}"${P.busy ? " disabled" : ""} hidden></label></div></div>`;
   }).join("");
   return `${communityHtml(E.sub, E.cards)}${P.msg ? `<div class="notice">${esc(P.msg)}</div>` : ""}${P.error ? `<div class="err">${esc(P.error)}</div>` : ""}
@@ -221,15 +222,15 @@ export function createEditor(ctx) {
     },
     // "Open question" on a flag: switch to the Quiz section and open that question once it has loaded.
     // "Edit wine info" on a wine flag opens the same wine info form as the structure sheet.
-    editWine: (id) => { const card = E.cards.find((c) => c.id === id); if (card) wineinfo.open(card, wineName(card)).catch((e) => { E.error = "Could not open wine info: " + (e.message || e); overlay().innerHTML = ""; }); },
+    editWine: (id) => { const card = E.cards.find((c) => c.id === id); if (card) openInfo(card); },
     gotoQuiz: (id) => { review.leave(); E.section = "quiz"; draw(); const wait = setInterval(() => { if (review.state.loaded) { clearInterval(wait); review.openQuestion(id); } }, 50); setTimeout(() => clearInterval(wait), 5000); },
   });
   const wineinfo = createWineInfo({
     sb: ctx.sb, userId: ctx.userId, can,
-    onSaved: async () => { if (ctx.onWineChanged) await ctx.onWineChanged(); E.cards = ctx.cards(); E.loaded = false; if (root && E.section === "structure") draw(); },
+    onSaved: async () => { if (ctx.onWineChanged) await ctx.onWineChanged(); E.cards = ctx.cards(); E.loaded = false; if (root && E.section === "structure") draw(); else if (root && E.section === "photos") drawPhotos(); },
     onDeleted: async () => { if (ctx.onWineChanged) await ctx.onWineChanged(); E.cards = ctx.cards(); E.loaded = false; if (root) draw(); },
     cards: ctx.cards, photoKind: () => E.ph.kind,
-    onPhotoSaved: async () => { if (ctx.onWineChanged) await ctx.onWineChanged(); E.cards = ctx.cards(); },
+    onPhotoSaved: async () => { if (ctx.onWineChanged) await ctx.onWineChanged(); E.cards = ctx.cards(); if (root && E.section === "photos") drawPhotos(); },
     onPublished: async (r) => {
       if (ctx.onWineChanged) await ctx.onWineChanged();
       E.cards = ctx.cards(); E.loaded = false; E.cat.loaded = false; E.cat.msg = publishedMessage(r);
@@ -240,7 +241,9 @@ export function createEditor(ctx) {
   const flagsLabel = () => { const n = review.openFlags; return n ? `Flags (${n})` : "Flags"; };
   const feedbackLabel = () => { const n = review.newFeedback; return n ? `Feedback (${n})` : "Feedback"; };
 
-  const chips = () => `${ctx.roleLabel && ctx.roleLabel() ? `<div class="muted small" style="margin:2px 0 6px">Your access: <b>${esc(ctx.roleLabel())}</b></div>` : ""}<div class="chips left edtabs">${sectionsFor(can).map((x) => `<button class="chip wide ed${E.section === x.id ? " on" : ""}" data-editor="sec:${x.id}">${x.id === "flags" ? flagsLabel() : x.id === "feedback" ? feedbackLabel() : x.label}</button>`).join("")}</div>`;
+  const showError = (msg) => { E.openError = msg; const el = document.getElementById("editorOpenErr"); if (el) el.textContent = msg; };
+  const openInfo = (card) => { showError(""); return wineinfo.open(card, wineName(card)).catch((e) => { showError("Could not open wine info: " + (e.message || e)); const o = overlay(); if (o) o.innerHTML = ""; }); };
+  const chips = () => `${ctx.roleLabel && ctx.roleLabel() ? `<div class="muted small" style="margin:2px 0 6px">Your access: <b>${esc(ctx.roleLabel())}</b></div>` : ""}<div id="editorOpenErr" class="err">${esc(E.openError || "")}</div><div class="chips left edtabs">${sectionsFor(can).map((x) => `<button class="chip wide ed${E.section === x.id ? " on" : ""}" data-editor="sec:${x.id}">${x.id === "flags" ? flagsLabel() : x.id === "feedback" ? feedbackLabel() : x.label}</button>`).join("")}</div>`;
   const structureShell = () => `<div class="jbar"><input class="field" data-editor-q placeholder="Search wines" value="${esc(E.q)}" autocomplete="off">
       ${sortSelectHtml("data-editor-sort", STRUCTURE_SORTS, E.sort, "structure")}
       <div class="chips left"><button class="chip wide${E.filter === "needs" ? " on" : ""}" data-editor="filter:needs">Needs a profile</button><button class="chip wide${E.filter === "all" ? " on" : ""}" data-editor="filter:all">All wines</button><button class="chip wide${E.filter === "gold" ? " on" : ""}" data-editor="filter:gold">Gold set</button></div></div>
@@ -275,7 +278,7 @@ export function createEditor(ctx) {
       await loadCatalog();
       const card = E.cards.find((c) => c.id === vid);
       C.busy = false; drawCatalog();
-      if (card) wineinfo.open(card, wineName(card)).catch((e) => { E.error = "Could not open wine info: " + (e.message || e); });
+      if (card) openInfo(card);
     } catch (e) { C.busy = false; C.error = "Could not add it. " + (e.message || e); drawCatalog(); }
   }
   async function catalogDismiss(cand) {
@@ -409,12 +412,13 @@ export function createEditor(ctx) {
     const t = ev.target.closest("[data-editor]");
     if (!t || (!root && !E.sheet && !document.getElementById("testPanel"))) return;
     const [action, a, b] = t.dataset.editor.split(":");
-    if (action === "sec") { if (E.section !== a) { review.leave(); E.sheet = null; overlay().innerHTML = ""; E.section = a; draw(); } }
+    if (action === "sec") { if (E.section !== a) { E.openError = ""; review.leave(); E.sheet = null; overlay().innerHTML = ""; E.section = a; draw(); } }
     else if (action === "filter") { E.filter = a; draw(); }
     else if (action === "phfilter") { E.ph.filter = a; E.ph.show = PHOTO_PAGE; E.ph.confirm = null; drawPhotos(); }
     else if (action === "phkind") { E.ph.kind = a; drawPhotos(); }
     else if (action === "phmore") { E.ph.show += PHOTO_PAGE; drawPhotos(); }
     else if (action === "phremove") photoRemove(a);
+    else if (action === "phinfo") { const card = E.cards.find((c) => c.id === a); if (card) openInfo(card); }
     else if (action === "phreuse") photoReuse(a, b);
     else if (action === "subok") subApprove(a);
     else if (action === "subno") subReject(a);
@@ -425,7 +429,7 @@ export function createEditor(ctx) {
       else if (a === "add" && v && v.candidates[Number(b)] && !E.cat.busy) catalogAdd(v.candidates[Number(b)]);
       else if (a === "not" && v && v.candidates[Number(b)] && !E.cat.busy) catalogDismiss(v.candidates[Number(b)]);
       else if (a === "dedupe" && v && v.dups[Number(b)] && !E.cat.busy) catalogDedupe(v.dups[Number(b)]);
-      else if (a === "openwine") { const card = E.cards.find((c) => c.id === b); if (card) wineinfo.open(card, wineName(card)).catch((e) => { E.error = "Could not open wine info: " + (e.message || e); }); }
+      else if (a === "openwine") { const card = E.cards.find((c) => c.id === b); if (card) openInfo(card); }
     }
     else if (action === "retry") load();
     else if (action === "open") {
@@ -448,7 +452,7 @@ export function createEditor(ctx) {
     else if (action === "info") {
       const card = E.cards.find((c) => c.id === a);
       E.sheet = null;
-      wineinfo.open(card, wineName(card)).catch((e) => { E.error = "Could not open wine info: " + (e.message || e); overlay().innerHTML = ""; });
+      openInfo(card);
     }
     else if (action === "keep") { E.sheet.touched.add(a); syncSheet(); }
     else if (action === "save") save();
