@@ -5,22 +5,22 @@ import {
   FAMILIARITY, wineName, esc, clamp01, shuffle, tapEdge, swipeKind, cardFromRow, filterEntries, groupEntries, swipeLists,
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, dimMeta, isChoice, setStyle, choiceDims, barDims,
-  dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=9";
-import * as db from "./data.js?v=12";
-import { shrinkImage } from "./photos.js?v=4";
+  dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=10";
+import * as db from "./data.js?v=13";
+import { shrinkImage } from "./photos.js?v=5";
 import {
-  discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=9";
+  discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=10";
 import { createLearn } from "./learn.js?v=3";
 import { wireGrapeInputs, checkGrapeInput } from "./grapes.js?v=1";
 import { buildDeck } from "./deck.js?v=1";
 import { createProfile } from "./profile.js?v=7";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=5";
 import { createFeedback } from "./feedback.js?v=3";
-import { createEditor } from "./editor.js?v=10";
+import { createEditor } from "./editor.js?v=11";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
-const APP_VERSION = "17";   // shown to editors with each piece of feedback
+const APP_VERSION = "18";   // shown to editors with each piece of feedback
 const SUPABASE_JS_VERSION = "2.109.0";
 const LIBRARY_URLS = [
   `https://esm.sh/@supabase/supabase-js@${SUPABASE_JS_VERSION}`,
@@ -167,9 +167,27 @@ async function enterMain() {
   state.status = "main"; render();
 }
 // The Discover deck: three decks (familiar, getting warmer, new territory) mixed by what the person knows and likes. See deck.js.
+// ---------------------------------------------------------------- bottle photos on the cards
+// The photo fades in once it has loaded. If it cannot be loaded, the drawn bottle is shown instead.
+document.addEventListener("load", (ev) => { const t = ev.target; if (t && t.classList && t.classList.contains("winephoto")) t.classList.add("ready"); }, true);
+document.addEventListener("error", (ev) => { const t = ev.target; if (t && t.classList && t.classList.contains("winephoto")) { const box = t.closest(".image"); if (box) box.classList.add("failed"); } }, true);
+function settlePhotos() {   // a photo that was already loaded before the page was drawn
+  document.querySelectorAll("img.winephoto").forEach((i) => { if (i.complete) { if (i.naturalWidth) i.classList.add("ready"); else { const b = i.closest(".image"); if (b) b.classList.add("failed"); } } });
+}
+// The next few cards' photos are fetched ahead of time, so a swipe never waits for a download. (Skipped when the phone is saving data.)
+const photoCache = new Map();
+function preloadPhotos(n = 4) {
+  if (navigator.connection && navigator.connection.saveData) return;
+  state.deck.slice(0, n).forEach((c) => {
+    if (!c.photo || photoCache.has(c.photo)) return;
+    const im = new Image(); im.decoding = "async"; im.src = c.photo; photoCache.set(c.photo, im);
+  });
+  while (photoCache.size > 16) photoCache.delete(photoCache.keys().next().value);
+}
 function rebuildDeck() {
   const r = buildDeck({ cards: state.cards, states: state.states, journal: state.journal, quiz: state.quiz, refs: state.refs, crowd: state.crowd });
   state.deck = r.deck; state.deckInfo = r.info; state.deckMix = r.mix; state.sinceDeck = 0;
+  preloadPhotos();
 }
 
 // ---------------------------------------------------------------- drawing the page
@@ -203,6 +221,7 @@ function renderBody() {
     body.innerHTML = discoverHtml({ deck: state.deck, interest: state.interest, banner: null, counts: state.counts, feedback: state.feedback, flaggedId: state.wfDone, nudge: showNudge() });
     const card = $("#card");
     if (card) attachCard(card);
+    settlePhotos(); preloadPhotos();
   } else if (state.tab === "swipes") {
     body.innerHTML = swipesHtml(swipeLists(state.cards, state.states, state.journal), state.sw, state.photoUrls);
   } else if (state.tab === "learn") {
@@ -715,5 +734,5 @@ document.addEventListener("change", async (ev) => {
   }
 });
 
-window.__wine = { state, fly, render, init, learn, rebuildDeck, profile: profileTab, editor: editorTab, account, feedback };
+window.__wine = { state, fly, render, init, learn, rebuildDeck, photoCache, profile: profileTab, editor: editorTab, account, feedback };
 init();
