@@ -3,9 +3,9 @@
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
 import { esc, WINE_STYLES } from "./logic.js?v=10";
 import { checkGrapeText, grapeProblem, grapeIndex, setExtraGrapes } from "./grapes.js?v=1";
-import { archivePlanFor } from "./catalog.js?v=1";
-import { uploadWinePhoto, removeWinePhoto } from "./winephotos.js?v=1";
-import * as db from "./data.js?v=13";
+import { archivePlanFor } from "./catalog.js?v=2";
+import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=2";
+import * as db from "./data.js?v=14";
 
 const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 
@@ -82,8 +82,8 @@ function sheetHtml(W) {
       <div class="sheetbtns"><button class="pill wine" data-wi="save"${W.saving ? " disabled" : ""}>Save</button><button class="xbtn" data-wi="close" aria-label="Close">&times;</button></div></div>
     <div class="photoblock">${W.card && W.card.photo ? `<img class="rowthumb" src="${esc(W.card.photo)}" alt="Bottle photo">` : `<div class="rowthumb empty" aria-hidden="true"></div>`}
       <div class="photoctl"><div class="qlabel" style="margin:0">Bottle photo</div>
-        <div class="photobtns"><label class="btn outline slim photobtn${W.photoBusy ? " disabled" : ""}">${W.photoBusy ? "Saving…" : W.card && W.card.image ? "Replace photo" : "Add photo"}<input type="file" accept="image/*" data-wiphoto${W.photoBusy ? " disabled" : ""} hidden></label>${W.card && W.card.image && !W.photoBusy ? `<button class="link" data-wi="photoremove">${W.photoConfirm ? "Tap again to remove" : "Remove"}</button>` : ""}</div>
-        ${W.photoError ? `<div class="err">${esc(W.photoError)}</div>` : ""}</div></div>
+        <div class="photobtns"><label class="btn outline slim photobtn${W.photoBusy ? " disabled" : ""}">${W.photoBusy ? "Saving…" : W.card && W.card.image ? "Replace photo" : "Add photo"}<input type="file" accept="image/*" data-wiphoto${W.photoBusy ? " disabled" : ""} hidden></label>${W.card && W.card.image && !W.photoBusy ? `<button class="link" data-wi="photoremove">${W.photoConfirm ? "Tap again to remove" : "Remove"}</button>` : ""}${(() => { const re = W.card && !W.card.image && !W.photoBusy && ctx.cards ? pullSource(ctx.cards(), W.card, !!(ctx.can && ctx.can(FOUND_ONLINE_PERMISSION))) : null; return re ? `<button class="link" data-wi="photoreuse:${esc(re.id)}:${esc(re.vintage || "")}">Use the ${esc(re.vintage || "earlier")} photo</button>` : ""; })()}</div>
+        ${W.card && W.card.image && photoTag(W.card) ? `<div class="muted tiny">Photo: ${esc(photoTag(W.card))}</div>` : ""}${W.photoNote ? `<div class="muted small">${esc(W.photoNote)}</div>` : ""}${W.photoError ? `<div class="err">${esc(W.photoError)}</div>` : ""}</div></div>
     <div class="qlabel">Producer</div><input class="field" list="dlProducers" data-wif="producerName" value="${esc(f.producerName)}" autocomplete="off">
     ${f.producerName.trim() && !matchProducer ? `<div class="muted small">A new producer will be created.</div>` : ""}
     <div class="qlabel">Wine name (leave empty if there is none)</div><input class="field" data-wif="wineName" value="${esc(f.wineName)}">
@@ -157,7 +157,7 @@ export function createWineInfo(ctx) {
 
   async function open(card, title) {
     const o = overlay();
-    W.open = true; W.title = title || ""; W.card = card; W.error = ""; W.unknown = []; W.addNew = false; W.saving = false; W.del = null; W.pub = null; W.photoBusy = false; W.photoConfirm = false; W.photoError = "";
+    W.open = true; W.title = title || ""; W.card = card; W.error = ""; W.unknown = []; W.addNew = false; W.saving = false; W.del = null; W.pub = null; W.photoBusy = false; W.photoConfirm = false; W.photoError = ""; W.photoNote = "";
     if (o) o.innerHTML = `<div class="overlay"><div class="sheet"><p class="muted" style="padding:20px">Loading…</p></div></div>`;
     try {
       if (!W.lists) { W.lists = await db.loadEditorLists(ctx.sb()); W.options = placeOptions(W.lists.areas); }
@@ -173,8 +173,23 @@ export function createWineInfo(ctx) {
   async function refreshCard() { if (ctx.onPhotoSaved) await ctx.onPhotoSaved(); const fresh = (ctx.cards ? ctx.cards() : []).find((c) => c.id === W.card.id); if (fresh) W.card = fresh; }
   async function addPhoto(file) {
     if (!file || W.photoBusy) return;
+    const kind = ctx.photoKind ? ctx.photoKind() : "own_photography";
+    const canFound = !!(ctx.can && ctx.can(FOUND_ONLINE_PERMISSION));
+    if (kind === "found_online" && !canFound) { W.photoError = "Only the owner can add photos found online. Choose another source in Editor, Photos."; draw(); return; }
+    W.photoBusy = true; W.photoConfirm = false; W.photoError = ""; W.photoNote = ""; draw();
+    try {
+      await uploadWinePhoto(ctx.sb(), W.card.id, file, kind);
+      const share = await shareWinePhoto(ctx.sb(), ctx.cards ? ctx.cards() : [], W.card.id, kind, { canFound });   // the other vintages of this wine
+      await refreshCard();
+      W.photoNote = shareNote(share.done).trim();
+      if (share.failed.length) W.photoError = `Saved, but ${share.failed.length} other ${share.failed.length === 1 ? "vintage" : "vintages"} could not get it: ${share.failed[0].message}`;
+    } catch (e) { W.photoError = e.message || String(e); }
+    W.photoBusy = false; draw();
+  }
+  async function reusePhoto(fromId, fromVintage) {
+    if (W.photoBusy || !fromId) return;
     W.photoBusy = true; W.photoConfirm = false; W.photoError = ""; draw();
-    try { await uploadWinePhoto(ctx.sb(), W.card.id, file, ctx.photoKind ? ctx.photoKind() : "own_photography"); await refreshCard(); }
+    try { await reuseWinePhoto(ctx.sb(), fromId, W.card.id, fromVintage); await refreshCard(); }
     catch (e) { W.photoError = e.message || String(e); }
     W.photoBusy = false; draw();
   }
@@ -198,6 +213,11 @@ export function createWineInfo(ctx) {
     try {
       await db.publishWine(ctx.sb(), W.card.id);
       if (p.plan && p.plan.archive.length) await db.archiveVintages(ctx.sb(), p.plan.archive.map((c) => c.id), p.plan.keep.id);
+      // A vintage with no photo of its own borrows the best photo of the same wine (best effort: publishing never fails because of it).
+      try {
+        const src = pullSource(ctx.cards ? ctx.cards() : [], W.card, !!(ctx.can && ctx.can(FOUND_ONLINE_PERMISSION)));
+        if (src) await reuseWinePhoto(ctx.sb(), src.id, W.card.id, src.vintage);
+      } catch (_) { /* the editor can still tap "Use the ... photo" */ }
       const result = { name: W.title, plan: p.plan, selfId: W.card.id };
       W.lists = null; close();
       if (ctx.onPublished) await ctx.onPublished(result);
@@ -260,6 +280,7 @@ export function createWineInfo(ctx) {
     if (!t || !W.open || !W.form) return;
     const [action, arg] = t.dataset.wi.split(":");
     if (action === "photoremove") dropPhoto();
+    else if (action === "photoreuse") reusePhoto(arg, (t.dataset.wi.split(":")[2] || ""));
     else if (action === "pubask") askPublish();
     else if (action === "pubgo") doPublish();
     else if (action === "pubcancel") { W.pub = null; draw(); }
