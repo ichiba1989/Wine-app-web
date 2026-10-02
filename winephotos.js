@@ -2,25 +2,26 @@
 // The rules here (what counts as missing, what the choices are) are pure, so they can be tested on their own.
 // The upload step shrinks the picture in the browser first, then saves it through data.js.
 import { shrinkImage } from "./photos.js?v=5";
-import * as db from "./data.js?v=14";
+import * as db from "./data.js?v=15";
 import { looseKey } from "./catalog.js?v=2";
 
 // Bottle photos are saved at about 900 px on the longest side: sharp on a phone card, small to download.
 export const DECK_PHOTO_SIDE = 900;
 // Where the picture came from. The ids match the database's image kinds.
-// "Community" is the database's verified_user kind: a photo a player contributed and an editor checked.
+// "Community" is the database's verified_user kind: a photo a player chose to share from their journal and an editor approved.
+// It cannot be picked by hand: it only arrives through the review queue (see sharing.js).
 // "Found online" is for pictures taken from the web without a licence. Only the owner can use it (permission found_online_photos),
 // and it is the lowest priority: a licensed or community photo replaces it everywhere.
 export const FOUND_ONLINE_PERMISSION = "found_online_photos";
 export const PHOTO_KINDS = [
   { id: "official", label: "Licensed or official", note: "Licensed or official image" },
-  { id: "verified_user", label: "Community photo", note: "Contributed by the community and checked by an editor" },
+  { id: "verified_user", label: "Community photo", auto: true, note: "Shared by a player and approved by an editor" },
   { id: "own_photography", label: "I took them", note: "Photographed by an editor" },
   { id: "producer", label: "Producer or distributor", note: "Provided by the producer or distributor, with permission" },
   { id: "found_online", label: "Found online", ownerOnly: true, note: "Found online and not licensed. Replace it when a licensed or community photo is available" },
 ];
 // The kinds this person may choose from.
-export const visibleKinds = (can) => PHOTO_KINDS.filter((k) => !k.ownerOnly || (can && can(FOUND_ONLINE_PERMISSION)));
+export const visibleKinds = (can) => PHOTO_KINDS.filter((k) => !k.auto && (!k.ownerOnly || (can && can(FOUND_ONLINE_PERMISSION))));
 // Lower number = preferred. Licensed and community photos come first, found-online ones last.
 export const KIND_RANK = { official: 0, verified_user: 0, own_photography: 1, producer: 2, found_online: 3 };
 export const rankOf = (k) => (k in KIND_RANK ? KIND_RANK[k] : 9);
