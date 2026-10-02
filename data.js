@@ -104,20 +104,23 @@ export async function signedUrls(sb, paths) {
   return new Map(data.filter((d) => d.signedUrl).map((d) => [d.path, d.signedUrl]));
 }
 export async function loadEntryPhotos(sb, consumptionId) {
-  const rows = must(await sb.from("journal_photos").select("id, storage_path, created_at").eq("consumption_id", consumptionId).order("created_at", { ascending: true }));
+  const rows = must(await sb.from("journal_photos").select("id, storage_path, created_at, share_status").eq("consumption_id", consumptionId).order("created_at", { ascending: true }));
   const urls = await signedUrls(sb, rows.map((r) => r.storage_path));
   return rows.map((r) => ({ ...r, url: urls.get(r.storage_path) || null }));
 }
 // Uploads queued pictures one at a time and returns the ones that failed, so a retry only repeats those.
-export async function uploadPhotos(sb, userId, consumptionId, queued) {
-  const failed = [];
+// With share, each new photo is also offered to the community (catalog wines only). A photo that uploads but cannot be shared stays private:
+// that is reported in the list's shareErrors, not as a failed upload.
+export async function uploadPhotos(sb, userId, consumptionId, queued, share = false) {
+  const failed = []; failed.shareErrors = [];
   for (const p of queued) {
     const path = newPhotoPath(userId);
     try {
       const up = await sb.storage.from(BUCKET).upload(path, p.blob, { contentType: "image/jpeg", upsert: false });
       if (up.error) throw up.error;
-      const ins = await sb.from("journal_photos").insert({ consumption_id: consumptionId, user_id: userId, storage_path: path });
+      const ins = await sb.from("journal_photos").insert({ consumption_id: consumptionId, user_id: userId, storage_path: path }).select("id").single();
       if (ins.error) { await sb.storage.from(BUCKET).remove([path]); throw ins.error; }
+      if (share) { try { await shareMyPhoto(sb, ins.data.id); } catch (e) { failed.shareErrors.push(e.message || String(e)); } }
     } catch (e) { failed.push({ photo: p, message: e.message || String(e) }); }
   }
   return failed;
@@ -126,11 +129,78 @@ export async function deletePhotos(sb, existing) {
   const failed = [];
   for (const p of existing) {
     try {
+      if (p.status === "submitted" || p.status === "approved") await unshareMyPhoto(sb, p.id);   // taking a photo out of the journal also takes it back from the community
       must(await sb.from("journal_photos").delete().eq("id", p.id));
       await sb.storage.from(BUCKET).remove([p.path]);
     } catch (e) { failed.push({ photo: p, message: e.message || String(e) }); }
   }
   return failed;
+}
+
+// ---------------------------------------------------------------- sharing journal photos with the community
+// Offering a photo: it becomes "submitted" and only editors can see it, until one approves or rejects it. Catalog wines only.
+export async function shareMyPhoto(sb, photoId) { return must(await sb.rpc("share_my_photo", { p_photo_id: photoId })); }
+// Taking a photo back: the public copies (every vintage it was used for) are deleted first, then the database stops sharing it.
+// If a file cannot be removed nothing changes, so the person can try again and a copy is never left public.
+export async function unshareMyPhoto(sb, photoId) {
+  const rows = must(await sb.from("wine_images").select("storage_path").eq("submission_id", photoId));
+  if (rows.length) {
+    const r = await sb.storage.from(PHOTO_BUCKET).remove(rows.map((x) => x.storage_path));
+    if (r.error) throw r.error;
+    if (!r.data || r.data.length < rows.length) throw new Error("The shared copy could not be removed. Nothing was changed, so try again.");
+  }
+  must(await sb.rpc("unshare_my_photo", { p_photo_id: photoId }));
+}
+// Before photos or entries are deleted: take back every one that is submitted or live.
+export async function withdrawShared(sb, rows) {
+  for (const r of rows) if (r.share_status === "submitted" || r.share_status === "approved") await unshareMyPhoto(sb, r.id);
+}
+
+// ---------------------------------------------------------------- reviewing shared photos (editors)
+// Photos players offered, waiting for a decision. Each has a temporary link to look at it; there is no name, email or note.
+export async function loadSubmissions(sb) {
+  const rows = must(await sb.rpc("list_photo_submissions"));
+  const urls = await signedUrls(sb, rows.map((r) => r.storage_path));
+  return rows.map((r) => ({ ...r, url: urls.get(r.storage_path) || null }));
+}
+// Approving copies the picture into the public bottle photos as a Community photo. With replaceCurrent it becomes the vintage's main photo
+// (the photo it replaces is kept as a fallback); without, it is approved but a licensed photo stays on the card.
+export async function approveSubmission(sb, sub, replaceCurrent = true) {
+  const v = must(await sb.from("wine_vintages").select("wine_id").eq("id", sub.wine_vintage_id).single());
+  const dl = await sb.storage.from(BUCKET).download(sub.storage_path);
+  if (dl.error) throw dl.error;
+  const key = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+  const path = `community/${sub.share_token}/${key}.jpg`;
+  const up = await sb.storage.from(PHOTO_BUCKET).upload(path, dl.data, { contentType: "image/jpeg", upsert: false });
+  if (up.error) throw up.error;
+  let rowId = null, prev = [];
+  try {
+    prev = must(await sb.from("wine_images").select("id").eq("wine_vintage_id", sub.wine_vintage_id).eq("is_primary", true));
+    rowId = must(await sb.from("wine_images").insert({ wine_id: v.wine_id, wine_vintage_id: sub.wine_vintage_id, kind: "verified_user", storage_path: path,
+      license_note: "Shared by a player", is_primary: false, status: "verified", submission_id: sub.id }).select("id").single()).id;
+    if (replaceCurrent) {
+      if (prev.length) must(await sb.from("wine_images").update({ is_primary: false }).in("id", prev.map((p) => p.id)));
+      must(await sb.from("wine_images").update({ is_primary: true }).eq("id", rowId));
+    }
+    must(await sb.rpc("decide_photo_submission", { p_id: sub.id, p_decision: "approved" }));
+  } catch (e) {
+    if (rowId) await sb.from("wine_images").delete().eq("id", rowId);
+    if (replaceCurrent && prev.length) await sb.from("wine_images").update({ is_primary: true }).in("id", prev.map((p) => p.id));
+    await sb.storage.from(PHOTO_BUCKET).remove([path]);
+    throw e;
+  }
+  return path;
+}
+export async function rejectSubmission(sb, id) { must(await sb.rpc("decide_photo_submission", { p_id: id, p_decision: "rejected" })); }
+// An editor removed a photo that came from a player: take down every copy and mark it so the player sees it was taken down.
+export async function takeDownSubmissions(sb, ids) {
+  for (const id of [...new Set(ids.filter(Boolean))]) {
+    try {
+      const rows = must(await sb.from("wine_images").select("storage_path").eq("submission_id", id));
+      if (rows.length) await sb.storage.from(PHOTO_BUCKET).remove(rows.map((r) => r.storage_path));
+      must(await sb.rpc("decide_photo_submission", { p_id: id, p_decision: "removed" }));
+    } catch (_) { /* the photo itself is already gone from this wine; the other copies can be removed from their own vintage */ }
+  }
 }
 
 // ---------------------------------------------------------------- feedback on a wine card
@@ -160,7 +230,8 @@ export async function saveReferences(sb, userId, wineId, values, existingRows) {
 // The database functions remove the link to the account and keep only an anonymous rating (see the update script).
 // Photos are private files, so they are erased first; if that fails nothing else is deleted and the person can try again.
 export async function deleteJournalEntry(sb, consumptionId) {
-  const rows = must(await sb.from("journal_photos").select("storage_path").eq("consumption_id", consumptionId));
+  const rows = must(await sb.from("journal_photos").select("id, storage_path, share_status").eq("consumption_id", consumptionId));
+  await withdrawShared(sb, rows);   // shared copies go first; if that fails nothing else is deleted
   if (rows.length) {
     const r = await sb.storage.from(BUCKET).remove(rows.map((x) => x.storage_path));
     if (r.error) throw r.error;
@@ -184,7 +255,8 @@ export async function claimGuestMerge(sb, token) {
 // Photos are private files, so they are erased first. If that fails nothing else is deleted and the person can try again.
 // The database function then keeps only anonymous ratings, erases everything else, and removes the account.
 export async function deleteMyAccount(sb) {
-  const rows = await allRows(() => sb.from("journal_photos").select("storage_path"));
+  const rows = await allRows(() => sb.from("journal_photos").select("id, storage_path, share_status"));
+  await withdrawShared(sb, rows);   // shared copies go first; if that fails nothing else is deleted
   for (let i = 0; i < rows.length; i += 100) {
     const r = await sb.storage.from(BUCKET).remove(rows.slice(i, i + 100).map((x) => x.storage_path));
     if (r.error) throw r.error;
@@ -379,7 +451,7 @@ export async function saveWinePhoto(sb, wineVintageId, blob, kind, note) {
   if (up.error) throw up.error;
   let rowId = null, old = [];
   try {
-    old = must(await sb.from("wine_images").select("id, storage_path").eq("wine_vintage_id", wineVintageId));
+    old = must(await sb.from("wine_images").select("id, storage_path, submission_id").eq("wine_vintage_id", wineVintageId));
     rowId = must(await sb.from("wine_images").insert({ wine_id: v.wine_id, wine_vintage_id: wineVintageId, kind, storage_path: path, license_note: note || null, is_primary: false, status: "verified" }).select("id").single()).id;
     if (old.length) must(await sb.from("wine_images").update({ is_primary: false }).in("id", old.map((o) => o.id)));
     must(await sb.from("wine_images").update({ is_primary: true }).eq("id", rowId));
@@ -392,6 +464,7 @@ export async function saveWinePhoto(sb, wineVintageId, blob, kind, note) {
   if (old.length) {   // the replaced pictures go; if this fails the new photo is still in place
     await sb.from("wine_images").delete().in("id", old.map((o) => o.id));
     await sb.storage.from(PHOTO_BUCKET).remove(old.map((o) => o.storage_path));
+    await takeDownSubmissions(sb, old.map((o) => o.submission_id));
   }
   return path;
 }
@@ -400,10 +473,11 @@ export async function winePhotoPaths(sb, wineVintageId) {
   return (data || []).map((r) => r.storage_path);
 }
 export async function removeWinePhoto(sb, wineVintageId) {
-  const rows = must(await sb.from("wine_images").select("id, storage_path").eq("wine_vintage_id", wineVintageId));
+  const rows = must(await sb.from("wine_images").select("id, storage_path, submission_id").eq("wine_vintage_id", wineVintageId));
   if (!rows.length) return;
   must(await sb.from("wine_images").delete().in("id", rows.map((r) => r.id)));
   await sb.storage.from(PHOTO_BUCKET).remove(rows.map((r) => r.storage_path));
+  await takeDownSubmissions(sb, rows.map((r) => r.submission_id));
 }
 // Files left behind when a wine was deleted (the database removes the records; the files are removed here).
 export async function removePhotoFiles(sb, paths) { if (paths.length) await sb.storage.from(PHOTO_BUCKET).remove(paths); }
@@ -412,18 +486,20 @@ export async function removePhotoFiles(sb, paths) { if (paths.length) await sb.s
 // never changes the other's. With replace, the vintage's current photo is swapped for the copy (used to refresh carried-over copies).
 // Returns the new storage path.
 export async function reuseWinePhoto(sb, fromVintageId, toVintageId, note, { replace = false } = {}) {
-  const src = must(await sb.from("wine_images").select("storage_path, kind").eq("wine_vintage_id", fromVintageId).eq("is_primary", true).limit(1));
+  const src = must(await sb.from("wine_images").select("storage_path, kind, submission_id").eq("wine_vintage_id", fromVintageId).eq("is_primary", true).limit(1));
   if (!src.length) throw new Error("That vintage has no photo to reuse.");
   const have = must(await sb.from("wine_images").select("id, storage_path").eq("wine_vintage_id", toVintageId));
   if (have.length && !replace) throw new Error("This wine already has a photo.");
   const to = must(await sb.from("wine_vintages").select("wine_id").eq("id", toVintageId).single());
   const key = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-  const path = `${to.wine_id}/${toVintageId}-${key}.jpg`;
+  // A player's photo keeps its own folder (named by a random token, never the person's id) so taking it back removes every copy.
+  const folder = src[0].submission_id ? String(src[0].storage_path).split("/")[1] : null;
+  const path = folder ? `community/${folder}/${key}.jpg` : `${to.wine_id}/${toVintageId}-${key}.jpg`;
   const cp = await sb.storage.from(PHOTO_BUCKET).copy(src[0].storage_path, path);
   if (cp.error) throw cp.error;
   let rowId = null;
   try {
-    rowId = must(await sb.from("wine_images").insert({ wine_id: to.wine_id, wine_vintage_id: toVintageId, kind: src[0].kind, storage_path: path, license_note: note || null, is_primary: false, status: "verified" }).select("id").single()).id;
+    rowId = must(await sb.from("wine_images").insert({ wine_id: to.wine_id, wine_vintage_id: toVintageId, kind: src[0].kind, storage_path: path, license_note: note || null, is_primary: false, status: "verified", ...(src[0].submission_id ? { submission_id: src[0].submission_id } : {}) }).select("id").single()).id;
     if (have.length) must(await sb.from("wine_images").update({ is_primary: false }).in("id", have.map((h) => h.id)));
     must(await sb.from("wine_images").update({ is_primary: true }).eq("id", rowId));
   } catch (e) {
