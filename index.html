@@ -316,6 +316,9 @@
   .subrow { align-items: flex-start; }
   .subthumb { flex: 0 0 auto; width: 84px; height: 112px; object-fit: contain; background: linear-gradient(180deg,#E3EAE0,#CBD8C9); border-radius: 8px; border: 1px solid var(--line); }
   .subthumb.empty { display: block; }
+  /* The one "Not interested" button under the Discover card */
+  .notint { flex: 0 0 auto; border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 11px 22px; font-size: 15px; font-weight: 500; }
+  .notint.on { background: var(--moss); color: #fff; border-color: var(--moss); }
 </style>
 </head>
 <body>
@@ -345,6 +348,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=21" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=22" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>
