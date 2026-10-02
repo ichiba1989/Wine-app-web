@@ -1,10 +1,11 @@
 // Wine info (editors only): change a catalog wine's details. Producer, wine name, vineyard, vintage, type of wine,
 // place, the grapes printed on the label, and other grapes in the wine (for blends the label does not list).
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
-import { esc, WINE_STYLES } from "./logic.js?v=9";
+import { esc, WINE_STYLES } from "./logic.js?v=10";
 import { checkGrapeText, grapeProblem, grapeIndex, setExtraGrapes } from "./grapes.js?v=1";
 import { archivePlanFor } from "./catalog.js?v=1";
-import * as db from "./data.js?v=12";
+import { uploadWinePhoto, removeWinePhoto } from "./winephotos.js?v=1";
+import * as db from "./data.js?v=13";
 
 const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 
@@ -79,6 +80,10 @@ function sheetHtml(W) {
   return `<div class="overlay"><div class="sheet" id="wineInfoPanel">
     <div class="sheethead"><div class="sheettitle"><div class="serif big">Wine info</div><div class="muted small">${esc(W.title)}. Changes show for everyone.</div></div>
       <div class="sheetbtns"><button class="pill wine" data-wi="save"${W.saving ? " disabled" : ""}>Save</button><button class="xbtn" data-wi="close" aria-label="Close">&times;</button></div></div>
+    <div class="photoblock">${W.card && W.card.photo ? `<img class="rowthumb" src="${esc(W.card.photo)}" alt="Bottle photo">` : `<div class="rowthumb empty" aria-hidden="true"></div>`}
+      <div class="photoctl"><div class="qlabel" style="margin:0">Bottle photo</div>
+        <div class="photobtns"><label class="btn outline slim photobtn${W.photoBusy ? " disabled" : ""}">${W.photoBusy ? "Saving…" : W.card && W.card.image ? "Replace photo" : "Add photo"}<input type="file" accept="image/*" data-wiphoto${W.photoBusy ? " disabled" : ""} hidden></label>${W.card && W.card.image && !W.photoBusy ? `<button class="link" data-wi="photoremove">${W.photoConfirm ? "Tap again to remove" : "Remove"}</button>` : ""}</div>
+        ${W.photoError ? `<div class="err">${esc(W.photoError)}</div>` : ""}</div></div>
     <div class="qlabel">Producer</div><input class="field" list="dlProducers" data-wif="producerName" value="${esc(f.producerName)}" autocomplete="off">
     ${f.producerName.trim() && !matchProducer ? `<div class="muted small">A new producer will be created.</div>` : ""}
     <div class="qlabel">Wine name (leave empty if there is none)</div><input class="field" data-wif="wineName" value="${esc(f.wineName)}">
@@ -145,14 +150,14 @@ function deleteHtml(W) {
 
 // ctx: { sb(), userId(), can(permission), onSaved(), onDeleted() }
 export function createWineInfo(ctx) {
-  const W = { open: false, title: "", card: null, info: null, lists: null, options: [], form: null, unknown: [], addNew: false, error: "", saving: false, del: null, pub: null, canRemove: false };
+  const W = { photoBusy: false, photoConfirm: false, photoError: "", open: false, title: "", card: null, info: null, lists: null, options: [], form: null, unknown: [], addNew: false, error: "", saving: false, del: null, pub: null, canRemove: false };
   const overlay = () => document.querySelector("#overlay");
   const draw = () => { const o = overlay(); if (o && W.open) { W.canRemove = !!(ctx.can && ctx.can("remove_content")); o.innerHTML = W.del ? deleteHtml(W) : W.pub ? publishHtml(W) : sheetHtml(W); } };
   const setError = (m) => { W.error = m; const e = document.getElementById("wiErr"); if (e) e.textContent = m; };
 
   async function open(card, title) {
     const o = overlay();
-    W.open = true; W.title = title || ""; W.card = card; W.error = ""; W.unknown = []; W.addNew = false; W.saving = false; W.del = null; W.pub = null;
+    W.open = true; W.title = title || ""; W.card = card; W.error = ""; W.unknown = []; W.addNew = false; W.saving = false; W.del = null; W.pub = null; W.photoBusy = false; W.photoConfirm = false; W.photoError = "";
     if (o) o.innerHTML = `<div class="overlay"><div class="sheet"><p class="muted" style="padding:20px">Loading…</p></div></div>`;
     try {
       if (!W.lists) { W.lists = await db.loadEditorLists(ctx.sb()); W.options = placeOptions(W.lists.areas); }
@@ -164,6 +169,23 @@ export function createWineInfo(ctx) {
   }
   const close = () => { W.open = false; W.del = null; W.pub = null; const o = overlay(); if (o) o.innerHTML = ""; };
 
+  // The photo is saved as soon as it is chosen (it does not wait for Save); the rest of the form is kept as typed.
+  async function refreshCard() { if (ctx.onPhotoSaved) await ctx.onPhotoSaved(); const fresh = (ctx.cards ? ctx.cards() : []).find((c) => c.id === W.card.id); if (fresh) W.card = fresh; }
+  async function addPhoto(file) {
+    if (!file || W.photoBusy) return;
+    W.photoBusy = true; W.photoConfirm = false; W.photoError = ""; draw();
+    try { await uploadWinePhoto(ctx.sb(), W.card.id, file, ctx.photoKind ? ctx.photoKind() : "own_photography"); await refreshCard(); }
+    catch (e) { W.photoError = e.message || String(e); }
+    W.photoBusy = false; draw();
+  }
+  async function dropPhoto() {
+    if (W.photoBusy) return;
+    if (!W.photoConfirm) { W.photoConfirm = true; draw(); return; }
+    W.photoBusy = true; W.photoConfirm = false; W.photoError = ""; draw();
+    try { await removeWinePhoto(ctx.sb(), W.card.id); await refreshCard(); }
+    catch (e) { W.photoError = e.message || String(e); }
+    W.photoBusy = false; draw();
+  }
   function askPublish() {
     const all = (ctx.cards ? ctx.cards() : []).map((c) => (c.id === W.card.id ? { ...c, wineStatus: "verified", archived: false } : c));
     W.pub = { plan: archivePlanFor(all, W.card.id), busy: false, error: "" };
@@ -195,7 +217,9 @@ export function createWineInfo(ctx) {
     if (!d || d.deleting || !d.check || !d.check.can_delete) return;
     d.deleting = true; d.error = ""; draw();
     try {
+      let files = []; try { files = await db.winePhotoPaths(ctx.sb(), W.card.id); } catch (_) {}
       await db.deleteWineVintage(ctx.sb(), W.card.id);
+      try { await db.removePhotoFiles(ctx.sb(), files); } catch (_) {}   // the records went with the wine; this clears the picture files
       W.lists = null;
       close();
       if (ctx.onDeleted) await ctx.onDeleted();
@@ -235,7 +259,8 @@ export function createWineInfo(ctx) {
     const t = ev.target.closest("[data-wi]");
     if (!t || !W.open || !W.form) return;
     const [action, arg] = t.dataset.wi.split(":");
-    if (action === "pubask") askPublish();
+    if (action === "photoremove") dropPhoto();
+    else if (action === "pubask") askPublish();
     else if (action === "pubgo") doPublish();
     else if (action === "pubcancel") { W.pub = null; draw(); }
     else if (action === "delask") askDelete();
@@ -245,6 +270,10 @@ export function createWineInfo(ctx) {
     else if (action === "style") { W.form.style = arg; draw(); }
     else if (action === "save") save();
     else if (action === "close") close();
+  });
+  document.addEventListener("change", (ev) => {
+    const t = ev.target;
+    if (t && t.dataset && t.dataset.wiphoto !== undefined && W.open) { const f = t.files && t.files[0]; t.value = ""; addPhoto(f); }
   });
   document.addEventListener("input", (ev) => {
     const t = ev.target;
