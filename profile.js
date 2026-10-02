@@ -34,19 +34,21 @@ const weightOf = (verdict) => (verdict ? VERDICT_WEIGHTS[verdict] ?? 0 : UNRATED
 const pctOf = (a, b) => (b ? Math.round((a / b) * 100) : null);
 
 // ---------------------------------------------------------------- palate
-// refs: { vintageToWine: Map, reference: rows from wine_reference_values, defaults: rows from wine_default_values }.
-// A wine's baseline is its editor reference value, or failing that its suggested default.
+// refs: { vintageToWine: Map, reference: rows from wine_reference_values, defaults: rows from wine_default_values, rules: (wineVintageId, entry) => values | null }.
+// A wine's baseline is its editor reference value, or failing that what the structure rules suggest (when they are switched on), or failing that its suggested default.
+// Wines typed in by hand have no catalog id: their baseline comes from the rules alone.
 export function baselines(refs) {
   const vintageToWine = refs.vintageToWine || new Map();
   const byWine = new Map(), byVintage = new Map(), defByWine = new Map();
   const put = (m, k, d, v) => { if (!m.has(k)) m.set(k, {}); m.get(k)[d] = Number(v); };
   (refs.reference || []).forEach((r) => (r.wine_vintage_id ? put(byVintage, r.wine_vintage_id, r.dimension_key, r.value) : put(byWine, r.wine_id, r.dimension_key, r.value)));
   (refs.defaults || []).forEach((r) => put(defByWine, r.wine_id, r.dimension_key, r.value));
-  return (wineVintageId) => {
-    if (!wineVintageId) return { base: null, ref: null };
+  return (wineVintageId, entry) => {
+    const rv = refs.rules ? refs.rules(wineVintageId, entry) : null;
+    if (!wineVintageId) return { base: rv && Object.keys(rv).length ? { ...rv } : null, ref: null };
     const wineId = vintageToWine.get(wineVintageId);
     const ref = { ...(byWine.get(wineId) || {}), ...(byVintage.get(wineVintageId) || {}) };
-    const base = { ...(defByWine.get(wineId) || {}), ...ref };
+    const base = { ...(defByWine.get(wineId) || {}), ...(rv || {}), ...ref };
     return { base: Object.keys(base).length ? base : null, ref: Object.keys(ref).length ? ref : null };
   };
 }
@@ -60,7 +62,7 @@ export function palateEntries(journal, perceptionRows, baselineFor = () => ({ ba
   return journal.map((e) => {
     const perception = {}, adjusted = {};
     (byConsumption.get(e.id) || []).forEach((r) => { perception[r.dimension_key] = Number(r.value); adjusted[r.dimension_key] = !!r.adjusted; });
-    const { base, ref } = baselineFor(e.wine_vintage_id);
+    const { base, ref } = baselineFor(e.wine_vintage_id, e);
     return { id: e.id, verdict: e.verdict || null, grape: e.grape, country: e.country, style: e.style, perception, adjusted, base, ref };
   });
 }
@@ -380,7 +382,7 @@ export function createProfile(ctx) {
       P.journal = ctx.journal(); P.states = ctx.states();
       P.questions = questions;
       const questionsById = new Map(questions.map((q) => [q.id, q]));
-      const baselineFor = baselines({ vintageToWine: new Map(vintages.map((v) => [v.id, v.wine_id])), reference, defaults });
+      const baselineFor = baselines({ vintageToWine: new Map(vintages.map((v) => [v.id, v.wine_id])), reference, defaults, rules: ctx.ruleBase });
       P.entries = palateEntries(P.journal, perceptions, baselineFor);
       P.palate = computePalate(P.entries);
       P.quiz = quizProgress(questions, answers);
