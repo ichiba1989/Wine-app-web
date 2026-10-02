@@ -2,7 +2,7 @@
 // The rules at the top are pure (no browser, no network) so they can be tested on their own.
 // The controller at the bottom loads what it needs from Supabase and draws the tab.
 import { DIMS, dimRange, VERDICTS, FLAGS, esc, styleLabel, verdictShort, entryCard, entryName } from "./logic.js?v=10";
-import { marksHtml } from "./views.js?v=10";
+import { marksHtml } from "./views.js?v=11";
 import { accountCardHtml } from "./account.js?v=5";
 import { feedbackCardHtml } from "./feedback.js?v=3";
 
@@ -312,7 +312,7 @@ function exploredHtml(P) {
     ? x.verdicts.map((v) => `<div class="kv"><span>${esc(v.label)}</span><span class="muted">${v.count}</span></div>`).join("") + `<div class="kv"><span>No verdict yet</span><span class="muted">${x.unrated}</span></div>`
     : `<p class="muted small">Nothing logged yet.</p>`;
   return `<h2 class="serif ph">What you've explored</h2>
-    ${card("Your swipes", `<p class="ptext">${x.recognized} recognized, ${x.unknown} didn't know, ${x.had} had this bottle</p><p class="ptext">${x.interested} interested, ${x.notInterested} not interested</p>`)}
+    ${card("Your swipes", `<p class="ptext">${x.recognized} recognized, ${x.unknown} didn't know, ${x.had} had this bottle</p><p class="ptext">${x.notInterested} marked not interested</p>`)}
     ${card("Wines you've had", verdicts)}
     ${card("Countries", `<p class="ptext">${x.countries.length ? x.countries.map(flagName).join(", ") : "None yet"}</p>${x.notYet.length ? `<div class="muted small" style="margin-top:10px">Not yet explored</div><p class="ptext">${x.notYet.map(flagName).join(", ")}</p>` : ""}`)}
     ${card("Grapes you've had", `<p class="ptext">${x.grapes.length ? esc(x.grapes.join(", ")) : "None yet"}</p>`)}`;
