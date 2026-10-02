@@ -1,8 +1,8 @@
 // Profile tab: Overview, Palate, Knowledge, Explored and Trophies.
 // The rules at the top are pure (no browser, no network) so they can be tested on their own.
 // The controller at the bottom loads what it needs from Supabase and draws the tab.
-import { DIMS, dimRange, VERDICTS, FLAGS, esc, styleLabel, verdictShort, entryCard, entryName } from "./logic.js?v=9";
-import { marksHtml } from "./views.js?v=9";
+import { DIMS, dimRange, VERDICTS, FLAGS, esc, styleLabel, verdictShort, entryCard, entryName } from "./logic.js?v=10";
+import { marksHtml } from "./views.js?v=10";
 import { accountCardHtml } from "./account.js?v=5";
 import { feedbackCardHtml } from "./feedback.js?v=3";
 
