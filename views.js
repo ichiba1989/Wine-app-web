@@ -53,10 +53,9 @@ export function discoverHtml({ deck, interest, banner, counts, feedback = false,
     return `${bannerHtml}<div class="center"><div class="serif" style="font-size:22px">No more wines to show.</div>
       <div class="muted">If you expected some, check that the sample wines were published for testing.</div></div>`;
   }
-  const sw = ["try", "nope"].map((k) => `<button data-action="interest:${k}" class="${interest === k ? "on" : ""}" style="${interest === k ? `background:${INTEREST[k].color}` : ""}">${INTEREST[k].label}</button>`).join("");
   return `${bannerHtml}
     <div class="cardwrap">${deck.length > 1 ? '<div class="behind"></div>' : ""}${cardHtml(deck[0])}</div>
-    <div class="belowcard"><div class="switch small">${sw}</div>${feedback ? `<span class="fbline">${flaggedId === deck[0].id ? '<span class="muted">Thanks, an editor will review it.</span>' : '<button class="link" data-action="wineflag" aria-label="Report a problem with this wine">Report a problem</button>'}</span>` : ""}</div>
+    <div class="belowcard"><button class="notint" data-action="notint" aria-pressed="false" aria-label="Not interested in this wine">Not interested</button>${feedback ? `<span class="fbline">${flaggedId === deck[0].id ? '<span class="muted">Thanks, an editor will review it.</span>' : '<button class="link" data-action="wineflag" aria-label="Report a problem with this wine">Report a problem</button>'}</span>` : ""}</div>
     ${nudge ? `<div class="nudge"><b>Don't lose your journal.</b> Save it with an email so it follows you to any phone.
       <div class="nudgeacts"><button class="btn primary slim" data-account="open:save">Save with email</button><button class="link" data-action="nudgeoff">Not now</button></div></div>` : ""}`;
 }
@@ -86,12 +85,12 @@ export function swipesHtml(lists, sw, photoUrls) {
   const review = (c) => pill(`review:${c.id}`, "Review the wine", true);
   const parts = [];
   const isOpen = (id) => !!sw.open[id];
-  parts.push(section("rec", "Recognized and interested", lists.rec.length, isOpen("rec"),
+  parts.push(section("rec", "Recognized", lists.rec.length, isOpen("rec"),
     listBody("rec", lists.rec, (c) => review(c) + pill(`setint:${c.id}:nope`, "Not interested"))));
-  parts.push(section("unk", "Don't know it, interested", lists.unk.length, isOpen("unk"),
+  parts.push(section("unk", "Don't know it", lists.unk.length, isOpen("unk"),
     listBody("unk", lists.unk, (c) => review(c) + pill(`setint:${c.id}:nope`, "Not interested"))));
   parts.push(section("notint", "Not interested", lists.notInt.length, isOpen("notint"),
-    listBody("notint", lists.notInt, (c) => review(c) + pill(`setint:${c.id}:try`, "Interested"))));
+    listBody("notint", lists.notInt, (c) => review(c) + (sw.noFam && sw.noFam.has(c.id) ? pill(`unswipe:${c.id}`, "Put back") : pill(`setint:${c.id}:try`, "Put back")))));
   const triedBody = !lists.tried.length ? `<div class="muted small">Nothing here yet. Wines you rate are kept here.</div>`
     : (lists.tried.length > 1 ? sortSelect("tried", sortOf("tried")) : "") +
       sortCards(lists.tried, sortOf("tried"), lists.order).map((c) =>
