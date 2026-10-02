@@ -132,3 +132,17 @@ export function archivePlanFor(cards, vintageId) {
   if (g.keep.id !== vintageId && !g.archive.some((c) => c.id === vintageId)) return null;
   return { keep: g.keep, archive: g.archive };
 }
+
+// ---------------------------------------------------------------- a new vintage can borrow the photo of an older one
+// A wine's label changes little from year to year, so when a vintage has no photo but another vintage of the SAME wine has one, an editor can reuse it.
+// Same wine here means the same producer, wine name, type and grapes (the place is not compared: a new vintage often has none yet).
+// Returns { id, vintage } of the best vintage to borrow from (the most recent one with a photo), or null. Archived older vintages count.
+export function reusablePhoto(cards, card) {
+  if (!card || card.image) return null;
+  const key = looseKey({ producer: card.producer, cuvee: card.cuvee, style: card.style, grapes: card.grapes });
+  const rank = (c) => (/^\d{4}$/.test(String(c.vintage || "")) ? Number(c.vintage) : 0);   // non-vintage last
+  const from = (cards || [])
+    .filter((c) => c.id !== card.id && c.image && c.wineStatus !== "retired" && looseKey({ producer: c.producer, cuvee: c.cuvee, style: c.style, grapes: c.grapes }) === key)
+    .sort((a, b) => rank(b) - rank(a) || String(a.id).localeCompare(String(b.id)))[0];
+  return from ? { id: from.id, vintage: from.vintage || "" } : null;
+}
