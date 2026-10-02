@@ -32,6 +32,14 @@
   .card { will-change: transform; transform-origin: 50% 115%; position: absolute; inset: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 24px; overflow: hidden; display: flex; flex-direction: column; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; box-shadow: 0 18px 40px -22px rgba(22,38,29,.5); }
   .image { position: relative; height: 52%; background: linear-gradient(180deg,#E3EAE0,#CBD8C9); display: flex; align-items: flex-end; justify-content: center; }
   .image svg.bottle { height: 88%; margin-bottom: 6px; }
+  /* A real bottle photo: the whole bottle is shown on the soft background; the drawn bottle only appears if the photo cannot load */
+  .image.hasphoto { background: linear-gradient(180deg, #FCFDFB, #F0F4EE); }   /* near-white, so a photo on a white background sits on the card without a visible box */
+  .image.hasphoto svg.bottle { visibility: hidden; }
+  .image.hasphoto.failed svg.bottle { visibility: visible; }
+  .image img.winephoto { mix-blend-mode: multiply; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 10px 14px 6px; box-sizing: border-box; opacity: 0; transition: opacity .2s ease; pointer-events: none; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+  .image img.winephoto.ready { opacity: 1; }
+  .image.failed img.winephoto { display: none; }
+  .swipe-label { z-index: 2; }
   .sample { position: absolute; bottom: 4px; right: 12px; font-size: 10px; color: var(--muted); }
   .swipe-label { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); padding: 6px 16px; border-radius: 999px; color: #fff; font-weight: 600; font-size: 14px; opacity: 0; pointer-events: none; white-space: nowrap; }
   .body { flex: 1; overflow: hidden; padding: 14px 20px 10px; }
@@ -239,7 +247,10 @@
   .chips.left { justify-content: flex-start; flex-wrap: wrap; }   /* the editor's five tabs wrap instead of being cut off */
   .chip { flex: 1 1 auto; white-space: nowrap; border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 6px; font-size: min(11px, 2.9vw); font-weight: 500; }
   .chip.wide { flex: 0 0 auto; padding: 6px 16px; font-size: 12px; }
-  .chip.wide.ed { flex: 1 1 auto; padding: 6px 8px; font-size: 12px; }   /* the editor's five tabs share one row on a phone */
+  .chip.wide.ed { flex: 1 1 auto; padding: 8px 6px; font-size: 12.5px; }
+  /* The editor's tabs and the photo choices sit in tidy rows of three, so nothing is cut off or left alone on a line */
+  .chips.edtabs, .chips.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; overflow: visible; }
+  .chips.edtabs .chip, .chips.grid3 .chip { white-space: normal; line-height: 1.15; min-height: 36px; display: flex; align-items: center; justify-content: center; text-align: center; }
   .chip.on { background: var(--slate); color: #fff; border-color: var(--slate); }
   #lbody { margin-top: 14px; }
   .qtext { font-size: 22px; font-weight: 400; line-height: 1.25; margin: 10px 0 12px; }
@@ -282,6 +293,18 @@
   .candbtns .btn.slim { padding: 8px 14px; font-size: 14px; min-width: 92px; }
   .notice { background: #E7EEF3; border: 1px solid #C6D4DF; border-radius: 12px; padding: 10px 12px; margin: 8px 0; font-size: 14px; }
   .pubzone { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+  /* Editor: bottle photos */
+  .photorow { align-items: center; }
+  .rowthumb { flex: 0 0 auto; width: 52px; height: 68px; object-fit: contain; background: linear-gradient(180deg,#E3EAE0,#CBD8C9); border-radius: 8px; border: 1px solid var(--line); }
+  .rowthumb.empty { display: block; }
+  .candrow .candinfo { margin-left: 2px; }
+  .photobtn { cursor: pointer; text-align: center; display: inline-block; }
+  .photobtn.disabled { opacity: .55; pointer-events: none; }
+  .photoprogress { margin: 8px 0 4px; }
+  .photoprogress .big { font-size: 18px; }
+  .photoblock { display: flex; gap: 12px; align-items: center; margin: 4px 0 10px; }
+  .photoctl { flex: 1 1 auto; }
+  .photobtns { display: flex; gap: 14px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
 </style>
 </head>
 <body>
@@ -311,6 +334,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=17" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=18" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>
