@@ -4,7 +4,7 @@
 //   fam  (0 to 1)  how likely they are to RECOGNIZE it: how easy it is to find, plus what they already know
 //                  (producers, grapes, places they recognized or have had; quiz answers; what other players recognized)
 //   pref (0 to 1)  how likely they are to LIKE it: styles, grapes, places and producers they enjoyed or marked
-//                  Interested, and how close its structure is to the wines they rated well
+//                  swiped (not marked not interested), and how close its structure is to the wines they rated well
 // and is put into one of three decks by fam:
 //   high    "I might know this"    (familiar)
 //   medium  "Maybe"                (some connection)
@@ -21,6 +21,11 @@ export const HIGH_AT = 0.55, MEDIUM_AT = 0.28;
 // Whatever the numbers say, each deck holds at least this share of the wines left to swipe, so there is always something familiar
 // and always something new. The wines moved are the ones nearest the line: the least familiar go to low, the most familiar to high.
 export const MIN_SHARE = 0.15;
+// A wine with a real bottle photo is put ahead of the wines without one inside its deck. The bonus is bigger than the whole spread of
+// the taste-and-randomness score (0 to 1.35), so it is a strict priority: photo wines are used first, and wines without a photo follow
+// once the photo wines of that deck run out. The mix of familiar, warmer and new territory is not touched.
+export const PHOTO_BONUS = 2;
+export const hasPhoto = (c) => !!(c && (c.photo || c.image));
 // Verdicts count as likes and dislikes. A journal entry with no verdict yet is a faint like (they had the bottle).
 export const VERDICT_WEIGHT = { buy: 2, drink: 1, none: 0, respect: -0.5, no: -2 };
 export const UNRATED_WEIGHT = 0.25;
@@ -55,8 +60,9 @@ export function userModel({ cards, states = [], journal = [], quiz = null, refs 
   const ordered = [...states].sort((a, b) => String(b.last_swiped_at || "").localeCompare(String(a.last_swiped_at || "")));
   states.forEach((s) => {
     const c = byId.get(s.wine_vintage_id); if (!c) return;
+    // A wine only marked "not interested" has no familiarity: it says what they dislike, not what they know.
     if (s.familiarity === "unknown") { unknown++; eachKey(c, (k) => add(unk, k, 1)); }
-    else { recognized++; eachKey(c, (k) => add(rec, k, s.familiarity === "had" ? 1.5 : 1)); }
+    else if (s.familiarity) { recognized++; eachKey(c, (k) => add(rec, k, s.familiarity === "had" ? 1.5 : 1)); }
     if (s.interest === "try") eachKey(c, (k, kind) => add(pref, k, kind === "style" ? 0.4 : 0.6));
     else if (s.interest === "nope") eachKey(c, (k, kind) => add(pref, k, kind === "style" ? -0.4 : -0.6));
   });
@@ -88,7 +94,7 @@ export function userModel({ cards, states = [], journal = [], quiz = null, refs 
   // Overall knowledge, 0 to 1. A brand new person starts around a quarter.
   const knowledge = clamp01(0.35 * (quizAnswered >= 5 && quizAcc != null ? quizAcc : 0.3) + 0.35 * (recRate != null ? recRate : 0.4) + 0.30 * Math.min(1, journal.length / 25));
   // How the last ten swipes went: the share they recognized (only once there are at least four).
-  const recent = ordered.slice(0, 10);
+  const recent = ordered.filter((s) => s.familiarity).slice(0, 10);
   const recentRate = recent.length >= 4 ? recent.filter((s) => s.familiarity !== "unknown").length / recent.length : null;
   return { rec, unk, pref, palate, palateDims, quizAcc, quizAnswered, knowledge, recentRate, swipeCount, journalCount: journal.length };
 }
@@ -166,7 +172,7 @@ export function buildDeck({ cards, states = [], journal = [], quiz = null, refs 
   balanceTiers(entries);
   entries.forEach((e) => {
     info.set(e.c.id, { tier: e.tier, fam: e.fam, pref: e.pref });
-    queues[e.tier].push({ c: e.c, score: e.pref + 0.35 * rnd() });   // likelier favourites first, with enough randomness to stay fresh
+    queues[e.tier].push({ c: e.c, score: e.pref + 0.35 * rnd() + (hasPhoto(e.c) ? PHOTO_BONUS : 0) });   // photo wines first, then likelier favourites, with enough randomness to stay fresh
   });
   TIERS.forEach((t) => queues[t].sort((a, b) => b.score - a.score));
   const mix = mixFor(model);
@@ -185,7 +191,9 @@ export function buildDeck({ cards, states = [], journal = [], quiz = null, refs 
     const pick = open.reduce((best, t) => (credits[t] > credits[best] ? t : best), open[0]);
     credits[pick] -= 1;
     const q = queues[pick];
-    let i = q.slice(0, 6).findIndex((x) => !conflicts(x.c)); if (i < 0) i = 0;
+    // Avoid repeating a producer or place back to back, but only among wines that are equally ahead: a photo wine is never passed over for one without a photo.
+    const lead = hasPhoto(q[0].c);
+    let i = q.slice(0, 6).findIndex((x) => hasPhoto(x.c) === lead && !conflicts(x.c)); if (i < 0) i = 0;
     const [{ c }] = q.splice(i, 1);
     deck.push(c);
     const k = cardKeys(c); recent.push({ producer: k.producer, country: k.country, style: k.style, grape: k.grapes[0] || "" });
