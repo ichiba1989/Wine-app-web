@@ -82,7 +82,7 @@ function sheetHtml(W) {
       <div class="sheetbtns"><button class="pill wine" data-wi="save"${W.saving ? " disabled" : ""}>Save</button><button class="xbtn" data-wi="close" aria-label="Close">&times;</button></div></div>
     <div class="photoblock">${W.card && W.card.photo ? `<img class="rowthumb" src="${esc(W.card.photo)}" alt="Bottle photo">` : `<div class="rowthumb empty" aria-hidden="true"></div>`}
       <div class="photoctl"><div class="qlabel" style="margin:0">Bottle photo</div>
-        <div class="photobtns"><label class="btn outline slim photobtn${W.photoBusy ? " disabled" : ""}">${W.photoBusy ? "Saving…" : W.card && W.card.image ? "Replace photo" : "Add photo"}<input type="file" accept="image/*" data-wiphoto${W.photoBusy ? " disabled" : ""} hidden></label>${W.card && W.card.image && !W.photoBusy ? `<button class="link" data-wi="photoremove">${W.photoConfirm ? "Tap again to remove" : "Remove"}</button>` : ""}${(() => { const re = W.card && !W.card.image && !W.photoBusy && ctx.cards ? pullSource(ctx.cards(), W.card, !!(ctx.can && ctx.can(FOUND_ONLINE_PERMISSION))) : null; return re ? `<button class="link" data-wi="photoreuse:${esc(re.id)}:${esc(re.vintage || "")}">Use the ${esc(re.vintage || "earlier")} photo</button>` : ""; })()}</div>
+        <div class="photobtns"><label class="btn outline slim photobtn${W.photoBusy ? " disabled" : ""}">${W.photoBusy ? "Saving…" : W.card && W.card.image ? "Replace photo" : "Add photo"}<input type="file" accept="image/*" data-wiphoto${W.photoBusy ? " disabled" : ""} hidden></label>${W.card && W.card.image && !W.photoBusy ? `<button class="link" data-wi="photoremove">${W.photoConfirm ? "Tap again to remove" : "Remove"}</button>` : ""}${(() => { const re = W.reuse; return re ? `<button class="link" data-wi="photoreuse:${esc(re.id)}:${esc(re.vintage || "")}">Use the ${esc(re.vintage || "earlier")} photo</button>` : ""; })()}</div>
         ${W.card && W.card.image && photoTag(W.card) ? `<div class="muted tiny">Photo: ${esc(photoTag(W.card))}</div>` : ""}${W.photoNote ? `<div class="muted small">${esc(W.photoNote)}</div>` : ""}${W.photoError ? `<div class="err">${esc(W.photoError)}</div>` : ""}</div></div>
     <div class="qlabel">Producer</div><input class="field" list="dlProducers" data-wif="producerName" value="${esc(f.producerName)}" autocomplete="off">
     ${f.producerName.trim() && !matchProducer ? `<div class="muted small">A new producer will be created.</div>` : ""}
@@ -152,7 +152,7 @@ function deleteHtml(W) {
 export function createWineInfo(ctx) {
   const W = { photoBusy: false, photoConfirm: false, photoError: "", open: false, title: "", card: null, info: null, lists: null, options: [], form: null, unknown: [], addNew: false, error: "", saving: false, del: null, pub: null, canRemove: false };
   const overlay = () => document.querySelector("#overlay");
-  const draw = () => { const o = overlay(); if (o && W.open) { W.canRemove = !!(ctx.can && ctx.can("remove_content")); o.innerHTML = W.del ? deleteHtml(W) : W.pub ? publishHtml(W) : sheetHtml(W); } };
+  const draw = () => { const o = overlay(); if (o && W.open) { W.reuse = W.card && !W.card.image && !W.photoBusy ? pullSource(ctx.cards ? ctx.cards() : [], W.card, !!(ctx.can && ctx.can(FOUND_ONLINE_PERMISSION))) : null; W.canRemove = !!(ctx.can && ctx.can("remove_content")); o.innerHTML = W.del ? deleteHtml(W) : W.pub ? publishHtml(W) : sheetHtml(W); } };
   const setError = (m) => { W.error = m; const e = document.getElementById("wiErr"); if (e) e.textContent = m; };
 
   async function open(card, title) {
