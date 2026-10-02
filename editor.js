@@ -498,3 +498,4 @@ export function createEditor(ctx) {
     leave() { root = null; review.leave(); E.sheet = null; const o = overlay(); if (o) o.innerHTML = ""; },
   };
 }
+
