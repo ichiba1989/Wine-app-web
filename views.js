@@ -2,7 +2,7 @@
 import {
   FAMILIARITY, INTEREST, FLAGS, VERDICTS, DIMS, isChoice, GROUPS, GROUP_PAGE, SORTS, YEARS,
   esc, wineName, entryCard, entryName, verdictShort, groupEntries, filterEntries, sortCards,
-  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims, dimsFor, placeLine, entryGrape } from "./logic.js?v=9";
+  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims, dimsFor, placeLine, entryGrape } from "./logic.js?v=10";
 
 // ---------------------------------------------------------------- drawings
 const GLASS = { white: "#5F7440", sparkling: "#3E4B38", rose: "#8A5560", neutral: "#34403A", red: "#2C1C22" };
@@ -39,7 +39,7 @@ export const thumbHtml = (urls, path, size = 40) => (path && urls && urls.get(pa
 export function cardHtml(c) {
   const labels = ["recognize", "unknown", "had"].map((k) => `<div class="swipe-label" data-label="${k}" style="background:${FAMILIARITY[k].color}">${esc(FAMILIARITY[k].label)}</div>`).join("");
   return `<div class="card" id="card">
-    <div class="image">${bottleSvg(c.style)}${labels}</div>
+    <div class="image${c.photo ? " hasphoto" : ""}">${bottleSvg(c.style)}${c.photo ? `<img class="winephoto" src="${esc(c.photo)}" alt="Bottle of ${esc(wineName(c))}" draggable="false" decoding="async">` : ""}${labels}</div>
     <div class="body">
       ${c.vintage ? `<div class="vintage serif">${esc(c.vintage)}</div>` : ""}
       <div class="prow"><div class="producer serif">${esc(c.producer)}</div>${marksHtml(c)}</div>
