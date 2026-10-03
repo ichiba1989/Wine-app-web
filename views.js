@@ -3,6 +3,23 @@ import {
   FAMILIARITY, INTEREST, FLAGS, VERDICTS, DIMS, isChoice, GROUPS, GROUP_PAGE, SORTS, YEARS,
   esc, wineName, entryCard, entryName, verdictShort, groupEntries, filterEntries, sortCards,
   WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims, dimsFor, placeLine, entryGrape } from "./logic.js?v=10";
+import { splitGrapeParts, splitPlace } from "./blends.js?v=1";
+
+// The grape and place inputs shared by the two forms. The form keeps one grape text and one place text; these show them as
+// "main varietal" and "other varietals (if blended)", and as "country" and "region". app.js puts them back together as you type.
+// scope is "form" (Add a wine) or "wef" (Change wine info), so the right text is filled.
+function grapeAndPlaceInputs(form, scope) {
+  const g = splitGrapeParts(form.grape), p = splitPlace(form.region);
+  const tidy = `autocomplete="off" autocapitalize="words" spellcheck="false"`;
+  return `<div class="qlabel">Main varietal</div>
+    <input class="field" data-gmain data-pscope="${scope}" data-grapes="single" placeholder="The grape on the label (only if you know). GSM works" value="${esc(g.main)}" ${tidy}>
+    <div class="qlabel">Other varietals (if blended)</div>
+    <input class="field" data-gother data-pscope="${scope}" data-grapes="multi" placeholder="Other grapes in the blend, separated by commas" value="${esc(g.other)}" ${tidy}>
+    <div class="qlabel">Country</div>
+    <input class="field" data-pcountry data-pscope="${scope}" placeholder="Only if you know" value="${esc(p.country)}" autocomplete="off">
+    <div class="qlabel">Region</div>
+    <input class="field" data-pregion data-pscope="${scope}" placeholder="For example Piedmont, or Barolo, Piedmont" value="${esc(p.region)}" autocomplete="off">`;
+}
 
 // ---------------------------------------------------------------- drawings
 const GLASS = { white: "#5F7440", sparkling: "#3E4B38", rose: "#8A5560", neutral: "#34403A", red: "#2C1C22" };
@@ -308,8 +325,7 @@ export function addFormHtml(form, error = "") {
     <input class="field" data-form="producer" placeholder="Producer (required)" value="${esc(form.producer)}">
     <input class="field" data-form="wine_name" placeholder="Wine or cuvée" value="${esc(form.wine_name)}">
     <select class="field" data-form="vintage" aria-label="Vintage">${yearOpts}</select>
-    <input class="field" data-form="grape" data-grapes="multi" placeholder="Grape (only if you know)" value="${esc(form.grape)}" autocomplete="off" autocapitalize="words" spellcheck="false">
-    <input class="field" data-form="region" placeholder="Region (only if you know)" value="${esc(form.region)}">
+    ${grapeAndPlaceInputs(form, "form")}
     <div class="three">${styles}</div>
     <div id="formErr" class="err">${esc(error)}</div>
     <button class="btn primary" data-action="addrate">Rate it now</button>
@@ -341,8 +357,7 @@ export function wineEditHtml(form, { error = "", saving = false, note = "" } = {
     <div class="qlabel">Wine or cuvée</div><input class="field" data-wef="wine_name" value="${esc(form.wine_name)}" autocomplete="off">
     <div class="qlabel">Vintage</div><select class="field" data-wef="vintage" aria-label="Vintage">${yearOpts}</select>
     <div class="qlabel">Type of wine</div><div class="three wide">${styles}</div>
-    <div class="qlabel">Grape (start typing, then pick from the list)</div><input class="field" data-wef="grape" data-grapes="multi" value="${esc(form.grape)}" placeholder="For a blend, separate grapes with commas" autocomplete="off" autocapitalize="words" spellcheck="false">
-    <div class="qlabel">Place</div><input class="field" data-wef="region" value="${esc(form.region)}" placeholder="Appellation, region, country" autocomplete="off">
+    ${grapeAndPlaceInputs(form, "wef")}
     <div id="winfoErr" class="err">${esc(error)}</div>
     <button class="btn primary" data-wedit="save"${saving ? " disabled" : ""}>${saving ? "Saving…" : "Save wine info"}</button>
     <button class="btn outline" data-wedit="close"${saving ? " disabled" : ""}>Cancel</button></div></div>`;
