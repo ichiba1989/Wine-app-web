@@ -4,6 +4,7 @@
 import { esc, WINE_STYLES } from "./logic.js?v=10";
 import { checkGrapeText, grapeProblem, grapeIndex, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES } from "./blends.js?v=1";
+import { infoLine } from "./wineline.js?v=1";
 import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, placeClassification, savePlace } from "./geo.js?v=1";
 import { loadWinePrice, saveWinePrice, parsePrice, centsToField, blendPrice, formatPrice } from "./pricing.js?v=1";
 import { archivePlanFor } from "./catalog.js?v=2";
@@ -100,7 +101,7 @@ function sheetHtml(W) {
   const chips = [...WINE_STYLES, { id: "unknown", label: "Other" }].map((s) => `<button class="chip${f.style === s.id ? " on" : ""}" data-wi="style:${s.id}" aria-pressed="${f.style === s.id}">${esc(s.label)}</button>`).join("");
   const matchProducer = L.producers.some((p) => fold(p.name) === fold(f.producerName));
   return `<div class="overlay"><div class="sheet" id="wineInfoPanel">
-    <div class="sheethead"><div class="sheettitle"><div class="serif big">Wine info</div><div class="muted small">${esc(W.title)}. Changes show for everyone.</div></div>
+    <div class="sheethead"><div class="sheettitle"><div class="serif big">Wine info</div><div class="muted small">${esc(W.title)}. Changes show for everyone.</div>${W.card && infoLine(W.card) ? `<div class="muted small">${esc(infoLine(W.card))}</div>` : ""}</div>
       <div class="sheetbtns"><button class="pill wine" data-wi="save"${W.saving ? " disabled" : ""}>Save</button><button class="xbtn" data-wi="close" aria-label="Close">&times;</button></div></div>
     <div class="photoblock">${W.card && W.card.photo ? `<img class="rowthumb" src="${esc(W.card.photo)}" alt="Bottle photo">` : `<div class="rowthumb empty" aria-hidden="true"></div>`}
       <div class="photoctl"><div class="qlabel" style="margin:0">Bottle photo</div>
