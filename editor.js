@@ -10,12 +10,13 @@
 // Every change is logged by the database.
 import { dimsFor, dimMeta, defaultFor, esc, wineName, placeLine, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel, barDims, choiceDims, styleInfo } from "./logic.js?v=10";
 import * as db from "./data.js?v=15";
-import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=12";
+import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=13";
 import { createReview } from "./review.js?v=6";
-import { createWineInfo, publishSummary } from "./wineinfo.js?v=10";
+import { createWineInfo, publishSummary } from "./wineinfo.js?v=11";
 import { groupSubmissions, planPromotion, duplicateGroups, rulesFrom } from "./catalog.js?v=2";
 import { visibleKinds, FOUND_ONLINE_PERMISSION, photoSummary, photoList, photoTag, pullSource, shareWinePhoto, shareNote, uploadWinePhoto, removeWinePhoto, reuseWinePhoto } from "./winephotos.js?v=3";
-import { communityHtml, loadSubmissionState, approvalPlan } from "./sharing.js?v=1";
+import { communityHtml, loadSubmissionState, approvalPlan } from "./sharing.js?v=2";
+import { infoLine } from "./wineline.js?v=1";
 import { sortWines, sortSelectHtml, STRUCTURE_SORTS, PHOTO_SORTS } from "./sorting.js?v=1";
 import { suggestStructure, values as ruleValues, goldInfo, GOLD, GROUPS, evaluateRules, reportText, TARGETS, RULES_VERSION } from "./rules.js?v=4";
 
@@ -60,7 +61,7 @@ function sheetHtml(E) {
         ? `<div class="rulebanner"><b>Suggested by the rules.</b> These are starting points, not facts. Check each one against what you know, change what is wrong, then save to confirm.</div>`
         : "";
   return `<div class="overlay"><div class="sheet" id="editorPanel">
-    <div class="sheethead"><div class="sheettitle"><div class="serif big">${esc(s.name)}</div><div class="muted small">Reference structure for a ${esc(s.style === "unknown" ? "wine of another type" : ((styleInfo(s.style) || {}).label || s.style).toLowerCase() + " wine")}. A baseline, not a correct answer.</div><button class="pill infobtn" data-editor="info:${s.vintageId}">Edit wine info</button></div>
+    <div class="sheethead"><div class="sheettitle"><div class="serif big">${esc(s.name)}</div><div class="muted small">${esc(s.info || "")}</div><div class="muted small">Reference structure for a ${esc(s.style === "unknown" ? "wine of another type" : ((styleInfo(s.style) || {}).label || s.style).toLowerCase() + " wine")}. A baseline, not a correct answer.</div><button class="pill infobtn" data-editor="info:${s.vintageId}">Edit wine info</button></div>
       <div class="sheetbtns"><button class="pill wine" data-editor="save"${E.saving ? " disabled" : ""}>Save</button><button class="xbtn" data-editor="close" aria-label="Close">&times;</button></div></div>
     ${banner}${dims}${SCALE_GUIDE}<div id="editorErr" class="err">${esc(E.error || "")}</div>
     <button class="btn primary" data-editor="save"${E.saving ? " disabled" : ""}>Save reference</button></div></div>`;
@@ -104,7 +105,7 @@ function catalogHtml(E) {
       <div class="meta">${c.kind === "new" ? "New to the catalog" : `The catalog has up to ${c.catalogNewest}; players are on a newer vintage`}${c.vintageNote ? `. ${esc(c.vintageNote)}` : ""}</div></div>
       <div class="candbtns"><button class="btn primary slim" data-editor="cat:add:${i}"${C.busy ? " disabled" : ""}>Add</button><button class="btn outline slim" data-editor="cat:not:${i}"${C.busy ? " disabled" : ""}>Not now</button></div></div>`).join("");
   const waiting = v.waiting.slice(0, 8).map((c) => `<div class="meta">${esc(c.name)}: ${c.entries} of ${c.need} entries (${c.people} ${c.people === 1 ? "person" : "people"})</div>`).join("");
-  const pend = v.pending.map((c) => `<div class="candrow"><div class="candinfo"><div class="serif">${esc(wineName(c))}</div><div class="meta">${c.wineStatus === "pending_review" ? "Waiting for review" : esc(c.wineStatus)}</div></div>
+  const pend = v.pending.map((c) => `<div class="candrow"><div class="candinfo"><div class="serif">${esc(wineName(c))}</div><div class="meta">${infoLine(c) ? esc(infoLine(c)) + ". " : ""}${c.wineStatus === "pending_review" ? "Waiting for review" : esc(c.wineStatus)}</div></div>
       <div class="candbtns"><button class="btn outline slim" data-editor="cat:openwine:${esc(c.id)}">Open</button></div></div>`).join("");
   const dups = v.dups.map((d, i) => `<div class="candrow"><div class="candinfo"><div class="serif">${esc(d.name)}</div>
       <div class="meta">Vintages in the deck: ${d.years.join(", ")}. Keep ${d.years[0]}, archive ${d.archive.map((c) => c.vintage).join(", ")}.</div></div>
@@ -136,7 +137,7 @@ function photosHtml(E) {
     const tag = photoTag(c);
     const reuse = re ? `<button class="link" data-editor="phreuse:${esc(c.id)}:${esc(re.id)}">Use the ${esc(re.vintage || "earlier")} photo</button>` : "";
     return `<div class="candrow photorow">${thumb}<div class="candinfo"><div class="serif">${esc(wineName(c))}</div>
-      <div class="meta">${esc(placeLine(c))}${c.wineStatus && c.wineStatus !== "verified" ? " (waiting for review)" : ""}</div>
+      <div class="meta">${esc(infoLine(c))}${c.wineStatus && c.wineStatus !== "verified" ? " (waiting for review)" : ""}</div>
       <button class="link" data-editor="phinfo:${esc(c.id)}">Edit wine info</button>${tag ? `<div class="muted tiny">Photo: ${esc(tag)}</div>` : ""}${remove}${reuse}</div>
       <div class="candbtns"><label class="btn ${c.image ? "outline" : "primary"} slim photobtn${busy || P.busy ? " disabled" : ""}">${busy ? "Saving…" : c.image ? "Replace" : "Add photo"}<input type="file" accept="image/*" data-photofor="${esc(c.id)}"${P.busy ? " disabled" : ""} hidden></label></div></div>`;
   }).join("");
@@ -162,7 +163,7 @@ function listHtml(E) {
     const has = hasFullProfile(E.refs.get(c.id), c.style);
     const gold = goldInfo(c);
     return `<button class="jrow" data-editor="open:${c.id}"><span class="jl"><span class="iname"><span class="serif trunc">${esc(wineName(c))}</span>${marksHtml(c, 16)}</span>
-      <span class="meta trunc">${gold ? '<span class="goldtag">Gold set</span> ' : ""}${esc(placeLine(c))}</span></span>
+      <span class="meta trunc">${gold ? '<span class="goldtag">Gold set</span> ' : ""}${esc(infoLine(c))}</span></span>
       <span class="pill${has ? "" : " dark"}">${has ? "Edit" : "Set"}</span></button>`;
   }).join("");
   const empty = E.filter === "needs" ? "Every wine has a profile." : "No wines match.";
@@ -440,7 +441,7 @@ export function createEditor(ctx) {
       const suggestion = gold ? null : suggestStructure(card);   // gold set wines never show a suggestion, so scoring stays blind
       const startFor = (d) => (typeof cur[d.key] === "number" ? clampDimValue(d, cur[d.key]) : suggestion ? clampDimValue(d, suggestion.dims[d.key].value) : defaultFor(d, card.style));
       E.sheet = {
-        vintageId: a, wineId: E.vintageToWine.get(a), name: wineName(card), style: card.style, suggestion,
+        vintageId: a, wineId: E.vintageToWine.get(a), name: wineName(card), info: infoLine(card), style: card.style, suggestion,
         mode: gold ? (hasRef ? "gold-saved" : "blind") : hasRef ? "saved" : "suggest", touched: new Set(),
         values: Object.fromEntries(dimsFor(card.style).map((d) => [d.key, startFor(d)])),
       };
