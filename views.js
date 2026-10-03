@@ -4,6 +4,7 @@ import {
   esc, wineName, entryCard, entryName, verdictShort, groupEntries, filterEntries, sortCards,
   WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims, dimsFor, placeLine, entryGrape } from "./logic.js?v=10";
 import { splitGrapeParts, splitPlace } from "./blends.js?v=1";
+import { infoLine, entryInfoLine } from "./wineline.js?v=1";
 
 // The grape and place inputs shared by the two forms. The form keeps one grape text and one place text; these show them as
 // "main varietal" and "other varietals (if blended)", and as "country" and "region". app.js puts them back together as you type.
@@ -86,7 +87,7 @@ function section(id, title, count, open, inner) {
 }
 function item(card, actions, extra = "", thumb = "") {
   actions += `<button class="delsmall" data-action="delswipe:${card.id}" aria-label="Delete this swipe">Delete</button>`;
-  const where = placeLine(card);
+  const where = infoLine(card);   // varietal, vineyard, appellation, region, country: up to three, most important first
   return `<div class="item withthumb">${thumb}<div class="ibody"><div class="iname"><span class="serif">${esc(wineName(card))}</span>${marksHtml(card, 16)}</div>
     <div class="meta">${esc(where)}${extra}</div><div class="acts">${actions}</div></div></div>`;
 }
@@ -160,7 +161,7 @@ export function journalListHtml(entries, j, photoUrls, cards = []) {
       const c = entryCard(e); const v = verdictShort(e.verdict);
       return `<button class="jrow" data-action="entry:${e.id}">${thumbHtml(photoUrls, e.first_photo_path)}<span class="jl">
         <span class="iname"><span class="serif trunc">${esc(entryName(e))}</span>${marksHtml(c, 16)}</span>
-        ${entryGrape(e, cardsById) ? `<span class="meta grapeline trunc">${esc(entryGrape(e, cardsById))}</span>` : ""}
+        ${entryInfoLine(e, e.wine_vintage_id ? cardsById.get(e.wine_vintage_id) : null) ? `<span class="meta grapeline trunc">${esc(entryInfoLine(e, e.wine_vintage_id ? cardsById.get(e.wine_vintage_id) : null))}</span>` : ""}
         <span class="meta trunc"><b class="${v ? "wine" : ""}">${esc(v || "No verdict yet")}</b>${e.consumed_on ? ", " + esc(e.consumed_on) : ""}${e.food ? ", with " + esc(e.food) : ""}${e.is_outside_wine ? ", not in catalog" : ""}</span></span>
         ${v ? "" : `<span class="pill dark">Rate</span>`}</button>`;
     }).join("");
