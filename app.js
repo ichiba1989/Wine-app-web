@@ -16,6 +16,7 @@ import { createLearn } from "./learn.js?v=3";
 import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=1";
 import { loadPrices, applyPrices, tidyFacts } from "./pricing.js?v=1";
+import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, toggleTag, cleanGrid, gridToDims, loadTasting, saveTasting, isEmptyGrid } from "./tasting.js?v=1";
 import { buildDeck } from "./deck.js?v=2";
 import { createProfile } from "./profile.js?v=10";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=5";
@@ -24,7 +25,7 @@ import { createEditor } from "./editor.js?v=17";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
-const APP_VERSION = "24";   // shown to editors with each piece of feedback
+const APP_VERSION = "25";   // shown to editors with each piece of feedback
 const SUPABASE_JS_VERSION = "2.109.0";
 const LIBRARY_URLS = [
   `https://esm.sh/@supabase/supabase-js@${SUPABASE_JS_VERSION}`,
@@ -75,6 +76,8 @@ const state = {
   deckInfo: new Map(),                  // wine id -> { tier, fam, pref }: which deck each wine is in and why
   sinceDeck: 0,                         // swipes since the deck was last re-ranked
   access: { role: null, label: null, permissions: [] },   // what this person may do as staff: from the database
+  pro: false,                           // this person has the professional tier: they get the tasting grid (feature switch proTasting)
+  grid: null,                           // the tasting grid that is open: { values }
   refs: new Map(),                      // wine_vintage_id -> reference structure values set by editors
   feedback: false,                      // feedback switch (feature_access), on for everyone for now
   wf: null, wfDone: null,               // "report a problem with this wine"
@@ -195,6 +198,7 @@ async function enterMain() {
   state.cards = await loadAllCards();
   await Promise.all([refreshData(), loadReferences()]);
   try { state.feedback = feedbackOn(await db.loadFeature(state.sb, "contentFeedback"), (state.profile || {}).tier || "default"); } catch (_) { state.feedback = false; }
+  try { state.pro = feedbackOn(await db.loadFeature(state.sb, PRO_FEATURE), (state.profile || {}).tier || "default"); } catch (_) { state.pro = false; }   // off until database update 21 is run
   // What the person knows and what other players know both help decide the deck. Neither is essential.
   try { state.quiz = await db.loadQuizKnowledge(state.sb); } catch (_) { state.quiz = null; }
   try { state.crowd = await db.loadCrowd(state.sb); } catch (_) { state.crowd = new Map(); }
@@ -481,6 +485,28 @@ function openSheet() {
   state.sheetUi = { ...state.sheetUi, saving: false, error: "", page: 0 };
   $("#overlay").innerHTML = sheetHtml(state.sheet, state.sheetUi);
   showPhotos();   // the photos block with the sharing choices (sharing.js)
+  showPro();
+}
+// Professionals get the tasting grid at the top of the Structure step. It is drawn again whenever that step is redrawn.
+function showPro() {
+  const page = document.querySelector('[data-wpage="1"]');
+  if (!state.pro || !state.sheet || !page) return;
+  const old = page.querySelector("[data-problock]"); if (old) old.remove();
+  page.insertAdjacentHTML("afterbegin", proBlockHtml(state.sheet.tasting || {}, state.sheet.style));
+}
+function openGrid() {
+  if (!state.sheet) return;
+  state.grid = { values: JSON.parse(JSON.stringify(cleanGrid(state.sheet.tasting || {}, state.sheet.style))) };
+  $("#confirm").innerHTML = gridHtml(state.grid.values, state.sheet.style, state.sheet.target.name);
+}
+function closeGrid() { state.grid = null; $("#confirm").innerHTML = ""; }
+// Done: keep the answers, and let acidity, tannin, body, sweetness, oak and bubbles move the structure sliders.
+function finishGrid() {
+  if (!state.grid || !state.sheet) return;
+  const style = state.sheet.style, clean = cleanGrid(state.grid.values, style);
+  state.sheet.tasting = clean; state.sheet.tastingDirty = true;
+  Object.entries(gridToDims(clean, style)).forEach(([key, value]) => { if (state.sheet.dims[key]) state.sheet = setDim(state.sheet, key, value); });
+  closeGrid(); syncSheet(); showPro();
 }
 // Go to page n of the rating window (0 to 4). Everything stays on the page, so nothing entered is lost.
 function showSheetPage(n) {
@@ -541,11 +567,14 @@ function redrawStructurePages() {
   const a = document.querySelector('[data-wpage="1"]'), b = document.querySelector('[data-wpage="2"]');
   if (a) a.innerHTML = structurePageHtml(state.sheet);
   if (b) b.innerHTML = characterPageHtml(state.sheet);
+  showPro();
 }
 async function openEntry(entry) {
   const [rows, photos] = await Promise.all([db.loadPerceptions(state.sb, entry.id), db.loadEntryPhotos(state.sb, entry.id).catch(() => [])]);
   state.sheet = sheetForEntry(entry, rows, today(), startForEntry(entry), photos);
   state.sheet.photos.existing.forEach((p) => { const row = photos.find((r) => String(r.id) === String(p.id)); p.status = (row && row.share_status) || "private"; p.want = p.status === "submitted" || p.status === "approved"; });
+  state.sheet.tasting = {}; state.sheet.tastingDirty = false;
+  if (state.pro) { try { state.sheet.tasting = await loadTasting(state.sb, entry.id); } catch (_) { /* before database update 21 there are no notes */ } }
   openSheet();
 }
 const showPhotos = () => { const el = $("#sheetPhotos"); if (el && state.sheet) el.innerHTML = sheetPhotosHtml(state.sheet); };
@@ -571,6 +600,10 @@ async function saveSheet() {
     const failedUp = await db.uploadPhotos(state.sb, state.user.id, id, state.sheet.photos.queued, shareNew);
     const failedDel = await db.deletePhotos(state.sb, removed);
     const failedShare = await applyShareChanges(state.sb, state.sheet.photos.existing.filter((p) => !p.removed || failedDel.some((f) => f.photo.id === p.id)));
+    if (state.pro && state.sheet.tastingDirty) {
+      try { await saveTasting(state.sb, id, state.sheet.tasting || {}, state.sheet.style); state.sheet.tastingDirty = false; }
+      catch (e) { failedShare.push({ message: "the tasting grid was not saved (" + (e.message || e) + ")" }); }
+    }
     await refreshData();
     if (failedUp.length || failedDel.length || failedShare.length) {
       const stillThere = new Set(failedDel.map((f) => f.photo.id));
@@ -580,7 +613,7 @@ async function saveSheet() {
       };
       showPhotos();
       const first = (failedUp[0] || failedDel[0] || failedShare[0]).message;
-      state.sheetUi = { ...state.sheetUi, saving: false, error: `Your rating is saved, but ${failedUp.length + failedDel.length + failedShare.length} photo change(s) did not go through: ${first}. Tap Save to try again.` };
+      state.sheetUi = { ...state.sheetUi, saving: false, error: `Your rating is saved, but ${failedUp.length + failedDel.length + failedShare.length} change(s) did not go through: ${first}. Tap Save to try again.` };
       syncSheet();
       return;
     }
@@ -661,6 +694,18 @@ document.addEventListener("pointerup", (ev) => {
 document.addEventListener("pointercancel", () => { pageSwipe = null; });
 
 // ---------------------------------------------------------------- clicks and typing
+// The professional tasting grid (tasting.js). It sits above the rating window and changes nothing until Done.
+document.addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-grid]");
+  if (!b) return;
+  const [action, id, i] = b.dataset.grid.split(":");
+  if (action === "open") openGrid();
+  else if (!state.grid) return;
+  else if (action === "cancel") closeGrid();
+  else if (action === "done") finishGrid();
+  else if (action === "pick") { state.grid.values = pickValue(state.grid.values, id, Number(i), state.sheet.style); syncGridDom(state.grid.values, state.sheet.style); }
+  else if (action === "tag") { state.grid.values = toggleTag(state.grid.values, id, Number(i)); syncGridDom(state.grid.values, state.sheet.style); }
+});
 document.addEventListener("click", async (ev) => {
   const wb = ev.target.closest("[data-wedit], [data-wedit-style]");
   if (wb && state.wedit) {
@@ -798,7 +843,8 @@ function syncGrapePlace(scope) {
 const checkGrapeInputs = (scope) => document.querySelectorAll(`[data-pscope="${scope}"][data-grapes]`).forEach((el) => checkGrapeInput(el));   // marks a grape that is not on the list
 document.addEventListener("input", (ev) => {
   const t = ev.target;
-  if (t.dataset.sharenew !== undefined && state.sheet) { state.sheet.shareNew = !!t.checked; }
+  if (t.dataset.gridNote !== undefined && state.grid) { state.grid.values.note = t.value; }
+  else if (t.dataset.sharenew !== undefined && state.sheet) { state.sheet.shareNew = !!t.checked; }
   else if (t.dataset.dim) { state.sheet = setDim(state.sheet, t.dataset.dim, Number(t.value)); syncSheet(); }
   else if (t.dataset.field && state.sheet) state.sheet[t.dataset.field] = t.value;
   else if (t.dataset.pscope !== undefined) syncGrapePlace(t.dataset.pscope);
