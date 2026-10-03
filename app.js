@@ -11,18 +11,20 @@ import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=1";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=2";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=11";
+  discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=12";
 import { createLearn } from "./learn.js?v=3";
-import { wireGrapeInputs, checkGrapeInput } from "./grapes.js?v=1";
+import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
+import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=1";
+import { loadPrices, applyPrices, tidyFacts } from "./pricing.js?v=1";
 import { buildDeck } from "./deck.js?v=2";
-import { createProfile } from "./profile.js?v=9";
+import { createProfile } from "./profile.js?v=10";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=5";
 import { createFeedback } from "./feedback.js?v=3";
-import { createEditor } from "./editor.js?v=16";
+import { createEditor } from "./editor.js?v=17";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
-const APP_VERSION = "23";   // shown to editors with each piece of feedback
+const APP_VERSION = "24";   // shown to editors with each piece of feedback
 const SUPABASE_JS_VERSION = "2.109.0";
 const LIBRARY_URLS = [
   `https://esm.sh/@supabase/supabase-js@${SUPABASE_JS_VERSION}`,
@@ -110,8 +112,15 @@ const feedback = createFeedback({ sb: () => state.sb, user: () => state.user, sc
 // A gentle reminder for guests who have started building a journal, shown on Discover until they save it or say "not now".
 const showNudge = () => !!state.user && state.user.is_anonymous === true && !store.get("wine.nudgeOff") && (state.journal.length >= 1 || state.states.length >= 5);
 // The Editor tab (editors only) lives in editor.js.
-const editorTab = createEditor({ sb: () => state.sb, userId: () => state.user.id, cards: () => state.cards, can, roleLabel: () => (state.access && state.access.label) || "", onSaved: () => loadReferences(), onWineChanged: async () => { state.cards = await db.loadCards(state.sb); rebuildDeck(); } });   // a deleted, archived, published or edited wine changes the Discover deck too
+const editorTab = createEditor({ sb: () => state.sb, userId: () => state.user.id, cards: () => state.cards, can, roleLabel: () => (state.access && state.access.label) || "", onSaved: () => loadReferences(), onWineChanged: async () => { state.cards = await loadAllCards(); rebuildDeck(); } });   // a deleted, archived, published or edited wine changes the Discover deck too
 
+// The catalog cards, each with its price (an editor's price blended with players' prices, see pricing.js) and no repeated lines.
+// Before database update 20 there are no prices; the cards still load.
+async function loadAllCards() {
+  const cards = await db.loadCards(state.sb);
+  try { applyPrices(cards, await loadPrices(state.sb)); } catch (_) { cards.forEach(tidyFacts); }
+  return cards;
+}
 // Counts for the Discover screen. Only swipes count as swipes (not later changes of interest).
 async function loadCounts() {
   const [s, j] = await Promise.all([
@@ -125,6 +134,7 @@ async function loadCounts() {
 
 // ---------------------------------------------------------------- start up
 async function init() {
+  setExtraGrapes(BLEND_NAMES);   // GSM is accepted as a varietal (it becomes Grenache, Syrah and Mourvèdre when saved)
   wireGrapeInputs();   // suggestions under every grape field
   try {
     // config.js (created once in the site's folder) carries the connection details for everyone who opens the link.
@@ -182,7 +192,7 @@ async function loadReferences() {
   } catch (_) { state.refs = new Map(); }
 }
 async function enterMain() {
-  state.cards = await db.loadCards(state.sb);
+  state.cards = await loadAllCards();
   await Promise.all([refreshData(), loadReferences()]);
   try { state.feedback = feedbackOn(await db.loadFeature(state.sb, "contentFeedback"), (state.profile || {}).tier || "default"); } catch (_) { state.feedback = false; }
   // What the person knows and what other players know both help decide the deck. Neither is essential.
@@ -510,7 +520,7 @@ function showWineChange() {
 async function saveWineEdit() {
   const w = state.wedit;
   if (!w || w.saving) return;
-  const gi = document.querySelector('[data-wef="grape"]'); if (gi) checkGrapeInput(gi);
+  checkGrapeInputs("wef"); syncGrapePlace("wef"); w.form.grape = expandBlends(w.form.grape);   // GSM -> its three grapes
   const problem = validateWineEdit(w.form);
   if (problem) { w.error = problem; const e = document.getElementById("winfoErr"); if (e) e.textContent = problem; return; }
   const plan = planWineEdit(w.entry, w.before, w.form, state.cards);
@@ -759,7 +769,7 @@ document.addEventListener("click", async (ev) => {
     else if (action === "formstyle") { state.form.style = state.form.style === a ? "" : a; $("#overlay").innerHTML = addFormHtml(state.form); }
     else if (action === "formunqueue") { state.form.photos = state.form.photos.filter((p) => p.key !== a); showFormPhotos(); }
     else if (action === "addrate" || action === "addnorate") {
-      const gi = document.querySelector('[data-form="grape"]'); if (gi) checkGrapeInput(gi);   // marks a grape that is not on the list
+      checkGrapeInputs("form"); syncGrapePlace("form"); state.form.grape = expandBlends(state.form.grape);   // GSM -> its three grapes
       const problem = validateOutside(state.form);
       if (problem) { $("#formErr").textContent = problem; return; }
       if (action === "addrate") { state.sheet = applyDefaults(sheetForOutside(state.form, today()), startingValues(entryAsCard(state.form), null)); state.form = null; openSheet(); }
@@ -777,11 +787,21 @@ document.addEventListener("click", async (ev) => {
   }
 });
 
+// The forms show "main varietal", "other varietals", "country" and "region"; the form keeps one grape text and one place text.
+function syncGrapePlace(scope) {
+  const form = scope === "wef" ? (state.wedit && state.wedit.form) : state.form;
+  if (!form) return;
+  const val = (sel) => { const el = document.querySelector(`${sel}[data-pscope="${scope}"]`); return el ? el.value : ""; };
+  form.grape = joinGrapeParts(val("[data-gmain]"), val("[data-gother]"));
+  form.region = joinPlace(val("[data-pregion]"), val("[data-pcountry]"));
+}
+const checkGrapeInputs = (scope) => document.querySelectorAll(`[data-pscope="${scope}"][data-grapes]`).forEach((el) => checkGrapeInput(el));   // marks a grape that is not on the list
 document.addEventListener("input", (ev) => {
   const t = ev.target;
   if (t.dataset.sharenew !== undefined && state.sheet) { state.sheet.shareNew = !!t.checked; }
   else if (t.dataset.dim) { state.sheet = setDim(state.sheet, t.dataset.dim, Number(t.value)); syncSheet(); }
   else if (t.dataset.field && state.sheet) state.sheet[t.dataset.field] = t.value;
+  else if (t.dataset.pscope !== undefined) syncGrapePlace(t.dataset.pscope);
   else if (t.dataset.form && state.form) state.form[t.dataset.form] = t.value;
   else if (t.dataset.wef && state.wedit) state.wedit.form[t.dataset.wef] = t.value;
   else if (t.dataset.jq !== undefined) { state.j.q = t.value; renderJournalList(); }
