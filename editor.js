@@ -10,9 +10,9 @@
 // Every change is logged by the database.
 import { dimsFor, dimMeta, defaultFor, esc, wineName, placeLine, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel, barDims, choiceDims, styleInfo } from "./logic.js?v=10";
 import * as db from "./data.js?v=15";
-import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=11";
+import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=12";
 import { createReview } from "./review.js?v=6";
-import { createWineInfo, publishSummary } from "./wineinfo.js?v=9";
+import { createWineInfo, publishSummary } from "./wineinfo.js?v=10";
 import { groupSubmissions, planPromotion, duplicateGroups, rulesFrom } from "./catalog.js?v=2";
 import { visibleKinds, FOUND_ONLINE_PERMISSION, photoSummary, photoList, photoTag, pullSource, shareWinePhoto, shareNote, uploadWinePhoto, removeWinePhoto, reuseWinePhoto } from "./winephotos.js?v=3";
 import { communityHtml, loadSubmissionState, approvalPlan } from "./sharing.js?v=1";
@@ -60,7 +60,7 @@ function sheetHtml(E) {
         ? `<div class="rulebanner"><b>Suggested by the rules.</b> These are starting points, not facts. Check each one against what you know, change what is wrong, then save to confirm.</div>`
         : "";
   return `<div class="overlay"><div class="sheet" id="editorPanel">
-    <div class="sheethead"><div class="sheettitle"><div class="serif big">${esc(s.name)}</div><div class="muted small">Reference structure for a ${esc(s.style === "unknown" ? "wine of unknown style" : ((styleInfo(s.style) || {}).label || s.style).toLowerCase() + " wine")}. A baseline, not a correct answer.</div><button class="pill infobtn" data-editor="info:${s.vintageId}">Edit wine info</button></div>
+    <div class="sheethead"><div class="sheettitle"><div class="serif big">${esc(s.name)}</div><div class="muted small">Reference structure for a ${esc(s.style === "unknown" ? "wine of another type" : ((styleInfo(s.style) || {}).label || s.style).toLowerCase() + " wine")}. A baseline, not a correct answer.</div><button class="pill infobtn" data-editor="info:${s.vintageId}">Edit wine info</button></div>
       <div class="sheetbtns"><button class="pill wine" data-editor="save"${E.saving ? " disabled" : ""}>Save</button><button class="xbtn" data-editor="close" aria-label="Close">&times;</button></div></div>
     ${banner}${dims}${SCALE_GUIDE}<div id="editorErr" class="err">${esc(E.error || "")}</div>
     <button class="btn primary" data-editor="save"${E.saving ? " disabled" : ""}>Save reference</button></div></div>`;
