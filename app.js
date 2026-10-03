@@ -7,25 +7,28 @@ import {
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, dimMeta, isChoice, setStyle, choiceDims, barDims,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=10";
 import * as db from "./data.js?v=15";
-import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=1";
+import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=2";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=2";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=12";
+  discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=13";
 import { createLearn } from "./learn.js?v=3";
 import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=1";
 import { loadPrices, applyPrices, tidyFacts } from "./pricing.js?v=1";
-import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, toggleTag, cleanGrid, gridToDims, loadTasting, saveTasting, isEmptyGrid } from "./tasting.js?v=1";
+import { FEELS, applyFeel, feelBlockHtml } from "./feel.js?v=1";
+import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent, tickAll, CONSENT_VERSION } from "./consent.js?v=1";
+import { infoLine, entryInfoLine } from "./wineline.js?v=1";
+import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, isEmptyGrid } from "./tasting.js?v=2";
 import { buildDeck } from "./deck.js?v=2";
-import { createProfile } from "./profile.js?v=10";
+import { createProfile } from "./profile.js?v=11";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=5";
 import { createFeedback } from "./feedback.js?v=3";
-import { createEditor } from "./editor.js?v=17";
+import { createEditor } from "./editor.js?v=18";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
-const APP_VERSION = "25";   // shown to editors with each piece of feedback
+const APP_VERSION = "26";   // shown to editors with each piece of feedback
 const SUPABASE_JS_VERSION = "2.109.0";
 const LIBRARY_URLS = [
   `https://esm.sh/@supabase/supabase-js@${SUPABASE_JS_VERSION}`,
@@ -76,6 +79,7 @@ const state = {
   deckInfo: new Map(),                  // wine id -> { tier, fam, pref }: which deck each wine is in and why
   sinceDeck: 0,                         // swipes since the deck was last re-ranked
   access: { role: null, label: null, permissions: [] },   // what this person may do as staff: from the database
+  consent: {}, consentBusy: false, consentError: "",   // the consent page: what is ticked
   pro: false,                           // this person has the professional tier: they get the tasting grid (feature switch proTasting)
   grid: null,                           // the tasting grid that is open: { values }
   refs: new Map(),                      // wine_vintage_id -> reference structure values set by editors
@@ -119,8 +123,16 @@ const editorTab = createEditor({ sb: () => state.sb, userId: () => state.user.id
 
 // The catalog cards, each with its price (an editor's price blended with players' prices, see pricing.js) and no repeated lines.
 // Before database update 20 there are no prices; the cards still load.
+// The vineyard is put on the card and added to its facts, right after the grape (before database update 22 there is none to show).
+function addVineyard(card) {
+  card.vineyard = String((card.raw && card.raw.vineyard) || "").trim();
+  if (!card.vineyard) return card;
+  const leading = (card.raw.label_grapes && card.raw.label_grapes.length ? 1 : 0) + (card.raw.rule_grapes && card.raw.rule_grapes.length ? 1 : 0);
+  card.facts = [...card.facts.slice(0, leading), { text: card.vineyard, derived: false }, ...card.facts.slice(leading)];
+  return card;
+}
 async function loadAllCards() {
-  const cards = await db.loadCards(state.sb);
+  const cards = (await db.loadCards(state.sb)).map(addVineyard);
   try { applyPrices(cards, await loadPrices(state.sb)); } catch (_) { cards.forEach(tidyFacts); }
   return cards;
 }
@@ -158,7 +170,7 @@ async function init() {
     const carried = await carryOverGuest();
     state.profile = await db.loadProfile(state.sb, state.user.id);
     state.access = await db.loadAccess(state.sb, state.profile.role);
-    if (state.profile.age_attested_at) await enterMain(); else { state.status = "age"; render(); }
+    if (!needsConsent(state.profile, store.get("wine.consent"))) await enterMain(); else { state.status = "age"; render(); }   // the one consent page: first time, or when its version changes
     if (carried && carried.error) setBanner(carried.error);
     else if (carried) setBanner(carried, true);
   } catch (e) {
@@ -304,11 +316,7 @@ function render() {
   else if (state.status === "error") html = `<div class="center"><div class="err">${esc(state.error)}</div>
       <div class="muted small">Check the two values you entered, that the database setup finished, and that anonymous sign-ins are switched on in Supabase.</div>
       <button class="btn outline" data-action="retry">Try again</button></div>`;
-  else if (state.status === "age") html = `<div class="center"><div class="serif" style="font-size:32px;line-height:1.1">A game that learns your palate while teaching you about wine.</div>
-      ${state.underage ? `<div class="muted">This app is for people 21 and older in the US. Come back when you're 21.</div>`
-        : `<div class="muted">Are you 21 or older?</div><button class="btn primary" data-action="attest">I'm 21 or older</button><button class="btn outline" data-action="under">I'm under 21</button><button class="link" data-account="open:signin">I already have an account</button>`}
-      <div class="muted small"><a class="link" href="privacy.html" target="_blank" rel="noopener">Privacy policy</a></div>
-      ${state.banner ? `<div class="err">${esc(state.banner)}</div>` : ""}</div>`;
+  else if (state.status === "age") html = `${consentHtml({ accepted: state.consent, underage: state.underage, busy: state.consentBusy, error: state.consentError })}${state.banner ? `<div class="err" style="padding:0 20px">${esc(state.banner)}</div>` : ""}`;
   app.innerHTML = html;
 }
 
@@ -484,30 +492,65 @@ function syncFoot() {
 function openSheet() {
   state.sheetUi = { ...state.sheetUi, saving: false, error: "", page: 0 };
   $("#overlay").innerHTML = sheetHtml(state.sheet, state.sheetUi);
-  showPhotos();   // the photos block with the sharing choices (sharing.js)
-  showPro();
+  showPhotos();   // the photos block (sharing.js)
+  showExtras(); showWineLine();
 }
-// Professionals get the tasting grid at the top of the Structure step. It is drawn again whenever that step is redrawn.
-function showPro() {
+// The top of the Structure step: "How did the wine feel?" for everyone (feel.js), and the tasting grid for professionals (tasting.js).
+// It is drawn again whenever that step is redrawn.
+function showExtras() {
   const page = document.querySelector('[data-wpage="1"]');
-  if (!state.pro || !state.sheet || !page) return;
-  const old = page.querySelector("[data-problock]"); if (old) old.remove();
-  page.insertAdjacentHTML("afterbegin", proBlockHtml(state.sheet.tasting || {}, state.sheet.style));
+  if (!state.sheet || !page) return;
+  page.querySelectorAll("[data-feelblock], [data-problock]").forEach((e) => e.remove());
+  page.insertAdjacentHTML("afterbegin", feelBlockHtml(state.sheet.feel && state.sheet.feel.id) + (state.pro ? proBlockHtml(state.sheet.tasting || {}, state.sheet.style) : ""));
+}
+// The small line of wine info (varietal, vineyard, region ...) under the wine's name.
+function sheetInfo(sheet) {
+  if (!sheet) return "";
+  const t = sheet.target || {};
+  if (t.wineVintageId) return infoLine(cardById(t.wineVintageId));
+  const e = sheet.entryId && state.journal.find((x) => x.id === sheet.entryId);
+  if (e) return entryInfoLine(e, e.wine_vintage_id ? cardById(e.wine_vintage_id) : null);
+  return t.form ? entryInfoLine(t.form, null) : "";
+}
+function showWineLine() {
+  const big = document.querySelector("#sheetPanel .sheettitle .big");
+  if (!big || !state.sheet) return;
+  const old = document.getElementById("sheetInfo"); if (old) old.remove();
+  const info = sheetInfo(state.sheet);
+  if (info) big.insertAdjacentHTML("afterend", `<div class="muted small" id="sheetInfo">${esc(info)}</div>`);
 }
 function openGrid() {
   if (!state.sheet) return;
-  state.grid = { values: JSON.parse(JSON.stringify(cleanGrid(state.sheet.tasting || {}, state.sheet.style))) };
-  $("#confirm").innerHTML = gridHtml(state.grid.values, state.sheet.style, state.sheet.target.name);
+  const values = JSON.parse(JSON.stringify(cleanGrid(state.sheet.tasting || {}, state.sheet.style)));
+  state.grid = { values, open: openFromGrid(values), timer: null };
+  $("#confirm").innerHTML = gridHtml(values, state.grid.open, state.sheet.style, state.sheet.target.name, sheetInfo(state.sheet));
 }
-function closeGrid() { state.grid = null; $("#confirm").innerHTML = ""; }
-// Done: keep the answers, and let acidity, tannin, body, sweetness, oak and bubbles move the structure sliders.
-function finishGrid() {
+const setGridMsg = (m) => { const el = document.getElementById("gridMsg"); if (el) el.textContent = m || ""; };
+// Every tap is kept at once: it goes into the rating window (and moves the structure sliders), and for an entry that already exists it is also
+// saved to the database a moment later. For a new entry it is saved together with the rating.
+async function saveGridNow() {
+  const g = state.grid, sheet = state.sheet;
+  if (g) { clearTimeout(g.timer); g.timer = null; }
+  if (!sheet || !sheet.entryId || !sheet.tastingDirty) return;
+  try { await saveTasting(state.sb, sheet.entryId, sheet.tasting || {}, sheet.style); sheet.tastingDirty = false; setGridMsg(""); }
+  catch (e) { setGridMsg("Not saved yet (" + (e.message || e) + "). It will be saved with the rating."); }
+}
+function scheduleGridSave() {
+  const g = state.grid;
+  if (!g || !state.sheet || !state.sheet.entryId) return;
+  clearTimeout(g.timer); g.timer = setTimeout(saveGridNow, 600);
+}
+function applyGridLive(withDims = true) {
   if (!state.grid || !state.sheet) return;
   const style = state.sheet.style, clean = cleanGrid(state.grid.values, style);
   state.sheet.tasting = clean; state.sheet.tastingDirty = true;
-  Object.entries(gridToDims(clean, style)).forEach(([key, value]) => { if (state.sheet.dims[key]) state.sheet = setDim(state.sheet, key, value); });
-  closeGrid(); syncSheet(); showPro();
+  if (withDims) {
+    Object.entries(gridToDims(clean, style)).forEach(([key, value]) => { if (state.sheet.dims[key]) state.sheet = setDim(state.sheet, key, value); });
+    state.sheet.feel = null; syncSheet(); showExtras();
+  }
+  scheduleGridSave();
 }
+async function closeGrid() { await saveGridNow(); state.grid = null; $("#confirm").innerHTML = ""; showExtras(); }
 // Go to page n of the rating window (0 to 4). Everything stays on the page, so nothing entered is lost.
 function showSheetPage(n) {
   const last = SHEET_PAGES.length - 1;
@@ -541,7 +584,7 @@ function showWineChange() {
   const s = state.sheet; if (!s) return;
   const t = document.querySelector("#sheetPanel .sheettitle .big"); if (t) t.textContent = s.target.name;
   const c = document.getElementById("wcname"); if (c) c.textContent = s.target.name;
-  redrawStructurePages(); showPhotos(); syncSheet();   // the photos block follows the wine: sharing is only for catalog wines
+  redrawStructurePages(); showPhotos(); showWineLine(); syncSheet();   // the photos block follows the wine: sharing is only for catalog wines
 }
 async function saveWineEdit() {
   const w = state.wedit;
@@ -567,7 +610,7 @@ function redrawStructurePages() {
   const a = document.querySelector('[data-wpage="1"]'), b = document.querySelector('[data-wpage="2"]');
   if (a) a.innerHTML = structurePageHtml(state.sheet);
   if (b) b.innerHTML = characterPageHtml(state.sheet);
-  showPro();
+  showExtras();
 }
 async function openEntry(entry) {
   const [rows, photos] = await Promise.all([db.loadPerceptions(state.sb, entry.id), db.loadEntryPhotos(state.sb, entry.id).catch(() => [])]);
@@ -596,7 +639,7 @@ async function saveSheet() {
     state.sheet.entryId = id;
     // 2. pictures: upload the new ones, delete the ones marked for removal
     const removed = state.sheet.photos.existing.filter((p) => p.removed);
-    const shareNew = !!(state.sheet.shareNew && state.sheet.target.kind === "catalog");   // sharing is only for wines in the catalog, and only when the person chose it
+    const shareNew = state.sheet.target.kind === "catalog";   // photos of catalog wines are offered to the editors (agreed on the consent page); wines typed in by hand are never shared
     const failedUp = await db.uploadPhotos(state.sb, state.user.id, id, state.sheet.photos.queued, shareNew);
     const failedDel = await db.deletePhotos(state.sb, removed);
     const failedShare = await applyShareChanges(state.sb, state.sheet.photos.existing.filter((p) => !p.removed || failedDel.some((f) => f.photo.id === p.id)));
@@ -694,17 +737,40 @@ document.addEventListener("pointerup", (ev) => {
 document.addEventListener("pointercancel", () => { pageSwipe = null; });
 
 // ---------------------------------------------------------------- clicks and typing
-// The professional tasting grid (tasting.js). It sits above the rating window and changes nothing until Done.
+// The consent page (consent.js): tick boxes, Tick all, Accept and continue, I am under 21.
+document.addEventListener("change", (ev) => {
+  const t = ev.target;
+  if (t.dataset && t.dataset.consent && state.status === "age") { state.consent = toggleConsent(state.consent, t.dataset.consent); render(); }
+});
+document.addEventListener("click", async (ev) => {
+  if (state.status !== "age") return;
+  if (ev.target.closest("[data-consent-all]")) { state.consent = tickAll(state.consent, !allAccepted(state.consent)); render(); }
+  else if (ev.target.closest("[data-consent-under]")) { state.underage = true; render(); }
+  else if (ev.target.closest("[data-consent-go]")) {
+    if (!allAccepted(state.consent) || state.consentBusy) return;
+    state.consentBusy = true; state.consentError = ""; render();
+    try { state.profile = await acceptConsents(state.sb, state.user.id, state.profile, (v) => store.set("wine.consent", v)); state.consentBusy = false; await enterMain(); }
+    catch (e) { state.consentBusy = false; state.consentError = "Could not save that: " + (e.message || e); render(); }
+  }
+});
+// "How did the wine feel?" (feel.js): one tap sets acidity, body, tannin and oak in relation to each other; tapping it again puts them back.
+document.addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-feel]");
+  if (!b || !state.sheet) return;
+  const r = applyFeel(state.sheet, b.dataset.feel);
+  state.sheet = { ...state.sheet, dims: r.dims, feel: r.feel };
+  syncSheet(); showExtras();
+});
+// The professional tasting grid (tasting.js). It sits above the rating window; every tap is kept straight away.
 document.addEventListener("click", (ev) => {
   const b = ev.target.closest("[data-grid]");
   if (!b) return;
   const [action, id, i] = b.dataset.grid.split(":");
   if (action === "open") openGrid();
   else if (!state.grid) return;
-  else if (action === "cancel") closeGrid();
-  else if (action === "done") finishGrid();
-  else if (action === "pick") { state.grid.values = pickValue(state.grid.values, id, Number(i), state.sheet.style); syncGridDom(state.grid.values, state.sheet.style); }
-  else if (action === "tag") { state.grid.values = toggleTag(state.grid.values, id, Number(i)); syncGridDom(state.grid.values, state.sheet.style); }
+  else if (action === "close") closeGrid();
+  else if (action === "pick") { state.grid.values = pickValue(state.grid.values, id, Number(i), state.sheet.style); syncGridDom(state.grid.values, state.grid.open, state.sheet.style); applyGridLive(); }
+  else if (action === "tag") { const r = tapTag(state.grid.values, state.grid.open, id, Number(i)); state.grid.values = r.grid; state.grid.open = r.open; syncGridDom(state.grid.values, state.grid.open, state.sheet.style); applyGridLive(); }
 });
 document.addEventListener("click", async (ev) => {
   const wb = ev.target.closest("[data-wedit], [data-wedit-style]");
@@ -726,7 +792,7 @@ document.addEventListener("click", async (ev) => {
     else if (action === "prev") showSheetPage(state.sheetUi.page - 1);
     else if (action === "next") showSheetPage(state.sheetUi.page + 1);
     else if (action === "page") showSheetPage(Number(a));
-    else if (action === "style") { state.sheet = setStyle(state.sheet, a); redrawStructurePages(); syncSheet(); }
+    else if (action === "style") { state.sheet = { ...setStyle(state.sheet, a), feel: null }; redrawStructurePages(); syncSheet(); }
     else if (action === "sweet") { if (state.sheet.dims[a] && state.sheet.dims[a].value === 0) state.sheet = setDim(state.sheet, a, 1); syncSheet(); }
     else if (action === "nudge") { state.sheet = nudgeDim(state.sheet, a, Number(b)); syncSheet(); }
     else if (action === "choice") { state.sheet = setDim(state.sheet, a, Number(b)); syncSheet(); }
@@ -843,8 +909,7 @@ function syncGrapePlace(scope) {
 const checkGrapeInputs = (scope) => document.querySelectorAll(`[data-pscope="${scope}"][data-grapes]`).forEach((el) => checkGrapeInput(el));   // marks a grape that is not on the list
 document.addEventListener("input", (ev) => {
   const t = ev.target;
-  if (t.dataset.gridNote !== undefined && state.grid) { state.grid.values.note = t.value; }
-  else if (t.dataset.sharenew !== undefined && state.sheet) { state.sheet.shareNew = !!t.checked; }
+  if (t.dataset.gridNote !== undefined && state.grid) { state.grid.values.note = t.value; applyGridLive(false); }
   else if (t.dataset.dim) { state.sheet = setDim(state.sheet, t.dataset.dim, Number(t.value)); syncSheet(); }
   else if (t.dataset.field && state.sheet) state.sheet[t.dataset.field] = t.value;
   else if (t.dataset.pscope !== undefined) syncGrapePlace(t.dataset.pscope);
