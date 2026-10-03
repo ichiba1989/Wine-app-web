@@ -3,6 +3,9 @@
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
 import { esc, WINE_STYLES } from "./logic.js?v=10";
 import { checkGrapeText, grapeProblem, grapeIndex, setExtraGrapes } from "./grapes.js?v=1";
+import { expandBlends, BLEND_NAMES } from "./blends.js?v=1";
+import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, placeClassification, savePlace } from "./geo.js?v=1";
+import { loadWinePrice, saveWinePrice, parsePrice, centsToField, blendPrice, formatPrice } from "./pricing.js?v=1";
 import { archivePlanFor } from "./catalog.js?v=2";
 import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=3";
 import * as db from "./data.js?v=15";
@@ -53,6 +56,7 @@ export function validateInfo(v) {
     if (!/^\d{4}$/.test(String(v.year).trim()) || y < 1800 || y > 2100) return "Enter the vintage as a four-digit year, or tick Non-vintage.";
   }
   if (![...WINE_STYLES.map((s) => s.id), "unknown"].includes(v.style)) return "Choose the type of wine.";
+  if (Number.isNaN(parsePrice(v.price))) return "Enter the price as a number in US dollars, like 24.99, or leave it empty.";
   return "";
 }
 // The form starts from what the database holds.
@@ -67,15 +71,33 @@ export function formFromInfo(info, lists) {
     producerName: producer ? producer.name : "", wineName: info.wine.name || "", vineyard: info.wine.vineyard || "",
     year: info.vintage.vintage_year ? String(info.vintage.vintage_year) : "", nonVintage: !!info.vintage.is_non_vintage,
     reach: info.wine.reach != null ? String(info.wine.reach) : "",   // empty before database update 15
-    style: info.wine.style || "unknown", place: info.wine.appellation_id ? placeLabel(lists.areas, info.wine.appellation_id) : "",
+    style: info.wine.style || "unknown", price: "", ...placeFromArea(lists.areas, info.wine.appellation_id),
     labelGrapes: label.map(nameOf).filter(Boolean).join(", "), otherGrapes: other.map(nameOf).filter(Boolean).join(", "),
   };
 }
 
+// The line under the place fields: what saving would add, and the classification of the appellation.
+function placeNoteHtml(W) {
+  const place = { country: W.form.country, region: W.form.region, appellation: W.form.appellation };
+  const plan = planPlace(W.lists.areas, place);
+  if (plan.error) return esc(plan.error);
+  const cls = placeClassification(W.lists.areas, place);
+  return [...plan.notes.map(esc), cls ? `Classification (from the appellation): ${esc(cls)}` : ""].filter(Boolean).join(" ");
+}
+// The line under the price: what players paid, and what players will see.
+function priceNoteHtml(W) {
+  const p = W.priceInfo;
+  if (!p) return "Prices are not available yet. Run database update 20.";
+  const typed = parsePrice(W.form.price);
+  const editorCents = Number.isNaN(typed) ? p.editorCents : typed;
+  const shown = blendPrice({ editorCents, sumCents: p.sumCents, count: p.count });
+  const players = p.count ? `Players paid about ${formatPrice(Math.round(p.sumCents / p.count))} (${p.count} ${p.count === 1 ? "price" : "prices"} from ${p.people} ${p.people === 1 ? "player" : "players"}). ` : "No player prices to use yet. ";
+  return esc(`${players}${shown == null ? "Players see no price until you set one or enough players enter theirs." : `Players see about ${formatPrice(shown)}.`} Player prices move the price a little: your price counts like four players' prices.`);
+}
+
 function sheetHtml(W) {
   const f = W.form, L = W.lists;
-  const chips = [...WINE_STYLES, { id: "unknown", label: "Not known" }].map((s) => `<button class="chip${f.style === s.id ? " on" : ""}" data-wi="style:${s.id}" aria-pressed="${f.style === s.id}">${esc(s.label)}</button>`).join("");
-  const place = W.options.find((o) => fold(o.label) === fold(f.place));
+  const chips = [...WINE_STYLES, { id: "unknown", label: "Other" }].map((s) => `<button class="chip${f.style === s.id ? " on" : ""}" data-wi="style:${s.id}" aria-pressed="${f.style === s.id}">${esc(s.label)}</button>`).join("");
   const matchProducer = L.producers.some((p) => fold(p.name) === fold(f.producerName));
   return `<div class="overlay"><div class="sheet" id="wineInfoPanel">
     <div class="sheethead"><div class="sheettitle"><div class="serif big">Wine info</div><div class="muted small">${esc(W.title)}. Changes show for everyone.</div></div>
@@ -90,18 +112,24 @@ function sheetHtml(W) {
     <div class="qlabel">Vineyard (optional)</div><input class="field" data-wif="vineyard" value="${esc(f.vineyard)}">
     <div class="two"><div><div class="qlabel">Vintage</div><input class="field" inputmode="numeric" maxlength="4" data-wif="year" value="${esc(f.year)}"${f.nonVintage ? " disabled" : ""}></div>
       <label class="nvrow"><input type="checkbox" data-wif="nonVintage"${f.nonVintage ? " checked" : ""}> Non-vintage</label></div>
+    <div class="qlabel">Typical price in US dollars (optional)</div><input class="field" inputmode="decimal" data-wif="price" value="${esc(f.price)}" placeholder="For example 24.99" autocomplete="off">
+    <div class="muted small">${priceNoteHtml(W)}</div>
     <div class="qlabel">Type of wine</div><div class="stylerow">${chips}</div>
     ${f.reach ? `<div class="qlabel">How easy to find (helps decide who is likely to recognize it)</div><select class="field" data-wif="reach" aria-label="How easy to find">${REACH_CHOICES.map(([v, l]) => `<option value="${v}"${f.reach === v ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>` : ""}
-    <div class="qlabel">Place</div><input class="field" list="dlPlaces" data-wif="place" value="${esc(f.place)}" placeholder="Start typing, then pick from the list" autocomplete="off">
-    ${place && place.classification ? `<div class="muted small">Classification (from the place): ${esc(place.classification)}</div>` : ""}
-    <div class="qlabel">Grapes on the label, in order (separate with commas)</div><input class="field" data-grapes="multi" data-wif="labelGrapes" value="${esc(f.labelGrapes)}" placeholder="Start typing, then pick from the list" autocomplete="off" autocapitalize="words" spellcheck="false">
-    <div class="qlabel">Other grapes in the wine, not on the label (a blend)</div><input class="field" data-grapes="multi" data-wif="otherGrapes" value="${esc(f.otherGrapes)}" placeholder="Start typing, then pick from the list" autocomplete="off" autocapitalize="words" spellcheck="false">
+    <div class="qlabel">Country</div><input class="field" list="dlCountries" data-wif="country" value="${esc(f.country)}" placeholder="Start typing, then pick from the list" autocomplete="off">
+    <div class="qlabel">Region</div><input class="field" list="dlRegions" data-wif="region" value="${esc(f.region)}" placeholder="For example Piedmont or Napa Valley" autocomplete="off">
+    <div class="qlabel">Appellation (optional)</div><input class="field" list="dlApps" data-wif="appellation" value="${esc(f.appellation)}" placeholder="For example Barolo or Rutherford" autocomplete="off">
+    <div id="wiPlaceNote" class="muted small">${placeNoteHtml(W)}</div>
+    <div class="qlabel">Main varietal</div><div class="muted tiny">The grape named on the label. If the label names more than one, separate them with commas. GSM is accepted.</div><input class="field" data-grapes="multi" data-wif="labelGrapes" value="${esc(f.labelGrapes)}" placeholder="Start typing, then pick from the list" autocomplete="off" autocapitalize="words" spellcheck="false">
+    <div class="qlabel">Other varietals (if blended)</div><div class="muted tiny">Other grapes in the blend that are not named on the label.</div><input class="field" data-grapes="multi" data-wif="otherGrapes" value="${esc(f.otherGrapes)}" placeholder="Start typing, then pick from the list" autocomplete="off" autocapitalize="words" spellcheck="false">
     <div id="wiErr" class="err">${esc(W.error)}</div>
     <button class="btn primary" data-wi="save"${W.saving ? " disabled" : ""}>Save wine info</button>
     ${W.card && W.card.wineStatus && W.card.wineStatus !== "verified" ? `<div class="pubzone"><div class="muted small">This wine is <b>${W.card.wineStatus === "pending_review" ? "waiting for review" : esc(W.card.wineStatus)}</b>. Players do not see it yet.</div><button class="btn outline" data-wi="pubask">Publish to Discover</button></div>` : ""}
     ${W.canRemove ? `<div class="dangerzone"><button class="link danger" data-wi="delask">Delete this wine</button></div>` : ""}
     <datalist id="dlProducers">${L.producers.map((p) => `<option value="${esc(p.name)}">`).join("")}</datalist>
-    <datalist id="dlPlaces">${W.options.map((o) => `<option value="${esc(o.label)}">`).join("")}</datalist>
+    <datalist id="dlCountries">${countriesOf(L.areas).map((n) => `<option value="${esc(n)}">`).join("")}</datalist>
+    <datalist id="dlRegions">${regionsOf(L.areas, f.country).map((n) => `<option value="${esc(n)}">`).join("")}</datalist>
+    <datalist id="dlApps">${appellationsOf(L.areas, f.country, f.region).map((n) => `<option value="${esc(n)}">`).join("")}</datalist>
 </div></div>`;
 }
 
@@ -155,15 +183,24 @@ export function createWineInfo(ctx) {
   const draw = () => { const o = overlay(); if (o && W.open) { W.reuse = W.card && !W.card.image && !W.photoBusy ? pullSource(ctx.cards ? ctx.cards() : [], W.card, !!(ctx.can && ctx.can(FOUND_ONLINE_PERMISSION))) : null; W.canRemove = !!(ctx.can && ctx.can("remove_content")); o.innerHTML = W.del ? deleteHtml(W) : W.pub ? publishHtml(W) : sheetHtml(W); } };
   const setError = (m) => { W.error = m; const e = document.getElementById("wiErr"); if (e) e.textContent = m; };
 
+  // The region and appellation suggestions depend on the country and region typed so far; the note says what saving would add.
+  function refreshPlace() {
+    const f = W.form, L = W.lists;
+    const fill = (id, names) => { const el = document.getElementById(id); if (el) el.innerHTML = names.map((n) => `<option value="${esc(n)}">`).join(""); };
+    fill("dlRegions", regionsOf(L.areas, f.country)); fill("dlApps", appellationsOf(L.areas, f.country, f.region));
+    const note = document.getElementById("wiPlaceNote"); if (note) note.innerHTML = placeNoteHtml(W);
+  }
   async function open(card, title) {
     const o = overlay();
     W.open = true; W.title = title || ""; W.card = card; W.error = ""; W.unknown = []; W.addNew = false; W.saving = false; W.del = null; W.pub = null; W.photoBusy = false; W.photoConfirm = false; W.photoError = ""; W.photoNote = "";
     if (o) o.innerHTML = `<div class="overlay"><div class="sheet"><p class="muted" style="padding:20px">Loading…</p></div></div>`;
     try {
       if (!W.lists) { W.lists = await db.loadEditorLists(ctx.sb()); W.options = placeOptions(W.lists.areas); }
-      setExtraGrapes(W.lists.grapes.map((x) => x.name));
+      setExtraGrapes([...W.lists.grapes.map((x) => x.name), ...BLEND_NAMES]);   // GSM is accepted too; it is turned into its three grapes on save
       W.info = await db.loadWineInfo(ctx.sb(), card.id);
       W.form = formFromInfo(W.info, W.lists);
+      // The price comes from its own view; before database update 20 it is simply not offered.
+      try { W.priceInfo = await loadWinePrice(ctx.sb(), card.id); W.form.price = centsToField(W.priceInfo.editorCents); } catch (_) { W.priceInfo = null; }
       draw();
     } catch (e) { W.open = false; if (o) o.innerHTML = ""; throw e; }
   }
@@ -251,12 +288,9 @@ export function createWineInfo(ctx) {
     const f = W.form;
     const problem = validateInfo(f);
     if (problem) return setError(problem);
-    let areaId = null;
-    if (f.place.trim()) {
-      const hit = W.options.find((o) => fold(o.label) === fold(f.place));
-      if (!hit) return setError("Choose the place from the list. If it is not there, it needs to be added to the places first.");
-      areaId = hit.id;
-    }
+    f.labelGrapes = expandBlends(f.labelGrapes); f.otherGrapes = expandBlends(f.otherGrapes);   // GSM -> Grenache, Syrah, Mourvèdre
+    const placePlan = planPlace(W.lists.areas, f);
+    if (placePlan.error) return setError(placePlan.error);
     const dbNames = W.lists.grapes.map((g) => g.name), idx = grapeIndex(dbNames);
     const lc = checkGrapeText(f.labelGrapes, idx), oc = checkGrapeText(f.otherGrapes, idx);
     if (!lc.ok || !oc.ok) return setError(grapeProblem([...lc.bad, ...oc.bad]));
@@ -265,14 +299,22 @@ export function createWineInfo(ctx) {
     W.unknown = [...label.unknown.map((name) => ({ name, where: "label" })), ...other.unknown.map((name) => ({ name, where: "other" }))];
     W.saving = true; setError(""); draw();
     try {
+      const areaId = await savePlace(ctx.sb(), W.lists.areas, f);   // creates a country, region or appellation that is new
       await db.saveWineInfo(ctx.sb(), ctx.userId(), W.info, {
         producerName: f.producerName, wineName: f.wineName, vineyard: f.vineyard, year: f.year, nonVintage: f.nonVintage, style: f.style, areaId, reach: f.reach,
         labelGrapes: label.ids, otherGrapes: other.ids, newGrapes: W.unknown,
       }, W.lists);
-      W.lists = null;   // producers and grapes may have changed
-      close();
-      if (ctx.onSaved) await ctx.onSaved();
-    } catch (e) { W.saving = false; draw(); setError("Could not save. " + (e.message || e)); }
+    } catch (e) { W.saving = false; draw(); return setError("Could not save. " + (e.message || e)); }
+    // The price is saved last, so a problem with it never loses the rest. It is only touched when it changed.
+    let priceProblem = "";
+    if (W.priceInfo) {
+      const cents = parsePrice(f.price);
+      if (cents !== W.priceInfo.editorCents) { try { await saveWinePrice(ctx.sb(), W.info.wine.id, cents); } catch (e) { priceProblem = String((e && e.message) || e); } }
+    }
+    if (priceProblem) { W.saving = false; W.priceInfo = null; draw(); return setError("The wine info was saved, but not the price: " + priceProblem); }   // the form stays open, so keep what it draws from
+    W.lists = null;   // producers, grapes and places may have changed
+    close();
+    if (ctx.onSaved) await ctx.onSaved();
   }
 
   document.addEventListener("click", (ev) => {
@@ -301,7 +343,11 @@ export function createWineInfo(ctx) {
     if (!W.open || !W.form || !t.dataset || t.dataset.wif === undefined) return;
     const k = t.dataset.wif;
     if (k === "nonVintage") { W.form.nonVintage = t.checked; draw(); }
-    else W.form[k] = t.value;
+    else {
+      W.form[k] = t.value;
+      if (k === "country" || k === "region" || k === "appellation") refreshPlace();
+      else if (k === "price") { const n = document.querySelector("[data-wif='price']"); const note = n && n.nextElementSibling; if (note) note.innerHTML = priceNoteHtml(W); }
+    }
   });
   return { state: W, open, close };
 }
