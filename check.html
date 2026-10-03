@@ -18,15 +18,15 @@
 <script type="module">
 const FILES = {
  "index.html": {
-  "hash": "082d559f6fc636ed40d09f0a70c98ee7ad457cd492aa1e84f674eafc621b6cc5",
+  "hash": "64946847ce68e4ddaf3bd7da0fda6acadeb0ba4d58c4a3acfc52cd6b2730297c",
   "chars": 30193,
   "query": null,
   "exports": []
  },
  "app.js": {
-  "hash": "775b7cdea2c03b44f322ddd83d2bfebda0136dfcd5e887213da99da0d8133997",
-  "chars": 51345,
-  "query": "23",
+  "hash": "29a2d84664447d16f264696faee0634eabb8e6be8f1d7d0191ef7a4764d28c09",
+  "chars": 52853,
+  "query": "24",
   "exports": []
  },
  "logic.js": {
@@ -195,9 +195,9 @@ const FILES = {
   ]
  },
  "views.js": {
-  "hash": "76eec6358136962c6b38e29167f583a51ffe793da5a665e28312599added7183",
-  "chars": 31559,
-  "query": "11",
+  "hash": "df875c615022c6973ac09efff3a04fd6d4d2f5790137face645eddef11497199",
+  "chars": 32337,
+  "query": "12",
   "exports": [
    "KEPT_NOTE",
    "SHEET_PAGES",
@@ -273,9 +273,9 @@ const FILES = {
   ]
  },
  "editor.js": {
-  "hash": "8771c34ac58558f94772a588ce487a0779550f685ce98ae0210ff6eb3fa521ae",
+  "hash": "61abedd1e518ee0dcf088e0137d3ee03c6ae3ade67a4af1eba8cd3bb3bbefa7d",
   "chars": 39592,
-  "query": "16",
+  "query": "17",
   "exports": [
    "SECTION_PERMISSIONS",
    "catalogView",
@@ -285,9 +285,9 @@ const FILES = {
   ]
  },
  "profile.js": {
-  "hash": "3a2d785e81cd8ad14f1e6926929cb75edec33b9668139975937a7f6830324652",
+  "hash": "95b9ab81d973e914b24741ee4ae19d233528ff01cd53b7cc89fdc0099383a1ad",
   "chars": 29809,
-  "query": "9",
+  "query": "10",
   "exports": [
    "DIFFS",
    "TIER_COLORS",
@@ -392,9 +392,9 @@ const FILES = {
   ]
  },
  "wineinfo.js": {
-  "hash": "edb6387a50ba8c8f0db9c6c1cd7cbceb564a2bdc2bcd7d160443420792b57073",
-  "chars": 22934,
-  "query": "9",
+  "hash": "fd61fc867f0735552f409135ff5e0249f6cab8c922af899e9ab520eb7c984c21",
+  "chars": 27546,
+  "query": "10",
   "exports": [
    "REACH_CHOICES",
    "createWineInfo",
@@ -548,9 +548,59 @@ const FILES = {
    "sortSelectHtml",
    "sortWines"
   ]
+ },
+ "blends.js": {
+  "hash": "0471526f796bcbf963324bf41083766ff2ce580477d360aca376a2f68cc54f89",
+  "chars": 3316,
+  "query": "1",
+  "exports": [
+   "BLENDS",
+   "BLEND_NAMES",
+   "COUNTRIES",
+   "expandBlends",
+   "isCountryName",
+   "joinGrapeParts",
+   "joinPlace",
+   "splitGrapeParts",
+   "splitPlace"
+  ]
+ },
+ "geo.js": {
+  "hash": "fd92093f589ff8a8b7eab3cc282e067895b55e966de2a71256a2171eb6e783ea",
+  "chars": 5228,
+  "query": "1",
+  "exports": [
+   "appellationsOf",
+   "countriesOf",
+   "placeClassification",
+   "placeFromArea",
+   "placeNotes",
+   "planPlace",
+   "regionsOf",
+   "savePlace"
+  ]
+ },
+ "pricing.js": {
+  "hash": "b5e391c9b0d4d7ccef7b90fe752ad89f92bd23d586b5e31ddd1befc8717edda8",
+  "chars": 5077,
+  "query": "1",
+  "exports": [
+   "EDITOR_WEIGHT",
+   "applyPrice",
+   "applyPrices",
+   "blendPrice",
+   "centsToField",
+   "formatPrice",
+   "loadPrices",
+   "loadWinePrice",
+   "parsePrice",
+   "priceFact",
+   "saveWinePrice",
+   "tidyFacts"
+  ]
  }
 };
-const APP_SCRIPT = "app.js?v=23";
+const APP_SCRIPT = "app.js?v=24";
 const LIBRARIES = ["https://esm.sh/@supabase/supabase-js@2.109.0", "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.109.0/+esm"];
 const out = document.getElementById("out"), sum = document.getElementById("sum");
 const lines = []; let problems = 0, first = "";
