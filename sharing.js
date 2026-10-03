@@ -6,6 +6,7 @@
 import { esc, photoCount, wineName } from "./logic.js?v=10";
 import * as db from "./data.js?v=15";
 import { photoTag } from "./winephotos.js?v=3";
+import { infoLine } from "./wineline.js?v=1";
 
 // ---------------------------------------------------------------- the rules
 // private = not shared, submitted = waiting for an editor, approved = on the wine's card, rejected = an editor said no, removed = an editor took it down.
@@ -34,7 +35,9 @@ export function chipLabel(p) {
 }
 // An editor approves a photo for a vintage. A licensed photo already on the card is kept: the player's photo is approved but not shown.
 export const approvalPlan = (currentKind) => ({ replaces: currentKind !== "official" });
-export const SHARE_PROMISE = "Share my new photos of this bottle with other players. An editor checks every photo before anyone sees it. You can take a photo back at any time, and it is removed if you delete the entry or your account.";
+// Sharing is part of the consent page everyone accepts before using the app (consent.js), so there is no tick box here any more.
+// Photos added to a wine in the catalog are offered to the editors automatically; a person can take any photo back with one tap.
+export const SHARE_NOTE = "Photos of wines in the catalog are checked by our editors and may then appear on the wine's card, without your name. Tap Shared under a photo to take it back.";
 
 // ---------------------------------------------------------------- the rating window (players)
 const chipHtml = (p) => {
@@ -48,13 +51,11 @@ const chipHtml = (p) => {
 export function sheetPhotosHtml(sheet) {
   const catalog = !!(sheet.target && sheet.target.kind === "catalog");
   const existing = sheet.photos.existing.map((p) => `<div class="phwrap"><div class="ph${p.removed ? " gone" : ""}">${p.url ? `<img src="${esc(p.url)}" alt="Your photo">` : ""}<button class="phx" data-sheet="togglephoto:${p.id}" aria-label="${p.removed ? "Keep this photo" : "Remove this photo"}">${p.removed ? "↺" : "×"}</button></div>${catalog && !p.removed ? chipHtml(p) : ""}</div>`).join("");
-  const queued = sheet.photos.queued.map((p) => `<div class="phwrap"><div class="ph"><img src="${esc(p.url)}" alt="New photo"><button class="phx" data-sheet="unqueue:${p.key}" aria-label="Remove this photo">×</button></div></div>`).join("");
+  const queued = sheet.photos.queued.map((p) => `<div class="phwrap"><div class="ph"><img src="${esc(p.url)}" alt="New photo"><button class="phx" data-sheet="unqueue:${p.key}" aria-label="Remove this photo">×</button></div>${catalog ? `<div class="sharechip off">Shared after review</div>` : ""}</div>`).join("");
   const label = photoCount(sheet) ? "Add more photos" : "Add photos";
-  const optin = catalog
-    ? `<label class="shareopt"><input type="checkbox" data-sharenew${sheet.shareNew ? " checked" : ""}><span>${esc(SHARE_PROMISE)} <a href="privacy.html" target="_blank" rel="noopener">How sharing works</a></span></label>`
-    : "";
+  const note = catalog && photoCount(sheet) ? `<div class="muted tiny" style="margin-top:8px">${esc(SHARE_NOTE)}</div>` : "";
   return `<div class="phs">${existing}${queued}</div>
-    <label class="pill addph">${label}<input type="file" accept="image/*" multiple hidden data-photo="sheet"></label>${optin}`;
+    <label class="pill addph">${label}<input type="file" accept="image/*" multiple hidden data-photo="sheet"></label>${note}`;
 }
 // Carries out what the person chose for photos they already had. Returns the ones that failed, so Save can report them.
 export async function applyShareChanges(sb, existing) {
@@ -85,7 +86,7 @@ export function communityHtml(S, cards) {
     const what = plan.replaces ? "Approving puts it on the card." : "A licensed photo is on the card, so approving keeps that one and stores this.";
     const busy = S.busy === it.id;
     return `<div class="candrow subrow">${it.url ? `<img class="subthumb" src="${esc(it.url)}" alt="Offered photo">` : `<div class="subthumb empty"></div>`}
-      <div class="candinfo"><div class="serif">${c ? esc(wineName(c)) : "A wine that is no longer listed"}</div><div class="muted tiny">${now} ${what}</div></div>
+      <div class="candinfo"><div class="serif">${c ? esc(wineName(c)) : "A wine that is no longer listed"}</div>${c && infoLine(c) ? `<div class="meta">${esc(infoLine(c))}</div>` : ""}<div class="muted tiny">${now} ${what}</div></div>
       <div class="candbtns"><button class="btn primary slim" data-editor="subok:${esc(it.id)}"${S.busy ? " disabled" : ""}>${busy ? "Saving…" : "Approve"}</button><button class="btn outline slim" data-editor="subno:${esc(it.id)}"${S.busy ? " disabled" : ""}>Reject</button></div></div>`;
   }).join("");
   return `<div class="pcard">${head}${S.msg ? `<div class="notice">${esc(S.msg)}</div>` : ""}
