@@ -18,15 +18,15 @@
 <script type="module">
 const FILES = {
  "index.html": {
-  "hash": "64946847ce68e4ddaf3bd7da0fda6acadeb0ba4d58c4a3acfc52cd6b2730297c",
-  "chars": 30193,
+  "hash": "05de731984f974d85f1fbf34b4ce9b6e1d64cd06f0a3a66c0b373254392a9b12",
+  "chars": 32785,
   "query": null,
   "exports": []
  },
  "app.js": {
-  "hash": "29a2d84664447d16f264696faee0634eabb8e6be8f1d7d0191ef7a4764d28c09",
-  "chars": 52853,
-  "query": "24",
+  "hash": "45104d273018f462ffb682fa5f9ba78ccf7d2c3419685ac280de56371fea0743",
+  "chars": 60191,
+  "query": "26",
   "exports": []
  },
  "logic.js": {
@@ -195,9 +195,9 @@ const FILES = {
   ]
  },
  "views.js": {
-  "hash": "df875c615022c6973ac09efff3a04fd6d4d2f5790137face645eddef11497199",
-  "chars": 32337,
-  "query": "12",
+  "hash": "8076380b0235bb4b3b70f0578c9c0c73a2446efa7f27e2c3ff9a74a188b4cd28",
+  "chars": 32592,
+  "query": "13",
   "exports": [
    "KEPT_NOTE",
    "SHEET_PAGES",
@@ -273,9 +273,9 @@ const FILES = {
   ]
  },
  "editor.js": {
-  "hash": "61abedd1e518ee0dcf088e0137d3ee03c6ae3ade67a4af1eba8cd3bb3bbefa7d",
-  "chars": 39592,
-  "query": "17",
+  "hash": "e77e38d78a01865e2463a0a36371045bf69760ed0224ef99f59c37ed34ef32a0",
+  "chars": 39754,
+  "query": "18",
   "exports": [
    "SECTION_PERMISSIONS",
    "catalogView",
@@ -285,9 +285,9 @@ const FILES = {
   ]
  },
  "profile.js": {
-  "hash": "95b9ab81d973e914b24741ee4ae19d233528ff01cd53b7cc89fdc0099383a1ad",
-  "chars": 29809,
-  "query": "10",
+  "hash": "ac48b45be44dd7ca78231702b93b3281e05da13fddb95c3a2b43f44a6dcb64a5",
+  "chars": 30165,
+  "query": "11",
   "exports": [
    "DIFFS",
    "TIER_COLORS",
@@ -392,9 +392,9 @@ const FILES = {
   ]
  },
  "wineinfo.js": {
-  "hash": "fd61fc867f0735552f409135ff5e0249f6cab8c922af899e9ab520eb7c984c21",
-  "chars": 27546,
-  "query": "10",
+  "hash": "8a412a0295c1f3f92f164f2b0ca9ab3f4e64fff60b35ee5600a5fba31a8fff61",
+  "chars": 27686,
+  "query": "11",
   "exports": [
    "REACH_CHOICES",
    "createWineInfo",
@@ -503,11 +503,11 @@ const FILES = {
   ]
  },
  "sharing.js": {
-  "hash": "b35ca654557c9e98861b51b906c2b386fc733d96306bd495f04c4964f9823285",
-  "chars": 7485,
-  "query": "1",
+  "hash": "810b7fbe1979fb9635f2bf2865bab70334f96cf08c30a5bc40b7028cd98dba0d",
+  "chars": 7754,
+  "query": "2",
   "exports": [
-   "SHARE_PROMISE",
+   "SHARE_NOTE",
    "applyShareChanges",
    "approvalPlan",
    "canToggle",
@@ -598,9 +598,81 @@ const FILES = {
    "saveWinePrice",
    "tidyFacts"
   ]
+ },
+ "tasting.js": {
+  "hash": "e79e2e8c3f569317ef67591d1041971b8919d24be54f3bed7ed198255e881897",
+  "chars": 17065,
+  "query": "2",
+  "exports": [
+   "CATEGORIES",
+   "COLOURS",
+   "FEATURE",
+   "FIELDS",
+   "METHOD",
+   "SECTIONS",
+   "TAG_LIST",
+   "TAG_TREE",
+   "cleanGrid",
+   "fieldsFor",
+   "gridCount",
+   "gridHtml",
+   "gridToDims",
+   "isEmptyGrid",
+   "loadTasting",
+   "openFromGrid",
+   "parentOf",
+   "pickValue",
+   "proBlockHtml",
+   "saveTasting",
+   "shortLabel",
+   "summaryText",
+   "syncGridDom",
+   "tapTag"
+  ]
+ },
+ "consent.js": {
+  "hash": "5b1b138d1e14393f5c2dfa3012624007b30f4e654b9d76fc33ee0abccc1cd4e6",
+  "chars": 4753,
+  "query": "1",
+  "exports": [
+   "AGE_RULE",
+   "CONSENTS",
+   "CONSENT_VERSION",
+   "acceptConsents",
+   "allAccepted",
+   "consentHtml",
+   "needsConsent",
+   "tickAll",
+   "toggleConsent"
+  ]
+ },
+ "feel.js": {
+  "hash": "be792cda82c28d8e62724c22111dc35e08591a21bfd383e23d8f5cc5dfada9e5",
+  "chars": 4378,
+  "query": "1",
+  "exports": [
+   "FEELS",
+   "FEEL_KEYS",
+   "applyFeel",
+   "feelBlockHtml",
+   "feelDims"
+  ]
+ },
+ "wineline.js": {
+  "hash": "273f2717a36af1c9edbc84646c2ae70bc96b932e8008e9456367cdcf7638a7fd",
+  "chars": 2011,
+  "query": "1",
+  "exports": [
+   "SEPARATOR",
+   "entryAsInfoCard",
+   "entryInfoLine",
+   "infoLine",
+   "infoParts",
+   "varietalOf"
+  ]
  }
 };
-const APP_SCRIPT = "app.js?v=24";
+const APP_SCRIPT = "app.js?v=26";
 const LIBRARIES = ["https://esm.sh/@supabase/supabase-js@2.109.0", "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.109.0/+esm"];
 const out = document.getElementById("out"), sum = document.getElementById("sum");
 const lines = []; let problems = 0, first = "";
