@@ -100,3 +100,5 @@ export async function loadSubmissionState(sb) {
     return { loaded: false, error: /list_photo_submissions|function|schema cache/i.test(m) ? "Database update 18 has not been run yet." : "Could not load: " + m, items: [] };
   }
 }
+
+
