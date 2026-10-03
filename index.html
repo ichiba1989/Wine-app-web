@@ -319,6 +319,14 @@
   /* The one "Not interested" button under the Discover card */
   .notint { flex: 0 0 auto; border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 11px 22px; font-size: 15px; font-weight: 500; }
   .notint.on { background: var(--moss); color: #fff; border-color: var(--moss); }
+  /* The professional tasting grid */
+  .problock { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin: 6px 0 12px; }
+  .gridsheet { max-height: 94vh; max-height: 94dvh; }
+  .gsec { font-size: 18px; font-weight: 400; margin: 22px 0 4px; border-top: 1px solid var(--line); padding-top: 12px; }
+  .glabel { font-size: 12px; font-weight: 600; color: var(--muted); margin: 12px 0 4px; }
+  .gopts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .gopt { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 8px 12px; font-size: 13px; }
+  .gopt.on { background: var(--slate); color: #fff; border-color: var(--slate); }
 </style>
 </head>
 <body>
@@ -348,6 +356,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=24" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=25" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>
