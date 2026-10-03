@@ -327,6 +327,28 @@
   .gopts { display: flex; flex-wrap: wrap; gap: 6px; }
   .gopt { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 8px 12px; font-size: 13px; }
   .gopt.on { background: var(--slate); color: #fff; border-color: var(--slate); }
+  /* Profile headings: the photo thumbnail class has the same name (.ph) and gave them a 72px box */
+  .profile h2.ph { position: static; width: auto; height: auto; }
+  /* The one consent page */
+  .consentpage { flex: 1; min-height: 0; overflow-y: auto; padding: 26px 20px 24px; }
+  .consent { display: flex; gap: 12px; align-items: flex-start; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-top: 10px; text-align: left; }
+  .consent.on { border-color: var(--slate); }
+  .consent input { flex: 0 0 auto; width: 22px; height: 22px; margin-top: 2px; }
+  .consent b { display: block; font-size: 15px; font-weight: 600; margin-bottom: 3px; }
+  .consent .muted { display: block; line-height: 1.4; }
+  .consent a { color: var(--slate); }
+  /* "How did the wine feel?" and the tasting grid: compact bars for ordered answers, second-level aroma choices */
+  .feelblock { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin: 6px 0 12px; }
+  .gseg { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #fff; }
+  .gseg.n2 { grid-template-columns: repeat(2, 1fr); } .gseg.n3 { grid-template-columns: repeat(3, 1fr); } .gseg.n4 { grid-template-columns: repeat(4, 1fr); }
+  .gstep { border: 0; border-right: 1px solid var(--line); background: transparent; padding: 10px 1px; font-size: 12px; min-width: 0; line-height: 1.15; }
+  .gstep:last-child { border-right: 0; }
+  .gstep.on { background: var(--slate); color: #fff; font-weight: 600; }
+  .feelopts { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .feelopts .gopt { padding: 9px 2px; text-align: center; }
+  .gopt.cat.open { border-color: var(--slate); }
+  .gsub { margin: 6px 0 8px; padding: 8px 10px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
+  .gsub[hidden] { display: none; }
 </style>
 </head>
 <body>
@@ -343,7 +365,7 @@
     if (window.__booted || shown) return;
     shown = true;
     var el = document.getElementById("bootError");
-    el.innerHTML = '<div class="bootbox"><b>The app could not start.</b><p>Reloading often fixes it. If it keeps happening, open the check page to see which file is wrong.</p><p class="bootdetail"></p><p><button onclick="location.reload()">Reload</button> &nbsp; <a href="check.html">Open the check page</a></p></div>';
+    el.innerHTML = '<div class="bootbox"><b>The app could not start.</b><p>Reloading often fixes it. If it keeps happening, send the message below to whoever runs the app.</p><p class="bootdetail"></p><p><button onclick="location.reload()">Reload</button></p></div>';
     el.querySelector(".bootdetail").textContent = detail;
     el.hidden = false;
   }
@@ -356,6 +378,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=25" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=26" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>
