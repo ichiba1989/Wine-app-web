@@ -5,6 +5,9 @@ import {
   WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims, dimsFor, placeLine, entryGrape } from "./logic.js?v=10";
 import { splitGrapeParts, splitPlace } from "./blends.js?v=1";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
+import { flavorsForCard, placeFor } from "./flavors.js?v=1";
+import { bottleSilhouette, flavorRowHtml } from "./visuals.js?v=1";
+import { countryMapSvg, zoomPlan } from "./maps.js?v=1";
 
 // The grape and place inputs shared by the two forms. The form keeps one grape text and one place text; these show them as
 // "main varietal" and "other varietals (if blended)", and as "country" and "region". app.js puts them back together as you type.
@@ -23,17 +26,6 @@ function grapeAndPlaceInputs(form, scope) {
 }
 
 // ---------------------------------------------------------------- drawings
-const GLASS = { white: "#5F7440", sparkling: "#3E4B38", rose: "#8A5560", neutral: "#34403A", red: "#2C1C22" };
-export function bottleSvg(style) {
-  const type = ["red", "white", "sparkling", "rose"].includes(style) ? style : style === "fortified" ? "red" : "neutral";
-  const foil = type === "sparkling" ? "#B9A15A" : "#7B1E3A";
-  return `<svg class="bottle" viewBox="0 0 120 300" aria-hidden="true">
-    <path d="M50 8 h20 v70 c0 22 28 34 28 62 v140 a10 10 0 0 1 -10 10 h-56 a10 10 0 0 1 -10 -10 v-140 c0 -28 28 -40 28 -62 z" fill="${GLASS[type]}"/>
-    <rect x="48" y="6" width="24" height="26" rx="3" fill="${foil}"/>
-    <rect x="32" y="170" width="56" height="86" rx="2" fill="#E9E4D6"/>
-    <rect x="40" y="186" width="40" height="5" fill="#B8B29F"/><rect x="44" y="198" width="32" height="4" fill="#CFC9B7"/><rect x="44" y="210" width="32" height="4" fill="#CFC9B7"/>
-    <rect x="36" y="100" width="7" height="150" rx="3" fill="#fff" opacity=".12"/></svg>`;
-}
 // Country flag and a red / white / sparkling symbol. Rose, fortified and unknown styles have no symbol yet.
 export function marksHtml(card, size = 26) {
   const symbol = ["red", "white", "sparkling"].includes(card.style) ? card.style : null;
@@ -54,16 +46,26 @@ export function marksHtml(card, size = 26) {
 export const thumbHtml = (urls, path, size = 40) => (path && urls && urls.get(path) ? `<img class="thumb" src="${esc(urls.get(path))}" alt="Your photo" width="${size}" height="${size}">` : "");
 
 // ---------------------------------------------------------------- Discover
+// What the card draws for a wine that is not a photo: a bottle shaped by its grape and tinted by its type, a map of its country with a pin,
+// and six flavors. Nothing here uses a label, a logo or a picture of a real bottle. stats is null until players have written enough about the wine.
+export function visualFor(c, stats = null) {
+  const fl = flavorsForCard(c, stats), place = placeFor(c), plan = zoomPlan(c);
+  return { shape: fl.shape, type: fl.type, flavors: fl.picks, map: countryMapSvg(c.country, place, fl.type, 64), zoomable: !!plan };
+}
 export function cardHtml(c) {
   const labels = ["recognize", "unknown", "had"].map((k) => `<div class="swipe-label" data-label="${k}" style="background:${FAMILIARITY[k].color}">${esc(FAMILIARITY[k].label)}</div>`).join("");
+  const v = visualFor(c);
+  const map = v.map ? `<${v.zoomable ? "button" : "div"} class="mapbtn${v.zoomable ? "" : " still"}"${v.zoomable ? ` data-zoom="${esc(c.id)}" aria-label="Show where this wine is from"` : ""}>${v.map}${v.zoomable ? '<span class="badge" aria-hidden="true">+</span>' : ""}</${v.zoomable ? "button" : "div"}>` : "";
   return `<div class="card" id="card">
-    <div class="image${c.photo ? " hasphoto" : ""}">${bottleSvg(c.style)}${c.photo ? `<img class="winephoto" src="${esc(c.photo)}" alt="Bottle of ${esc(wineName(c))}" draggable="false" decoding="async">` : ""}${labels}</div>
+    <div class="image${c.photo ? " hasphoto" : ""}">${bottleSilhouette(v.shape, v.type)}${c.photo ? `<img class="winephoto" src="${esc(c.photo)}" alt="Bottle of ${esc(wineName(c))}" draggable="false" decoding="async">` : ""}${labels}</div>
     <div class="body">
-      <div class="namelink" data-wineinfo="${esc(c.id)}">
-      ${c.vintage ? `<div class="vintage serif">${esc(c.vintage)}</div>` : ""}
-      <div class="prow"><div class="producer serif">${esc(c.producer)} <span class="ed" aria-hidden="true">&#9998;</span></div>${marksHtml(c)}</div>
-      ${c.cuvee ? `<div class="cuvee serif">${esc(c.cuvee)}</div>` : ""}</div>
+      <div class="toprow"><div class="nameblock">
+        <div class="namelink" data-wineinfo="${esc(c.id)}">
+        ${c.vintage ? `<div class="vintage serif">${esc(c.vintage)}</div>` : ""}
+        <div class="prow"><div class="producer serif">${esc(c.producer)} <span class="ed" aria-hidden="true">&#9998;</span></div>${marksHtml(c)}</div>
+        ${c.cuvee ? `<div class="cuvee serif">${esc(c.cuvee)}</div>` : ""}</div></div>${map}</div>
       <div class="facts">${c.facts.map((f) => `<div class="${f.derived ? "derived" : ""}">${esc(f.text)}</div>`).join("")}</div>
+      ${flavorRowHtml(v.flavors)}
     </div></div>`;
 }
 export function discoverHtml({ deck, interest, banner, counts, feedback = false, flaggedId = null, nudge = false }) {
