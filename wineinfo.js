@@ -5,7 +5,6 @@ import { esc, WINE_STYLES } from "./logic.js?v=10";
 import { checkGrapeText, grapeProblem, grapeIndex, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES } from "./blends.js?v=1";
 import { infoLine } from "./wineline.js?v=1";
-import { removePhotoFor } from "./finder.js?v=1";
 import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, placeClassification, savePlace } from "./geo.js?v=1";
 import { loadWinePrice, saveWinePrice, parsePrice, centsToField, blendPrice, formatPrice } from "./pricing.js?v=1";
 import { archivePlanFor } from "./catalog.js?v=2";
@@ -236,7 +235,7 @@ export function createWineInfo(ctx) {
     if (W.photoBusy) return;
     if (!W.photoConfirm) { W.photoConfirm = true; draw(); return; }
     W.photoBusy = true; W.photoConfirm = false; W.photoError = ""; draw();
-    try { await removePhotoFor(ctx.sb(), W.card); await refreshCard(); }
+    try { await removeWinePhoto(ctx.sb(), W.card.id); await refreshCard(); }
     catch (e) { W.photoError = e.message || String(e); }
     W.photoBusy = false; draw();
   }
