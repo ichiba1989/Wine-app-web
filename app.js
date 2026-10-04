@@ -25,11 +25,11 @@ import { buildDeck } from "./deck.js?v=2";
 import { createProfile } from "./profile.js?v=12";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=5";
 import { createFeedback } from "./feedback.js?v=3";
-import { createEditor } from "./editor.js?v=19";
+import { createEditor } from "./editor.js?v=20";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
-const APP_VERSION = "28";   // shown to editors with each piece of feedback
+const APP_VERSION = "29";   // shown to editors with each piece of feedback
 const SUPABASE_JS_VERSION = "2.109.0";
 const LIBRARY_URLS = [
   `https://esm.sh/@supabase/supabase-js@${SUPABASE_JS_VERSION}`,
