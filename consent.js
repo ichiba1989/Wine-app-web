@@ -21,7 +21,7 @@ export const TERMS = [
     "A guest ID the app creates automatically. It is not your name.",
     "Your email address, only if you choose to save your progress with email or sign in. It is used to send you sign-in codes and links.",
     "That you confirmed you are 21 or older, and when. We do not ask for or store your date of birth.",
-    "What you do in the app: wines you swipe on; journal entries (the wine, your verdict, how it tasted, the date, price, food, occasion and notes); photos you add; quiz answers and timed rounds; your trophies; and the palate summary worked out from these.",
+    "What you do in the app: wines you swipe on; journal entries (the wine, your verdict, how it tasted, whether you would drink it alone or with food, the date, price, food, occasion and notes); your own private changes to a wine's details; photos you add; quiz answers and timed rounds; your trophies; and the palate summary worked out from these.",
     "Feedback you send, such as a report that a wine or a quiz question looks wrong.",
     "Technical information: your browser keeps a sign-in token and a few settings on your device, and the services below see technical details such as your IP address when your device connects to them.",
   ] },
