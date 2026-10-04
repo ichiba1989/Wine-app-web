@@ -2,7 +2,7 @@
 // The rules at the top are pure (no browser, no network) so they can be tested on their own.
 // The controller at the bottom loads what it needs from Supabase and draws the tab.
 import { DIMS, dimRange, VERDICTS, FLAGS, esc, styleLabel, verdictShort, entryCard, entryName } from "./logic.js?v=10";
-import { marksHtml } from "./views.js?v=13";
+import { marksHtml } from "./views.js?v=15";
 import { accountCardHtml } from "./account.js?v=5";
 import { feedbackCardHtml } from "./feedback.js?v=3";
 import { entryInfoLine } from "./wineline.js?v=1";
@@ -54,7 +54,9 @@ export function baselines(refs) {
   };
 }
 // One entry per journal wine, with its saved structure ratings.
-export function palateEntries(journal, perceptionRows, baselineFor = () => ({ base: null, ref: null })) {
+// tasteById: consumption id -> what the player answered (feel.js). "Yes, balanced" means the wine tasted as expected, so every structure line the
+// wine has counts as perceived at its expected level (a difference of zero) even though no slider was moved.
+export function palateEntries(journal, perceptionRows, baselineFor = () => ({ base: null, ref: null }), tasteById = new Map()) {
   const byConsumption = new Map();
   (perceptionRows || []).forEach((r) => {
     if (!byConsumption.has(r.consumption_id)) byConsumption.set(r.consumption_id, []);
@@ -64,6 +66,8 @@ export function palateEntries(journal, perceptionRows, baselineFor = () => ({ ba
     const perception = {}, adjusted = {};
     (byConsumption.get(e.id) || []).forEach((r) => { perception[r.dimension_key] = Number(r.value); adjusted[r.dimension_key] = !!r.adjusted; });
     const { base, ref } = baselineFor(e.wine_vintage_id, e);
+    const t = tasteById.get(e.id);
+    if (t && t.balanced === true && base) DIMS.forEach((d) => { if (typeof base[d.key] === "number" && !adjusted[d.key]) { perception[d.key] = base[d.key]; adjusted[d.key] = true; } });
     return { id: e.id, verdict: e.verdict || null, grape: e.grape, country: e.country, style: e.style, perception, adjusted, base, ref };
   });
 }
@@ -187,7 +191,7 @@ export function computeTrophies({ journal, states, answers, questionsById, runs,
   });
   const timedBest = (s) => Math.max(0, ...runs.filter((r) => r.seconds === s).map((r) => r.correct));
   const topicsMastered = new Set([...lastResult].filter(([, r]) => r === "correct").map(([id]) => (questionsById.get(id) || {}).topic).filter(Boolean)).size;
-  const adjusted = (perceptionRows || []).filter((p) => p.adjusted && ratedIds.has(p.consumption_id)).length;
+  const adjustedEntries = new Set((perceptionRows || []).filter((p) => p.adjusted && ratedIds.has(p.consumption_id)).map((p) => p.consumption_id)).size;   // wines where something stood out
 
   const T = (id, icon, title, desc, current, tiers) => {
     const level = tiers.filter((t) => current >= t).length;
@@ -203,7 +207,7 @@ export function computeTrophies({ journal, states, answers, questionsById, runs,
     T("bubbles", "sparkles", "Bubbles", (n) => `Rate ${n} sparkling wines`, rated.filter((e) => e.style === "sparkling").length, [1, 3, 10]),
     T("photos", "camera", "Shutterbug", (n) => `Add photos to ${n} reviews`, rated.filter((e) => e.first_photo_path).length, [1, 5, 20]),
     T("had", "check", "Been There", (n) => `Swipe up on ${n} bottles you've had`, states.filter((s) => s.familiarity === "had").length, [1, 5, 20]),
-    T("trust", "award", "Trust Your Palate", (n) => `Adjust ${n} wine structure sliders`, adjusted, [5, 25, 100]),
+    T("trust", "award", "Trust Your Palate", (n) => `Tell us what stood out in ${n} wines`, adjustedEntries, [5, 25, 100]),
     T("correct", "cap", "Quiz Starter", (n) => `Answer ${n} questions correctly`, correct.length, [5, 25, 100, 300]),
     T("streak", "flame", "On a Roll", (n) => `Get ${n} correct in a row`, best, [5, 10, 20]),
     T("second", "rotate", "Second Chance", (n) => `Turn ${n} missed questions into correct answers`, fixed.size, [1, 5, 20]),
@@ -256,7 +260,7 @@ function overviewHtml(P) {
     <div class="pgrid">${stat("Wines rated", rated.length)}${stat("Wines swiped", P.states.length)}${stat("Quiz completed", P.questions.length ? `${P.quiz.overall.completed}%` : "–")}${stat("Quiz correct", P.quiz.overall.correct === null ? "–" : `${P.quiz.overall.correct}%`)}</div>
     ${card("Trophies", `<div class="serif pbig">${acquired}</div><div class="prank">${esc(trophyRank(acquired))}</div>`)}
     ${card("Your palate", `<p class="ptext">${leans.length ? `You lean ${esc(leans.join(", "))}.` : "Add a couple more wines to your journal to see your palate take shape."}</p>`)}
-    ${latest ? card("Latest rating", `<div class="iname"><span class="serif">${esc(entryName(latest))}</span>${marksHtml(entryCard(latest), 16)}</div>${entryInfoLine(latest, latest.wine_vintage_id ? (P.cards || []).find((c) => c.id === latest.wine_vintage_id) : null) ? `<div class="muted small">${esc(entryInfoLine(latest, latest.wine_vintage_id ? (P.cards || []).find((c) => c.id === latest.wine_vintage_id) : null))}</div>` : ""}<div class="small wine"><b>${esc(verdictShort(latest.verdict))}</b></div>`) : ""}
+    ${latest ? card("Latest rating", `<div class="iname"><span class="serif">${esc(entryName(latest))}</span><button class="ed edbtn" data-action="wineinfo-entry:${latest.id}" aria-label="Change wine info">&#9998;</button>${marksHtml(entryCard(latest), 16)}</div>${entryInfoLine(latest, latest.wine_vintage_id ? (P.cards || []).find((c) => c.id === latest.wine_vintage_id) : null) ? `<div class="muted small">${esc(entryInfoLine(latest, latest.wine_vintage_id ? (P.cards || []).find((c) => c.id === latest.wine_vintage_id) : null))}</div>` : ""}<div class="small wine"><b>${esc(verdictShort(latest.verdict))}</b></div>`) : ""}
     ${accountCardHtml(P.user)}
     ${feedbackCardHtml()}
     ${P.userId ? `<div class="muted tiny uidline">Your account ID (needed to give you editor access): <span class="uid">${esc(P.userId)}</span></div>` : ""}`;
@@ -379,12 +383,14 @@ export function createProfile(ctx) {
         sb.from("wine_reference_values").select("wine_id, wine_vintage_id, dimension_key, value").then(must),
         sb.from("wine_default_values").select("wine_id, dimension_key, value").then(must),
       ]);
+      // What the player answered about how each wine tasted (database update 23); before it, nothing is known and the palate works as before.
+      let tastes = []; try { tastes = await allRows(() => sb.from("consumptions").select("id, taste")); } catch (_) { tastes = []; }
       if (my !== loadId) return;
       P.journal = ctx.journal(); P.states = ctx.states(); P.cards = ctx.cards();
       P.questions = questions;
       const questionsById = new Map(questions.map((q) => [q.id, q]));
       const baselineFor = baselines({ vintageToWine: new Map(vintages.map((v) => [v.id, v.wine_id])), reference, defaults, rules: ctx.ruleBase });
-      P.entries = palateEntries(P.journal, perceptions, baselineFor);
+      P.entries = palateEntries(P.journal, perceptions, baselineFor, new Map(tastes.filter((t) => t.taste).map((t) => [t.id, t.taste])));
       P.palate = computePalate(P.entries);
       P.quiz = quizProgress(questions, answers);
       P.timed = timedStats(runs);
