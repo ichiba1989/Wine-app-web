@@ -1,144 +1,120 @@
-// "How did it taste?": the conversational way to rate structure. Players do not see the structure sliders. They tap a word
-// (Sour, Fresh, Smooth, Juicy, Sweet) and answer a few everyday questions ("Did your mouth water?"). The answers are turned into the
-// acidity, body, tannin, sweetness and oak ratings of that bottle, which are private to the player and feed only their palate profile.
-// Professionals keep the sliders and the tasting grid; for them the words are a shortcut that moves the sliders.
-//   Sour    acidity clearly above the body (high-ish); tannin one step above the body.
-//   Fresh   acidity a notch above the body (medium or medium plus); tannin level with the body.
-//   Smooth  acidity, body and tannin in balance.
-//   Juicy   acidity a step below the body; tannin level with the body.
-//   Sweet   acidity and tannin a step below the anchor, the body a step above it, with new oak.
-// The anchor is the wine's own starting level (the average of its starting acidity, body and tannin), so the same word means the same
-// relationship for a light wine and for a big one. A question answer overrides the word for the one line it asks about.
+// "How did it taste?": the conversational way to rate structure. Players do not see the structure sliders.
+//   Was the wine balanced?   Yes: everything is as expected, nothing to adjust.   No: what stood out?
+//   Sour, Fruity, Sweet, Thin, Heavy or Drying (as many as apply), and for each one how much (a bit, quite, very).
+//   Would you drink it alone, with food, or either?
+// The answers are turned into the acidity, body, tannin and sweetness ratings of that bottle, relative to what the wine is expected to be.
+// Those are private to the player and feed only their palate profile. "Yes, balanced" counts as a real answer: it means the wine tasted as
+// expected (a difference of zero), so a player who says Yes a lot and a player who finds things out of the ordinary look different.
+// Professionals keep the sliders and the tasting grid; for them the same questions are a shortcut that moves the sliders.
 // The rules at the top are pure (no browser, no network). loadTaste and saveTaste at the bottom talk to Supabase.
-import { dimsFor, dimMeta, clampDimValue, WINE_STYLES, esc } from "./logic.js?v=10";
+import { dimsFor, dimMeta, clampDimValue, esc } from "./logic.js?v=10";
 
-export const FEELS = [
-  { id: "sour", label: "Sour", says: "Clearly more acidity than body, and a touch more tannin." },
-  { id: "fresh", label: "Fresh", says: "Bright, lively acidity, a little above the body." },
-  { id: "smooth", label: "Smooth", says: "Acidity, body and tannin in balance." },
-  { id: "juicy", label: "Juicy", says: "Soft acidity, with tannin and body in step." },
-  { id: "sweet", label: "Sweet", says: "Soft acidity and tannin, a fuller body, and some new oak." },
+// What can stand out, and how much (level 1, 2 or 3). Each effect is a change from the wine's expected level; sweetness is the step noticed.
+export const NOTES = [
+  { id: "sour", label: "Sour", ask: "How sour?", levels: ["A bit", "Quite", "Very sharp"], effects: { acidity: [1, 2, 3], tannin: [0, 1, 1] } },
+  { id: "fruity", label: "Fruity", ask: "How fruity?", levels: ["A bit", "Quite", "Very"], effects: { acidity: [-1, -1, -2] } },
+  { id: "sweet", label: "Sweet", ask: "How sweet?", levels: ["A hint", "Clearly", "Dessert-like"], effects: { sweetness: [1, 2, 3] }, set: true },
+  { id: "thin", label: "Thin", ask: "How thin?", levels: ["A bit", "Quite", "Very watery"], effects: { body: [-1, -2, -3] } },
+  { id: "heavy", label: "Heavy", ask: "How heavy?", levels: ["A bit", "Quite", "Very"], effects: { body: [1, 2, 3] } },
+  { id: "drying", label: "Drying", ask: "How drying?", levels: ["A bit", "Quite", "Very grippy"], effects: { tannin: [1, 2, 3] }, needs: "tannin" },
 ];
-export const FEEL_KEYS = ["acidity", "body", "tannin", "oak"];             // the lines a word can move
-export const SNAP_KEYS = ["acidity", "body", "tannin", "oak", "sweetness"]; // every line this screen can move (a question can move sweetness)
+export const PAIRINGS = [{ id: "alone", label: "Alone" }, { id: "food", label: "With food" }, { id: "either", label: "Either" }];
+export const SNAP_KEYS = ["acidity", "body", "tannin", "oak", "sweetness"];
+export const TASTE_VERSION = 2;
 
-// Everyday questions, each about one line of structure. Three answers are 1.5, 3 and 4.5 on the 1 to 5 scale (not the extremes, which
-// people rarely mean); sweetness and oak use the app's own steps.
-export const QUESTIONS = [
-  { id: "water", page: 1, dim: "acidity", text: "Did your mouth water?", options: [{ label: "Not really", value: 1.5 }, { label: "A bit", value: 3 }, { label: "Yes, a lot", value: 4.5 }] },
-  { id: "dry", page: 1, dim: "tannin", text: "Did it dry out your gums or tongue?", options: [{ label: "No", value: 1.5 }, { label: "A little", value: 3 }, { label: "Quite a lot", value: 4.5 }] },
-  { id: "weight", page: 1, dim: "body", text: "How did it feel in your mouth?", options: [{ label: "Light, like water", value: 1.5 }, { label: "Medium, like milk", value: 3 }, { label: "Rich, like cream", value: 4.5 }] },
-  { id: "sweet", page: 2, dim: "sweetness", text: "Did it taste sweet?", options: [{ label: "Dry", value: 0 }, { label: "A hint", value: 1 }, { label: "Sweet", value: 2 }, { label: "Dessert-sweet", value: 3 }] },
-  { id: "oak", page: 2, dim: "oak", text: "Did you taste vanilla, toast or smoke?", options: [{ label: "No", value: 0 }, { label: "A little", value: 1 }, { label: "Yes, clearly", value: 2 }] },
-];
-export const questionsFor = (style, page) => QUESTIONS.filter((q) => (!page || q.page === page) && dimsFor(style).some((d) => d.key === q.dim));
-
-const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const level = (v) => clamp(Math.round(v), 1, 5);
-
-// defaults: the sheet's starting values, { acidity, body, tannin }. Returns the values to set (only for lines this type of wine has).
-export function feelDims(feelId, defaults, style) {
-  const has = (k) => dimsFor(style).some((d) => d.key === k);
-  const known = ["acidity", "body", "tannin"].filter((k) => has(k) && Number.isFinite(defaults && defaults[k])).map((k) => defaults[k]);
-  const B = level(known.length ? known.reduce((a, b) => a + b, 0) / known.length : 3);
-  let a = B, b = B, t = B, oak = null;
-  switch (feelId) {
-    case "smooth": break;
-    case "fresh": a = clamp(B + 1, 3, 4); b = Math.min(B, a - 1); t = b; break;
-    case "sour": a = clamp(B + 2, 4, 5); b = Math.min(B, a - 1); t = b + 1; break;
-    case "juicy": a = B - 1; break;
-    case "sweet": a = B - 1; t = B - 1; b = B + 1; oak = 2; break;
-    default: return {};
-  }
-  const out = {};
-  if (has("acidity")) out.acidity = level(a);
-  if (has("body")) out.body = level(b);
-  if (has("tannin")) out.tannin = level(t);
-  if (oak != null && has("oak")) out.oak = oak;
-  return out;
-}
-
+const hasDim = (style, key) => dimsFor(style).some((d) => d.key === key);
+export const notesFor = (style) => NOTES.filter((n) => !n.needs || hasDim(style, n.needs));
 const snap = (dims) => Object.fromEntries(SNAP_KEYS.filter((k) => dims[k]).map((k) => [k, { ...dims[k] }]));
-// The sheet's lines as they would be for this word and these answers, worked out from the snapshot (the lines before any tap),
-// so choosing a different word never stacks on the last one.
-function build(sheet, snapshot, word, answers) {
+
+// The lines for this answer, worked out from the snapshot (the lines before any tap), so a change never stacks on the last one.
+function build(sheet, snapshot, taste) {
   const dims = { ...sheet.dims };
   Object.entries(snapshot).forEach(([k, v]) => { dims[k] = { ...v }; });
-  const set = (k, value) => { if (dims[k]) dims[k] = { ...dims[k], value: clampDimValue(dimMeta(k), value), adjusted: true }; };
-  if (word) {
-    const defaults = {}; ["acidity", "body", "tannin"].forEach((k) => { if (snapshot[k]) defaults[k] = snapshot[k].def; });
-    Object.entries(feelDims(word, defaults, sheet.style)).forEach(([k, v]) => set(k, v));
-  }
-  Object.entries(answers).forEach(([qid, idx]) => {
-    const q = QUESTIONS.find((x) => x.id === qid);
-    if (q && q.options[idx] && dimsFor(sheet.style).some((d) => d.key === q.dim)) set(q.dim, q.options[idx].value);
+  if (!taste || taste.balanced !== false) return dims;
+  const delta = {}, steps = {};
+  notesFor(sheet.style).forEach((n) => {
+    const level = taste.notes[n.id]; if (!level) return;
+    Object.entries(n.effects).forEach(([dim, arr]) => {
+      if (!hasDim(sheet.style, dim) || !snapshot[dim]) return;
+      if (n.set) steps[dim] = Math.max(steps[dim] || 0, arr[level - 1]);
+      else delta[dim] = (delta[dim] || 0) + arr[level - 1];
+    });
   });
+  Object.entries(delta).forEach(([dim, d]) => { if (d !== 0) dims[dim] = { ...dims[dim], value: clampDimValue(dimMeta(dim), snapshot[dim].def + d), adjusted: true }; });
+  Object.entries(steps).forEach(([dim, v]) => { if (v > snapshot[dim].def) dims[dim] = { ...dims[dim], value: clampDimValue(dimMeta(dim), v), adjusted: true }; });
   return dims;
 }
-// change: { word: "sour" } or { answer: ["water", 2] }. Choosing the same thing again takes it back.
+const isEmpty = (t) => t.balanced === null && !Object.keys(t.notes).length && !t.pairing;
+// change: { balanced: true|false } | { note: "sour" } | { level: ["sour", 2] } | { pairing: "food" }. Choosing the same thing again takes it back.
 // Returns { dims, taste }; taste is null when nothing is chosen any more (and the lines are back as they were).
 export function applyTaste(sheet, change) {
   const cur = sheet.taste || null;
   const snapshot = cur && cur.snapshot ? cur.snapshot : snap(sheet.dims);
-  let word = cur ? cur.word : null, answers = cur ? { ...cur.answers } : {};
-  if (change && "word" in change) word = word === change.word ? null : change.word;
-  if (change && change.answer) { const [qid, idx] = change.answer; if (answers[qid] === idx) delete answers[qid]; else answers[qid] = idx; }
-  const dims = build(sheet, snapshot, word, answers);
-  const empty = !word && Object.keys(answers).length === 0;
-  return { dims, taste: empty ? null : { word, answers, snapshot } };
+  const t = { v: TASTE_VERSION, balanced: cur ? cur.balanced : null, notes: cur ? { ...cur.notes } : {}, pairing: cur ? cur.pairing : null };
+  if (change && "balanced" in change) {
+    t.balanced = t.balanced === change.balanced ? null : change.balanced;
+    if (t.balanced !== false) t.notes = {};
+  }
+  if (change && change.note) {
+    if (!notesFor(sheet.style).some((n) => n.id === change.note)) return { dims: build(sheet, snapshot, cur), taste: cur };
+    t.balanced = false;
+    if (t.notes[change.note]) delete t.notes[change.note]; else t.notes[change.note] = 1;
+  }
+  if (change && change.level) { const [id, lv] = change.level; if (t.notes[id] && [1, 2, 3].includes(lv)) t.notes[id] = lv; }
+  if (change && change.pairing && PAIRINGS.some((p) => p.id === change.pairing)) t.pairing = t.pairing === change.pairing ? null : change.pairing;
+  if (t.balanced === false && !Object.keys(t.notes).length && !("balanced" in (change || {}))) t.balanced = null;   // the last thing that stood out was un-picked
+  const dims = build(sheet, snapshot, t);
+  return { dims, taste: isEmpty(t) ? null : { ...t, snapshot } };
 }
-// Answers that no longer apply (the wine became a white, so there is no tannin question) are dropped when the type changes.
+// Answers that no longer apply (the wine became a white, so nothing can be drying) are dropped when the type changes.
 export function cleanTaste(taste, style) {
-  if (!taste) return null;
-  const answers = {};
-  Object.entries(taste.answers || {}).forEach(([qid, idx]) => { if (questionsFor(style).some((q) => q.id === qid)) answers[qid] = idx; });
-  const word = FEELS.some((f) => f.id === taste.word) ? taste.word : null;
-  return word || Object.keys(answers).length ? { word, answers, snapshot: taste.snapshot || null } : null;
+  if (!taste || taste.v !== TASTE_VERSION) return null;
+  const notes = {};
+  notesFor(style).forEach((n) => { const lv = taste.notes && taste.notes[n.id]; if ([1, 2, 3].includes(lv)) notes[n.id] = lv; });
+  const t = { v: TASTE_VERSION, balanced: taste.balanced === true ? true : taste.balanced === false ? false : null, notes: taste.balanced === true ? {} : notes, pairing: PAIRINGS.some((p) => p.id === taste.pairing) ? taste.pairing : null };
+  return isEmpty(t) ? null : { ...t, snapshot: taste.snapshot || null };
 }
 
 // ---------------------------------------------------------------- the screens
-export function wordsHtml(selectedId) {
-  const chips = FEELS.map((f) => `<button class="gopt${selectedId === f.id ? " on" : ""}" data-feel="${f.id}" aria-pressed="${selectedId === f.id}">${esc(f.label)}</button>`).join("");
-  const says = (FEELS.find((f) => f.id === selectedId) || {}).says;
-  return `<div class="gopts feelopts" style="margin-top:6px">${chips}</div>
-    <div class="muted small" data-feelsays style="margin-top:6px">${esc(says || "Tap the word that fits best.")}</div>`;
+const chip = (on, data, label) => `<button class="gopt${on ? " on" : ""}" data-taste="${data}" aria-pressed="${on}">${esc(label)}</button>`;
+// The questions themselves. They are redrawn after each tap, because answering opens more options.
+export function tasteInnerHtml(sheet) {
+  const t = sheet.taste || { balanced: null, notes: {}, pairing: null };
+  let h = `<div class="tq"><div class="tqtext">Was the wine balanced?</div><div class="gopts">${chip(t.balanced === true, "balanced:yes", "Yes")}${chip(t.balanced === false, "balanced:no", "No")}</div>
+    <div class="muted small" style="margin-top:6px">${t.balanced === true ? "Nothing stood out: it tasted as expected." : t.balanced === false ? "" : "Yes if nothing stood out."}</div></div>`;
+  if (t.balanced === false) {
+    h += `<div class="tq"><div class="tqtext">What stood out?</div><div class="muted small" style="margin-bottom:6px">Pick as many as apply.</div>
+      <div class="gopts">${notesFor(sheet.style).map((n) => chip(!!t.notes[n.id], "note:" + n.id, n.label)).join("")}</div></div>`;
+    h += notesFor(sheet.style).filter((n) => t.notes[n.id]).map((n) =>
+      `<div class="tq sub"><div class="tqtext">${esc(n.ask)}</div><div class="gopts">${n.levels.map((lab, i) => chip(t.notes[n.id] === i + 1, `level:${n.id}:${i + 1}`, lab)).join("")}</div></div>`).join("");
+  }
+  h += `<div class="tq"><div class="tqtext">Would you drink it\u2026</div><div class="gopts">${PAIRINGS.map((p) => chip(t.pairing === p.id, "pairing:" + p.id, p.label)).join("")}</div></div>`;
+  return h;
 }
-// For professionals: a small block at the top of the Structure step. The words move the sliders below it.
-export function feelBlockHtml(selectedId) {
-  return `<div class="feelblock" data-feelblock><div class="serif" style="font-size:16px">How did the wine feel?</div>${wordsHtml(selectedId)}</div>`;
-}
-function questionHtml(q, answers) {
-  const opts = q.options.map((o, i) => `<button class="gopt${answers[q.id] === i ? " on" : ""}" data-taste="${q.id}:${i}" aria-pressed="${answers[q.id] === i}">${esc(o.label)}</button>`).join("");
-  return `<div class="tq"><div class="tqtext">${esc(q.text)}</div><div class="gopts">${opts}</div></div>`;
-}
-const typeChips = (sheet) => `<div class="stylerow" role="group" aria-label="Type of wine">${WINE_STYLES.map((st) => `<button class="chip${sheet.style === st.id ? " on" : ""}" data-sheet="style:${st.id}" aria-pressed="${sheet.style === st.id}">${esc(st.label)}</button>`).join("")}</div>`;
 const NOTE = `<div class="muted small" style="margin-top:12px">Every question is optional. Your answers are private and only shape your palate profile; they do not change anything about the wine.</div>`;
-// The two steps that replace the structure sliders for ordinary players.
-export function tastePageOneHtml(sheet) {
-  const t = sheet.taste || { word: null, answers: {} };
-  return `<h3 class="serif">How did it taste?</h3><div class="muted small">What kind of wine is it?</div>${typeChips(sheet)}
-    <div class="tq"><div class="tqtext">Was the wine\u2026</div>${wordsHtml(t.word)}</div>
-    ${questionsFor(sheet.style, 1).map((q) => questionHtml(q, t.answers)).join("")}${NOTE}`;
+// For ordinary players: the whole of step 2.
+export function tastePageHtml(sheet) {
+  return `<h3 class="serif">How did it taste?</h3><div data-tasteblock>${tasteInnerHtml(sheet)}</div>${NOTE}`;
 }
-export function tastePageTwoHtml(sheet) {
-  const t = sheet.taste || { word: null, answers: {} };
-  return `<h3 class="serif">A bit more</h3><div class="muted small">Two more quick ones about the taste.</div>
-    ${questionsFor(sheet.style, 2).map((q) => questionHtml(q, t.answers)).join("")}${NOTE}`;
+// For professionals: a small block at the top of step 2, above the sliders it moves.
+export function feelBlockHtml(sheet) {
+  return `<div class="feelblock" data-feelblock><div class="serif" style="font-size:16px">How did the wine feel?</div><div data-tasteblock>${tasteInnerHtml(sheet)}</div></div>`;
 }
-// After a tap: update the buttons and the sentence under the words without redrawing, so the page does not jump.
-export function syncTasteDom(sheet, root = document) {
-  const t = sheet.taste || { word: null, answers: {} };
-  root.querySelectorAll("[data-feel]").forEach((b) => { const on = b.dataset.feel === t.word; b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on)); });
-  const says = (FEELS.find((f) => f.id === t.word) || {}).says;
-  root.querySelectorAll("[data-feelsays]").forEach((el) => { el.textContent = says || "Tap the word that fits best."; });
-  root.querySelectorAll("[data-taste]").forEach((b) => { const [qid, i] = b.dataset.taste.split(":"); const on = t.answers[qid] === Number(i); b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on)); });
+// A tap on a data-taste button -> the change to apply.
+export function changeFrom(data) {
+  const [kind, a, b] = String(data).split(":");
+  if (kind === "balanced") return { balanced: a === "yes" };
+  if (kind === "note") return { note: a };
+  if (kind === "level") return { level: [a, Number(b)] };
+  if (kind === "pairing") return { pairing: a };
+  return null;
 }
 
 // ---------------------------------------------------------------- the database
-// Saved with the journal entry (column consumptions.taste, database update 23) so the words and answers come back when the entry is reopened.
-// The ratings themselves are saved with the rating as usual; this is only so the screen can show what was chosen.
+// Saved with the journal entry (column consumptions.taste, database update 23) so the answers come back when the entry is reopened, and so the
+// palate can count "balanced" as an answer. The ratings themselves are saved with the rating as usual.
 export async function saveTaste(sb, consumptionId, taste) {
-  const value = taste ? { v: 1, word: taste.word || null, answers: taste.answers || {} } : null;
+  const value = taste ? { v: TASTE_VERSION, balanced: taste.balanced, notes: taste.notes || {}, pairing: taste.pairing || null } : null;
   const { error } = await sb.from("consumptions").update({ taste: value }).eq("id", consumptionId);
   if (error) throw error;
 }
@@ -146,8 +122,6 @@ export async function saveTaste(sb, consumptionId, taste) {
 export async function loadTaste(sb, consumptionId, sheet) {
   const { data, error } = await sb.from("consumptions").select("taste").eq("id", consumptionId).maybeSingle();
   if (error) throw error;
-  const saved = data && data.taste;
-  if (!saved || (!saved.word && !Object.keys(saved.answers || {}).length)) return null;
   const snapshot = Object.fromEntries(SNAP_KEYS.filter((k) => sheet.dims[k]).map((k) => [k, { value: sheet.dims[k].def, def: sheet.dims[k].def, adjusted: false }]));
-  return cleanTaste({ word: saved.word, answers: saved.answers || {}, snapshot }, sheet.style);
+  return cleanTaste(data && data.taste ? { ...data.taste, snapshot } : null, sheet.style);
 }
