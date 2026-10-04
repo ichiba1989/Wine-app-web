@@ -11,25 +11,27 @@ import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=2";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=2";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=14";
+  visualFor, discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=15";
 import { createLearn } from "./learn.js?v=3";
 import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=1";
 import { loadPrices, applyPrices, tidyFacts } from "./pricing.js?v=1";
 import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=3";
+import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=1";
+import { applyVisualTables } from "./visualdata.js?v=1";
 import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=1";
 import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=2";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
 import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, isEmptyGrid } from "./tasting.js?v=2";
 import { buildDeck } from "./deck.js?v=2";
-import { createProfile } from "./profile.js?v=12";
+import { createProfile } from "./profile.js?v=13";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=5";
 import { createFeedback } from "./feedback.js?v=3";
-import { createEditor } from "./editor.js?v=20";
+import { createEditor } from "./editor.js?v=22";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
-const APP_VERSION = "29";   // shown to editors with each piece of feedback
+const APP_VERSION = "30";   // shown to editors with each piece of feedback
 const SUPABASE_JS_VERSION = "2.109.0";
 const LIBRARY_URLS = [
   `https://esm.sh/@supabase/supabase-js@${SUPABASE_JS_VERSION}`,
@@ -80,6 +82,7 @@ const state = {
   deckInfo: new Map(),                  // wine id -> { tier, fam, pref }: which deck each wine is in and why
   sinceDeck: 0,                         // swipes since the deck was last re-ranked
   access: { role: null, label: null, permissions: [] },   // what this person may do as staff: from the database
+  zoom: null,                           // the open map overlay: { plan, step }
   mine: new Map(),                      // wine_vintage_id -> this player's private changes to the wine's details (mywine.js)
   consent: {}, consentBusy: false, consentError: "",   // the consent page: what is ticked
   pro: false,                           // this person has the professional tier: they get the tasting grid (feature switch proTasting)
@@ -134,6 +137,7 @@ function addVineyard(card) {
   return card;
 }
 async function loadAllCards() {
+  await applyVisualTables(state.sb);   // flavor weights and place nudges the Owner or an editor tuned in the database (the built-in set is used if there are none)
   try { state.mine = await loadMyInfo(state.sb); } catch (_) { state.mine = new Map(); }   // before database update 24 nobody has private changes
   const cards = (await db.loadCards(state.sb)).map((c) => {
     c.catalogForm = wineEditForm({ style: c.style }, c, null);   // the catalog's own details, kept so a change can be compared and undone
@@ -464,11 +468,11 @@ function attachCard(el) {
       } else {
         lastTap = { t: now, x: from.x, y: from.y, edge }; showHint(edge);
         // A tap on the name opens wine info, but only when no second tap follows (that would be the double-tap swipe).
-        const hit = document.elementFromPoint(e.clientX, e.clientY);
-        if (hit && hit.closest("[data-wineinfo]")) {
-          const id = hit.closest("[data-wineinfo]").dataset.wineinfo;
+        const hit = document.elementFromPoint(e.clientX, e.clientY), target = hit && hit.closest("[data-wineinfo], [data-zoom]");
+        if (target) {
+          const zoomId = target.dataset.zoom, infoId = target.dataset.wineinfo;
           clearTimeout(infoTimer);
-          infoTimer = setTimeout(() => { if (lastTap && lastTap.t === now) { lastTap = null; clearHint(); openMyInfo(id); } }, 330);
+          infoTimer = setTimeout(() => { if (lastTap && lastTap.t === now) { lastTap = null; clearHint(); if (zoomId) openZoom(zoomId); else openMyInfo(infoId); } }, 330);
         }
       }
     }
@@ -832,6 +836,38 @@ document.addEventListener("pointerup", (ev) => {
 document.addEventListener("pointercancel", () => { pageSwipe = null; });
 
 // ---------------------------------------------------------------- clicks and typing
+// ---------------------------------------------------------------- the map overlay (zoommap.js)
+function openZoom(wineVintageId) {
+  const card = cardById(wineVintageId), plan = card && zoomPlan(card);
+  if (!plan) return;
+  state.zoom = { plan, step: 0 };
+  $("#zoom").innerHTML = zoomHtml(plan, visualFor(card).type, 0);
+  const x = document.querySelector("[data-zoomclose]"); if (x) x.focus();
+}
+function closeZoom() {
+  if (!state.zoom) return;
+  state.zoom = null; $("#zoom").innerHTML = "";
+}
+// A tap on the map: the next step, or close after the last one.
+function zoomTap() {
+  if (!state.zoom) return;
+  const next = nextStep(state.zoom.plan, state.zoom.step);
+  if (next === null) { closeZoom(); return; }
+  state.zoom.step = next; applyStep($("#zoom"), state.zoom.plan, next);
+}
+document.addEventListener("click", (ev) => {
+  const keyboardOpen = ev.target.closest("[data-zoom]");
+  if (keyboardOpen && ev.detail === 0) { openZoom(keyboardOpen.dataset.zoom); return; }   // Enter or Space on the focused map; a finger or mouse goes through the card's own tap handling
+  if (!state.zoom) return;
+  if (ev.target.closest("[data-zoomclose]")) closeZoom();
+  else if (ev.target.closest("[data-zoomstage]")) zoomTap();
+  else if (ev.target.matches("[data-zoomback]")) closeZoom();   // a tap outside the box
+});
+document.addEventListener("keydown", (ev) => {
+  if (!state.zoom) return;
+  if (ev.key === "Escape") { ev.preventDefault(); closeZoom(); }
+  else if ((ev.key === "Enter" || ev.key === " ") && ev.target.matches("[data-zoomstage]")) { ev.preventDefault(); zoomTap(); }
+});
 // The consent page (consent.js): tick boxes, Tick all, Accept and continue, I am under 21.
 document.addEventListener("change", (ev) => {
   const t = ev.target;
