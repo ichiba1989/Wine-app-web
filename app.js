@@ -11,24 +11,25 @@ import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=2";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=2";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=13";
+  discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=14";
 import { createLearn } from "./learn.js?v=3";
 import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=1";
 import { loadPrices, applyPrices, tidyFacts } from "./pricing.js?v=1";
-import { applyTaste, cleanTaste, feelBlockHtml, tastePageOneHtml, tastePageTwoHtml, syncTasteDom, saveTaste, loadTaste } from "./feel.js?v=2";
+import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=3";
+import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=1";
 import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=2";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
 import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, isEmptyGrid } from "./tasting.js?v=2";
 import { buildDeck } from "./deck.js?v=2";
-import { createProfile } from "./profile.js?v=11";
+import { createProfile } from "./profile.js?v=12";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=5";
 import { createFeedback } from "./feedback.js?v=3";
-import { createEditor } from "./editor.js?v=18";
+import { createEditor } from "./editor.js?v=19";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
-const APP_VERSION = "27";   // shown to editors with each piece of feedback
+const APP_VERSION = "28";   // shown to editors with each piece of feedback
 const SUPABASE_JS_VERSION = "2.109.0";
 const LIBRARY_URLS = [
   `https://esm.sh/@supabase/supabase-js@${SUPABASE_JS_VERSION}`,
@@ -79,6 +80,7 @@ const state = {
   deckInfo: new Map(),                  // wine id -> { tier, fam, pref }: which deck each wine is in and why
   sinceDeck: 0,                         // swipes since the deck was last re-ranked
   access: { role: null, label: null, permissions: [] },   // what this person may do as staff: from the database
+  mine: new Map(),                      // wine_vintage_id -> this player's private changes to the wine's details (mywine.js)
   consent: {}, consentBusy: false, consentError: "",   // the consent page: what is ticked
   pro: false,                           // this person has the professional tier: they get the tasting grid (feature switch proTasting)
   grid: null,                           // the tasting grid that is open: { values }
@@ -132,7 +134,11 @@ function addVineyard(card) {
   return card;
 }
 async function loadAllCards() {
-  const cards = (await db.loadCards(state.sb)).map(addVineyard);
+  try { state.mine = await loadMyInfo(state.sb); } catch (_) { state.mine = new Map(); }   // before database update 24 nobody has private changes
+  const cards = (await db.loadCards(state.sb)).map((c) => {
+    c.catalogForm = wineEditForm({ style: c.style }, c, null);   // the catalog's own details, kept so a change can be compared and undone
+    return addVineyard(patchCard(c, state.mine.get(c.id)));
+  });
   try { applyPrices(cards, await loadPrices(state.sb)); } catch (_) { cards.forEach(tidyFacts); }
   return cards;
 }
@@ -196,7 +202,8 @@ async function dateStates(states) {
 async function refreshData() {
   const [states0, journal, counts] = await Promise.all([db.loadStates(state.sb), db.loadJournal(state.sb), loadCounts()]);
   const states = await dateStates(states0);
-  state.states = states; state.journal = journal; state.counts = counts;
+  state.states = states;
+  if (state.mine.size) journal.forEach((e, i) => { if (e.wine_vintage_id && state.mine.has(e.wine_vintage_id)) journal[i] = patchEntry(e, state.mine.get(e.wine_vintage_id)); }); state.journal = journal; state.counts = counts;
   // A photo link that cannot be made only means that picture is not shown; it never blocks the app.
   try { state.photoUrls = await db.signedUrls(state.sb, journal.map((j) => j.first_photo_path)); } catch (_) { state.photoUrls = new Map(); }
 }
@@ -407,7 +414,7 @@ async function notInterested() {
 function attachCard(el) {
   // Forgiving double-tap: fingers may wobble a little, and the second tap can be slower or a bit off.
   const TAP_MOVE = 18, DOUBLE_TAP_MS = 500, TAP_APART = 70;
-  let start = null, dx = 0, dy = 0, lastTap = null, hintTimer = null, samples = [];
+  let start = null, dx = 0, dy = 0, lastTap = null, hintTimer = null, samples = [], infoTimer = null;
   const label = (k) => el.querySelector(`[data-label="${k}"]`);
   const clearHint = () => { clearTimeout(hintTimer); ["recognize", "unknown", "had"].forEach((k) => { label(k).style.opacity = 0; }); };
   const showHint = (edge) => { clearHint(); if (edge) { label(edge).style.opacity = 0.55; hintTimer = setTimeout(clearHint, DOUBLE_TAP_MS + 50); } };
@@ -453,7 +460,17 @@ function attachCard(el) {
         lastTap = null; clearHint();                                             // second tap: a double-tap
         const kind2 = edge || prev.edge;                                         // if the second tap drifted inward, use the first tap's edge
         if (kind2) { label(kind2).style.opacity = 1; fly(el, kind2); }
-      } else { lastTap = { t: now, x: from.x, y: from.y, edge }; showHint(edge); }
+        clearTimeout(infoTimer);
+      } else {
+        lastTap = { t: now, x: from.x, y: from.y, edge }; showHint(edge);
+        // A tap on the name opens wine info, but only when no second tap follows (that would be the double-tap swipe).
+        const hit = document.elementFromPoint(e.clientX, e.clientY);
+        if (hit && hit.closest("[data-wineinfo]")) {
+          const id = hit.closest("[data-wineinfo]").dataset.wineinfo;
+          clearTimeout(infoTimer);
+          infoTimer = setTimeout(() => { if (lastTap && lastTap.t === now) { lastTap = null; clearHint(); openMyInfo(id); } }, 330);
+        }
+      }
     }
   });
   el.addEventListener("pointercancel", () => { start = null; settle(); });
@@ -498,19 +515,27 @@ function openSheet() {
 // Ordinary players do not see the structure sliders. Steps 2 and 3 are everyday words and questions instead (feel.js): "How did it taste?"
 // and "A bit more". Their answers set that bottle's structure ratings behind the scenes, and those feed only the player's own palate profile.
 // Professionals keep the sliders, with the words and the tasting grid (tasting.js) at the top of step 2.
-const STEP_TITLES = ["Verdict", "How it tasted", "A bit more", "Details", "Notes and photos"];
+const STEP_TITLES = ["Verdict", "How it tasted", "", "Details", "Notes and photos"];
 const stepTitle = (i) => (state.pro ? SHEET_PAGES[i].title : STEP_TITLES[i]);
+// Ordinary players skip step 3 (sweetness and bubbles sliders): the questions on step 2 cover it.
+const pagesShown = () => [0, 1, 2, 3, 4].filter((i) => state.pro || i !== 2);
+const stepLine = (page) => `Step ${pagesShown().indexOf(page) + 1} of ${pagesShown().length}: ${stepTitle(page)}`;
+function paintSteps() {
+  const shown = pagesShown();
+  document.querySelectorAll(".wstep").forEach((el, i) => {
+    el.hidden = !shown.includes(i);
+    if (shown.includes(i)) { el.textContent = String(shown.indexOf(i) + 1); el.setAttribute("aria-label", `Step ${shown.indexOf(i) + 1} of ${shown.length}, ${stepTitle(i)}`); }
+  });
+  const t = $("#wtitle"); if (t && state.sheetUi) t.textContent = stepLine(state.sheetUi.page || 0);
+}
+// Steps 2 and 3, drawn for whoever is rating: questions (ordinary players) or sliders with the questions and the grid on top (professionals).
 function showExtras() {
-  const a = document.querySelector('[data-wpage="1"]'), b = document.querySelector('[data-wpage="2"]');
+  const a = document.querySelector('[data-wpage="1"]');
   if (!state.sheet || !a) return;
-  if (!state.pro) {   // everyone else: the conversational steps replace the sliders
-    a.innerHTML = tastePageOneHtml(state.sheet); if (b) b.innerHTML = tastePageTwoHtml(state.sheet);
-    const t = $("#wtitle"); if (t && state.sheetUi) t.textContent = `Step ${(state.sheetUi.page || 0) + 1} of ${SHEET_PAGES.length}: ${stepTitle(state.sheetUi.page || 0)}`;
-    document.querySelectorAll(".wstep").forEach((el, i) => el.setAttribute("aria-label", `Step ${i + 1} of ${SHEET_PAGES.length}, ${stepTitle(i)}`));
-    return;
-  }
+  paintSteps();
+  if (!state.pro) { a.innerHTML = tastePageHtml(state.sheet); return; }
   a.querySelectorAll("[data-feelblock], [data-problock]").forEach((e) => e.remove());
-  a.insertAdjacentHTML("afterbegin", feelBlockHtml(state.sheet.taste && state.sheet.taste.word) + proBlockHtml(state.sheet.tasting || {}, state.sheet.style));
+  a.insertAdjacentHTML("afterbegin", feelBlockHtml(state.sheet) + proBlockHtml(state.sheet.tasting || {}, state.sheet.style));
 }
 // The small line of wine info (varietal, vineyard, region ...) under the wine's name.
 function sheetInfo(sheet) {
@@ -525,6 +550,8 @@ function showWineLine() {
   const big = document.querySelector("#sheetPanel .sheettitle .big");
   if (!big || !state.sheet) return;
   const old = document.getElementById("sheetInfo"); if (old) old.remove();
+  // The name, with a pencil: tapping it changes the wine info.
+  big.innerHTML = `${esc(state.sheet.target.name)}&nbsp;<button class="ed edbtn" id="sheetEdit" data-sheet="editinfo" aria-label="Change wine info">&#9998;</button>`;
   const info = sheetInfo(state.sheet);
   if (info) big.insertAdjacentHTML("afterend", `<div class="muted small" id="sheetInfo">${esc(info)}</div>`);
 }
@@ -561,43 +588,98 @@ function applyGridLive(withDims = true) {
 }
 async function closeGrid() { await saveGridNow(); state.grid = null; $("#confirm").innerHTML = ""; showExtras(); }
 // Go to page n of the rating window (0 to 4). Everything stays on the page, so nothing entered is lost.
-function showSheetPage(n) {
+// dir (1 or -1) says which way to go when the page asked for is hidden.
+function showSheetPage(n, dir = 1) {
   const last = SHEET_PAGES.length - 1;
-  const page = Math.max(0, Math.min(last, n));
+  let page = Math.max(0, Math.min(last, n));
+  while (!pagesShown().includes(page) && page > 0 && page < last) page += dir;
   state.sheetUi.page = page;
   document.querySelectorAll("#wpages .wpage").forEach((el) => { el.hidden = Number(el.dataset.wpage) !== page; });
   document.querySelectorAll(".wstep").forEach((b, i) => b.classList.toggle("on", i === page));
-  const t = $("#wtitle"); if (t) t.textContent = `Step ${page + 1} of ${SHEET_PAGES.length}: ${stepTitle(page)}`;
+  const t = $("#wtitle"); if (t) t.textContent = stepLine(page);
   const panel = $("#sheetPanel"); if (panel) { panel.dataset.page = String(page); panel.scrollTop = 0; }
   syncFoot();
 }
-// ---------------------------------------------------------------- changing the wine on a journal entry
-// A person can correct what the wine is. The catalog is never changed: the entry either points at the right catalog wine or at a wine of their own.
-async function openWineEdit() {
-  const s = state.sheet;
-  if (!s || !s.entryId) return;
-  const entry = state.journal.find((e) => e.id === s.entryId);
-  if (!entry) return;
-  let userWine = null;
-  try { if (entry.is_outside_wine) userWine = await db.loadUserWine(state.sb, entry.user_wine_id); }
-  catch (e) { state.sheetUi.error = "Could not open wine info: " + (e.message || e); syncSheet(); return; }
-  const card = entry.is_outside_wine ? null : state.cards.find((c) => c.id === entry.wine_vintage_id) || null;
-  const before = wineEditForm(entry, card, userWine);
-  state.wedit = { entry, before, form: { ...before }, saving: false, error: "",
-    note: entry.is_outside_wine ? "This wine is yours. If it matches a catalog wine, this entry moves to that wine." : "This changes your journal only. The catalog stays as it is." };
+// ---------------------------------------------------------------- changing a wine's info
+// Anyone can change a wine's details for themselves: tap the name, or the pencil next to it. For a wine in the catalog this is a private
+// version laid over the catalog's (mywine.js): only the player sees it and the catalog never moves. A wine the player typed in themselves is
+// changed directly. Editors and the Owner change the catalog itself in the Editor tab.
+const MY_NOTE = "This is your own version of the wine. Only you see it, and the catalog does not change.";
+function openMyInfo(wineVintageId) {
+  const card = cardById(wineVintageId);
+  if (!card) return;
+  const before = wineEditForm({ style: card.style }, card, null);
+  state.wedit = { mode: "mine", card, before, form: { ...before }, saving: false, error: "", canReset: state.mine.has(card.id), note: MY_NOTE };
   drawWineEdit();
 }
-const drawWineEdit = () => { const w = state.wedit; $("#confirm").innerHTML = w ? wineEditHtml(w.form, { error: w.error, saving: w.saving, note: w.note }) : ""; };
+// From the rating window (the pencil by the name, or the link on the Details step) and from the Journal and Profile (by entry).
+async function openEntryInfo(entry) {
+  if (!entry) return;
+  if (!entry.is_outside_wine && entry.wine_vintage_id) return openMyInfo(entry.wine_vintage_id);
+  let userWine = null;
+  try { userWine = await db.loadUserWine(state.sb, entry.user_wine_id); }
+  catch (e) { setBanner("Could not open wine info: " + (e.message || e)); return; }
+  const before = wineEditForm(entry, null, userWine);
+  state.wedit = { entry, before, form: { ...before }, saving: false, error: "", note: "This wine is yours. If it matches a catalog wine, this entry moves to that wine." };
+  drawWineEdit();
+}
+async function openWineEdit() {
+  const s = state.sheet;
+  if (!s) return;
+  if (s.target.wineVintageId) return openMyInfo(s.target.wineVintageId);
+  const entry = s.entryId && state.journal.find((e) => e.id === s.entryId);
+  if (entry) return openEntryInfo(entry);
+}
+const drawWineEdit = () => { const w = state.wedit; $("#confirm").innerHTML = w ? wineEditHtml(w.form, { error: w.error, saving: w.saving, note: w.note, canReset: !!w.canReset }) : ""; };
 const closeWineEdit = () => { state.wedit = null; $("#confirm").innerHTML = ""; };
 function showWineChange() {
   const s = state.sheet; if (!s) return;
-  const t = document.querySelector("#sheetPanel .sheettitle .big"); if (t) t.textContent = s.target.name;
   const c = document.getElementById("wcname"); if (c) c.textContent = s.target.name;
-  redrawStructurePages(); showPhotos(); showWineLine(); syncSheet();   // the photos block follows the wine: sharing is only for catalog wines
+  redrawStructurePages(); showPhotos(); showWineLine(); syncSheet();   // the photos block follows the wine
+}
+// After a private change: the cards, the journal and the deck are rebuilt from the database so every screen shows the player's version,
+// and an open rating window follows the wine (its name, its type and so the questions it asks).
+async function reloadWines(wineVintageId) {
+  const wasOnTop = state.deck.length && state.deck[0].id === wineVintageId;
+  state.cards = await loadAllCards();
+  await refreshData();
+  rebuildDeck();
+  if (wasOnTop) { const c = cardById(wineVintageId); if (c) state.deck = [c, ...state.deck.filter((x) => x.id !== wineVintageId)]; }
+  const s = state.sheet, card = cardById(wineVintageId);
+  if (s && card && s.target.wineVintageId === wineVintageId) {
+    let next = { ...s, target: { ...s.target, name: wineName(card) }, catalogStyle: card.style };
+    if (next.style !== card.style) next = setStyle(next, card.style);
+    state.sheet = { ...next, taste: cleanTaste(next.taste, next.style), tasteDirty: true };
+    showWineChange();
+  }
+  if (state.tab === "journal") renderJournalList(); else renderBody();
+}
+async function saveMyWineEdit() {
+  const w = state.wedit;
+  checkGrapeInputs("wef"); syncGrapePlace("wef"); w.form.grape = expandBlends(w.form.grape);   // GSM -> its three grapes
+  const problem = validateWineEdit(w.form);
+  if (problem) { w.error = problem; const e = document.getElementById("winfoErr"); if (e) e.textContent = problem; return; }
+  const data = diffForm(w.card.catalogForm, w.form);
+  if (JSON.stringify(data) === JSON.stringify(state.mine.get(w.card.id) || {})) { closeWineEdit(); return; }
+  w.saving = true; w.error = ""; drawWineEdit();
+  try {
+    await saveMyInfo(state.sb, state.user.id, w.card.id, data);
+    const id = w.card.id;
+    closeWineEdit();
+    await reloadWines(id);
+  } catch (e) { w.saving = false; w.error = "Could not save: " + (e.message || e) + (/my_wine_info|relation/i.test(String(e.message || e)) ? " (Run database update 24.)" : ""); drawWineEdit(); }
+}
+async function resetMyInfo() {
+  const w = state.wedit;
+  if (!w || !w.card) return;
+  w.saving = true; drawWineEdit();
+  try { await saveMyInfo(state.sb, state.user.id, w.card.id, {}); const id = w.card.id; closeWineEdit(); await reloadWines(id); }
+  catch (e) { w.saving = false; w.error = "Could not reset: " + (e.message || e); drawWineEdit(); }
 }
 async function saveWineEdit() {
   const w = state.wedit;
   if (!w || w.saving) return;
+  if (w.mode === "mine") return saveMyWineEdit();
   checkGrapeInputs("wef"); syncGrapePlace("wef"); w.form.grape = expandBlends(w.form.grape);   // GSM -> its three grapes
   const problem = validateWineEdit(w.form);
   if (problem) { w.error = problem; const e = document.getElementById("winfoErr"); if (e) e.textContent = problem; return; }
@@ -745,7 +827,7 @@ document.addEventListener("pointerup", (ev) => {
   if (!pageSwipe || !state.sheet) return;
   const dx = ev.clientX - pageSwipe.x, dy = ev.clientY - pageSwipe.y;
   pageSwipe = null;
-  if (Math.abs(dx) > 60 && Math.abs(dy) < 45) showSheetPage(state.sheetUi.page + (dx < 0 ? 1 : -1));
+  if (Math.abs(dx) > 60 && Math.abs(dy) < 45) showSheetPage(state.sheetUi.page + (dx < 0 ? 1 : -1), dx < 0 ? 1 : -1);
 });
 document.addEventListener("pointercancel", () => { pageSwipe = null; });
 
@@ -765,16 +847,17 @@ document.addEventListener("click", async (ev) => {
     catch (e) { state.consentBusy = false; state.consentError = "Could not save that: " + (e.message || e); render(); }
   }
 });
-// The words and the everyday questions (feel.js). One tap sets that bottle's structure ratings; tapping the same answer again takes it back.
+// The questions (feel.js): "Was the wine balanced?", what stood out and how much, and alone or with food. Answering opens more options, so the
+// block is redrawn after each tap. The answers set that bottle's structure ratings behind the scenes (private; they feed only the palate).
 document.addEventListener("click", (ev) => {
-  const w = ev.target.closest("[data-feel]"), q = ev.target.closest("[data-taste]");
-  if ((!w && !q) || !state.sheet) return;
-  let change;
-  if (w) change = { word: w.dataset.feel };
-  else { const [qid, idx] = q.dataset.taste.split(":"); change = { answer: [qid, Number(idx)] }; }
+  const q = ev.target.closest("[data-taste]");
+  if (!q || !state.sheet) return;
+  const change = changeFrom(q.dataset.taste);
+  if (!change) return;
   const r = applyTaste(state.sheet, change);
   state.sheet = { ...state.sheet, dims: r.dims, taste: r.taste, tasteDirty: true };
-  syncSheet(); syncTasteDom(state.sheet);
+  syncSheet();
+  document.querySelectorAll("[data-tasteblock]").forEach((el) => { el.innerHTML = tasteInnerHtml(state.sheet); });
 });
 // The professional tasting grid (tasting.js). It sits above the rating window; every tap is kept straight away.
 document.addEventListener("click", (ev) => {
@@ -794,6 +877,7 @@ document.addEventListener("click", async (ev) => {
       state.wedit.form.style = wb.dataset.weditStyle;
       document.querySelectorAll("[data-wedit-style]").forEach((b) => b.classList.toggle("on", b.dataset.weditStyle === state.wedit.form.style));
     } else if (wb.dataset.wedit === "save") await saveWineEdit();
+    else if (wb.dataset.wedit === "reset") await resetMyInfo();
     else if (wb.dataset.wedit === "close") closeWineEdit();
     return;
   }
@@ -804,10 +888,9 @@ document.addEventListener("click", async (ev) => {
       state.sheet.verdict = a; syncSheet();
       if (state.sheetUi.page === 0) setTimeout(() => { if (state.sheet && state.sheet.verdict === a && state.sheetUi.page === 0) showSheetPage(1); }, 220);   // choosing a verdict moves on
     }
-    else if (action === "prev") showSheetPage(state.sheetUi.page - 1);
-    else if (action === "next") showSheetPage(state.sheetUi.page + 1);
+    else if (action === "prev") showSheetPage(state.sheetUi.page - 1, -1);
+    else if (action === "next") showSheetPage(state.sheetUi.page + 1, 1);
     else if (action === "page") showSheetPage(Number(a));
-    else if (action === "style") { const next = setStyle(state.sheet, a); state.sheet = { ...next, taste: cleanTaste(next.taste, next.style), tasteDirty: true }; redrawStructurePages(); syncSheet(); }
     else if (action === "sweet") { if (state.sheet.dims[a] && state.sheet.dims[a].value === 0) state.sheet = setDim(state.sheet, a, 1); syncSheet(); }
     else if (action === "nudge") { state.sheet = nudgeDim(state.sheet, a, Number(b)); syncSheet(); }
     else if (action === "choice") { state.sheet = setDim(state.sheet, a, Number(b)); syncSheet(); }
@@ -837,6 +920,8 @@ document.addEventListener("click", async (ev) => {
       state.banner = null; state.status = "loading"; render(); init();
     }
     else if (action === "notint") notInterested();
+    else if (action === "wineinfo") openMyInfo(a);
+    else if (action === "wineinfo-entry") openEntryInfo(state.journal.find((j) => j.id === a));
     else if (action === "unswipe") {   // "Put back" on a wine that was only marked not interested: it returns to the deck
       const card = cardById(a);
       await db.deleteSwipe(state.sb, a); await refreshData();
