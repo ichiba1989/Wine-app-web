@@ -16,8 +16,8 @@ import { createLearn } from "./learn.js?v=3";
 import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=1";
 import { loadPrices, applyPrices, tidyFacts } from "./pricing.js?v=1";
-import { FEELS, applyFeel, feelBlockHtml } from "./feel.js?v=1";
-import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent, tickAll, CONSENT_VERSION } from "./consent.js?v=1";
+import { applyTaste, cleanTaste, feelBlockHtml, tastePageOneHtml, tastePageTwoHtml, syncTasteDom, saveTaste, loadTaste } from "./feel.js?v=2";
+import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=2";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
 import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, isEmptyGrid } from "./tasting.js?v=2";
 import { buildDeck } from "./deck.js?v=2";
@@ -28,7 +28,7 @@ import { createEditor } from "./editor.js?v=18";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
-const APP_VERSION = "26";   // shown to editors with each piece of feedback
+const APP_VERSION = "27";   // shown to editors with each piece of feedback
 const SUPABASE_JS_VERSION = "2.109.0";
 const LIBRARY_URLS = [
   `https://esm.sh/@supabase/supabase-js@${SUPABASE_JS_VERSION}`,
@@ -495,13 +495,22 @@ function openSheet() {
   showPhotos();   // the photos block (sharing.js)
   showExtras(); showWineLine();
 }
-// The top of the Structure step: "How did the wine feel?" for everyone (feel.js), and the tasting grid for professionals (tasting.js).
-// It is drawn again whenever that step is redrawn.
+// Ordinary players do not see the structure sliders. Steps 2 and 3 are everyday words and questions instead (feel.js): "How did it taste?"
+// and "A bit more". Their answers set that bottle's structure ratings behind the scenes, and those feed only the player's own palate profile.
+// Professionals keep the sliders, with the words and the tasting grid (tasting.js) at the top of step 2.
+const STEP_TITLES = ["Verdict", "How it tasted", "A bit more", "Details", "Notes and photos"];
+const stepTitle = (i) => (state.pro ? SHEET_PAGES[i].title : STEP_TITLES[i]);
 function showExtras() {
-  const page = document.querySelector('[data-wpage="1"]');
-  if (!state.sheet || !page) return;
-  page.querySelectorAll("[data-feelblock], [data-problock]").forEach((e) => e.remove());
-  page.insertAdjacentHTML("afterbegin", feelBlockHtml(state.sheet.feel && state.sheet.feel.id) + (state.pro ? proBlockHtml(state.sheet.tasting || {}, state.sheet.style) : ""));
+  const a = document.querySelector('[data-wpage="1"]'), b = document.querySelector('[data-wpage="2"]');
+  if (!state.sheet || !a) return;
+  if (!state.pro) {   // everyone else: the conversational steps replace the sliders
+    a.innerHTML = tastePageOneHtml(state.sheet); if (b) b.innerHTML = tastePageTwoHtml(state.sheet);
+    const t = $("#wtitle"); if (t && state.sheetUi) t.textContent = `Step ${(state.sheetUi.page || 0) + 1} of ${SHEET_PAGES.length}: ${stepTitle(state.sheetUi.page || 0)}`;
+    document.querySelectorAll(".wstep").forEach((el, i) => el.setAttribute("aria-label", `Step ${i + 1} of ${SHEET_PAGES.length}, ${stepTitle(i)}`));
+    return;
+  }
+  a.querySelectorAll("[data-feelblock], [data-problock]").forEach((e) => e.remove());
+  a.insertAdjacentHTML("afterbegin", feelBlockHtml(state.sheet.taste && state.sheet.taste.word) + proBlockHtml(state.sheet.tasting || {}, state.sheet.style));
 }
 // The small line of wine info (varietal, vineyard, region ...) under the wine's name.
 function sheetInfo(sheet) {
@@ -546,7 +555,7 @@ function applyGridLive(withDims = true) {
   state.sheet.tasting = clean; state.sheet.tastingDirty = true;
   if (withDims) {
     Object.entries(gridToDims(clean, style)).forEach(([key, value]) => { if (state.sheet.dims[key]) state.sheet = setDim(state.sheet, key, value); });
-    state.sheet.feel = null; syncSheet(); showExtras();
+    state.sheet.taste = null; state.sheet.tasteDirty = true; syncSheet(); showExtras();
   }
   scheduleGridSave();
 }
@@ -558,7 +567,7 @@ function showSheetPage(n) {
   state.sheetUi.page = page;
   document.querySelectorAll("#wpages .wpage").forEach((el) => { el.hidden = Number(el.dataset.wpage) !== page; });
   document.querySelectorAll(".wstep").forEach((b, i) => b.classList.toggle("on", i === page));
-  const t = $("#wtitle"); if (t) t.textContent = `Step ${page + 1} of ${SHEET_PAGES.length}: ${SHEET_PAGES[page].title}`;
+  const t = $("#wtitle"); if (t) t.textContent = `Step ${page + 1} of ${SHEET_PAGES.length}: ${stepTitle(page)}`;
   const panel = $("#sheetPanel"); if (panel) { panel.dataset.page = String(page); panel.scrollTop = 0; }
   syncFoot();
 }
@@ -608,15 +617,18 @@ async function saveWineEdit() {
 // Changing the wine type changes which lines apply, so pages 2 and 3 are drawn again.
 function redrawStructurePages() {
   const a = document.querySelector('[data-wpage="1"]'), b = document.querySelector('[data-wpage="2"]');
-  if (a) a.innerHTML = structurePageHtml(state.sheet);
-  if (b) b.innerHTML = characterPageHtml(state.sheet);
+  if (state.pro) {
+    if (a) a.innerHTML = structurePageHtml(state.sheet);
+    if (b) b.innerHTML = characterPageHtml(state.sheet);
+  }
   showExtras();
 }
 async function openEntry(entry) {
   const [rows, photos] = await Promise.all([db.loadPerceptions(state.sb, entry.id), db.loadEntryPhotos(state.sb, entry.id).catch(() => [])]);
   state.sheet = sheetForEntry(entry, rows, today(), startForEntry(entry), photos);
   state.sheet.photos.existing.forEach((p) => { const row = photos.find((r) => String(r.id) === String(p.id)); p.status = (row && row.share_status) || "private"; p.want = p.status === "submitted" || p.status === "approved"; });
-  state.sheet.tasting = {}; state.sheet.tastingDirty = false;
+  state.sheet.tasting = {}; state.sheet.tastingDirty = false; state.sheet.taste = null; state.sheet.tasteDirty = false;
+  try { state.sheet.taste = await loadTaste(state.sb, entry.id, state.sheet); } catch (_) { /* before database update 23 nothing is remembered */ }
   if (state.pro) { try { state.sheet.tasting = await loadTasting(state.sb, entry.id); } catch (_) { /* before database update 21 there are no notes */ } }
   openSheet();
 }
@@ -643,6 +655,7 @@ async function saveSheet() {
     const failedUp = await db.uploadPhotos(state.sb, state.user.id, id, state.sheet.photos.queued, shareNew);
     const failedDel = await db.deletePhotos(state.sb, removed);
     const failedShare = await applyShareChanges(state.sb, state.sheet.photos.existing.filter((p) => !p.removed || failedDel.some((f) => f.photo.id === p.id)));
+    if (state.sheet.tasteDirty) { try { await saveTaste(state.sb, id, state.sheet.taste); state.sheet.tasteDirty = false; } catch (_) { /* before database update 23 the ratings are still saved */ } }
     if (state.pro && state.sheet.tastingDirty) {
       try { await saveTasting(state.sb, id, state.sheet.tasting || {}, state.sheet.style); state.sheet.tastingDirty = false; }
       catch (e) { failedShare.push({ message: "the tasting grid was not saved (" + (e.message || e) + ")" }); }
@@ -744,8 +757,7 @@ document.addEventListener("change", (ev) => {
 });
 document.addEventListener("click", async (ev) => {
   if (state.status !== "age") return;
-  if (ev.target.closest("[data-consent-all]")) { state.consent = tickAll(state.consent, !allAccepted(state.consent)); render(); }
-  else if (ev.target.closest("[data-consent-under]")) { state.underage = true; render(); }
+  if (ev.target.closest("[data-consent-under]")) { state.underage = true; render(); }
   else if (ev.target.closest("[data-consent-go]")) {
     if (!allAccepted(state.consent) || state.consentBusy) return;
     state.consentBusy = true; state.consentError = ""; render();
@@ -753,13 +765,16 @@ document.addEventListener("click", async (ev) => {
     catch (e) { state.consentBusy = false; state.consentError = "Could not save that: " + (e.message || e); render(); }
   }
 });
-// "How did the wine feel?" (feel.js): one tap sets acidity, body, tannin and oak in relation to each other; tapping it again puts them back.
+// The words and the everyday questions (feel.js). One tap sets that bottle's structure ratings; tapping the same answer again takes it back.
 document.addEventListener("click", (ev) => {
-  const b = ev.target.closest("[data-feel]");
-  if (!b || !state.sheet) return;
-  const r = applyFeel(state.sheet, b.dataset.feel);
-  state.sheet = { ...state.sheet, dims: r.dims, feel: r.feel };
-  syncSheet(); showExtras();
+  const w = ev.target.closest("[data-feel]"), q = ev.target.closest("[data-taste]");
+  if ((!w && !q) || !state.sheet) return;
+  let change;
+  if (w) change = { word: w.dataset.feel };
+  else { const [qid, idx] = q.dataset.taste.split(":"); change = { answer: [qid, Number(idx)] }; }
+  const r = applyTaste(state.sheet, change);
+  state.sheet = { ...state.sheet, dims: r.dims, taste: r.taste, tasteDirty: true };
+  syncSheet(); syncTasteDom(state.sheet);
 });
 // The professional tasting grid (tasting.js). It sits above the rating window; every tap is kept straight away.
 document.addEventListener("click", (ev) => {
@@ -792,7 +807,7 @@ document.addEventListener("click", async (ev) => {
     else if (action === "prev") showSheetPage(state.sheetUi.page - 1);
     else if (action === "next") showSheetPage(state.sheetUi.page + 1);
     else if (action === "page") showSheetPage(Number(a));
-    else if (action === "style") { state.sheet = { ...setStyle(state.sheet, a), feel: null }; redrawStructurePages(); syncSheet(); }
+    else if (action === "style") { const next = setStyle(state.sheet, a); state.sheet = { ...next, taste: cleanTaste(next.taste, next.style), tasteDirty: true }; redrawStructurePages(); syncSheet(); }
     else if (action === "sweet") { if (state.sheet.dims[a] && state.sheet.dims[a].value === 0) state.sheet = setDim(state.sheet, a, 1); syncSheet(); }
     else if (action === "nudge") { state.sheet = nudgeDim(state.sheet, a, Number(b)); syncSheet(); }
     else if (action === "choice") { state.sheet = setDim(state.sheet, a, Number(b)); syncSheet(); }
