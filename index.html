@@ -367,18 +367,46 @@
   .namelink { cursor: pointer; }
   .tq.sub { margin-top: 8px; padding-left: 12px; border-left: 3px solid var(--line); }
   .tq.sub .tqtext { font-weight: 500; font-size: 14px; }
-  /* The photo finder (Owner): one candidate at a time */
-  .fndcard { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
-  .fndimg { display: block; max-width: 100%; max-height: 52vh; margin: 8px auto; border-radius: 10px; background: linear-gradient(180deg,#F8FAF7,#E9EFE6); object-fit: contain; }
-  .fndimg.empty { padding: 40px 0; text-align: center; color: var(--muted); }
-  .fndbtns { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
-  .fndbtns .btn { margin-top: 0; flex: 1 1 auto; } .fndbtns select { margin-top: 0; flex: 2 1 auto; }
+  /* Card visuals: the bottle silhouette, the country map with its pin, six flavor icons, and the zoom overlay */
+  .image { height: auto; flex: 1 1 0; min-height: 34%; }   /* the picture takes whatever space the text does not need */
+  .body { display: flex; flex-direction: column; flex: 0 1 auto; max-height: 68%; }
+  .toprow { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .nameblock { flex: 1 1 auto; min-width: 0; }
+  .facts { flex: 0 1 auto; min-height: 0; overflow: hidden; }
+  .mapbtn { position: relative; flex: 0 0 64px; width: 64px; height: 64px; padding: 0; margin: 2px 4px 0 0; border: 0; border-radius: 12px; background: #f1f5ef; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .mapbtn.still { cursor: default; }
+  .mapbtn svg { width: 100%; height: 100%; display: block; border-radius: 12px; }
+  .mapbtn .badge { position: absolute; top: -5px; right: -5px; width: 18px; height: 18px; border-radius: 50%; background: var(--wine); color: #fff; font: 700 13px/18px system-ui, sans-serif; text-align: center; box-shadow: 0 1px 3px #0003; }
+  .flavors { display: flex; gap: 2px; margin-top: 10px; flex: 0 0 auto; }
+  .fl { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .fl .fico { display: block; }
+  .fl span { font-size: 9.5px; line-height: 1.15; margin-top: 3px; color: #3d4a43; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 100%; }
+  #zoom:empty { display: none; }
+  .zoomback { position: fixed; inset: 0; z-index: 80; background: rgba(20, 30, 25, .55); display: flex; align-items: center; justify-content: center; padding: 18px; animation: zfade .18s ease; }
+  .zoombox { position: relative; width: min(92vw, 68vh, 420px); background: #fff; border-radius: 18px; padding: 10px 10px 12px; box-shadow: 0 10px 40px #0005; }
+  .zoomx { position: absolute; top: -12px; right: -12px; width: 34px; height: 34px; border-radius: 50%; border: 0; background: #fff; font-size: 22px; line-height: 30px; box-shadow: 0 2px 8px #0004; z-index: 3; cursor: pointer; }
+  .stage { position: relative; width: 100%; aspect-ratio: 1 / 1; border-radius: 12px; overflow: hidden; background: #eaf0e6; cursor: pointer; }
+  .stage:focus-visible { outline: 3px solid var(--slate); outline-offset: 2px; }
+  .layer { position: absolute; inset: 0; transition: transform .75s cubic-bezier(.2, .7, .2, 1), opacity .75s ease; }
+  .layer svg { width: 100%; height: 100%; display: block; }
+  .layer.region { transform-origin: var(--px) var(--py); opacity: 1; transform: scale(1); }
+  .layer.vineyard { transform-origin: 50% 50%; opacity: 0; transform: scale(.4); pointer-events: none; }
+  .stage[data-step="1"] .layer.region { opacity: 0; transform: scale(2.8); }
+  .stage[data-step="1"] .layer.vineyard { opacity: 1; transform: scale(1); }
+  .zcap { margin-top: 10px; text-align: center; font-weight: 600; font-size: 14px; }
+  .zdots { display: flex; gap: 6px; justify-content: center; margin-top: 6px; }
+  .zdots i { width: 7px; height: 7px; border-radius: 50%; background: #c9d3c5; display: block; }
+  .zdots i.on { background: var(--wine); }
+  .zhint { text-align: center; font-size: 12px; color: var(--muted); margin-top: 4px; }
+  @keyframes zfade { from { opacity: 0; } to { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .layer { transition: opacity .15s linear; transform: none !important; } .zoomback { animation: none; } }
 </style>
 </head>
 <body>
 <div id="app"></div>
 <div id="overlay"></div>
 <div id="confirm"></div>
+<div id="zoom"></div>
 <div id="bootError" hidden></div>
 <script>
 // If the app cannot start, say why on the screen instead of leaving a blank page.
@@ -402,6 +430,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=29" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=30" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>
