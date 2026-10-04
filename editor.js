@@ -10,14 +10,13 @@
 // Every change is logged by the database.
 import { dimsFor, dimMeta, defaultFor, esc, wineName, placeLine, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel, barDims, choiceDims, styleInfo } from "./logic.js?v=10";
 import * as db from "./data.js?v=15";
-import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=14";
+import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=15";
 import { createReview } from "./review.js?v=6";
-import { createWineInfo, publishSummary } from "./wineinfo.js?v=12";
+import { createWineInfo, publishSummary } from "./wineinfo.js?v=13";
 import { groupSubmissions, planPromotion, duplicateGroups, rulesFrom } from "./catalog.js?v=2";
 import { visibleKinds, FOUND_ONLINE_PERMISSION, photoSummary, photoList, photoTag, pullSource, shareWinePhoto, shareNote, uploadWinePhoto, removeWinePhoto, reuseWinePhoto } from "./winephotos.js?v=3";
 import { communityHtml, loadSubmissionState, approvalPlan } from "./sharing.js?v=2";
 import { infoLine } from "./wineline.js?v=1";
-import { finderHtml, loadFinderState, findPhotos, approveCandidate, rejectCandidate, removePhotoFor, nextCandidate, summaryText } from "./finder.js?v=1";
 import { sortWines, sortSelectHtml, STRUCTURE_SORTS, PHOTO_SORTS } from "./sorting.js?v=1";
 import { suggestStructure, values as ruleValues, goldInfo, GOLD, GROUPS, evaluateRules, reportText, TARGETS, RULES_VERSION } from "./rules.js?v=4";
 
@@ -142,7 +141,7 @@ function photosHtml(E) {
       <button class="link" data-editor="phinfo:${esc(c.id)}">Edit wine info</button>${tag ? `<div class="muted tiny">Photo: ${esc(tag)}</div>` : ""}${remove}${reuse}</div>
       <div class="candbtns"><label class="btn ${c.image ? "outline" : "primary"} slim photobtn${busy || P.busy ? " disabled" : ""}">${busy ? "Saving…" : c.image ? "Replace" : "Add photo"}<input type="file" accept="image/*" data-photofor="${esc(c.id)}"${P.busy ? " disabled" : ""} hidden></label></div></div>`;
   }).join("");
-  return `${E.can(FOUND_ONLINE_PERMISSION) ? finderHtml(E.fnd, E.cards) : ""}${communityHtml(E.sub, E.cards)}${P.msg ? `<div class="notice">${esc(P.msg)}</div>` : ""}${P.error ? `<div class="err">${esc(P.error)}</div>` : ""}
+  return `${communityHtml(E.sub, E.cards)}${P.msg ? `<div class="notice">${esc(P.msg)}</div>` : ""}${P.error ? `<div class="err">${esc(P.error)}</div>` : ""}
     <div class="photoprogress"><div class="serif big">${sum.withPhoto} of ${sum.total} wines have a photo</div><div class="lbar thin"><div style="width:${sum.pct}%"></div></div></div>
     <p class="muted small">A photo saved for one vintage is also used for the other vintages of the same wine that do not have their own. Licensed and community photos take priority over everything else.${E.can(FOUND_ONLINE_PERMISSION) ? " Photos marked Found online are temporary: a licensed or community photo replaces them." : ""} A real photo makes the Discover card come alive. Stand the bottle upright, label facing the camera, on a plain background in good light. Photos are saved small (about 900 px) so they load fast.</p>
     <div class="qlabel">Where are these photos from?</div><div class="chips left grid3">${kinds}</div>
@@ -211,7 +210,7 @@ function testHtml(E) {
 // ctx: { sb(), userId(), cards(), can(permission), roleLabel(), onSaved(), onWineChanged() }
 export function createEditor(ctx) {
   const can = (p) => !!(ctx.can && ctx.can(p));
-  const E = { can, fnd: { loaded: false, loading: false, error: "", items: [], skipped: [], busy: null, running: false, msg: "" }, sort: "producer", sub: { loaded: false, loading: false, error: "", items: [], busy: null, msg: "" }, section: (sectionsFor(can)[0] || { id: "structure" }).id, loaded: false, loadError: null, cards: [], refs: new Map(), rows: [], vintageToWine: new Map(), q: "", filter: "needs", sheet: null, saving: false, error: "",
+  const E = { can, sort: "producer", sub: { loaded: false, loading: false, error: "", items: [], busy: null, msg: "" }, section: (sectionsFor(can)[0] || { id: "structure" }).id, loaded: false, loadError: null, cards: [], refs: new Map(), rows: [], vintageToWine: new Map(), q: "", filter: "needs", sheet: null, saving: false, error: "",
     ph: { sort: "default", filter: "needs", q: "", kind: "own_photography", show: PHOTO_PAGE, busy: null, confirm: null, msg: "", error: "" },
     cat: { loaded: false, loading: false, error: "", rows: [], config: [], decisions: [], busy: false, msg: "", view: null } };
   let root = null;
@@ -256,7 +255,7 @@ export function createEditor(ctx) {
     root.innerHTML = `${chips()}<div id="editorSection" style="margin-top:10px"></div>`;
     const sec = document.querySelector("#editorSection");
     if (E.section === "structure") { sec.innerHTML = structureShell(); if (!E.loaded) load(); else { E.cards = ctx.cards(); drawList(); } }
-    else if (E.section === "photos") { E.cards = ctx.cards(); if (!visibleKinds(can).some((k) => k.id === E.ph.kind)) E.ph.kind = "own_photography"; if (E.ph.filter === "found" && !can(FOUND_ONLINE_PERMISSION)) E.ph.filter = "needs"; if (!E.sub.loaded && !E.sub.loading) loadSubs(); if (can(FOUND_ONLINE_PERMISSION) && !E.fnd.loaded && !E.fnd.loading) loadFnd(); sec.innerHTML = `<div id="photosBody">${photosHtml(E)}</div>`; }
+    else if (E.section === "photos") { E.cards = ctx.cards(); if (!visibleKinds(can).some((k) => k.id === E.ph.kind)) E.ph.kind = "own_photography"; if (E.ph.filter === "found" && !can(FOUND_ONLINE_PERMISSION)) E.ph.filter = "needs"; if (!E.sub.loaded && !E.sub.loading) loadSubs(); sec.innerHTML = `<div id="photosBody">${photosHtml(E)}</div>`; }
     else if (E.section === "catalog") { E.cards = ctx.cards(); sec.innerHTML = `<div id="catalogBody">${catalogHtml(E)}</div>`; if (!E.cat.loaded && !E.cat.loading) loadCatalog(); }
     else review.mount(sec, E.section);
   }
@@ -315,46 +314,6 @@ export function createEditor(ctx) {
     } catch (e) { P.error = `${wineName(card)}: ${e.message || e}`; }
     P.busy = null; drawPhotos();
   }
-  async function loadFnd() {
-    const F = E.fnd; F.loading = true; F.error = "";
-    const r = await loadFinderState(ctx.sb());
-    F.loaded = r.loaded; F.error = r.error; F.items = r.items; F.loading = false;
-    if (E.section === "photos") drawPhotos();
-  }
-  async function fndFind() {
-    const F = E.fnd;
-    if (F.running || F.busy) return;
-    F.running = true; F.msg = ""; F.error = ""; drawPhotos();
-    try {
-      const summary = await findPhotos(ctx.sb(), 6);
-      const r = await loadFinderState(ctx.sb());
-      F.loaded = r.loaded; F.items = r.items; F.error = r.error; F.skipped = [];
-      F.msg = summaryText(summary);
-    } catch (e) { F.msg = ""; F.error = String((e && e.message) || e); F.loaded = true; }
-    F.running = false; drawPhotos();
-  }
-  async function fndApprove(id) {
-    const F = E.fnd, c = F.items.find((x) => x.id === id);
-    if (!c || F.busy) return;
-    F.busy = id; F.msg = ""; F.error = ""; drawPhotos();
-    try {
-      await approveCandidate(ctx.sb(), c);
-      F.items = F.items.filter((x) => x.id !== id && x.wine_id !== c.wine_id);   // the database closes the wine's other candidates when one is approved
-      if (ctx.onWineChanged) await ctx.onWineChanged();
-      E.cards = ctx.cards();
-      F.msg = `${c.wine_label || "The wine"}: photo approved. It is marked Found online.`;
-    } catch (e) { F.error = `${c.wine_label || "The wine"}: ${(e && e.message) || e}`; }
-    F.busy = null; drawPhotos();
-  }
-  async function fndReject(id) {
-    const F = E.fnd, c = F.items.find((x) => x.id === id);
-    if (!c || F.busy) return;
-    const why = (document.querySelector("[data-fnd-why]") || {}).value || "Other";
-    F.busy = id; F.msg = ""; F.error = ""; drawPhotos();
-    try { await rejectCandidate(ctx.sb(), c, why); F.items = F.items.filter((x) => x.id !== id); F.msg = "Rejected. It will not be suggested again for this wine."; }
-    catch (e) { F.error = String((e && e.message) || e); }
-    F.busy = null; drawPhotos();
-  }
   async function loadSubs() {
     const S = E.sub; S.loading = true; S.error = "";
     const r = await loadSubmissionState(ctx.sb());
@@ -403,7 +362,7 @@ export function createEditor(ctx) {
     if (!card || P.busy) return;
     if (P.confirm !== id) { P.confirm = id; drawPhotos(); return; }
     P.busy = id; P.confirm = null; P.msg = ""; P.error = ""; drawPhotos();
-    try { await removePhotoFor(ctx.sb(), card); if (ctx.onWineChanged) await ctx.onWineChanged(); E.cards = ctx.cards(); P.msg = `${wineName(card)}: photo removed.`; }
+    try { await removeWinePhoto(ctx.sb(), id); if (ctx.onWineChanged) await ctx.onWineChanged(); E.cards = ctx.cards(); P.msg = `${wineName(card)}: photo removed.`; }
     catch (e) { P.error = `${wineName(card)}: ${e.message || e}`; }
     P.busy = null; drawPhotos();
   }
@@ -462,7 +421,6 @@ export function createEditor(ctx) {
     else if (action === "phremove") photoRemove(a);
     else if (action === "phinfo") { const card = E.cards.find((c) => c.id === a); if (card) openInfo(card); }
     else if (action === "phreuse") photoReuse(a, b);
-    else if (action === "fnd") { if (a === "find") fndFind(); else if (a === "retry") { E.fnd.loaded = false; E.fnd.error = ""; loadFnd(); } else if (a === "ok") fndApprove(b); else if (a === "no") fndReject(b); else if (a === "skip") { E.fnd.skipped.push(b); drawPhotos(); } }
     else if (action === "subok") subApprove(a);
     else if (action === "subno") subReject(a);
     else if (action === "subretry") { E.sub.loaded = false; E.sub.error = ""; loadSubs(); }
