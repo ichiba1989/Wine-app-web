@@ -367,6 +367,12 @@
   .namelink { cursor: pointer; }
   .tq.sub { margin-top: 8px; padding-left: 12px; border-left: 3px solid var(--line); }
   .tq.sub .tqtext { font-weight: 500; font-size: 14px; }
+  /* The photo finder (Owner): one candidate at a time */
+  .fndcard { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .fndimg { display: block; max-width: 100%; max-height: 52vh; margin: 8px auto; border-radius: 10px; background: linear-gradient(180deg,#F8FAF7,#E9EFE6); object-fit: contain; }
+  .fndimg.empty { padding: 40px 0; text-align: center; color: var(--muted); }
+  .fndbtns { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .fndbtns .btn { margin-top: 0; flex: 1 1 auto; } .fndbtns select { margin-top: 0; flex: 2 1 auto; }
 </style>
 </head>
 <body>
@@ -396,6 +402,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=28" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=29" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>
