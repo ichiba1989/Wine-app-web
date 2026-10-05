@@ -7,7 +7,8 @@ import { splitGrapeParts, splitPlace } from "./blends.js?v=1";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
 import { flavorsForCard, placeFor } from "./flavors.js?v=1";
 import { bottleSilhouette, flavorRowHtml } from "./visuals.js?v=1";
-import { countryMapSvg, zoomPlan } from "./maps.js?v=1";
+import { countryMapSvg, zoomPlan } from "./maps.js?v=2";
+import { imageSearchUrl } from "./winelinks.js?v=1";
 
 // The grape and place inputs shared by the two forms. The form keeps one grape text and one place text; these show them as
 // "main varietal" and "other varietals (if blended)", and as "country" and "region". app.js puts them back together as you type.
@@ -53,18 +54,20 @@ export function visualFor(c, stats = null) {
   return { shape: fl.shape, type: fl.type, flavors: fl.picks, map: countryMapSvg(c.country, place, fl.type, 64), zoomable: !!plan };
 }
 // The card, top to bottom: a small bottle, then the name with the map beside it, then the six flavors, then the facts.
-// The flavors sit above the facts so that a short phone clips the facts, never the flavors. The name is plain text: wine info is not edited from the deck.
+// The flavors sit above the facts so that a short phone clips the facts, never the flavors. The wine's name is a link to a Google image search for that wine
+// (winelinks.js); wine info is not edited from the deck.
 export function cardHtml(c) {
   const labels = ["recognize", "unknown", "had"].map((k) => `<div class="swipe-label" data-label="${k}" style="background:${FAMILIARITY[k].color}">${esc(FAMILIARITY[k].label)}</div>`).join("");
-  const v = visualFor(c);
+  const v = visualFor(c), href = imageSearchUrl(c);
   const map = v.map ? `<${v.zoomable ? "button" : "div"} class="mapbtn${v.zoomable ? "" : " still"}"${v.zoomable ? ` data-zoom="${esc(c.id)}" aria-label="Show where this wine is from"` : ""}>${v.map}${v.zoomable ? '<span class="badge" aria-hidden="true">+</span>' : ""}</${v.zoomable ? "button" : "div"}>` : "";
   return `<div class="card" id="card">
     <div class="image${c.photo ? " hasphoto" : ""}">${bottleSilhouette(v.shape, v.type)}${c.photo ? `<img class="winephoto" src="${esc(c.photo)}" alt="Bottle of ${esc(wineName(c))}" draggable="false" decoding="async">` : ""}${labels}</div>
     <div class="body">
       <div class="toprow"><div class="nameblock">
+        <a class="winelink" data-wimg href="${esc(href)}" target="_blank" rel="noopener noreferrer" draggable="false" aria-label="Search Google Images for ${esc(wineName(c))}">
         ${c.vintage ? `<div class="vintage serif">${esc(c.vintage)}</div>` : ""}
         <div class="prow"><div class="producer serif">${esc(c.producer)}</div>${marksHtml(c)}</div>
-        ${c.cuvee ? `<div class="cuvee serif">${esc(c.cuvee)}</div>` : ""}</div>${map}</div>
+        ${c.cuvee ? `<div class="cuvee serif">${esc(c.cuvee)}</div>` : ""}</a></div>${map}</div>
       ${flavorRowHtml(v.flavors)}
       <div class="facts">${c.facts.map((f) => `<div class="${f.derived ? "derived" : ""}">${esc(f.text)}</div>`).join("")}</div>
     </div></div>`;
@@ -75,11 +78,12 @@ export function discoverHtml({ deck, interest, banner, counts, feedback = false,
     return `${bannerHtml}<div class="center"><div class="serif" style="font-size:22px">No more wines to show.</div>
       <div class="muted">If you expected some, check that the sample wines were published for testing.</div></div>`;
   }
-  return `${bannerHtml}
+  // The card, its button row and the save-your-journal reminder are one block, centred between the header and the tab bar, so the space is even above and below.
+  return `${bannerHtml}<div class="deckstage">
     <div class="cardwrap">${deck.length > 1 ? '<div class="behind"></div>' : ""}${cardHtml(deck[0])}</div>
     <div class="belowcard"><button class="notint" data-action="notint" aria-pressed="false" aria-label="Not interested in this wine">Not interested</button>${feedback ? `<span class="fbline">${flaggedId === deck[0].id ? '<span class="muted">Thanks, an editor will review it.</span>' : '<button class="link" data-action="wineflag" aria-label="Report a problem with this wine">Report a problem</button>'}</span>` : ""}</div>
     ${nudge ? `<div class="nudge"><b>Don't lose your journal.</b> Save it with an email so it follows you to any phone.
-      <div class="nudgeacts"><button class="btn primary slim" data-account="open:save">Save with email</button><button class="link" data-action="nudgeoff">Not now</button></div></div>` : ""}`;
+      <div class="nudgeacts"><button class="btn primary slim" data-account="open:save">Save with email</button><button class="link" data-action="nudgeoff">Not now</button></div></div>` : ""}</div>`;
 }
 
 // ---------------------------------------------------------------- Swipes
