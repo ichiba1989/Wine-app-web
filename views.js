@@ -1,8 +1,8 @@
 // Screens. Every function here takes data and returns an HTML string; nothing touches the network.
 import {
-  FAMILIARITY, INTEREST, FLAGS, VERDICTS, DIMS, isChoice, GROUPS, GROUP_PAGE, SORTS, YEARS,
+  FAMILIARITY, FLAGS, VERDICTS, isChoice, GROUPS, GROUP_PAGE, SORTS, YEARS,
   esc, wineName, entryCard, entryName, verdictShort, groupEntries, filterEntries, sortCards,
-  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims, dimsFor, placeLine, entryGrape } from "./logic.js?v=10";
+  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims } from "./logic.js?v=10";
 import { splitGrapeParts, splitPlace } from "./blends.js?v=1";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
 import { flavorsForCard, placeFor } from "./flavors.js?v=1";
@@ -50,8 +50,10 @@ export const thumbHtml = (urls, path, size = 40) => (path && urls && urls.get(pa
 // What the card draws for a wine that is not a photo: a bottle shaped by its grape and tinted by its type, a map of its country with a pin,
 // and six flavors. Nothing here uses a label, a logo or a picture of a real bottle. stats is null until players have written enough about the wine.
 export function visualFor(c, stats = null) {
-  const fl = flavorsForCard(c, stats), place = placeFor(c), plan = zoomPlan(c);
-  return { shape: fl.shape, type: fl.type, flavors: fl.picks, map: countryMapSvg(c.country, place, fl.type, 64), zoomable: !!plan };
+  try {
+    const fl = flavorsForCard(c, stats), place = placeFor(c), plan = zoomPlan(c);
+    return { shape: fl.shape, type: fl.type, flavors: fl.picks, map: countryMapSvg(c.country, place, fl.type, 64), zoomable: !!plan };
+  } catch (e) { return { shape: "bordeaux", type: c.style, flavors: [], map: "", zoomable: false }; }   // a card that cannot be read still shows its name and facts
 }
 // The card, top to bottom: a small bottle, then the name with the map beside it, then the six flavors, then the facts.
 // The flavors sit above the facts so that a short phone clips the facts, never the flavors. The wine's name is a link to a Google image search for that wine
@@ -197,12 +199,13 @@ export function photosHtml(sheet) {
 // slider: the attribute that identifies the range input. reset: whether to show the Reset link.
 export function dimControlHtml(d, x, { attr = "data-sheet", slider = "data-dim", reset = true } = {}) {
   const resetLink = reset ? `<button id="reset-${d.key}" class="link" ${attr}="reset:${d.key}" style="visibility:${x.adjusted ? "visible" : "hidden"}">Reset</button>` : "";
+  const head = `<div class="dim"><div class="dimtop"><span>${d.name}</span>${resetLink}</div>`;   // every control below starts from this heading
   const segbtn = (v, k, extra = "") => `<button class="segbtn${x.value === v ? " on" : ""}${x.value === v && !x.adjusted ? " def" : ""}${extra}" ${attr}="choice:${d.key}:${v}" aria-pressed="${x.value === v}">${esc(d.labels[k])}</button>`;
   if (d.ui === "drysweet") {
     // Most wines are dry, so the first question is only Dry or Sweet. Sweet then opens the three levels.
     const sweet = x.value > 0;
     const levels = d.values.map((v, k) => (v > 0 ? segbtn(v, k) : "")).join("");
-    return `<div class="dim"><div class="dimtop"><span>${d.name}</span>${resetLink}</div>
+    return `${head}
       <div class="seg" role="group" aria-label="${d.name}">${segbtn(0, 0)}<button class="segbtn${sweet ? " on" : ""}${sweet && !x.adjusted ? " def" : ""}" ${attr}="sweet:${d.key}" aria-pressed="${sweet}">Sweet</button></div>
       <div class="seg sub" data-sweetsub${sweet ? "" : " hidden"} role="group" aria-label="How sweet">${levels}</div></div>`;
   }
@@ -210,7 +213,7 @@ export function dimControlHtml(d, x, { attr = "data-sheet", slider = "data-dim",
     // A slider with a few fixed stops (oak). The + and - buttons move one stop; the labels show where it is.
     const at = d.values.indexOf(x.value);
     const stops = d.labels.map((l, k) => `<span data-steplabel="${d.key}:${k}" class="${k === at ? "on" : ""}">${esc(l)}</span>`).join("");
-    return `<div class="dim"><div class="dimtop"><span>${d.name}</span>${resetLink}</div>
+    return `${head}
       <div class="dimrow"><button class="round" ${attr}="nudge:${d.key}:-1" aria-label="Less ${d.name.toLowerCase()}">&minus;</button>
         <input type="range" min="${d.values[0]}" max="${d.values[d.values.length - 1]}" step="1" value="${x.value}" ${slider}="${d.key}" aria-label="${d.name}: ${d.labels.join(", ")}">
         <button class="round" ${attr}="nudge:${d.key}:1" aria-label="More ${d.name.toLowerCase()}">+</button></div>
@@ -218,9 +221,9 @@ export function dimControlHtml(d, x, { attr = "data-sheet", slider = "data-dim",
   }
   if (isChoice(d)) {
     const btns = d.values.map((v, k) => segbtn(v, k)).join("");
-    return `<div class="dim"><div class="dimtop"><span>${d.name}</span>${resetLink}</div><div class="seg" role="group" aria-label="${d.name}">${btns}</div></div>`;
+    return `${head}<div class="seg" role="group" aria-label="${d.name}">${btns}</div></div>`;
   }
-  return `<div class="dim"><div class="dimtop"><span>${d.name}</span>${resetLink}</div>
+  return `${head}
       <div class="dimrow"><button class="round" ${attr}="nudge:${d.key}:-0.5" aria-label="Less ${d.name.toLowerCase()}">&minus;</button>
         <input type="range" min="1" max="5" step="0.1" value="${x.value}" ${slider}="${d.key}" aria-label="${d.name}, from ${d.lo} to ${d.hi}">
         <button class="round" ${attr}="nudge:${d.key}:0.5" aria-label="More ${d.name.toLowerCase()}">+</button></div>
@@ -322,9 +325,10 @@ export function formPhotosHtml(form) {
     <label class="pill">Choose from library<input type="file" accept="image/*" multiple hidden data-photo="form"></label></div>
     ${(form.photos || []).length ? `<div class="muted small">Automatic recognition comes later. For now, describe the wine yourself.</div>` : ""}`;
 }
+// The vintage menu is the same in both wine forms.
+const yearOptions = (form) => `<option value="">Vintage (optional)</option><option value="NV"${form.vintage === "NV" ? " selected" : ""}>Non-vintage (NV)</option>` +
+  YEARS.map((y) => `<option value="${y}"${String(y) === form.vintage ? " selected" : ""}>${y}</option>`).join("");
 export function addFormHtml(form, error = "") {
-  const yearOpts = `<option value="">Vintage (optional)</option><option value="NV"${form.vintage === "NV" ? " selected" : ""}>Non-vintage (NV)</option>` +
-    YEARS.map((y) => `<option value="${y}"${String(y) === form.vintage ? " selected" : ""}>${y}</option>`).join("");
   const styles = [...WINE_STYLES.map((st) => [st.id, st.label]), ["unknown", "Other"]].map(([k, l]) => `<button class="vbtn tog${form.style === k ? " on" : ""}" data-action="formstyle:${k}">${l}</button>`).join("");
   return `<div class="overlay"><div class="sheet" id="sheetPanel">
     <div class="sheethead"><div class="sheettitle"><div class="serif big">Add a wine you drank</div><div class="muted small">Enter what is on the bottle.</div></div>
@@ -332,7 +336,7 @@ export function addFormHtml(form, error = "") {
     <div id="formPhotos" class="photoarea top">${formPhotosHtml(form)}</div>
     <input class="field" data-form="producer" placeholder="Producer (required)" value="${esc(form.producer)}">
     <input class="field" data-form="wine_name" placeholder="Wine or cuvée" value="${esc(form.wine_name)}">
-    <select class="field" data-form="vintage" aria-label="Vintage">${yearOpts}</select>
+    <select class="field" data-form="vintage" aria-label="Vintage">${yearOptions(form)}</select>
     ${grapeAndPlaceInputs(form, "form")}
     <div class="three">${styles}</div>
     <div id="formErr" class="err">${esc(error)}</div>
@@ -355,15 +359,13 @@ export function wineFlagHtml(flag) {
 // ---------------------------------------------------------------- changing a wine's info (journal)
 // form: { producer, wine_name, vintage, style, grape, region }; note says what the change will do.
 export function wineEditHtml(form, { error = "", saving = false, note = "", canReset = false } = {}) {
-  const yearOpts = `<option value="">Vintage (optional)</option><option value="NV"${form.vintage === "NV" ? " selected" : ""}>Non-vintage (NV)</option>` +
-    YEARS.map((y) => `<option value="${y}"${String(y) === form.vintage ? " selected" : ""}>${y}</option>`).join("");
   const styles = [...WINE_STYLES, { id: "unknown", label: "Other" }].map((st) => `<button class="vbtn tog${form.style === st.id ? " on" : ""}" data-wedit-style="${st.id}">${esc(st.label)}</button>`).join("");
   return `<div class="overlay top" id="winfoLayer"><div class="sheet" id="winfoPanel">
     <div class="sheethead"><div class="sheettitle"><div class="serif big">Change wine info</div><div class="muted small">${esc(note)}</div></div>
       <div class="sheetbtns"><button class="xbtn" data-wedit="close" aria-label="Close">&times;</button></div></div>
     <div class="qlabel">Producer</div><input class="field" data-wef="producer" value="${esc(form.producer)}" autocomplete="off">
     <div class="qlabel">Wine or cuvée</div><input class="field" data-wef="wine_name" value="${esc(form.wine_name)}" autocomplete="off">
-    <div class="qlabel">Vintage</div><select class="field" data-wef="vintage" aria-label="Vintage">${yearOpts}</select>
+    <div class="qlabel">Vintage</div><select class="field" data-wef="vintage" aria-label="Vintage">${yearOptions(form)}</select>
     <div class="qlabel">Type of wine</div><div class="three wide">${styles}</div>
     ${grapeAndPlaceInputs(form, "wef")}
     <div id="winfoErr" class="err">${esc(error)}</div>
