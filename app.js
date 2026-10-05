@@ -2,16 +2,16 @@
 // Rules are in logic.js, database calls in data.js, and HTML in views.js.
 // The two Supabase values come from config.js. If that file is missing or still has placeholders, the page asks for them and remembers them in this browser.
 import {
-  FAMILIARITY, wineName, esc, clamp01, shuffle, swipeKind, cardFromRow, filterEntries, groupEntries, swipeLists,
+  wineName, esc, clamp01, filterEntries, groupEntries, swipeLists,
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS,
-  queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, dimMeta, isChoice, setStyle, choiceDims, barDims,
+  queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=10";
 import * as db from "./data.js?v=15";
 import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=2";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=2";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=17";
+  visualFor, discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=18";
 import { createLearn } from "./learn.js?v=3";
 import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=1";
@@ -22,7 +22,7 @@ import { applyVisualTables } from "./visualdata.js?v=1";
 import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=1";
 import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=2";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
-import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, isEmptyGrid } from "./tasting.js?v=2";
+import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting } from "./tasting.js?v=2";
 import { buildDeck } from "./deck.js?v=2";
 import { createProfile } from "./profile.js?v=13";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=5";
@@ -31,7 +31,7 @@ import { createEditor } from "./editor.js?v=22";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
-const APP_VERSION = "32";   // shown to editors with each piece of feedback
+const APP_VERSION = "33";   // shown to editors with each piece of feedback
 const SUPABASE_JS_VERSION = "2.109.0";
 const LIBRARY_URLS = [
   `https://esm.sh/@supabase/supabase-js@${SUPABASE_JS_VERSION}`,
@@ -139,10 +139,13 @@ function addVineyard(card) {
 async function loadAllCards() {
   await applyVisualTables(state.sb);   // flavor weights and place nudges the Owner or an editor tuned in the database (the built-in set is used if there are none)
   try { state.mine = await loadMyInfo(state.sb); } catch (_) { state.mine = new Map(); }   // before database update 24 nobody has private changes
-  const cards = (await db.loadCards(state.sb)).map((c) => {
-    c.catalogForm = wineEditForm({ style: c.style }, c, null);   // the catalog's own details, kept so a change can be compared and undone
-    return addVineyard(patchCard(c, state.mine.get(c.id)));
-  });
+  const cards = [];
+  for (const c of await db.loadCards(state.sb)) {
+    try {
+      c.catalogForm = wineEditForm({ style: c.style }, c, null);   // the catalog's own details, kept so a change can be compared and undone
+      cards.push(addVineyard(patchCard(c, state.mine.get(c.id))));
+    } catch (e) { console.warn("A wine could not be read and was left out:", e); }   // one bad row must not take the whole deck down
+  }
   try { applyPrices(cards, await loadPrices(state.sb)); } catch (_) { cards.forEach(tidyFacts); }
   return cards;
 }
@@ -279,6 +282,9 @@ function renderBody() {
   const body = $("#tabbody");
   if (!body) return;
   document.body.dataset.tab = state.tab;   // lets Discover use a slimmer header so the card is bigger
+  try { drawTab(body); } catch (e) { setBanner("Could not draw this screen: " + (e.message || e)); }
+}
+function drawTab(body) {
   if (state.tab === "discover") {
     body.innerHTML = discoverHtml({ deck: state.deck, banner: null, counts: state.counts, feedback: state.feedback, flaggedId: state.wfDone, nudge: showNudge() });
     const card = $("#card");
@@ -342,11 +348,30 @@ function paintBehind(el, progress, ms = 0) {
   b.style.opacity = String(0.7 + 0.3 * progress);
 }
 // The card leaves the way it was thrown, at the speed it was thrown. A tap or a double-tap sends it with a gentler push.
+// Both ways of leaving a card (a swipe, and "Not interested") end the same way: save it, take the card out of the deck, remember what it taught us straight away,
+// re-rank the rest every 8 swipes (or when the deck runs low), then draw the next card, which settles forward from where the one underneath was.
+async function finishCard(card, save, row, failure, extra) {
+  try {
+    await save();
+    state.deck.shift();
+    state.states = [...state.states.filter((x) => x.wine_vintage_id !== card.id), { wine_vintage_id: card.id, last_swiped_at: new Date().toISOString(), ...row }];
+    if (++state.sinceDeck >= 8 || state.deck.length < 4) rebuildDeck();
+    setBanner(null);
+    if (extra) await extra();
+  } catch (e) { setBanner(failure + (e.message || e)); }
+  state.busy = false;   // always set again, whatever went wrong above, so the deck can never freeze
+  if (state.tab !== "discover") return;
+  renderBody();
+  const nc = $("#card");
+  if (nc && nc.animate && !reduceMotion()) nc.animate([{ transform: "scale(0.95) translateY(10px)", opacity: 0.85 }, { transform: "none", opacity: 1 }], { duration: 260, easing: "cubic-bezier(0.2, 0.9, 0.3, 1.15)" });
+}
+
+// The card leaves the way it was thrown, at the speed it was thrown. A tap or a double-tap sends it with a gentler push.
 async function fly(el, kind, v = { dx: 0, dy: 0, vx: 0, vy: 0 }) {
   if (state.busy || !state.deck.length) return;
   state.busy = true;
   const card = state.deck[0];
-  if (el) {
+  if (el) try {
     el.classList.remove("dragging"); el.classList.add("leaving");
     const plan = flyPlan(kind, v.dx, v.dy, v.vx || (kind === "recognize" ? 0.9 : kind === "unknown" ? -0.9 : 0), v.vy || (kind === "had" ? -1.1 : 0), window.innerWidth, window.innerHeight);
     paintBehind(el, 1, plan.duration);
@@ -360,27 +385,9 @@ async function fly(el, kind, v = { dx: 0, dy: 0, vx: 0, vy: 0 }) {
       await sleep(210);
     }
     if (navigator.vibrate) { try { navigator.vibrate(8); } catch (_) {} }
-  }
-  try {
-    const interestUsed = "try";   // interest is implied: a wine the person swipes is a wine they are open to
-    await db.recordSwipe(state.sb, card.id, kind, interestUsed);
-    state.deck.shift();
-    // What this swipe taught us counts straight away; every 8 swipes (or when the deck runs low) the rest of the deck is re-ranked.
-    state.states = [...state.states.filter((x) => x.wine_vintage_id !== card.id), { wine_vintage_id: card.id, familiarity: kind, interest: interestUsed, last_swiped_at: new Date().toISOString() }];
-    state.sinceDeck += 1;
-    if (state.sinceDeck >= 8 || state.deck.length < 4) rebuildDeck();
-    setBanner(null);
-    state.counts = await loadCounts();
-  } catch (e) {
-    setBanner("Could not save that swipe: " + (e.message || e));
-  }
-  state.busy = false;
-  if (state.tab === "discover") {
-    renderBody();
-    // The next card starts where the one underneath was, then settles forward.
-    const nc = $("#card");
-    if (nc && nc.animate && !reduceMotion()) nc.animate([{ transform: "scale(0.95) translateY(10px)", opacity: 0.85 }, { transform: "none", opacity: 1 }], { duration: 260, easing: "cubic-bezier(0.2, 0.9, 0.3, 1.15)" });
-  }
+  } catch (_) { /* the exit animation is only for show: the card is still saved and removed */ }
+  // interest is implied: a wine the person swipes is a wine they are open to
+  await finishCard(card, () => db.recordSwipe(state.sb, card.id, kind, "try"), { familiarity: kind, interest: "try" }, "Could not save that swipe: ", async () => { state.counts = await loadCounts(); });
 }
 
 // "Not interested": the button turns on for this one wine and the wine is filed under Not interested in Swipes straight away.
@@ -390,7 +397,7 @@ async function notInterested() {
   state.busy = true;
   const card = state.deck[0], el = $("#card"), btn = document.querySelector("[data-action='notint']");
   if (btn) { btn.classList.add("on"); btn.setAttribute("aria-pressed", "true"); }
-  if (el) {
+  if (el) try {
     el.classList.remove("dragging"); el.classList.add("leaving");
     paintBehind(el, 1, 260);
     if (el.animate && !reduceMotion()) {
@@ -398,21 +405,8 @@ async function notInterested() {
         { duration: 280, easing: "cubic-bezier(0.4, 0, 0.8, 0.6)", fill: "forwards" });
       try { await anim.finished; } catch (_) {}
     } else await sleep(120);
-  }
-  try {
-    await db.changeInterest(state.sb, state.user.id, card.id, "nope");
-    state.deck.shift();
-    state.states = [...state.states.filter((x) => x.wine_vintage_id !== card.id), { wine_vintage_id: card.id, familiarity: null, interest: "nope", last_swiped_at: new Date().toISOString() }];
-    state.sinceDeck += 1;
-    if (state.sinceDeck >= 8 || state.deck.length < 4) rebuildDeck();
-    setBanner(null);
-  } catch (e) { setBanner("Could not save that: " + (e.message || e)); }
-  state.busy = false;
-  if (state.tab === "discover") {
-    renderBody();
-    const nc = $("#card");
-    if (nc && nc.animate && !reduceMotion()) nc.animate([{ transform: "scale(0.95) translateY(10px)", opacity: 0.85 }, { transform: "none", opacity: 1 }], { duration: 260, easing: "cubic-bezier(0.2, 0.9, 0.3, 1.15)" });
-  }
+  } catch (_) { /* the exit animation is only for show: the card is still saved and removed */ }
+  await finishCard(card, () => db.changeInterest(state.sb, state.user.id, card.id, "nope"), { familiarity: null, interest: "nope" }, "Could not save that: ");
 }
 
 // The double-tap zones: a narrow strip down each side (left = don't know it, right = recognize it) and a thin strip across the top (had it).
@@ -671,9 +665,6 @@ async function reloadWines(wineVintageId) {
 }
 async function saveMyWineEdit() {
   const w = state.wedit;
-  checkGrapeInputs("wef"); syncGrapePlace("wef"); w.form.grape = expandBlends(w.form.grape);   // GSM -> its three grapes
-  const problem = validateWineEdit(w.form);
-  if (problem) { w.error = problem; const e = document.getElementById("winfoErr"); if (e) e.textContent = problem; return; }
   const data = diffForm(w.card.catalogForm, w.form);
   if (JSON.stringify(data) === JSON.stringify(state.mine.get(w.card.id) || {})) { closeWineEdit(); return; }
   w.saving = true; w.error = ""; drawWineEdit();
@@ -694,10 +685,10 @@ async function resetMyInfo() {
 async function saveWineEdit() {
   const w = state.wedit;
   if (!w || w.saving) return;
-  if (w.mode === "mine") return saveMyWineEdit();
   checkGrapeInputs("wef"); syncGrapePlace("wef"); w.form.grape = expandBlends(w.form.grape);   // GSM -> its three grapes
   const problem = validateWineEdit(w.form);
   if (problem) { w.error = problem; const e = document.getElementById("winfoErr"); if (e) e.textContent = problem; return; }
+  if (w.mode === "mine") return saveMyWineEdit();
   const plan = planWineEdit(w.entry, w.before, w.form, state.cards);
   if (plan.action === "none") { closeWineEdit(); return; }
   w.saving = true; w.error = ""; drawWineEdit();
@@ -851,8 +842,9 @@ document.addEventListener("pointercancel", () => { pageSwipe = null; });
 function openZoom(wineVintageId) {
   const card = cardById(wineVintageId), plan = card && zoomPlan(card);
   if (!plan || state.zoom) return;
+  const html = zoomHtml(plan, visualFor(card).type, 0);   // built first: if drawing fails, nothing is left half open
   state.zoom = { plan, step: 0, at: performance.now() };
-  $("#zoom").innerHTML = zoomHtml(plan, visualFor(card).type, 0);
+  $("#zoom").innerHTML = html;
   const x = document.querySelector("[data-zoomclose]"); if (x) x.focus();
 }
 function closeZoom() {
@@ -1083,5 +1075,9 @@ document.addEventListener("change", async (ev) => {
   }
 });
 
+// Once the app is running, a failure that no try block caught (a rejected promise, a script error) shows in the banner instead of failing silently.
+const report = (m) => { if (state.status === "main") setBanner("Something went wrong: " + m + ". If it keeps happening, tap Send feedback in Profile."); };
+window.addEventListener("unhandledrejection", (e) => report((e.reason && e.reason.message) || e.reason));
+window.addEventListener("error", (e) => { if (e.filename && e.filename.indexOf(location.origin) === 0) report(e.message); });
 window.__wine = { state, fly, render, init, learn, rebuildDeck, photoCache, profile: profileTab, editor: editorTab, account, feedback };
 init();
