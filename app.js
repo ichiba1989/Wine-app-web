@@ -2,7 +2,7 @@
 // Rules are in logic.js, database calls in data.js, and HTML in views.js.
 // The two Supabase values come from config.js. If that file is missing or still has placeholders, the page asks for them and remembers them in this browser.
 import {
-  FAMILIARITY, wineName, esc, clamp01, shuffle, tapEdge, swipeKind, cardFromRow, filterEntries, groupEntries, swipeLists,
+  FAMILIARITY, wineName, esc, clamp01, shuffle, swipeKind, cardFromRow, filterEntries, groupEntries, swipeLists,
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, dimMeta, isChoice, setStyle, choiceDims, barDims,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=10";
@@ -11,7 +11,7 @@ import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=2";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=2";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=15";
+  visualFor, discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=16";
 import { createLearn } from "./learn.js?v=3";
 import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=1";
@@ -31,7 +31,7 @@ import { createEditor } from "./editor.js?v=22";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
-const APP_VERSION = "30";   // shown to editors with each piece of feedback
+const APP_VERSION = "31";   // shown to editors with each piece of feedback
 const SUPABASE_JS_VERSION = "2.109.0";
 const LIBRARY_URLS = [
   `https://esm.sh/@supabase/supabase-js@${SUPABASE_JS_VERSION}`,
@@ -82,7 +82,7 @@ const state = {
   deckInfo: new Map(),                  // wine id -> { tier, fam, pref }: which deck each wine is in and why
   sinceDeck: 0,                         // swipes since the deck was last re-ranked
   access: { role: null, label: null, permissions: [] },   // what this person may do as staff: from the database
-  zoom: null,                           // the open map overlay: { plan, step }
+  zoom: null,                           // the open map overlay: { plan, step, at }
   mine: new Map(),                      // wine_vintage_id -> this player's private changes to the wine's details (mywine.js)
   consent: {}, consentBusy: false, consentError: "",   // the consent page: what is ticked
   pro: false,                           // this person has the professional tier: they get the tasting grid (feature switch proTasting)
@@ -415,10 +415,14 @@ async function notInterested() {
   }
 }
 
+// The double-tap zones: a narrow strip down each side (left = don't know it, right = recognize it) and a thin strip across the top (had it).
+// Everything in the middle of the card is not a zone, so a double-tap there does nothing. These are fractions of the card's width and height.
+const EDGE_SIDE = 0.14, EDGE_TOP = 0.09;
+const edgeOf = (fx, fy) => (fy < EDGE_TOP ? "had" : fx < EDGE_SIDE ? "unknown" : fx > 1 - EDGE_SIDE ? "recognize" : null);
 function attachCard(el) {
   // Forgiving double-tap: fingers may wobble a little, and the second tap can be slower or a bit off.
   const TAP_MOVE = 18, DOUBLE_TAP_MS = 500, TAP_APART = 70;
-  let start = null, dx = 0, dy = 0, lastTap = null, hintTimer = null, samples = [], infoTimer = null;
+  let start = null, dx = 0, dy = 0, lastTap = null, hintTimer = null, samples = [];
   const label = (k) => el.querySelector(`[data-label="${k}"]`);
   const clearHint = () => { clearTimeout(hintTimer); ["recognize", "unknown", "had"].forEach((k) => { label(k).style.opacity = 0; }); };
   const showHint = (edge) => { clearHint(); if (edge) { label(edge).style.opacity = 0.55; hintTimer = setTimeout(clearHint, DOUBLE_TAP_MS + 50); } };
@@ -456,24 +460,20 @@ function attachCard(el) {
     if (kind) { fly(el, kind, { dx, dy, vx, vy }); return; }
     settle();
     if (Math.hypot(e.clientX - from.x, e.clientY - from.y) < TAP_MOVE) {      // a tap that barely moved
+      // A tap on the map is only ever a tap on the map: it never counts toward a double-tap, whatever part of the card it is on.
+      // The overlay opens a moment after the finger lifts, so the click that follows the tap lands on the card and not on the overlay.
+      const hit = document.elementFromPoint(e.clientX, e.clientY), mapEl = hit && hit.closest("[data-zoom]");
+      if (mapEl) { lastTap = null; clearHint(); const id = mapEl.dataset.zoom; setTimeout(() => openZoom(id), 60); return; }
       const now = Date.now();
       const r = el.getBoundingClientRect();
-      const edge = tapEdge((from.x - r.left) / r.width, (from.y - r.top) / r.height);
+      const edge = edgeOf((from.x - r.left) / r.width, (from.y - r.top) / r.height);
       const prev = lastTap;
       if (prev && now - prev.t < DOUBLE_TAP_MS && Math.hypot(from.x - prev.x, from.y - prev.y) < TAP_APART) {
         lastTap = null; clearHint();                                             // second tap: a double-tap
-        const kind2 = edge || prev.edge;                                         // if the second tap drifted inward, use the first tap's edge
+        const kind2 = edge || prev.edge;                                         // if the second tap drifted inward, use the first tap's zone
         if (kind2) { label(kind2).style.opacity = 1; fly(el, kind2); }
-        clearTimeout(infoTimer);
       } else {
         lastTap = { t: now, x: from.x, y: from.y, edge }; showHint(edge);
-        // A tap on the name opens wine info, but only when no second tap follows (that would be the double-tap swipe).
-        const hit = document.elementFromPoint(e.clientX, e.clientY), target = hit && hit.closest("[data-wineinfo], [data-zoom]");
-        if (target) {
-          const zoomId = target.dataset.zoom, infoId = target.dataset.wineinfo;
-          clearTimeout(infoTimer);
-          infoTimer = setTimeout(() => { if (lastTap && lastTap.t === now) { lastTap = null; clearHint(); if (zoomId) openZoom(zoomId); else openMyInfo(infoId); } }, 330);
-        }
       }
     }
   });
@@ -605,9 +605,9 @@ function showSheetPage(n, dir = 1) {
   syncFoot();
 }
 // ---------------------------------------------------------------- changing a wine's info
-// Anyone can change a wine's details for themselves: tap the name, or the pencil next to it. For a wine in the catalog this is a private
-// version laid over the catalog's (mywine.js): only the player sees it and the catalog never moves. A wine the player typed in themselves is
-// changed directly. Editors and the Owner change the catalog itself in the Editor tab.
+// Wine info is changed from the Swipes list, the Journal, the Profile and the rating window (the name, or the pencil next to it). It is not changed from the Discover deck.
+// For a wine in the catalog this is a private version laid over the catalog's (mywine.js): only the player sees it and the catalog never moves.
+// A wine the player typed in themselves is changed directly. Editors and the Owner change the catalog itself in the Editor tab.
 const MY_NOTE = "This is your own version of the wine. Only you see it, and the catalog does not change.";
 function openMyInfo(wineVintageId) {
   const card = cardById(wineVintageId);
@@ -839,8 +839,8 @@ document.addEventListener("pointercancel", () => { pageSwipe = null; });
 // ---------------------------------------------------------------- the map overlay (zoommap.js)
 function openZoom(wineVintageId) {
   const card = cardById(wineVintageId), plan = card && zoomPlan(card);
-  if (!plan) return;
-  state.zoom = { plan, step: 0 };
+  if (!plan || state.zoom) return;
+  state.zoom = { plan, step: 0, at: performance.now() };
   $("#zoom").innerHTML = zoomHtml(plan, visualFor(card).type, 0);
   const x = document.querySelector("[data-zoomclose]"); if (x) x.focus();
 }
@@ -859,6 +859,7 @@ document.addEventListener("click", (ev) => {
   const keyboardOpen = ev.target.closest("[data-zoom]");
   if (keyboardOpen && ev.detail === 0) { openZoom(keyboardOpen.dataset.zoom); return; }   // Enter or Space on the focused map; a finger or mouse goes through the card's own tap handling
   if (!state.zoom) return;
+  if (performance.now() - state.zoom.at < 400) return;   // the click that trails the tap which opened the map must not move it on or close it
   if (ev.target.closest("[data-zoomclose]")) closeZoom();
   else if (ev.target.closest("[data-zoomstage]")) zoomTap();
   else if (ev.target.matches("[data-zoomback]")) closeZoom();   // a tap outside the box
