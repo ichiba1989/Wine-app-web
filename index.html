@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<!-- Nothing here uses plug-ins, a <base> tag or forms, so these are switched off for good: even a page that was somehow altered could not use them. -->
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>Wine app (phone test)</title>
 <style>
   :root { --bg:#DCE4DA; --panel:#F2F5F0; --ink:#16261D; --muted:#5A6A5F; --wine:#7B1E3A; --slate:#3E5C76; --moss:#3A4B40; --line:#C3CFC1; }
@@ -27,42 +29,32 @@
   .banner { background: var(--wine); color: #fff; border-radius: 10px; padding: 8px 10px; font-size: 12px; margin: 0 16px 8px; }
   .banner[hidden] { display: none; }
   .banner.good { background: var(--slate); }
-  .cardwrap { position: relative; flex: 1; min-height: 360px; }
+  .cardwrap { position: relative; flex: 1 1 0; min-height: 360px; max-height: 600px; }   /* fills what is left, but never taller than 600 px: a tall phone gets even space above and below instead */
   .behind { will-change: transform, opacity; position: absolute; inset: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 24px; opacity: .7; transform: scale(.95) translateY(10px); }
   .card { will-change: transform; transform-origin: 50% 115%; position: absolute; inset: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 24px; overflow: hidden; display: flex; flex-direction: column; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; box-shadow: 0 18px 40px -22px rgba(22,38,29,.5); }
-  .image { position: relative; height: 52%; background: linear-gradient(180deg,#E3EAE0,#CBD8C9); display: flex; align-items: flex-end; justify-content: center; }
-  .image svg.bottle { height: 88%; margin-bottom: 6px; }
+  .image { position: relative; flex: 0 0 24%; min-height: 0; background: linear-gradient(180deg,#E3EAE0,#CBD8C9); display: flex; align-items: flex-end; justify-content: center; }
+  .image svg.bottle { height: 84%; margin-bottom: 4px; }
   /* A real bottle photo: the whole bottle is shown on the soft background; the drawn bottle only appears if the photo cannot load */
-  .image.hasphoto { background: linear-gradient(180deg, #FCFDFB, #F0F4EE); }   /* near-white, so a photo on a white background sits on the card without a visible box */
+  .image.hasphoto { flex-basis: 38%; background: linear-gradient(180deg, #FCFDFB, #F0F4EE); }   /* near-white, so a photo on a white background sits on the card without a visible box */
   .image.hasphoto svg.bottle { visibility: hidden; }
   .image.hasphoto.failed svg.bottle { visibility: visible; }
   .image img.winephoto { mix-blend-mode: multiply; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 10px 14px 6px; box-sizing: border-box; opacity: 0; transition: opacity .2s ease; pointer-events: none; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
   .image img.winephoto.ready { opacity: 1; }
   .image.failed img.winephoto { display: none; }
-  .swipe-label { z-index: 2; }
-  .sample { position: absolute; bottom: 4px; right: 12px; font-size: 10px; color: var(--muted); }
-  .swipe-label { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); padding: 6px 16px; border-radius: 999px; color: #fff; font-weight: 600; font-size: 14px; opacity: 0; pointer-events: none; white-space: nowrap; }
-  .body { flex: 1; overflow: hidden; padding: 14px 20px 10px; }
+  .swipe-label { z-index: 2; position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); padding: 6px 16px; border-radius: 999px; color: #fff; font-weight: 600; font-size: 14px; opacity: 0; pointer-events: none; white-space: nowrap; }
+  .body { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; overflow: hidden; padding: 12px 18px 10px; }
   .vintage { font-size: 20px; font-weight: 700; color: var(--wine); letter-spacing: .04em; }
   .prow { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-top: 2px; }
-  .producer { font-size: 26px; line-height: 1.1; word-break: break-word; }
-  .cuvee { font-size: 18px; margin-top: 2px; }
-  .facts { margin-top: 10px; font-size: 15px; }
+  .producer { font-size: 24px; line-height: 1.1; word-break: break-word; }
+  .cuvee { font-size: 17px; margin-top: 2px; }
+  .facts { flex: 0 1 auto; min-height: 0; overflow: hidden; margin: 0 0 auto; padding-top: 6px; font-size: 14px; line-height: 1.35; }
   .derived { text-decoration: underline dotted; text-underline-offset: 4px; text-decoration-color: var(--muted); }
-  .legend { margin-top: 10px; font-size: 11px; color: var(--muted); }
   .marks { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
   .marks .flag { line-height: 1; }
-  .switch { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px; background: var(--line); border-radius: 999px; padding: 4px; }
-  .switch button { border: 0; background: transparent; padding: 9px 0; border-radius: 999px; font-weight: 500; }
-  .switch.small { margin: 0; padding: 3px; flex: 1 1 210px; max-width: 290px; gap: 4px; }
-  .switch.small button { padding: 10px 0; font-size: 14px; }
   .belowcard { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
   body[data-tab="discover"] .top { padding: 6px 20px 2px; }
   body[data-tab="discover"] .top h1 { font-size: 16px; }
   body[data-tab="discover"] .content { padding-bottom: 2px; }
-  .switch button.on { color: #fff; }
-  .hint { margin: 8px 0 0; text-align: center; font-size: 11px; color: var(--muted); }
-  .counts { margin: 6px 0 0; text-align: center; font-size: 11px; }
   .fbline { margin: 0; text-align: right; font-size: 11px; flex: 0 0 auto; }
   .fbline .link { font-size: 11px; padding: 2px 0; }
   .tabs { display: flex; background: var(--panel); border-top: 1px solid var(--line); }
@@ -134,7 +126,7 @@
   .link.dangerlink:active { color: #B71C1C; }
   /* Quiz verification: the correct answer stands out */
   .qlabel { font-size: 12px; font-weight: 600; color: var(--muted); margin: 10px 0 2px; } .qlabel.good { color: #2F6B3A; } .qlabel.bad { color: var(--wine); }
-  .nvrow { display: flex; align-items: center; gap: 6px; font-size: 14px; padding-top: 22px; } .addgrapes { display: block; font-size: 13px; margin: 8px 0; }
+  .nvrow { display: flex; align-items: center; gap: 6px; font-size: 14px; padding-top: 22px; }
   .okmark { color: #2F6B3A; font-weight: 700; }
   .field.correct { border: 2px solid #2F6B3A; background: #EAF4EA; } .field.wrong { border-color: #D8B4B4; background: #FBF3F3; }
   /* The rating window: numbered pages */
@@ -199,7 +191,6 @@
   .ph.gone img { opacity: .3; }
   .phx { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: var(--ink); color: #fff; font-size: 14px; line-height: 1; padding: 0; }
   .addph, .photobtns .pill { display: inline-block; cursor: pointer; }
-  .photobtns { display: flex; flex-wrap: wrap; gap: 8px; }
   .uidline { margin-top: 16px; word-break: break-all; } .uid { user-select: all; -webkit-user-select: all; font-family: ui-monospace, monospace; }
   /* Profile tab */
   .profile { display: flex; flex-direction: column; }
@@ -310,9 +301,6 @@
   .sharechip { width: 100%; border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 5px 6px; font-size: 11px; line-height: 1.25; text-align: left; }
   .sharechip.on { background: var(--slate); color: #fff; border-color: var(--slate); }
   .sharechip.off { background: transparent; border-style: dashed; color: var(--muted); }
-  .shareopt { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.4; margin-top: 12px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
-  .shareopt input { flex: 0 0 auto; width: 20px; height: 20px; margin-top: 2px; }
-  .shareopt a { color: var(--slate); white-space: nowrap; }
   .subrow { align-items: flex-start; }
   .subthumb { flex: 0 0 auto; width: 84px; height: 112px; object-fit: contain; background: linear-gradient(180deg,#E3EAE0,#CBD8C9); border-radius: 8px; border: 1px solid var(--line); }
   .subthumb.empty { display: block; }
@@ -344,8 +332,6 @@
   .gstep { border: 0; border-right: 1px solid var(--line); background: transparent; padding: 10px 1px; font-size: 12px; min-width: 0; line-height: 1.15; }
   .gstep:last-child { border-right: 0; }
   .gstep.on { background: var(--slate); color: #fff; font-weight: 600; }
-  .feelopts { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
-  .feelopts .gopt { padding: 9px 2px; text-align: center; }
   .gopt.cat.open { border-color: var(--slate); }
   .gsub { margin: 6px 0 8px; padding: 8px 10px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
   .gsub[hidden] { display: none; }
@@ -366,23 +352,15 @@
   .namebtn { border: 0; background: transparent; padding: 0; margin: 0; text-align: left; font-size: 16px; color: inherit; cursor: pointer; }
   .tq.sub { margin-top: 8px; padding-left: 12px; border-left: 3px solid var(--line); }
   .tq.sub .tqtext { font-weight: 500; font-size: 14px; }
-  /* Card visuals (version 32). The card, its button row and the reminder are one block (.deckstage), centred between the header and the tab bar.
+  /* The Discover card. The card, its button row and the reminder are one block (.deckstage), centred between the header and the tab bar.
      On the card: a small bottle, then the name (a link to a Google image search) with the country map beside it, the six flavors, then the facts.
      The free space inside the card is shared evenly between those parts, so there is no blank area at the bottom. When a phone is short the facts are clipped, never the flavors. */
   .deckstage { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: center; }
-  .cardwrap { flex: 1 1 0; min-height: 360px; max-height: 600px; }   /* fills what is left, but never taller than 600 px: a tall phone gets even space above and below instead */
-  .image { height: auto; flex: 0 0 24%; min-height: 0; }
-  .image.hasphoto { flex-basis: 38%; }
-  .image svg.bottle { height: 84%; margin-bottom: 4px; }
-  .body { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; max-height: none; overflow: hidden; padding: 12px 18px 10px; }
   .toprow { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex: 0 0 auto; }
   .nameblock { flex: 1 1 auto; min-width: 0; }
-  .producer { font-size: 24px; }
-  .cuvee { font-size: 17px; }
   .winelink { display: block; color: inherit; text-decoration: none; cursor: pointer; }
   .winelink .producer { text-decoration: underline; text-decoration-color: rgba(62,92,118,.5); text-decoration-thickness: 1px; text-underline-offset: 5px; }
   .winelink:focus-visible { outline: 2px solid var(--slate); outline-offset: 3px; border-radius: 6px; }
-  .facts { flex: 0 1 auto; min-height: 0; overflow: hidden; margin: 0 0 auto; padding-top: 6px; font-size: 14px; line-height: 1.35; }
   .mapbtn { position: relative; flex: 0 0 64px; width: 64px; height: 64px; padding: 0; margin: 2px 4px 0 0; border: 0; border-radius: 12px; background: #f1f5ef; cursor: pointer; -webkit-tap-highlight-color: transparent; }
   .mapbtn::after { content: ""; position: absolute; inset: -8px; }   /* a bigger target for a thumb than the 64 px drawing */
   .mapbtn.still { cursor: default; }
@@ -443,6 +421,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=32" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=33" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>
