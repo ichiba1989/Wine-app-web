@@ -366,38 +366,46 @@
   .namebtn { border: 0; background: transparent; padding: 0; margin: 0; text-align: left; font-size: 16px; color: inherit; cursor: pointer; }
   .tq.sub { margin-top: 8px; padding-left: 12px; border-left: 3px solid var(--line); }
   .tq.sub .tqtext { font-weight: 500; font-size: 14px; }
-  /* Card visuals (version 31). Top to bottom: a small bottle, the name with the country map beside it, the six flavors, then the facts.
-     The bottle area is short (a card with a real photo gets a taller one). The flavors never shrink: when a phone is short, the facts are clipped instead. */
-  .image { height: auto; flex: 0 0 21%; min-height: 0; }
-  .image.hasphoto { flex-basis: 36%; }
+  /* Card visuals (version 32). The card, its button row and the reminder are one block (.deckstage), centred between the header and the tab bar.
+     On the card: a small bottle, then the name (a link to a Google image search) with the country map beside it, the six flavors, then the facts.
+     The free space inside the card is shared evenly between those parts, so there is no blank area at the bottom. When a phone is short the facts are clipped, never the flavors. */
+  .deckstage { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: center; }
+  .cardwrap { flex: 1 1 0; min-height: 360px; max-height: 600px; }   /* fills what is left, but never taller than 600 px: a tall phone gets even space above and below instead */
+  .image { height: auto; flex: 0 0 24%; min-height: 0; }
+  .image.hasphoto { flex-basis: 38%; }
   .image svg.bottle { height: 84%; margin-bottom: 4px; }
-  .body { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; max-height: none; overflow: hidden; padding: 10px 18px 8px; }
+  .body { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; max-height: none; overflow: hidden; padding: 12px 18px 10px; }
   .toprow { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex: 0 0 auto; }
   .nameblock { flex: 1 1 auto; min-width: 0; }
   .producer { font-size: 24px; }
   .cuvee { font-size: 17px; }
-  .facts { flex: 0 1 auto; min-height: 0; overflow: hidden; margin-top: 8px; font-size: 14px; line-height: 1.35; }
+  .winelink { display: block; color: inherit; text-decoration: none; cursor: pointer; }
+  .winelink .producer { text-decoration: underline; text-decoration-color: rgba(62,92,118,.5); text-decoration-thickness: 1px; text-underline-offset: 5px; }
+  .winelink:focus-visible { outline: 2px solid var(--slate); outline-offset: 3px; border-radius: 6px; }
+  .facts { flex: 0 1 auto; min-height: 0; overflow: hidden; margin: 0 0 auto; padding-top: 6px; font-size: 14px; line-height: 1.35; }
   .mapbtn { position: relative; flex: 0 0 64px; width: 64px; height: 64px; padding: 0; margin: 2px 4px 0 0; border: 0; border-radius: 12px; background: #f1f5ef; cursor: pointer; -webkit-tap-highlight-color: transparent; }
   .mapbtn::after { content: ""; position: absolute; inset: -8px; }   /* a bigger target for a thumb than the 64 px drawing */
   .mapbtn.still { cursor: default; }
   .mapbtn svg { width: 100%; height: 100%; display: block; border-radius: 12px; pointer-events: none; }
   .mapbtn .badge { position: absolute; top: -5px; right: -5px; width: 18px; height: 18px; border-radius: 50%; background: var(--wine); color: #fff; font: 700 13px/18px system-ui, sans-serif; text-align: center; box-shadow: 0 1px 3px #0003; pointer-events: none; }
-  .flavors { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; margin-top: 8px; flex: 0 0 auto; }
+  .flavors { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; margin: auto 0; padding-top: 6px; flex: 0 0 auto; }
   .fl { min-width: 0; display: flex; flex-direction: column; align-items: center; text-align: center; }
-  .fl .fico { display: block; width: 30px; height: 30px; flex: 0 0 auto; }
-  .fl span { font-size: 9.5px; line-height: 1.15; margin-top: 3px; color: #3d4a43; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 100%; }
+  .fl .fico { display: block; width: 38px; height: 38px; flex: 0 0 auto; }
+  .fl span { font-size: 10px; line-height: 1.15; margin-top: 3px; color: #3d4a43; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 100%; }
+  @media (max-width: 380px) { .fl span { font-size: 9px; } }
   #zoom:empty { display: none; }
   .zoomback { position: fixed; inset: 0; z-index: 80; background: rgba(20, 30, 25, .55); display: flex; align-items: center; justify-content: center; padding: 18px; animation: zfade .18s ease; }
   .zoombox { position: relative; width: min(92vw, 68vh, 420px); background: #fff; border-radius: 18px; padding: 10px 10px 12px; box-shadow: 0 10px 40px #0005; }
   .zoomx { position: absolute; top: -12px; right: -12px; width: 34px; height: 34px; border-radius: 50%; border: 0; background: #fff; font-size: 22px; line-height: 30px; box-shadow: 0 2px 8px #0004; z-index: 3; cursor: pointer; }
   .stage { position: relative; width: 100%; aspect-ratio: 1 / 1; border-radius: 12px; overflow: hidden; background: #eaf0e6; cursor: pointer; }
   .stage:focus-visible { outline: 3px solid var(--slate); outline-offset: 2px; }
-  .layer { position: absolute; inset: 0; transition: transform .75s cubic-bezier(.2, .7, .2, 1), opacity .75s ease; }
+  /* The zoom views are stacked. The one for the current step is shown; the ones before it have zoomed past (out from the pin), the ones after it are still small. */
+  .layer { position: absolute; inset: 0; opacity: 0; transform: scale(.4); pointer-events: none; transform-origin: 50% 50%; transition: transform .75s cubic-bezier(.2, .7, .2, 1), opacity .75s ease; }
   .layer svg { width: 100%; height: 100%; display: block; }
-  .layer.region { transform-origin: var(--px) var(--py); opacity: 1; transform: scale(1); }
-  .layer.vineyard { transform-origin: 50% 50%; opacity: 0; transform: scale(.4); pointer-events: none; }
-  .stage[data-step="1"] .layer.region { opacity: 0; transform: scale(2.8); }
-  .stage[data-step="1"] .layer.vineyard { opacity: 1; transform: scale(1); }
+  .layer.country { transform-origin: var(--cx) var(--cy); }
+  .layer.region { transform-origin: var(--px) var(--py); }
+  .stage[data-step="0"] .layer[data-i="0"], .stage[data-step="1"] .layer[data-i="1"], .stage[data-step="2"] .layer[data-i="2"] { opacity: 1; transform: scale(1); }
+  .stage[data-step="1"] .layer[data-i="0"], .stage[data-step="2"] .layer[data-i="0"], .stage[data-step="2"] .layer[data-i="1"] { opacity: 0; transform: scale(2.8); }
   .zcap { margin-top: 10px; text-align: center; font-weight: 600; font-size: 14px; }
   .zdots { display: flex; gap: 6px; justify-content: center; margin-top: 6px; }
   .zdots i { width: 7px; height: 7px; border-radius: 50%; background: #c9d3c5; display: block; }
@@ -435,6 +443,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=31" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=32" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>
