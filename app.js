@@ -11,13 +11,13 @@ import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=2";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=2";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=16";
+  visualFor, discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, photosHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=17";
 import { createLearn } from "./learn.js?v=3";
 import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=1";
 import { loadPrices, applyPrices, tidyFacts } from "./pricing.js?v=1";
 import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=3";
-import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=1";
+import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=2";
 import { applyVisualTables } from "./visualdata.js?v=1";
 import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=1";
 import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=2";
@@ -31,7 +31,7 @@ import { createEditor } from "./editor.js?v=22";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
-const APP_VERSION = "31";   // shown to editors with each piece of feedback
+const APP_VERSION = "32";   // shown to editors with each piece of feedback
 const SUPABASE_JS_VERSION = "2.109.0";
 const LIBRARY_URLS = [
   `https://esm.sh/@supabase/supabase-js@${SUPABASE_JS_VERSION}`,
@@ -419,6 +419,14 @@ async function notInterested() {
 // Everything in the middle of the card is not a zone, so a double-tap there does nothing. These are fractions of the card's width and height.
 const EDGE_SIDE = 0.14, EDGE_TOP = 0.09;
 const edgeOf = (fx, fy) => (fy < EDGE_TOP ? "had" : fx < EDGE_SIDE ? "unknown" : fx > 1 - EDGE_SIDE ? "recognize" : null);
+// The wine's name is a link to a Google image search. A finger on the card is captured by the card, so the browser would not follow the link by itself:
+// the card opens it when a tap lands on it (once, even if the tap was a double-tap).
+let lastImageOpen = 0;
+function openImages(url) {
+  if (!url || Date.now() - lastImageOpen < 900) return;
+  lastImageOpen = Date.now();
+  try { window.open(url, "_blank", "noopener,noreferrer"); } catch (_) { /* a blocked pop-up: nothing else to do */ }
+}
 function attachCard(el) {
   // Forgiving double-tap: fingers may wobble a little, and the second tap can be slower or a bit off.
   const TAP_MOVE = 18, DOUBLE_TAP_MS = 500, TAP_APART = 70;
@@ -462,8 +470,9 @@ function attachCard(el) {
     if (Math.hypot(e.clientX - from.x, e.clientY - from.y) < TAP_MOVE) {      // a tap that barely moved
       // A tap on the map is only ever a tap on the map: it never counts toward a double-tap, whatever part of the card it is on.
       // The overlay opens a moment after the finger lifts, so the click that follows the tap lands on the card and not on the overlay.
-      const hit = document.elementFromPoint(e.clientX, e.clientY), mapEl = hit && hit.closest("[data-zoom]");
+      const hit = document.elementFromPoint(e.clientX, e.clientY), mapEl = hit && hit.closest("[data-zoom]"), nameEl = hit && hit.closest("a[data-wimg]");
       if (mapEl) { lastTap = null; clearHint(); const id = mapEl.dataset.zoom; setTimeout(() => openZoom(id), 60); return; }
+      if (nameEl) { lastTap = null; clearHint(); openImages(nameEl.href); return; }
       const now = Date.now();
       const r = el.getBoundingClientRect();
       const edge = edgeOf((from.x - r.left) / r.width, (from.y - r.top) / r.height);
@@ -478,6 +487,8 @@ function attachCard(el) {
     }
   });
   el.addEventListener("pointercancel", () => { start = null; settle(); });
+  // If a browser does deliver the click to the link itself, the tap was already handled above: do not open it twice. (A keyboard click, detail 0, follows the link normally.)
+  el.addEventListener("click", (ev) => { const a = ev.target.closest && ev.target.closest("a[data-wimg]"); if (a && ev.detail !== 0) ev.preventDefault(); });
 }
 
 // ---------------------------------------------------------------- the rating sheet
