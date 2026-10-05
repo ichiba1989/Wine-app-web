@@ -52,6 +52,8 @@ export function visualFor(c, stats = null) {
   const fl = flavorsForCard(c, stats), place = placeFor(c), plan = zoomPlan(c);
   return { shape: fl.shape, type: fl.type, flavors: fl.picks, map: countryMapSvg(c.country, place, fl.type, 64), zoomable: !!plan };
 }
+// The card, top to bottom: a small bottle, then the name with the map beside it, then the six flavors, then the facts.
+// The flavors sit above the facts so that a short phone clips the facts, never the flavors. The name is plain text: wine info is not edited from the deck.
 export function cardHtml(c) {
   const labels = ["recognize", "unknown", "had"].map((k) => `<div class="swipe-label" data-label="${k}" style="background:${FAMILIARITY[k].color}">${esc(FAMILIARITY[k].label)}</div>`).join("");
   const v = visualFor(c);
@@ -60,12 +62,11 @@ export function cardHtml(c) {
     <div class="image${c.photo ? " hasphoto" : ""}">${bottleSilhouette(v.shape, v.type)}${c.photo ? `<img class="winephoto" src="${esc(c.photo)}" alt="Bottle of ${esc(wineName(c))}" draggable="false" decoding="async">` : ""}${labels}</div>
     <div class="body">
       <div class="toprow"><div class="nameblock">
-        <div class="namelink" data-wineinfo="${esc(c.id)}">
         ${c.vintage ? `<div class="vintage serif">${esc(c.vintage)}</div>` : ""}
-        <div class="prow"><div class="producer serif">${esc(c.producer)} <span class="ed" aria-hidden="true">&#9998;</span></div>${marksHtml(c)}</div>
-        ${c.cuvee ? `<div class="cuvee serif">${esc(c.cuvee)}</div>` : ""}</div></div>${map}</div>
-      <div class="facts">${c.facts.map((f) => `<div class="${f.derived ? "derived" : ""}">${esc(f.text)}</div>`).join("")}</div>
+        <div class="prow"><div class="producer serif">${esc(c.producer)}</div>${marksHtml(c)}</div>
+        ${c.cuvee ? `<div class="cuvee serif">${esc(c.cuvee)}</div>` : ""}</div>${map}</div>
       ${flavorRowHtml(v.flavors)}
+      <div class="facts">${c.facts.map((f) => `<div class="${f.derived ? "derived" : ""}">${esc(f.text)}</div>`).join("")}</div>
     </div></div>`;
 }
 export function discoverHtml({ deck, interest, banner, counts, feedback = false, flaggedId = null, nudge = false }) {
