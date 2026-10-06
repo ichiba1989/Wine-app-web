@@ -262,40 +262,66 @@ Details:
 
 **Objective [Spec §16]:** each next card is chosen for *both* likelihood of enjoyment and *information value* about the palate model.
 
-**Stage A: Candidate set.** All wines with a verified record, a real photo, and not recently shown. The prototype already does this.
+### 9.1 The reactions (current model, confirmed by the owner)
 
-**Stage B: Per-wine features (derived, all from structured data).** Reference-profile values; grape/region/producer/style keys; popularity/"reach"; vintage; (hidden) price tier; the user's exposure/knowledge on those keys.
+A swipe is **familiarity + interest**, not like/dislike:
 
-**Stage C: Scoring.**
+| Action | Familiarity stored | Interest | Notes |
+|---|---|---|---|
+| Swipe right: **I recognize it** | `recognize` | `try` | |
+| Swipe up: **I've had this bottle** | `had` | `try` | Also adds the wine to the journal (done server-side by `record_swipe`) |
+| Swipe left: **I don't know it** | `unknown` | `try` | Still interested; the person just lacks knowledge |
+| **Not interested** button | none | `nope` | Says what they dislike, not what they know |
+
+Visible buttons exist alongside gestures. The first three imply interest. Interest can be changed later (a separate `interest_change` event in `encounters`).
+
+How each reaction is read (as implemented in `deck.js` `userModel`):
+- `recognize` / `had` → **knowledge/exposure** evidence for the wine's producer, grape, region, country and style (`had` counts 1.5×, `recognize` 1×).
+- `unknown` → **knowledge-gap** evidence for the same keys. It is never a dislike and never neutral preference.
+- `try` → small positive **preference** for those keys (0.6; style 0.4). `nope` → small negative (−0.6; style −0.4).
+- Journal entries and verdicts are far stronger evidence than swipes (verdict weights: `buy` 2, `drink` 1, `none` 0, `respect` −0.5, `no` −2; an unrated journal wine counts 0.25).
+
+### 9.2 What the prototype does today
+
+Two scores per unswiped wine, both 0 to 1:
+- **`fam`** (how likely the person is to *recognize* it): editor-set "reach" (1 to 5, default 3), blended with what other players recognized (once ≥3 players have seen it), then with the person's own evidence (producer 55%, grape 25%, place 10%, quiz accuracy 10%).
+- **`pref`** (how likely they are to *like* it): affinity for style, grape, place and producer, plus closeness of the wine's reference structure (acidity, body, tannin) to wines they rated well (needs ≥2 liked wines).
+
+`fam` puts each wine into one of three decks: **Familiar** (≥ 0.55), **Getting warmer** (≥ 0.28), **New territory** (below). Each deck keeps at least 15% of the remaining wines. The deck shown is an **interleaved mix** of the three, never long runs. A new or less-certain person gets mostly familiar wines; as knowledge grows (quiz accuracy, recognition rate, journal size) the mix moves toward warmer and new. If recent swipes show they stop recognizing things, it eases back. Inside each deck, higher `pref` comes first with some randomness, and the same producer or place does not repeat back to back. A wine with a real photo is strictly prioritized over one without.
+
+Note the current data (checked against the live catalog): only 10 of 197 wines have a photo, so that priority rule currently limits the usable deck.
+
+### 9.3 Gap versus the stated goal, and the proposed next step
+
+Today's deck optimizes **familiarity pacing and enjoyment**. It does not yet **measure how uncertain the model is**, so it cannot deliberately pick the wine that teaches it the most. Proposed additions **[Proposal]**:
+
+**Stage C: Scoring (extend, don't replace).**
 ```
-score(w) = α · P(like | user, w)                 # exploit: predicted enjoyment
-         + β · InformationGain(w; user model)    # explore: reduces model uncertainty
-         + γ · Novelty/diversity(w; recent deck) # avoid repeats
-         + δ · Learning value(w; knowledge model)# teachable moments
+score(w) = α · pref(w)                           # exploit: predicted enjoyment (exists)
+         + β · InformationGain(w; user model)    # explore: reduces model uncertainty (new)
+         + γ · diversity(w; recent deck)         # avoid repeats (exists, as a rule)
+         + δ · learning value(w; knowledge gaps) # teachable moments, fed by `unknown` swipes (new)
+         + tier mix from `fam` (exists)          # familiar / warmer / new pacing stays
          − penalties (just shown, same producer back-to-back, no photo)
 ```
-with α, β, γ, δ tuned per user maturity: sparse history → heavier on familiar/popular wines and wide coverage; mature history → more probing wines.
+The three-tier mix stays as the pacing layer. Information gain is added *inside* each tier.
 
-**Information gain / "challenge my assumptions".** Use a model that carries **uncertainty** per dimension (§10), e.g. a Bayesian/ordinal model, or a bandit with Thompson sampling. Pick wines whose predicted outcome is most uncertain *or* that test a recently shifted dimension (e.g., user historically dislikes tannin but liked three tannic wines recently ⇒ present another tannic wine). That is a direct implementation of your example.
+**Uncertainty.** Give each preference estimate a confidence (e.g. evidence count, or a Beta/ordinal posterior). Pick wines whose predicted outcome is most uncertain, or that **test a recent change** (e.g. the person usually avoids high tannin but liked several high-tannin wines lately → show another one). This implements the "challenge my assumptions" requirement.
 
-**Reading the three reactions** (spec §2):
-- ❤️ → positive interest signal on the wine's features (weak, since not yet drunk)
-- 👎 → negative interest signal (weak)
-- 🤷 → *"insufficient knowledge"*: increases the **exposure/knowledge gap** estimate for those keys; **not** a preference signal and **not** the midpoint of like/dislike. Feeds learning content (what to teach) and discovery (what to explain).
-- Swipes are weaker evidence than a consumption verdict; weights differ.
+**Assumption-test slots.** Reserve one card every N cards for the most informative wine, and label it internally so its outcome can be evaluated.
 
-**Verdict weights.** `buy` > `drink` > `none` > `respect` > `no` as preference evidence. `buy` vs `drink` also carries a *value/price-sensitivity* signal. `respect` writes a **preference-negative / understanding-positive** pair, and must not generalize to a whole category (§10).
+**Using `unknown` swipes better.** They already raise the knowledge-gap signal. Next step: feed those keys to the Learn tab (suggest quiz topics) and prefer to show explanatory content for them, without treating them as dislikes.
 
-**Prediction game.** Predictions sit beside later verdicts; the delta feeds an "intuition" score and also a calibration signal for the engine itself.
+**Prediction step [Open].** A pre-consumption prediction entity does not exist yet; where it is captured is an open question (§15). When it exists, prediction vs. verdict becomes a calibration signal for the engine.
 
-**Implementation staging [Proposal]:**
-1. MVP: rule-based scoring in the style of `deck.js` + explicit exploration slots (e.g. every N cards an "assumption test" card).
-2. Next: Bayesian preference model with uncertainty, sampling for explore/exploit.
-3. Later: learned models only after enough data, always with structured inputs.
+**Implementation staging:**
+1. Now: add confidence to the existing `pref` evidence and an assumption-test slot (rules, no new model).
+2. Next: Bayesian preference model with uncertainty; sampling for explore/exploit.
+3. Later: learned models only after enough data, always from structured inputs.
 
-**Cold start [Open]:** what does a brand-new user see first? (e.g., an onboarding set of widely recognizable wines). Not specified.
+**Cold start [Open]:** what a brand-new user sees first is not specified. Today they get mostly high-reach, familiar wines.
 
-**Evaluation:** log every deck decision (candidates, scores, chosen) so the engine can be replayed and measured offline.
+**Evaluation:** log every deck decision (candidates, scores, tier, chosen) so the engine can be replayed and measured offline. Nothing is logged today.
 
 ---
 
