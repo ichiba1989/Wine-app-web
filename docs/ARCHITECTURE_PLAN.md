@@ -27,7 +27,7 @@ The current repo is a phone-first web prototype (vanilla ES modules, Supabase ba
 | Learning | Quiz modes, difficulty, timed runs, review archive, flags |
 | Active deck | `deck.js` mixes Familiar / Getting warmer / New territory |
 
-**Gaps versus the spec:** (a) the three-way ❤️/👎/🤷 swipe semantics; (b) a stored pre-consumption **prediction**; (c) market-price observations as a separate system; (d) controlled-inference rule layer as explicit data; (e) content provenance/CMS workflow with approval states; (f) active-learning (information-gain) selection, not just familiarity mixing; (g) community perception with privacy floors; (h) native clients; (i) schema migrations are **not** in the repo.
+**Gaps versus the spec:** (a) *(resolved: the swipe model is recognize / had / don't know + Not interested, see §9.1)*; (b) a stored pre-consumption **prediction**; (c) market-price observations as a separate system; (d) controlled-inference rule layer as explicit data; (e) content provenance/CMS workflow with approval states; (f) active-learning (information-gain) selection, not just familiarity mixing; (g) community perception with privacy floors; (h) native clients; (i) schema migrations are **not** in the repo.
 
 **Recommendation [Proposal]:** do not discard the prototype. Treat it as the validated product spec and a working reference implementation. Its backend schema can evolve into the production one. The first engineering task is to put the existing schema under version control (see §15 and Phase 0).
 
@@ -144,8 +144,8 @@ Include **[Spec §26 + Proposal on interpretation]**:
 
 1. User accounts (guest-first, optional email; age/consent as the prototype does it **[Open: required age/legal rules by launch market]**)
 2. Wine Master DB for a **bounded launch catalog**
-3. Real bottle images for catalog wines (without a photo, a wine should not enter the deck; the prototype already prioritizes photo wines)
-4. Swipe UI with gestures **and** visible buttons: ❤️ / 👎 / 🤷, with 🤷 stored distinctly
+3. Real bottle images where available. **Design decision (owner):** the experience should rely on photos *less*. A wine without a photo still appears in the deck, at the same priority as one with a photo, and its card shows the app's drawn bottle silhouette (`visuals.js`). Photos improve a card but are neither required nor preferred by the deck. **[Open]** whether the card should say a photo is missing, and whether any wines should still be held out (e.g. wines whose label details are unverified).
+4. Swipe UI with gestures **and** visible buttons: **I recognize it / I've had this bottle / I don't know it**, each implying interest, plus a separate **Not interested** button. "I don't know it" is stored distinctly and never treated as a dislike
 5. Pre-consumption prediction (3 states), stored separately
 6. Consumption tracking (encountered ≠ consumed)
 7. Five verdicts
@@ -287,9 +287,7 @@ Two scores per unswiped wine, both 0 to 1:
 - **`fam`** (how likely the person is to *recognize* it): editor-set "reach" (1 to 5, default 3), blended with what other players recognized (once ≥3 players have seen it), then with the person's own evidence (producer 55%, grape 25%, place 10%, quiz accuracy 10%).
 - **`pref`** (how likely they are to *like* it): affinity for style, grape, place and producer, plus closeness of the wine's reference structure (acidity, body, tannin) to wines they rated well (needs ≥2 liked wines).
 
-`fam` puts each wine into one of three decks: **Familiar** (≥ 0.55), **Getting warmer** (≥ 0.28), **New territory** (below). Each deck keeps at least 15% of the remaining wines. The deck shown is an **interleaved mix** of the three, never long runs. A new or less-certain person gets mostly familiar wines; as knowledge grows (quiz accuracy, recognition rate, journal size) the mix moves toward warmer and new. If recent swipes show they stop recognizing things, it eases back. Inside each deck, higher `pref` comes first with some randomness, and the same producer or place does not repeat back to back. A wine with a real photo is strictly prioritized over one without.
-
-Note the current data (checked against the live catalog): only 10 of 197 wines have a photo, so that priority rule currently limits the usable deck.
+`fam` puts each wine into one of three decks: **Familiar** (≥ 0.55), **Getting warmer** (≥ 0.28), **New territory** (below). Each deck keeps at least 15% of the remaining wines. The deck shown is an **interleaved mix** of the three, never long runs. A new or less-certain person gets mostly familiar wines; as knowledge grows (quiz accuracy, recognition rate, journal size) the mix moves toward warmer and new. If recent swipes show they stop recognizing things, it eases back. Inside each deck, higher `pref` comes first with some randomness, and the same producer or place does not repeat back to back. A bottle photo **does not affect ordering**. An earlier version strictly put photo wines first; that was removed (deck.js v=3) because only 10 of 197 catalog wines have a photo and the design should rely on photos less. Wines without a photo show the drawn bottle silhouette.
 
 ### 9.3 Gap versus the stated goal, and the proposed next step
 
@@ -302,7 +300,7 @@ score(w) = α · pref(w)                           # exploit: predicted enjoymen
          + γ · diversity(w; recent deck)         # avoid repeats (exists, as a rule)
          + δ · learning value(w; knowledge gaps) # teachable moments, fed by `unknown` swipes (new)
          + tier mix from `fam` (exists)          # familiar / warmer / new pacing stays
-         − penalties (just shown, same producer back-to-back, no photo)
+         − penalties (just shown, same producer back-to-back)
 ```
 The three-tier mix stays as the pacing layer. Information gain is added *inside* each tier.
 
@@ -419,7 +417,7 @@ Resolve the blocking open questions (§15). Put the existing Supabase schema und
 *Exit:* a sourced catalog plan with known licenses and a reproducible schema.
 
 **Phase 1: Core loop MVP (native client).**
-Accounts; launch catalog with real photos; swipe (❤️/👎/🤷 + buttons); prediction; consumption + 5 verdicts; journal with edit/search/filter; basic preference/perception/understanding signals; minimal CMS with provenance + approval; small inference rule set; basic quiz.
+Accounts; launch catalog with real photos; swipe (recognize / had / don't know + Not interested, gestures and buttons); prediction; consumption + 5 verdicts; journal with edit/search/filter; basic preference/perception/understanding signals; minimal CMS with provenance + approval; small inference rule set; basic quiz.
 *Exit:* a tester completes SEE→SWIPE→PREDICT→DRINK→RECORD→LEARN→NEXT and sees a visible palate profile change.
 
 **Phase 2: Validate and deepen.**
@@ -441,7 +439,7 @@ Phases 3–5 ordering is a recommendation; reorder based on what Phase 2 learns.
 ## 15. Requirements needing clarification before development
 
 **Product/UX**
-1. **Swipe semantics (resolved).** Reactions are recognize / don't know / had, each implying interest, plus a separate Not interested button. This replaces the original emoji spec; sections 2, 9 and the MVP list above still use the old ❤️/👎/🤷 wording and should be read with that mapping.
+1. **Swipe semantics (resolved).** Reactions are recognize / don't know / had, each implying interest, plus a separate Not interested button. This replaces the original emoji spec. Sections 3, 9 and the roadmap now use the new wording. The requirements brief in the original request still describes the emoji version.
 2. **Prediction timing.** Is the prediction a distinct step when the user is about to drink (e.g. after scanning/choosing a wine to drink), or collected at swipe time or both? Can a user predict without ever swiping?
 3. **Repeat consumption.** Is "number of times consumed" a counter on one entry, or one journal entry per occasion (the plan assumes per-occasion rows)? Does each get its own verdict?
 4. **Verdict edits.** When a user edits a historical verdict, should the model treat it as a correction (replace) or a change of mind (history)?

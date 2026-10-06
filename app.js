@@ -23,7 +23,7 @@ import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywin
 import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=2";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
 import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting } from "./tasting.js?v=2";
-import { buildDeck } from "./deck.js?v=2";
+import { buildDeck } from "./deck.js?v=3";
 import { createProfile } from "./profile.js?v=13";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=5";
 import { createFeedback } from "./feedback.js?v=3";

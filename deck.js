@@ -21,14 +21,6 @@ export const HIGH_AT = 0.55, MEDIUM_AT = 0.28;
 // Whatever the numbers say, each deck holds at least this share of the wines left to swipe, so there is always something familiar
 // and always something new. The wines moved are the ones nearest the line: the least familiar go to low, the most familiar to high.
 export const MIN_SHARE = 0.15;
-// A wine with a real bottle photo is put ahead of the wines without one inside its deck. The bonus is bigger than the whole spread of
-// the taste-and-randomness score (0 to 1.35), so it is a strict priority: photo wines are used first, and wines without a photo follow
-// once the photo wines of that deck run out. The mix of familiar, warmer and new territory is not touched.
-export const PHOTO_BONUS = 2;
-export const hasPhoto = (c) => !!(c && (c.photo || c.image));
-// Verdicts count as likes and dislikes. A journal entry with no verdict yet is a faint like (they had the bottle).
-export const VERDICT_WEIGHT = { buy: 2, drink: 1, none: 0, respect: -0.5, no: -2 };
-export const UNRATED_WEIGHT = 0.25;
 // "How easy to find" (reach, set by editors, 1 to 5; 3 when nobody has set it) is the starting point for familiarity.
 export const DEFAULT_REACH = 3;
 
@@ -172,7 +164,7 @@ export function buildDeck({ cards, states = [], journal = [], quiz = null, refs 
   balanceTiers(entries);
   entries.forEach((e) => {
     info.set(e.c.id, { tier: e.tier, fam: e.fam, pref: e.pref });
-    queues[e.tier].push({ c: e.c, score: e.pref + 0.35 * rnd() + (hasPhoto(e.c) ? PHOTO_BONUS : 0) });   // photo wines first, then likelier favourites, with enough randomness to stay fresh
+    queues[e.tier].push({ c: e.c, score: e.pref + 0.35 * rnd() });   // likelier favourites first, with enough randomness to stay fresh (a bottle photo does not change the order)
   });
   TIERS.forEach((t) => queues[t].sort((a, b) => b.score - a.score));
   const mix = mixFor(model);
@@ -191,9 +183,8 @@ export function buildDeck({ cards, states = [], journal = [], quiz = null, refs 
     const pick = open.reduce((best, t) => (credits[t] > credits[best] ? t : best), open[0]);
     credits[pick] -= 1;
     const q = queues[pick];
-    // Avoid repeating a producer or place back to back, but only among wines that are equally ahead: a photo wine is never passed over for one without a photo.
-    const lead = hasPhoto(q[0].c);
-    let i = q.slice(0, 6).findIndex((x) => hasPhoto(x.c) === lead && !conflicts(x.c)); if (i < 0) i = 0;
+    // Avoid repeating a producer or place back to back: take the first of the next few wines that does not repeat.
+    let i = q.slice(0, 6).findIndex((x) => !conflicts(x.c)); if (i < 0) i = 0;
     const [{ c }] = q.splice(i, 1);
     deck.push(c);
     const k = cardKeys(c); recent.push({ producer: k.producer, country: k.country, style: k.style, grape: k.grapes[0] || "" });
