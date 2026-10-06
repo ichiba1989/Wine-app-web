@@ -216,6 +216,7 @@ Rules:
 4. **Caution:** the prototype's `find-photos` flow finds web images as *pending candidates* and requires editor approval. Whether that is legally usable for public display is **unverified**; licensing of images found online must be reviewed before production use.
 5. No AI-generated bottle images for real wines (spec §18).
 6. User photos stay private journal items unless submitted and approved.
+7. **Launch decision (owner):** the Discover card shows no bottle photo. For "what does this bottle look like", the native app opens an in-app browser sheet with a Google image search (mock-up in `docs/mockups/`). The app itself neither frames, scrapes nor stores Google's results. Legal review is listed in `docs/PRE_TEST_REVIEW.md` (Launch notes).
 
 Catalog bootstrap size and the first-launch catalog strategy are **[Open]** (see §15).
 

@@ -41,6 +41,12 @@
 
 - _2026-10-06:_ The "Would you drink it alone or with food?" question is hidden in the rating sheet (`feel.js`, `SHOW_PAIRING = false`), and the "How did it taste?" / "How did the wine feel?" headings were removed. The consent text (`consent.js` line 24) and privacy page (line 36) still say players answer "whether you would drink it alone or with food". Decide whether to remove that phrase, or bring the question back. Old answers already saved are kept.
 
+## Launch notes (decisions to carry into the native app)
+
+- **In-app browser sheet for "look up this wine" (liked by the owner, 2026-10-06).** In the native app, tapping the wine's name should open Google image search in an in-app browser sheet that slides up over the card, with a Done button to return (see `docs/mockups/browser-sheet-placeholder.png`). The sheet shows Google's own page; the app does not copy, frame or scrape it, and stores no images. The web prototype cannot do this (Google blocks being shown inside other pages), so it keeps opening a new tab.
+- **To confirm before launch:** a lawyer's view of the link-out and of any wording near it (no suggestion that Google or any producer endorses the app); that the results page shows ads and shopping prices, which clashes with "not a shopping app"; and how each platform's in-app browser behaves (iOS and Android differ).
+- **Longer term:** the cleaner fix is a licensed or permitted bottle image source, so the picture lives in the app. See the image-source questions in `docs/ARCHITECTURE_PLAN.md` section 6.
+
 ## When testing starts (checklist)
 
 - [ ] Read `consent.js` and `privacy.html` side by side and align every sentence
