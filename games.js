@@ -1,9 +1,12 @@
 // The Games tab: a list of games (Wine Bingo is the first), then the bingo tiers, then one card. Every function here takes data and returns an HTML
 // string; nothing touches the network. The rules (what fills a square, what unlocks a tier) are in bingo.js; app.js holds the screen state and clicks.
-import { esc } from "./logic.js?v=10";
-import { TIERS, CARDS, CLEARS_TO_UNLOCK, cardById, cardsOfTier, tierOpen, clearedIn } from "./bingo.js?v=1";
+import { esc, wineName, entryName } from "./logic.js?v=10";
+import { infoLine } from "./wineline.js?v=1";
+import { TIERS, CARDS, CLEARS_TO_UNLOCK, cardById, cardsOfTier, tierOpen, clearedIn } from "./bingo.js?v=2";
 
-// g: { screen: "hub" | "bingo" | "card", cardId, sq }   data: { progress: Map(cardId -> progress), memory, news: [{ id, kind }] }
+// g: { screen: "hub" | "bingo" | "card", cardId, sq }
+// data: { progress: Map(cardId -> progress), memory, news: [{ id, kind }], help }
+//   help (only for an empty square that is selected): { unrated: [journal entries], recs: [{ card, reason }] }
 export function gamesHtml(g, data) {
   if (g.screen === "card" && cardById(g.cardId)) return cardScreen(cardById(g.cardId), g, data);
   if (g.screen === "bingo") return bingoScreen(data);
@@ -41,25 +44,41 @@ function bingoScreen({ progress, memory, news }) {
       <div class="muted small bt-blurb">${esc(t.blurb)}</div>${cardsOfTier(t.n).map((c) => cardTile(c, progress.get(c.id), memory)).join("")}</div>`;
   }).join("");
   return `<div class="games"><button class="link back" data-action="game:hub">‹ Games</button><h2 class="serif gh">Wine Bingo</h2>
-    <p class="ptext">A square fills when you <b>rate</b> a wine that fits it. Each wine fills one square, and rating a wine again does not count twice. Three in a row clears a card.</p>
+    <p class="ptext">A square fills when you <b>rate</b> a wine that fits it. One wine can fill several squares (a white wine from the USA fills both), and rating a wine again does not count twice. Three in a row clears a card.</p>
     ${newsHtml(news)}${tiers}</div>`;
 }
 
-function cardScreen(c, g, { progress, memory, news }) {
+function photoHtml(w, cls) { return w && w.photo ? `<img class="${cls}${w.photo.own ? " own" : ""}" src="${esc(w.photo.url)}" alt="" loading="lazy" decoding="async">` : ""; }
+// What to show for an empty square: a wine in the journal that only needs rating, or else wines picked for this player's taste (recommend.js).
+function helpHtml(s, help, c) {
+  const hint = `<div class="ptext"><b>${esc(s.label)}</b><br>${esc(s.hint)}</div>`;
+  if (help && help.unrated && help.unrated.length) {
+    return hint + `<div class="bhelp"><div class="muted small">You already have ${help.unrated.length === 1 ? "this wine" : "these wines"} in your Journal without a rating:</div>` +
+      help.unrated.slice(0, 3).map((e) => `<button class="brow" data-action="entry:${esc(e.id)}"><span class="serif">${esc(entryName(e))}</span><span class="pill dark">Rate it</span></button>`).join("") +
+      `<div class="muted small">Tip: double-tap this square to rate ${esc(entryName(help.unrated[0]))}.</div></div>`;
+  }
+  if (help && help.recs && help.recs.length) {
+    return hint + `<div class="bhelp"><div class="muted small">${help.cold ? "A good place to start, and it would fill this square:" : "Picked for your taste, and it would fill this square:"}</div>` +
+      help.recs.map((r) => `<div class="brec"><div class="serif">${esc(wineName(r.card))}</div><div class="muted small">${esc(infoLine(r.card))}</div>${r.reason ? `<div class="small brwhy">${esc(r.reason)}</div>` : ""}
+        <button class="pill" data-action="review:${esc(r.card.id)}">I've had it: rate it</button></div>`).join("") + `</div>`;
+  }
+  const tip = c && c.note ? " " + esc(c.note) : "";
+  return hint + `<div class="muted small">None of our wines fits this square yet. If you have one, add it in Journal.${tip}</div><button class="btn outline slim" data-action="tab:journal">Open Journal</button>`;
+}
+function cardScreen(c, g, { progress, memory, news, help }) {
   const p = progress.get(c.id), inLine = new Set(p.lines.flat());
   const sel = Number.isInteger(g.sq) && g.sq >= 0 && g.sq < 9 ? g.sq : null;
   const squares = c.squares.map((s, i) => {
     const w = p.filled[i];
     return `<button class="bsq${w ? " on" : ""}${inLine.has(i) ? " line" : ""}${sel === i ? " sel" : ""}" data-action="game:sq:${i}" aria-pressed="${sel === i}"
-      aria-label="${esc(s.label)}${w ? ", filled by " + esc(w.name) : ", not filled yet"}"><span class="bs-label">${esc(s.label)}</span>${w ? `<span class="bs-check" aria-hidden="true">✓</span>` : ""}</button>`;
+      aria-label="${esc(s.label)}${w ? ", filled by " + esc(w.name) : ", not filled yet"}">${photoHtml(w, "bs-photo")}<span class="bs-label">${esc(s.label)}</span>${w ? `<span class="bs-check" aria-hidden="true">✓</span>` : ""}</button>`;
   }).join("");
   let detail = `<div class="muted small">Tap a square to see what it needs.</div>`;
   if (sel !== null) {
     const s = c.squares[sel], w = p.filled[sel];
     detail = w
-      ? `<div class="ptext"><b>${esc(s.label)}</b><br>Filled by <b>${esc(w.name)}</b>.</div>`
-      : `<div class="ptext"><b>${esc(s.label)}</b><br>${esc(s.hint)}</div><div class="muted small">Find a wine in Discover or Swipes, or add one in Journal, then rate it.</div>
-         <button class="btn outline slim" data-action="tab:journal">Open Journal</button>`;
+      ? `<div class="bfilled">${photoHtml(w, "bd-photo")}<div class="ptext"><b>${esc(s.label)}</b><br>Filled by <b>${esc(w.name)}</b>.</div></div>`
+      : helpHtml(s, help, c);
   }
   const status = (p.blackout ? "Blackout!" : p.bingo ? `Bingo: ${p.lines.length} ${p.lines.length === 1 ? "line" : "lines"}` : "No line yet") + ` · ${p.count} of 9 squares`;
   return `<div class="games"><button class="link back" data-action="game:bingo">‹ Wine Bingo</button>

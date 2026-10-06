@@ -439,6 +439,16 @@
   .bdetail .btn { margin-top: 10px; }
   .bnote { margin-top: 12px; line-height: 1.4; }
   .tabs button { min-width: 0; padding-left: 2px; padding-right: 2px; font-size: calc(13px * min(var(--ts), 1.15)); }
+  .bsq { flex-direction: column; gap: 4px; }
+  .bs-photo { width: 38px; height: 38px; object-fit: contain; border-radius: 6px; background: #fff; flex: 0 0 auto; }
+  .bs-photo.own, .bd-photo.own { object-fit: cover; border-radius: 50%; }
+  .bfilled { display: flex; align-items: center; gap: 12px; }
+  .bd-photo { width: 64px; height: 64px; object-fit: contain; border-radius: 10px; background: #fff; flex: 0 0 auto; }
+  .bhelp { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .brow { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; text-align: left; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: calc(15px * var(--ts)); }
+  .brec { display: flex; flex-direction: column; gap: 3px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  .brec .serif { font-size: calc(16px * var(--ts)); } .brec .pill { align-self: flex-start; margin-top: 6px; }
+  .brwhy { color: var(--wine); font-size: calc(13px * var(--ts)); }
 </style>
 </head>
 <body>
@@ -469,6 +479,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=44" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=46" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>

@@ -2,8 +2,7 @@
 //
 // How it works
 //   * A square is filled by a wine the player has RATED (a journal entry with a verdict). Having had the bottle is not enough; rating it is the point.
-//   * One wine fills at most one square on a card, so a card takes nine different wines. (If a wine could fit two squares, the cards are filled
-//     so that as many squares as possible are filled.) Rating the same wine twice still counts once.
+//   * One wine can fill every square it fits (a white wine from the USA fills both "White wine" and "USA"). Rating the same wine twice still counts once.
 //   * Three squares in a row, column or diagonal is a bingo. A card is CLEARED with its first bingo. All nine is a blackout.
 //   * Cards come in four tiers, easy to nerdy. Clearing CLEARS_TO_UNLOCK cards of a tier opens the next tier.
 //   * Progress is worked out from the journal each time. Which cards have been cleared is remembered on the phone so deleting an old journal entry
@@ -11,12 +10,17 @@
 //
 // What a square is allowed to ask (all matched against facts the app already holds, never guessed):
 //   style, verdict, country, place (region, appellation or country text), grape, text (producer, wine name, vineyard), age, decade, nv, all, any.
+// A filled square shows a photo only when the photo is the player's own or from a source we are allowed to show (LICENSED_IMAGE_KINDS); a photo found
+// online is never shown here.
 // "Draft" cards (the very specific ones) name particular vineyards and growths. Those lists are facts, so an editor must check them against a
 // source before testers rely on them; see docs/PRE_TEST_REVIEW.md.
 import { fold as foldText, splitGrapeText } from "./grapes.js?v=1";
 import { splitPlace } from "./blends.js?v=1";
 
 export const CLEARS_TO_UNLOCK = 3;
+// Catalog photo kinds (wine_images.kind) that may be shown on a bingo square. "found_online" is deliberately not here. Add the kind used for licensed or
+// producer-supplied images once the catalog has them (their exact names are not in the data yet).
+export const LICENSED_IMAGE_KINDS = ["licensed", "own_photography", "verified_user"];
 export const TIERS = [
   { n: 1, title: "First sips", blurb: "Colors, countries and your honest verdicts." },
   { n: 2, title: "Getting curious", blurb: "Famous grapes and famous places." },
@@ -107,7 +111,7 @@ const has = (hay, needle) => { const n = norm(needle); return !!n && (" " + hay 
 const yearOf = (text) => { const m = /^(\d{4})/.exec(String(text || "")); return m ? Number(m[1]) : null; };
 
 // Everything a square may ask about one rated wine. entry: a journal entry; card: its catalog card (or null for a wine typed in by hand).
-export function factsOf(entry, card, today = new Date()) {
+export function factsOf(entry, card, today = new Date(), photoUrls = null) {
   const raw = (card && card.raw) || {};
   let grapes, region, appellation, countryName, vineyard, classification;
   if (card) {
@@ -119,6 +123,9 @@ export function factsOf(entry, card, today = new Date()) {
     const p = splitPlace(entry.region || entry.region_text || "");
     region = p.region || ""; appellation = ""; countryName = p.country || entry.country || ""; vineyard = ""; classification = "";
   }
+  // The picture for a filled square: the player's own photo of this wine first, then a catalog photo of an allowed kind.
+  const own = entry.first_photo_path && photoUrls && photoUrls.get ? photoUrls.get(entry.first_photo_path) : null;
+  const photo = own ? { url: own, own: true } : card && card.photo && LICENSED_IMAGE_KINDS.includes(card.imageKind) ? { url: card.photo, own: false } : null;
   const year = entry.is_non_vintage ? null : (Number(entry.vintage_year) || null);
   const drankYear = yearOf(entry.consumed_on) || today.getFullYear();
   return {
@@ -127,14 +134,14 @@ export function factsOf(entry, card, today = new Date()) {
     style: entry.style || (card && card.style) || "unknown", verdict: entry.verdict || null,
     grapes: grapes.map(norm), country: norm(countryName), placeText: norm([region, appellation, countryName, classification].join(" | ")),
     text: norm([entry.producer, entry.wine_name, vineyard, appellation].join(" ")),
-    nv: !!entry.is_non_vintage, year, age: year ? drankYear - year : null,
+    nv: !!entry.is_non_vintage, year, age: year ? drankYear - year : null, photo, entryId: entry.id || null,
   };
 }
 // The rated wines, one per wine (the latest rating wins), oldest first. A journal entry with no verdict is not rated yet and does not count.
-export function ratedWines(journal, cardsById = new Map(), today = new Date()) {
+export function ratedWines(journal, cardsById = new Map(), today = new Date(), photoUrls = null) {
   const sorted = [...(journal || [])].filter((e) => e && e.verdict).sort((a, b) => String(a.consumed_on || "").localeCompare(String(b.consumed_on || "")) || String(a.created_at || "").localeCompare(String(b.created_at || "")));
   const byKey = new Map();
-  sorted.forEach((e) => { const f = factsOf(e, e.wine_vintage_id ? cardsById.get(e.wine_vintage_id) || null : null, today); byKey.delete(f.key); byKey.set(f.key, f); });
+  sorted.forEach((e) => { const f = factsOf(e, e.wine_vintage_id ? cardsById.get(e.wine_vintage_id) || null : null, today, photoUrls); byKey.delete(f.key); byKey.set(f.key, f); });
   return [...byKey.values()];
 }
 
@@ -157,22 +164,13 @@ export function matches(test, w) {
 
 // ---------------------------------------------------------------- filling a card
 export const LINES = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]];
-// One wine per square, filling as many squares as possible (squares in order, wines oldest first, so the result is the same every time).
+// A square is filled by any rated wine that fits it, and one wine can fill several squares. When more than one wine fits, the one with a picture to show
+// wins, then the most recently rated (wines come oldest first), so the result is the same every time.
 export function fillSquares(squares, wines) {
-  const canFill = squares.map((s) => wines.map((w, i) => (matches(s.test, w) ? i : -1)).filter((i) => i >= 0));
-  const squareOfWine = new Array(wines.length).fill(-1);
-  const place = (si, seen) => {
-    for (const wi of canFill[si]) {
-      if (seen.has(wi)) continue;
-      seen.add(wi);
-      if (squareOfWine[wi] < 0 || place(squareOfWine[wi], seen)) { squareOfWine[wi] = si; return true; }
-    }
-    return false;
-  };
-  squares.forEach((_, si) => place(si, new Set()));
-  const filled = new Array(squares.length).fill(null);
-  squareOfWine.forEach((si, wi) => { if (si >= 0) filled[si] = wines[wi]; });
-  return filled;
+  return squares.map((sq) => {
+    const fits = wines.filter((w) => matches(sq.test, w));
+    return fits.filter((w) => w.photo).pop() || fits.pop() || null;
+  });
 }
 export function cardProgress(card, wines) {
   const filled = fillSquares(card.squares, wines);
@@ -184,6 +182,24 @@ export function allProgress(wines, cards = CARDS) {
   const m = new Map();
   cards.forEach((c) => m.set(c.id, cardProgress(c, wines)));
   return m;
+}
+
+// ---------------------------------------------------------------- finding help for an empty square
+// The facts of a catalog wine, so a square's test can be asked of a wine nobody has rated (used to recommend wines for a square).
+export function cardFacts(card, today = new Date()) {
+  const r = card.raw || {};
+  return factsOf({ wine_vintage_id: card.id, style: card.style, vintage_year: r.vintage_year, is_non_vintage: !!r.is_non_vintage, producer: card.producer, wine_name: card.cuvee, verdict: null }, card, today);
+}
+// Journal entries the player has not rated yet that would fill this square once they are rated. Newest first, one per wine.
+export function unratedMatches(test, journal, cardsById = new Map(), today = new Date()) {
+  const keyOf = (e) => factsOf(e, e.wine_vintage_id ? cardsById.get(e.wine_vintage_id) || null : null, today).key;
+  const seen = new Set((journal || []).filter((e) => e && e.verdict).map(keyOf)), out = [];   // a wine that is rated somewhere is not "unrated"
+  [...(journal || [])].filter((e) => e && !e.verdict).sort((a, b) => String(b.consumed_on || "").localeCompare(String(a.consumed_on || ""))).forEach((e) => {
+    const f = factsOf(e, e.wine_vintage_id ? cardsById.get(e.wine_vintage_id) || null : null, today);
+    if (seen.has(f.key) || !matches(test, f)) return;
+    seen.add(f.key); out.push(e);
+  });
+  return out;
 }
 
 // ---------------------------------------------------------------- unlocking (remembered on the phone)

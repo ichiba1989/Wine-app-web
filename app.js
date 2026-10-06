@@ -23,14 +23,15 @@ import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywin
 import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=2";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
 import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting } from "./tasting.js?v=2";
-import { buildDeck } from "./deck.js?v=4";
+import { buildDeck, userModel } from "./deck.js?v=4";
 import { createProfile } from "./profile.js?v=14";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=5";
 import { createFeedback } from "./feedback.js?v=3";
 import { createEditor } from "./editor.js?v=23";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=1";
-import { gamesHtml } from "./games.js?v=2";
-import { ratedWines, allProgress, mergeMemory, parseMemory } from "./bingo.js?v=1";
+import { gamesHtml } from "./games.js?v=4";
+import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard, cardProgress } from "./bingo.js?v=2";
+import { recommend } from "./recommend.js?v=1";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -285,10 +286,31 @@ function renderBody() {
 // Wine Bingo is worked out from the journal each time the Games tab is drawn: only rated wines count (see bingo.js).
 function gamesView() {
   const cardsById = new Map(state.cards.map((c) => [c.id, c]));
-  const progress = allProgress(ratedWines(state.journal, cardsById));
+  const progress = allProgress(ratedWines(state.journal, cardsById, new Date(), state.photoUrls));
   const { memory, news } = mergeMemory(state.gamesMemory, progress);
   if (memory !== state.gamesMemory) { state.gamesMemory = memory; store.set(GAMES_KEY, JSON.stringify(memory)); }
-  return gamesHtml(state.g, { progress, memory, news });
+  let help = null;
+  const c = state.g.screen === "card" ? bingoCard(state.g.cardId) : null;
+  if (c && Number.isInteger(state.g.sq) && !progress.get(c.id).done[state.g.sq]) help = squareHelp(c.squares[state.g.sq], cardsById);
+  return gamesHtml(state.g, { progress, memory, news, help });
+}
+// Help for an empty square: a wine already in the journal that only needs rating, or else wines picked for this player's taste (recommend.js).
+// The same recommend() can serve other games: give it a different accept().
+function squareHelp(square, cardsById) {
+  const unrated = unratedMatches(square.test, state.journal, cardsById);
+  if (unrated.length) return { unrated, recs: [] };
+  const refs = structureMap(state.cards, state.refs);
+  const model = userModel({ cards: state.cards, states: state.states, journal: state.journal, quiz: state.quiz, refs });
+  const leaveOut = new Set([...state.journal.filter((e) => e.verdict && e.wine_vintage_id).map((e) => e.wine_vintage_id), ...state.states.filter((x) => x.interest === "nope").map((x) => x.wine_vintage_id)]);
+  const cold = model.swipeCount + model.journalCount < 5;   // too little history to say "your taste"
+  return { unrated: [], cold, recs: recommend({ cards: state.cards, model, refs, crowd: state.crowd, exclude: leaveOut, accept: (c) => bingoMatches(square.test, cardFacts(c)), limit: 3 }) };
+}
+// A double-tap on an empty square that has an unrated journal wine opens that wine's rating sheet.
+function unratedForSquare(n) {
+  const c = bingoCard(state.g.cardId), cardsById = new Map(state.cards.map((x) => [x.id, x]));
+  if (!c || !c.squares[n]) return null;
+  if (cardProgress(c, ratedWines(state.journal, cardsById)).done[n]) return null;
+  return unratedMatches(c.squares[n].test, state.journal, cardsById)[0] || null;
 }
 function drawTab(body) {
   if (state.tab === "discover") {
@@ -1062,9 +1084,17 @@ document.addEventListener("click", async (ev) => {
       if (a === "hub") state.g = { screen: "hub", cardId: null, sq: null };
       else if (a === "bingo") state.g = { screen: "bingo", cardId: null, sq: null };
       else if (a === "card") state.g = { screen: "card", cardId: b, sq: null };
-      else if (a === "sq") state.g = { ...state.g, sq: state.g.sq === Number(b) ? null : Number(b) };
+      else if (a === "sq") {
+        const n = Number(b), now = Date.now(), again = state.g.sq === n && now - (state.g.t || 0) < 450;
+        state.g = { ...state.g, sq: n, t: now };
+        const entry = again ? unratedForSquare(n) : null;
+        if (entry) { renderBody(); await openEntry(entry); return; }
+      }
       renderBody();
-      if (a !== "sq") { const c = $("#content"); if (c) c.scrollTop = 0; }
+      if (a === "sq") {                 // the details sit under the grid: bring them into view
+        const d = document.querySelector(".bdetail");
+        if (d && d.scrollIntoView) d.scrollIntoView({ block: "nearest", behavior: reduceMotion() ? "auto" : "smooth" });
+      } else { const c = $("#content"); if (c) c.scrollTop = 0; }
     }
     else if (action === "settings") openSettings();
     else if (action === "setclose") closeSettings();
