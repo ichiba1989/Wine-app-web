@@ -46,7 +46,7 @@ export function changeSetting(s, key, value) {
 const chip = (on, data, label, disabled = false) => `<button class="gopt${on ? " on" : ""}" data-action="set:${data}" aria-pressed="${on}"${disabled ? " disabled" : ""}>${esc(label)}</button>`;
 const row = (title, chips, note) => `<div class="srow"><div class="stitle">${esc(title)}</div><div class="gopts">${chips}</div>${note ? `<div class="muted small snote">${note}</div>` : ""}</div>`;
 
-export function settingsHtml(s, user) {
+export function settingsHtml(s, user, { owner = false } = {}) {
   const onOff = (key, disabled = false) => chip(s[key], `${key}:on`, "On", disabled) + chip(!s[key], `${key}:off`, "Off", disabled);
   return `<div class="overlay"><div class="sheet" id="settingsPanel" role="dialog" aria-label="Settings">
     <div class="sheethead"><div class="sheettitle"><div class="serif big">Settings</div><div class="muted small">Saved on this phone.</div></div>
@@ -56,6 +56,7 @@ export function settingsHtml(s, user) {
     ${row("Buttons under the card", onOff("buttons", !s.swipe), s.swipe ? "Tap a button to answer without swiping." : "Always on while swiping is off.")}
     ${row("Zoom", "", "Pinch the card with two fingers, double-tap the middle of it, or tap Zoom under the card. While it is zoomed, swiping is paused. Tap Reset zoom to go back.")}
     ${row("Motion", MOTION.map((m) => chip(s.motion === m.id, `motion:${m.id}`, m.label)).join(""), "Reduces the card's movement and the fades.")}
+    ${owner ? `<div class="srow"><div class="stitle">Owner</div><button class="btn outline slim" data-action="owner:open">Open the owner page</button><div class="muted small snote">Tables of wines, lenses, bingo cards, checks and settings.</div></div>` : ""}
     <div class="srow"><div class="stitle">Account</div>${accountCardHtml(user)}</div>
   </div></div>`;
 }

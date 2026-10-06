@@ -514,3 +514,19 @@ export async function reuseWinePhoto(sb, fromVintageId, toVintageId, note, { rep
   }
   return path;
 }
+
+// ---------------------------------------------------------------- the Owner page
+// The numbers the app reads from the database (app_config: key, value, note). value is a number, or an object with a "value" number.
+export async function loadAppConfig(sb) {
+  return must(await sb.from("app_config").select("key, value, note").order("key"));
+}
+// Changes one setting. The database decides who may; if no row was changed this throws, so a refused save is never shown as done.
+export async function saveAppConfig(sb, key, value) {
+  const rows = must(await sb.from("app_config").update({ value }).eq("key", key).select("key"));
+  if (!rows || !rows.length) throw new Error("The setting was not saved. Your access may not allow changing it.");
+}
+// "How easy to find" for a wine (1 to 5), the same field the full editor sets. Needs database update 15.
+export async function saveWineReach(sb, wineId, reach) {
+  const rows = must(await sb.from("wines").update({ reach: reach === null ? null : Number(reach) }).eq("id", wineId).select("id"));
+  if (!rows || !rows.length) throw new Error("The change was not saved. Your access may not allow it, or database update 15 has not been run.");
+}

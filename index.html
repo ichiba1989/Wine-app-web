@@ -451,6 +451,33 @@
   .brwhy { color: var(--wine); font-size: calc(13px * var(--ts)); }
   .brlens { font-size: calc(11px * min(var(--ts), 1.2)); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--slate); }
   .bview { margin-top: 8px; }
+
+  /* ---- owner page */
+  body[data-tab="owner"] #app { max-width: 1100px; }
+  .owner { padding: 4px 0 24px; }
+  .otabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+  .otab { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 9px 16px; font-size: calc(14px * min(var(--ts), 1.2)); font-weight: 500; }
+  .otab.on { background: var(--slate); color: #fff; border-color: var(--slate); }
+  .ocontrols { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .ofield { border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 8px 10px; font-size: calc(14px * min(var(--ts), 1.2)); max-width: 100%; }
+  .osearch { flex: 1 1 200px; min-width: 140px; }
+  .oprice { width: 80px; } .onumin { width: 76px; }
+  .otable .ofield { padding: 4px 6px; border-radius: 8px; }
+  .otable th, .otable td { padding-top: 5px; padding-bottom: 5px; }
+  .owt { display: inline-flex; align-items: center; gap: 4px; margin: 2px 8px 2px 0; font-size: calc(12px * min(var(--ts), 1.2)); }
+  .opill { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 12px; font-size: calc(12px * min(var(--ts), 1.2)); margin-left: 4px; }
+  .okmsg { min-height: 1.2em; font-size: calc(13px * min(var(--ts), 1.2)); color: var(--wine); margin-bottom: 4px; }
+  .onote { margin: 4px 0 8px; line-height: 1.4; }
+  .osub { font-size: calc(18px * var(--ts)); font-weight: 400; margin: 18px 0 6px; }
+  .otablewrap { overflow: auto; max-height: calc(100dvh - 280px); min-height: 160px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); -webkit-overflow-scrolling: touch; }
+  .otable { border-collapse: collapse; width: 100%; font-size: calc(13px * min(var(--ts), 1.2)); }
+  .otable th, .otable td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; vertical-align: middle; }
+  .otable thead th { position: sticky; top: 0; z-index: 1; background: #e9eee7; }
+  .otable td:nth-child(n+8) { white-space: nowrap; }
+  .onum { text-align: right !important; }
+  .oth { border: 0; background: transparent; font: inherit; font-weight: 600; color: var(--ink); padding: 0; text-align: left; }
+  .osq { display: inline-block; margin: 2px 6px 2px 0; padding: 2px 8px; border-radius: 999px; background: #e4e9e1; font-size: calc(12px * min(var(--ts), 1.2)); }
+  .osq.none { background: #f3d6d6; color: #8a1f1f; }
 </style>
 </head>
 <body>
@@ -481,6 +508,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=47" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=48" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>

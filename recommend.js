@@ -28,9 +28,26 @@ const HIT = 0.6;                                            // a category counts
 const DIM_RANGE = { acidity: 4, body: 4, tannin: 4, sweetness: 3, oak: 2 };
 const DIM_WORDS = { acidity: ["softer", "tarter"], body: ["lighter", "fuller"], tannin: ["smoother", "grippier"], sweetness: ["drier", "sweeter"], oak: ["less oaky", "oakier"] };
 
+// How much each ingredient counts in each lens. The owner page lets these be tried out; pass a partial object as `weights` to buildContext to override some.
+export const DEFAULT_WEIGHTS = {
+  confident: { taste: 0.8, hits: 0.05, ease: 0.15 },
+  unique: { rare: 0.35, grape: 0.25, odd: 0.25, price: 0.15 },
+  challenge: { grape: 0.35, region: 0.25, country: 0.15, style: 0.1, taste: 0.15 },
+  similar: { keys: 0.4, flavors: 0.3, structure: 0.3 },
+  value: { taste: 0.5, ease: 0.2, cheap: 0.3 },
+};
+export function mergeWeights(over) {
+  const out = {};
+  Object.keys(DEFAULT_WEIGHTS).forEach((lens) => {
+    out[lens] = { ...DEFAULT_WEIGHTS[lens] };
+    Object.keys((over && over[lens]) || {}).forEach((k) => { const v = Number(over[lens][k]); if (k in out[lens] && Number.isFinite(v) && v >= 0) out[lens][k] = v; });
+  });
+  return out;
+}
+
 // ---------------------------------------------------------------- the context (worked out once, shared by every lens)
 // cards: catalog cards. model: userModel(...). refs: structureMap(...). journal / states: the player's own. seed: a card, for the "similar" lens.
-export function buildContext({ cards = [], model, refs = new Map(), crowd = null, journal = [], states = [], seed = null }) {
+export function buildContext({ cards = [], model, refs = new Map(), crowd = null, journal = [], states = [], seed = null, weights = null }) {
   const live = cards.filter(isLive), byId = new Map(cards.map((c) => [c.id, c]));
   const flavorCache = new Map();
   const flavorsOf = (c) => {
@@ -63,7 +80,7 @@ export function buildContext({ cards = [], model, refs = new Map(), crowd = null
     Object.keys(DIM_RANGE).forEach((d) => { if (typeof r[d] === "number") { centroid[s].n[d] = (centroid[s].n[d] || 0) + 1; centroid[s].sum[d] = (centroid[s].sum[d] || 0) + r[d]; } }); });
   // Where each price sits among the priced wines (0 cheapest, 1 dearest). Too few prices and it says nothing: everything is neutral.
   const priced = live.filter((c) => typeof c.price === "number").map((c) => c.price).sort((a, b) => a - b);
-  return { cards: live, byId, model, refs, crowd, tried, flavorPref, flavorsOf, grapeCount, maxCount, centroid, priced, seed, seedFlavors: seed ? flavorsOf(seed) : [], hasPrices: priced.length >= 5 };
+  return { weights: mergeWeights(weights), cards: live, byId, model, refs, crowd, tried, flavorPref, flavorsOf, grapeCount, maxCount, centroid, priced, seed, seedFlavors: seed ? flavorsOf(seed) : [], hasPrices: priced.length >= 5 };
 }
 export function pricePct(ctx, c) {
   if (!ctx.hasPrices || typeof c.price !== "number") return 0.5;
@@ -112,7 +129,8 @@ export const LENSES = {
       const fl = ctx.flavorsOf(c);
       cats.push(["flavors", fl.length ? mean(fl.map((f) => to01(aff(ctx.flavorPref, f)))) : null]);
       const known = cats.filter((x) => x[1] !== null), hits = known.filter((x) => x[1] >= HIT).map((x) => x[0]);
-      const score = 0.8 * (known.length ? mean(known.map((x) => x[1])) : 0.5) + 0.05 * Math.min(4, hits.length) + 0.15 * famOf(c, model, ctx.crowd);
+      const w = ctx.weights.confident;
+      const score = w.taste * (known.length ? mean(known.map((x) => x[1])) : 0.5) + w.hits * Math.min(4, hits.length) + w.ease * famOf(c, model, ctx.crowd);
       const reason = hits.length >= 2 ? `Matches your taste in ${joinList(hits.slice(0, 3))}.` : hits.length === 1 ? `Matches your taste in ${hits[0]}.` : (Number(c.reach) >= 4 ? "Easy to find, a good place to start." : "");
       return { score, reason, hits: hits.length };
     },
@@ -122,7 +140,7 @@ export const LENSES = {
     score(ctx, c) {
       const rare = (5 - reachOf(c)) / 4, gr = grapeRarity(ctx, c), odd = oddness(ctx, c), pr = pricePct(ctx, c);
       const taste = 0.5 + 0.5 * prefOf(c, ctx.model, ctx.refs);            // never something they are known to dislike
-      const parts = [["rare", 0.35 * rare], ["grape", 0.25 * gr.value], ["odd", 0.25 * odd.value], ["price", 0.15 * pr]];
+      const w = ctx.weights.unique, parts = [["rare", w.rare * rare], ["grape", w.grape * gr.value], ["odd", w.odd * odd.value], ["price", w.price * pr]];
       const score = parts.reduce((s, p) => s + p[1], 0) * taste;
       const top = [...parts].sort((a, b) => b[1] - a[1])[0][0];            // the price is used in the score but never named
       const names = { rare: rare >= 0.5 ? "Hard to find, not on every shelf." : "", grape: gr.grape && gr.value >= 0.5 ? `Made from a rare grape in our catalog: ${grapeLabel(c, gr.grape)}.` : "",
@@ -137,7 +155,8 @@ export const LENSES = {
       const k = cardKeys(c), t = ctx.tried, pref = prefOf(c, ctx.model, ctx.refs);
       const newGrapes = k.grapes.filter((g) => !t.has(g)), grapeNew = k.grapes.length ? (newGrapes.length === k.grapes.length ? 1 : 0) : 0.5;
       const regionNew = k.region && !t.has(k.region) ? 1 : 0, countryNew = k.country && !t.has(k.country) ? 1 : 0, styleNew = k.style && !t.has(k.style) ? 1 : 0;
-      let score = 0.35 * grapeNew + 0.25 * regionNew + 0.15 * countryNew + 0.1 * styleNew + 0.15 * pref;
+      const w = ctx.weights.challenge;
+      let score = w.grape * grapeNew + w.region * regionNew + w.country * countryNew + w.style * styleNew + w.taste * pref;
       if (pref < 0.3) score *= 0.5;                                          // keep to a stretch they might enjoy, not something they are known to dislike
       const bits = [];
       if (grapeNew === 1 && k.grapes.length) bits.push(`you have not tried ${grapeLabel(c, newGrapes[0]) || "this grape"} yet`);
@@ -158,8 +177,8 @@ export const LENSES = {
       const fa = new Set(ctx.seedFlavors), fb = ctx.flavorsOf(c), sharedFl = fb.filter((f) => fa.has(f));
       const flavorJ = fa.size || fb.length ? sharedFl.length / new Set([...fa, ...fb]).size : null;
       const st = structureCloseness(ctx.refs, seed, c);
-      const parts = [[0.4, union ? inter / union : 0], [0.3, flavorJ], [0.3, st]].filter((p) => p[1] !== null);
-      const wsum = parts.reduce((s, p) => s + p[0], 0);
+      const w = ctx.weights.similar, parts = [[w.keys, union ? inter / union : 0], [w.flavors, flavorJ], [w.structure, st]].filter((p) => p[1] !== null);
+      const wsum = parts.reduce((s, p) => s + p[0], 0) || 1;
       const score = parts.reduce((s, p) => s + p[0] * p[1], 0) / wsum;
       const same = [];
       const sharedGrape = b.grapes.find((g) => a.grapes.includes(g)); if (sharedGrape) same.push(`grape (${grapeLabel(c, sharedGrape)})`);
@@ -174,7 +193,8 @@ export const LENSES = {
     label: "Everyday pick", blurb: "Likely to be liked, easy to find, gentle on the budget.",
     score(ctx, c) {
       const pct = pricePct(ctx, c);
-      const score = 0.5 * prefOf(c, ctx.model, ctx.refs) + 0.2 * famOf(c, ctx.model, ctx.crowd) + 0.3 * (1 - pct);
+      const w = ctx.weights.value;
+      const score = w.taste * prefOf(c, ctx.model, ctx.refs) + w.ease * famOf(c, ctx.model, ctx.crowd) + w.cheap * (1 - pct);
       return { score, reason: ctx.hasPrices && typeof c.price === "number" && pct <= 0.35 ? "Easy on the wallet." : (Number(c.reach) >= 4 ? "Easy to find, a good everyday pick." : "") };
     },
   },
