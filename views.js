@@ -6,8 +6,8 @@ import {
 import { splitGrapeParts, splitPlace } from "./blends.js?v=1";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
 import { flavorsForCard, placeFor } from "./flavors.js?v=1";
-import { bottleSilhouette, flavorRowHtml } from "./visuals.js?v=1";
-import { countryMapSvg, zoomPlan } from "./maps.js?v=2";
+import { bottleSilhouette, flavorRowHtml, tintFor } from "./visuals.js?v=2";
+import { countryMapSvg, zoomPlan } from "./maps.js?v=3";
 import { imageSearchUrl } from "./winelinks.js?v=1";
 
 // The grape and place inputs shared by the two forms. The form keeps one grape text and one place text; these show them as
@@ -58,23 +58,26 @@ export function visualFor(c, stats = null) {
     return { shape: fl.shape, type: fl.type, flavors: fl.picks, map: countryMapSvg(c.country, place, fl.type, 64), zoomable: !!plan };
   } catch (e) { return { shape: "bordeaux", type: c.style, flavors: [], map: "", zoomable: false }; }   // a card that cannot be read still shows its name and facts
 }
-// The card, top to bottom: a small bottle, then the name with the map beside it, then the six flavors, then the facts.
-// The flavors sit above the facts so that a short phone clips the facts, never the flavors. The wine's name is a link to a Google image search for that wine
-// (winelinks.js); wine info is not edited from the deck.
+// The card, top to bottom: the maker in small capitals with the year beside it, the wine's name as the only large text, a one-line summary (type
+// and place), then one soft tinted panel holding an abstract bottle, the six flavors and the map, and last the facts in small type.
+// A wine with no separate wine name uses its producer as the name. The wine's name is a link to a Google image search for that wine
+// (winelinks.js); wine info is not edited from the deck. The card never shows a bottle photo.
 export function cardHtml(c) {
   const labels = ["recognize", "unknown", "had"].map((k) => `<div class="swipe-label" data-label="${k}" style="background:${FAMILIARITY[k].color}">${esc(FAMILIARITY[k].label)}</div>`).join("");
-  const v = visualFor(c), href = imageSearchUrl(c);
+  const v = visualFor(c), href = imageSearchUrl(c), t = tintFor(v.type);
   const map = v.map ? `<${v.zoomable ? "button" : "div"} class="mapbtn${v.zoomable ? "" : " still"}"${v.zoomable ? ` data-zoom="${esc(c.id)}" aria-label="Show where this wine is from"` : ""}>${v.map}${v.zoomable ? '<span class="badge" aria-hidden="true">+</span>' : ""}</${v.zoomable ? "button" : "div"}>` : "";
-  return `<div class="card" id="card">
-    <div class="image">${bottleSilhouette(v.shape, v.type)}${labels}</div>
+  const place = c.appellation || c.region || c.country || "";
+  const flag = FLAGS[c.country];
+  const summary = [t.label !== "Other" ? esc(t.label) : "", place ? `${flag ? `<span class="flag">${flag}</span> ` : ""}${esc(place)}` : ""].filter(Boolean).join(" · ");
+  const facts = c.facts.filter((f) => f.text !== place);   // the place is already in the summary line
+  return `<div class="card" id="card">${labels}
     <div class="body">
-      <div class="toprow"><div class="nameblock">
-        <a class="winelink" data-wimg href="${esc(href)}" target="_blank" rel="noopener noreferrer" draggable="false" aria-label="Search Google Images for ${esc(wineName(c))}">
-        ${c.vintage ? `<div class="vintage serif">${esc(c.vintage)}</div>` : ""}
-        <div class="prow"><div class="producer serif">${esc(c.producer)}</div>${marksHtml(c)}</div>
-        ${c.cuvee ? `<div class="cuvee serif">${esc(c.cuvee)}</div>` : ""}</a></div>${map}</div>
-      ${flavorRowHtml(v.flavors)}
-      <div class="facts">${c.facts.map((f) => `<div class="${f.derived ? "derived" : ""}">${esc(f.text)}</div>`).join("")}</div>
+      <a class="winelink" data-wimg href="${esc(href)}" target="_blank" rel="noopener noreferrer" draggable="false" aria-label="Search Google Images for ${esc(wineName(c))}">
+        <div class="topline"><span class="maker">${c.cuvee ? esc(c.producer) : ""}</span>${c.vintage ? `<span class="vpill">${esc(c.vintage)}</span>` : ""}</div>
+        <div class="title serif">${esc(c.cuvee || c.producer)}</div></a>
+      ${summary ? `<div class="metaline"><span class="tdot" style="background:${t.dot}"></span><span>${summary}</span></div>` : ""}
+      <div class="visrow" style="background:${t.pin}1a">${bottleSilhouette(v.shape, v.type)}${flavorRowHtml(v.flavors)}${map}</div>
+      <div class="facts">${facts.map((f) => `<span class="${f.derived ? "derived" : ""}">${esc(f.text)}</span>`).join("")}</div>
     </div></div>`;
 }
 export function discoverHtml({ deck, interest, banner, counts, feedback = false, flaggedId = null, nudge = false }) {

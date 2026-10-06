@@ -9,7 +9,7 @@
 import { COUNTRY, VILLAGES, DETAIL } from "./geodata.js?v=1";
 import { placeFor, tables } from "./flavors.js?v=1";
 import { fold } from "./flavordata.js?v=1";
-import { tintFor } from "./visuals.js?v=1";
+import { tintFor } from "./visuals.js?v=2";
 
 const COS = (lat) => Math.cos((lat * Math.PI) / 180);
 const r1 = (n) => Math.round(n * 10) / 10;
