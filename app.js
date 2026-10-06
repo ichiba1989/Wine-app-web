@@ -29,6 +29,8 @@ import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from
 import { createFeedback } from "./feedback.js?v=3";
 import { createEditor } from "./editor.js?v=23";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=1";
+import { gamesHtml } from "./games.js?v=2";
+import { ratedWines, allProgress, mergeMemory, parseMemory } from "./bingo.js?v=1";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -67,7 +69,10 @@ if (SUPABASE_URL.startsWith("PASTE")) SUPABASE_URL = cleanProjectUrl(store.get("
 if (SUPABASE_KEY.startsWith("PASTE")) SUPABASE_KEY = store.get("wine_key") || SUPABASE_KEY;
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
+const GAMES_KEY = "wine.games";   // which bingo cards this phone has cleared (bingo.js)
 const state = {
+  g: { screen: "hub", cardId: null, sq: null },   // the Games tab: which screen is open
+  gamesMemory: parseMemory(store.get(GAMES_KEY)),
   settings: parseSettings(store.get(SETTINGS_KEY)),   // this phone's choices from the gear in the header (settings.js)
   status: "loading",            // loading | setup | error | age | main
   error: null, banner: null, tab: "discover", underage: false,
@@ -104,7 +109,7 @@ const startFor = (card) => startingValues(card, card && state.refs.get(card.id))
 const startForEntry = (entry) => (entry.wine_vintage_id ? startFor(cardById(entry.wine_vintage_id)) : startingValues(entryAsCard(entry), null));
 // What the palate uses as a baseline from the rules alone (the editor's own scores are added in profile.js).
 const ruleBase = (wineVintageId, entry) => rulesFor(wineVintageId ? cardById(wineVintageId) : entryAsCard(entry));
-const TITLES = { discover: "Discover", swipes: "Swipes", journal: "Journal", profile: "Profile", learn: "Learn", editor: "Editor" };
+const TITLES = { discover: "Discover", swipes: "Swipes", journal: "Journal", profile: "Profile", learn: "Learn", games: "Games", editor: "Editor" };
 
 // The Learn tab lives in learn.js. It saves quiz answers itself and reports save problems through the banner.
 const learn = createLearn({ sb: () => state.sb, user: () => state.user, profile: () => state.profile, onError: (m) => setBanner(m) });
@@ -269,13 +274,21 @@ function shellHtml() {
   return `<div class="top"><h1 class="serif" id="title"></h1><div class="topright"><span class="muted small">Early build</span><button class="gear" data-action="settings" aria-label="Settings">&#9881;</button></div></div>
     <div id="gbanner" class="banner gb" data-action="dismiss" hidden></div>
     <div class="content" id="content"><div id="tabbody"></div></div>
-    <nav class="tabs">${tab("discover", "Discover")}${tab("swipes", "Swipes")}${tab("journal", "Journal")}${tab("profile", "Profile")}${tab("learn", "Learn")}${editorLink}</nav>`;
+    <nav class="tabs">${tab("discover", "Discover")}${tab("swipes", "Swipes")}${tab("journal", "Journal")}${tab("profile", "Profile")}${tab("learn", "Learn")}${tab("games", "Games")}${editorLink}</nav>`;
 }
 function renderBody() {
   const body = $("#tabbody");
   if (!body) return;
   document.body.dataset.tab = state.tab;   // lets Discover use a slimmer header so the card is bigger
   try { drawTab(body); } catch (e) { setBanner("Could not draw this screen: " + (e.message || e)); }
+}
+// Wine Bingo is worked out from the journal each time the Games tab is drawn: only rated wines count (see bingo.js).
+function gamesView() {
+  const cardsById = new Map(state.cards.map((c) => [c.id, c]));
+  const progress = allProgress(ratedWines(state.journal, cardsById));
+  const { memory, news } = mergeMemory(state.gamesMemory, progress);
+  if (memory !== state.gamesMemory) { state.gamesMemory = memory; store.set(GAMES_KEY, JSON.stringify(memory)); }
+  return gamesHtml(state.g, { progress, memory, news });
 }
 function drawTab(body) {
   if (state.tab === "discover") {
@@ -285,6 +298,8 @@ function drawTab(body) {
     settlePhotos();
   } else if (state.tab === "swipes") {
     body.innerHTML = swipesHtml(swipeLists(state.cards, state.states, state.journal), { ...state.sw, noFam: new Set(state.states.filter((x) => !x.familiarity).map((x) => x.wine_vintage_id)) }, state.photoUrls);
+  } else if (state.tab === "games") {
+    body.innerHTML = gamesView();
   } else if (state.tab === "learn") {
     learn.mount(body);
   } else if (state.tab === "profile") {
@@ -1043,6 +1058,14 @@ document.addEventListener("click", async (ev) => {
       fly(el, a);
     }
     else if (action === "zoomcard") { const el = $("#card"); if (el && el.__toggleZoom) el.__toggleZoom(); }
+    else if (action === "game") {     // game:hub, game:bingo, game:card:ID, game:sq:N
+      if (a === "hub") state.g = { screen: "hub", cardId: null, sq: null };
+      else if (a === "bingo") state.g = { screen: "bingo", cardId: null, sq: null };
+      else if (a === "card") state.g = { screen: "card", cardId: b, sq: null };
+      else if (a === "sq") state.g = { ...state.g, sq: state.g.sq === Number(b) ? null : Number(b) };
+      renderBody();
+      if (a !== "sq") { const c = $("#content"); if (c) c.scrollTop = 0; }
+    }
     else if (action === "settings") openSettings();
     else if (action === "setclose") closeSettings();
     else if (action === "set") {      // set:text:large, set:swipe:off, ...
@@ -1064,7 +1087,7 @@ document.addEventListener("click", async (ev) => {
       if (state.tab === "profile" && a !== "profile") profileTab.leave();
       if (state.tab === "editor" && a !== "editor") editorTab.leave();
       state.tab = a;
-      if (a === "swipes" || a === "journal" || a === "profile") await refreshData();
+      if (a === "swipes" || a === "journal" || a === "profile" || a === "games") await refreshData();
       render();
     }
     else if (action === "toggle") { state.sw.open[a] = !state.sw.open[a]; renderBody(); }

@@ -403,6 +403,42 @@
   .snote { margin-top: 6px; line-height: 1.4; }
   .gopt:disabled { opacity: .5; }
   html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+
+  /* ---- games */
+  .games { padding: 4px 4px 24px; }
+  .gh { font-size: calc(24px * var(--ts)); font-weight: 400; margin: 6px 0 6px; }
+  .gtile { display: block; width: 100%; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px; margin-top: 12px; }
+  .gtile.soon { opacity: .6; border-style: dashed; }
+  .gt-title { font-size: calc(22px * var(--ts)); margin-bottom: 4px; }
+  .gt-meta { margin-top: 10px; font-size: calc(13px * var(--ts)); font-weight: 600; color: var(--wine); }
+  .back { padding: 8px 0; font-size: calc(14px * var(--ts)); }
+  .btier { margin-top: 18px; }
+  .btier.locked { opacity: .75; border: 1px dashed var(--line); border-radius: 14px; padding: 12px; }
+  .bt-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .bt-title { font-size: calc(19px * var(--ts)); }
+  .bt-blurb { margin: 2px 0 6px; }
+  .bcard { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; margin-top: 8px; }
+  .mini { flex: 0 0 auto; display: grid; grid-template-columns: repeat(3, 12px); gap: 3px; }
+  .mini i { width: 12px; height: 12px; border-radius: 3px; background: #dfe5dc; }
+  .mini i.on { background: var(--wine); }
+  .bc-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .bc-title { font-size: calc(17px * var(--ts)); }
+  .bc-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .gbadge { display: inline-block; font-size: calc(11px * min(var(--ts), 1.2)); font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #e4e9e1; color: var(--moss); }
+  .gbadge.ok { background: #d6e8d6; color: #2F6B3A; } .gbadge.star { background: #f3e3b8; color: #7a5a10; } .gbadge.draft { background: #f1ddc9; color: #9A5A1E; }
+  .gnews { margin: 8px 0; } .okbox.gnews { background: #e1efdf; border-radius: 12px; padding: 10px 12px; font-size: calc(14px * var(--ts)); }
+  .bstatus { margin: 12px 0 8px; font-size: calc(14px * var(--ts)); font-weight: 600; }
+  .bgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .bsq { position: relative; aspect-ratio: 1; min-height: 92px; display: flex; align-items: center; justify-content: center; text-align: center; padding: 8px 4px; border: 1.5px solid var(--line); background: #fff; border-radius: 14px; }
+  .bs-label { font-size: calc(12.5px * min(var(--ts), 1.2)); font-weight: 500; line-height: 1.2; overflow-wrap: anywhere; }
+  .bsq.on { background: #f3e6ea; border-color: var(--wine); } .bsq.on .bs-label { font-weight: 600; }
+  .bsq.line { background: var(--wine); border-color: var(--wine); color: #fff; }
+  .bsq.sel { outline: 3px solid var(--slate); outline-offset: 2px; }
+  .bs-check { position: absolute; top: 4px; right: 8px; font-size: calc(14px * min(var(--ts), 1.2)); font-weight: 700; }
+  .bdetail { margin-top: 14px; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+  .bdetail .btn { margin-top: 10px; }
+  .bnote { margin-top: 12px; line-height: 1.4; }
+  .tabs button { min-width: 0; padding-left: 2px; padding-right: 2px; font-size: calc(13px * min(var(--ts), 1.15)); }
 </style>
 </head>
 <body>
@@ -433,6 +469,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=42" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=44" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>
