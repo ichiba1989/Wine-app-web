@@ -29,9 +29,9 @@ import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from
 import { createFeedback } from "./feedback.js?v=3";
 import { createEditor } from "./editor.js?v=23";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=1";
-import { gamesHtml } from "./games.js?v=4";
-import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard, cardProgress } from "./bingo.js?v=2";
-import { recommend } from "./recommend.js?v=1";
+import { gamesHtml } from "./games.js?v=5";
+import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=2";
+import { recommendMix } from "./recommend.js?v=2";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -294,8 +294,8 @@ function gamesView() {
   if (c && Number.isInteger(state.g.sq) && !progress.get(c.id).done[state.g.sq]) help = squareHelp(c.squares[state.g.sq], cardsById);
   return gamesHtml(state.g, { progress, memory, news, help });
 }
-// Help for an empty square: a wine already in the journal that only needs rating, or else wines picked for this player's taste (recommend.js).
-// The same recommend() can serve other games: give it a different accept().
+// Help for an empty square: a wine already in the journal that only needs rating, or else a few wines that would fill it, each from a different angle
+// (recommend.js lenses: a safe bet, something different, a stretch). Other games can call recommendMix() or recommend() with their own accept() and lenses.
 function squareHelp(square, cardsById) {
   const unrated = unratedMatches(square.test, state.journal, cardsById);
   if (unrated.length) return { unrated, recs: [] };
@@ -303,14 +303,7 @@ function squareHelp(square, cardsById) {
   const model = userModel({ cards: state.cards, states: state.states, journal: state.journal, quiz: state.quiz, refs });
   const leaveOut = new Set([...state.journal.filter((e) => e.verdict && e.wine_vintage_id).map((e) => e.wine_vintage_id), ...state.states.filter((x) => x.interest === "nope").map((x) => x.wine_vintage_id)]);
   const cold = model.swipeCount + model.journalCount < 5;   // too little history to say "your taste"
-  return { unrated: [], cold, recs: recommend({ cards: state.cards, model, refs, crowd: state.crowd, exclude: leaveOut, accept: (c) => bingoMatches(square.test, cardFacts(c)), limit: 3 }) };
-}
-// A double-tap on an empty square that has an unrated journal wine opens that wine's rating sheet.
-function unratedForSquare(n) {
-  const c = bingoCard(state.g.cardId), cardsById = new Map(state.cards.map((x) => [x.id, x]));
-  if (!c || !c.squares[n]) return null;
-  if (cardProgress(c, ratedWines(state.journal, cardsById)).done[n]) return null;
-  return unratedMatches(c.squares[n].test, state.journal, cardsById)[0] || null;
+  return { unrated: [], cold, recs: recommendMix({ cards: state.cards, model, refs, crowd: state.crowd, journal: state.journal, states: state.states, exclude: leaveOut, accept: (c) => bingoMatches(square.test, cardFacts(c)), lenses: ["confident", "unique", "challenge"] }) };
 }
 function drawTab(body) {
   if (state.tab === "discover") {
@@ -1084,12 +1077,7 @@ document.addEventListener("click", async (ev) => {
       if (a === "hub") state.g = { screen: "hub", cardId: null, sq: null };
       else if (a === "bingo") state.g = { screen: "bingo", cardId: null, sq: null };
       else if (a === "card") state.g = { screen: "card", cardId: b, sq: null };
-      else if (a === "sq") {
-        const n = Number(b), now = Date.now(), again = state.g.sq === n && now - (state.g.t || 0) < 450;
-        state.g = { ...state.g, sq: n, t: now };
-        const entry = again ? unratedForSquare(n) : null;
-        if (entry) { renderBody(); await openEntry(entry); return; }
-      }
+      else if (a === "sq") state.g = { ...state.g, sq: Number(b) };
       renderBody();
       if (a === "sq") {                 // the details sit under the grid: bring them into view
         const d = document.querySelector(".bdetail");

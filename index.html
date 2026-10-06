@@ -449,6 +449,8 @@
   .brec { display: flex; flex-direction: column; gap: 3px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
   .brec .serif { font-size: calc(16px * var(--ts)); } .brec .pill { align-self: flex-start; margin-top: 6px; }
   .brwhy { color: var(--wine); font-size: calc(13px * var(--ts)); }
+  .brlens { font-size: calc(11px * min(var(--ts), 1.2)); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--slate); }
+  .bview { margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -479,6 +481,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=46" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=47" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>

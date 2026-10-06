@@ -55,11 +55,11 @@ function helpHtml(s, help, c) {
   if (help && help.unrated && help.unrated.length) {
     return hint + `<div class="bhelp"><div class="muted small">You already have ${help.unrated.length === 1 ? "this wine" : "these wines"} in your Journal without a rating:</div>` +
       help.unrated.slice(0, 3).map((e) => `<button class="brow" data-action="entry:${esc(e.id)}"><span class="serif">${esc(entryName(e))}</span><span class="pill dark">Rate it</span></button>`).join("") +
-      `<div class="muted small">Tip: double-tap this square to rate ${esc(entryName(help.unrated[0]))}.</div></div>`;
+      `</div>`;
   }
   if (help && help.recs && help.recs.length) {
-    return hint + `<div class="bhelp"><div class="muted small">${help.cold ? "A good place to start, and it would fill this square:" : "Picked for your taste, and it would fill this square:"}</div>` +
-      help.recs.map((r) => `<div class="brec"><div class="serif">${esc(wineName(r.card))}</div><div class="muted small">${esc(infoLine(r.card))}</div>${r.reason ? `<div class="small brwhy">${esc(r.reason)}</div>` : ""}
+    return hint + `<div class="bhelp"><div class="muted small">${help.cold ? "A few places to start, and each would fill this square:" : "Picked for you, from different angles. Each would fill this square:"}</div>` +
+      help.recs.map((r) => `<div class="brec"><div class="brlens">${esc(r.label)}</div><div class="serif">${esc(wineName(r.card))}</div><div class="muted small">${esc(infoLine(r.card))}</div>${r.reason ? `<div class="small brwhy">${esc(r.reason)}</div>` : ""}
         <button class="pill" data-action="review:${esc(r.card.id)}">I've had it: rate it</button></div>`).join("") + `</div>`;
   }
   const tip = c && c.note ? " " + esc(c.note) : "";
@@ -77,7 +77,7 @@ function cardScreen(c, g, { progress, memory, news, help }) {
   if (sel !== null) {
     const s = c.squares[sel], w = p.filled[sel];
     detail = w
-      ? `<div class="bfilled">${photoHtml(w, "bd-photo")}<div class="ptext"><b>${esc(s.label)}</b><br>Filled by <b>${esc(w.name)}</b>.</div></div>`
+      ? `<div class="bfilled">${photoHtml(w, "bd-photo")}<div class="ptext"><b>${esc(s.label)}</b><br>Filled by <b>${esc(w.name)}</b>.${w.entryId ? `<br><button class="pill dark bview" data-action="entry:${esc(w.entryId)}">View my rating</button>` : ""}</div></div>`
       : helpHtml(s, help, c);
   }
   const status = (p.blackout ? "Blackout!" : p.bingo ? `Bingo: ${p.lines.length} ${p.lines.length === 1 ? "line" : "lines"}` : "No line yet") + ` · ${p.count} of 9 squares`;
