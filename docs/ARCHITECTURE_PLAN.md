@@ -415,7 +415,7 @@ Phases 3–5 ordering is a recommendation; reorder based on what Phase 2 learns.
 ## 15. Requirements needing clarification before development
 
 **Product/UX**
-1. **Swipe semantics.** The prototype swipes record *familiarity* (recognize / don't know / had) plus a separate *interest* switch; your spec defines ❤️ I'd try it / 👎 Not for me / 🤷 I don't know. Confirm the spec version replaces the prototype's model, and whether "I've had this bottle" is still a swipe-time option.
+1. **Swipe semantics (resolved).** Reactions are recognize / don't know / had, each implying interest, plus a separate Not interested button. This replaces the original emoji spec; sections 2, 9 and the MVP list above still use the old ❤️/👎/🤷 wording and should be read with that mapping.
 2. **Prediction timing.** Is the prediction a distinct step when the user is about to drink (e.g. after scanning/choosing a wine to drink), or collected at swipe time or both? Can a user predict without ever swiping?
 3. **Repeat consumption.** Is "number of times consumed" a counter on one entry, or one journal entry per occasion (the plan assumes per-occasion rows)? Does each get its own verdict?
 4. **Verdict edits.** When a user edits a historical verdict, should the model treat it as a correction (replace) or a change of mind (history)?

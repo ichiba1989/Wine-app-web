@@ -63,7 +63,7 @@ Tabs: Discover, Swipes, Journal, Profile, Learn, and Editor (only for users with
 
 ## Prototype vs. product vision (known differences)
 
-The product spec asks for three swipe reactions: ❤️ I'd try it / 👎 Not for me / 🤷 I don't know, with "I don't know" recorded separately and never treated as neutral. The prototype's swipe instead records **familiarity** (`recognize` / `unknown` / `had`) plus a separate **interest** switch (`try` / `nope`) (`logic.js` `FAMILIARITY`, `INTEREST`). Also not yet present: a pre-consumption *prediction* entity, a community-perception layer with privacy thresholds, a separate market-observation system, a bottle scanner, challenges, and native apps. Treat these as roadmap items, not bugs, and do not add them unasked.
+**Swipe model (current, confirmed by the owner):** the reactions are **I recognize it** (swipe right), **I don't know it** (swipe left), **I've had this bottle** (swipe up, also adds the wine to the journal), plus a separate **Not interested** button. The first three imply interest; interest is `try` unless the person marks `nope` (`logic.js` `FAMILIARITY`, `INTEREST`, `decideSwipe`; stored via the `record_swipe` RPC and `encounters`). This **replaces** the original ❤️ / 👎 / 🤷 spec, so do not reintroduce the emoji model. "I don't know it" is recorded separately and is never treated as a like or dislike. Not yet present: a pre-consumption *prediction* entity, a community-perception layer with privacy thresholds, a separate market-observation system, a bottle scanner, challenges, and native apps. Treat these as roadmap items, not bugs, and do not add them unasked.
 
 ## Product rules that constrain every change
 
