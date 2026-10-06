@@ -16,7 +16,7 @@ import { createLearn } from "./learn.js?v=3";
 import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=1";
 import { loadPrices, applyPrices, tidyFacts } from "./pricing.js?v=1";
-import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=3";
+import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=4";
 import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=2";
 import { applyVisualTables } from "./visualdata.js?v=1";
 import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=1";
@@ -887,7 +887,7 @@ document.addEventListener("click", async (ev) => {
     catch (e) { state.consentBusy = false; state.consentError = "Could not save that: " + (e.message || e); render(); }
   }
 });
-// The questions (feel.js): "Was the wine balanced?", what stood out and how much, and alone or with food. Answering opens more options, so the
+// The questions (feel.js): "Did the wine taste as expected?", what stood out and how much, and alone or with food. Answering opens more options, so the
 // block is redrawn after each tap. The answers set that bottle's structure ratings behind the scenes (private; they feed only the palate).
 document.addEventListener("click", (ev) => {
   const q = ev.target.closest("[data-taste]");

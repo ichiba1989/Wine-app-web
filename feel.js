@@ -1,5 +1,5 @@
 // "How did it taste?": the conversational way to rate structure. Players do not see the structure sliders.
-//   Was the wine balanced?   Yes: everything is as expected, nothing to adjust.   No: what stood out?
+//   Did the wine taste as expected? (stored as "balanced", an older name kept so saved answers still work.)   Yes: everything is as expected, nothing to adjust.   No: what stood out?
 //   Sour, Fruity, Sweet, Thin, Heavy or Drying (as many as apply), and for each one how much (a bit, quite, very).
 //   Would you drink it alone, with food, or either?
 // The answers are turned into the acidity, body, tannin and sweetness ratings of that bottle, relative to what the wine is expected to be.
@@ -80,7 +80,7 @@ const chip = (on, data, label) => `<button class="gopt${on ? " on" : ""}" data-t
 // The questions themselves. They are redrawn after each tap, because answering opens more options.
 export function tasteInnerHtml(sheet) {
   const t = sheet.taste || { balanced: null, notes: {}, pairing: null };
-  let h = `<div class="tq"><div class="tqtext">Was the wine balanced?</div><div class="gopts">${chip(t.balanced === true, "balanced:yes", "Yes")}${chip(t.balanced === false, "balanced:no", "No")}</div>
+  let h = `<div class="tq"><div class="tqtext">Did the wine taste as expected?</div><div class="gopts">${chip(t.balanced === true, "balanced:yes", "Yes")}${chip(t.balanced === false, "balanced:no", "No")}</div>
     <div class="muted small" style="margin-top:6px">${t.balanced === true ? "Nothing stood out: it tasted as expected." : t.balanced === false ? "" : "Yes if nothing stood out."}</div></div>`;
   if (t.balanced === false) {
     h += `<div class="tq"><div class="tqtext">What stood out?</div><div class="muted small" style="margin-bottom:6px">Pick as many as apply.</div>
