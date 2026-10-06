@@ -3,7 +3,7 @@
 Goal (from the owner): a conversational tone that avoids wine-specific terms in most of the app.
 Wine terms are fine in **Learn**, the **professional tasting grid** and the **Editor**.
 
-**Status:** nothing below has been changed yet, except the review question, which is now "Did the wine taste as expected?"
+**Status:** the review question is now "Did the wine taste as expected?". **Sections A, B and C were approved and applied.** Sections D, E and F were left as they are for now.
 Each item has the current text, a *suggestion* (not a decision), and where it lives. Mark each one **Yes / No / Edit**.
 
 **How this list was made:** a text search of the player-facing files (`views.js`, `feel.js`, `logic.js`, `profile.js`, `app.js`, `consent.js`, `account.js`). It is not exhaustive. The Discover card, tab screens and some pop-ups were only partly read, so more may turn up when we look at the running app.
@@ -12,7 +12,7 @@ Each item has the current text, a *suggestion* (not a decision), and where it li
 
 ---
 
-## A. Rating sheet (the "How was it?" window)
+## A. Rating sheet (done) (the "How was it?" window)
 
 | # | Current | Suggested | Where |
 |---|---|---|---|
@@ -22,7 +22,7 @@ Each item has the current text, a *suggestion* (not a decision), and where it li
 | A4 | "Most wines are dry and still. Change only what you noticed." | Fine as is | `views.js` |
 | A5 | The five verdict labels, such as "Dislike, but understand its position" | **Keep.** These are the product's own wording | `logic.js` `VERDICTS` |
 
-## B. "How did it taste?" questions
+## B. "How did it taste?" questions (done)
 
 | # | Current | Suggested | Where |
 |---|---|---|---|
@@ -31,7 +31,7 @@ Each item has the current text, a *suggestion* (not a decision), and where it li
 | B3 | "Dessert-like" (under Sweet) | Fine as is | `feel.js` |
 | B4 | Footnote "…only shape your **palate** profile" | "…only shape your taste profile" | `feel.js` `NOTE` |
 
-## C. Profile tab
+## C. Profile tab (done)
 
 | # | Current | Suggested | Where |
 |---|---|---|---|
@@ -41,7 +41,7 @@ Each item has the current text, a *suggestion* (not a decision), and where it li
 | C4 | "You tend to notice acidity more/less than the **baseline**" | "You notice how tart wines are more/less than most people expect" (needs a plain name per dimension, see E) | `profile.js` |
 | C5 | Learn topics: Grapes, Regions, Producers, Winemaking | **Keep.** This is wine learning | `profile.js`, `learn.js` |
 
-## D. Adding or changing a wine
+## D. Adding or changing a wine (not changed)
 
 | # | Current | Suggested | Where |
 |---|---|---|---|
@@ -53,7 +53,7 @@ Each item has the current text, a *suggestion* (not a decision), and where it li
 | D6 | **Region** placeholder "For example Piedmont, or Barolo, Piedmont" | "Where it's from, for example Piedmont, Italy" | `views.js` |
 | D7 | Placeholder "The grape on the label (only if you know). GSM works" | Keep. "GSM" is a bottle term, so leave it | `views.js` |
 
-## E. Structure words (acidity, body, tannin, oak, sweetness)
+## E. Structure words (not changed) (acidity, body, tannin, oak, sweetness)
 
 These show on the sliders (professionals) and in the Palate bars. Professionals need the real words, so the idea is a **second set of display names for ordinary players only**, keeping the real names for the professional grid and the Editor.
 
@@ -68,7 +68,7 @@ These show on the sliders (professionals) and in the Palate bars. Professionals 
 
 Where: `logic.js` `DIMS`. Needs a decision before anything is changed.
 
-## F. Journal and Swipes lists
+## F. Journal and Swipes lists (not changed)
 
 | # | Current | Suggested | Where |
 |---|---|---|---|
@@ -88,3 +88,10 @@ Where: `logic.js` `DIMS`. Needs a decision before anything is changed.
 ## H. Not yet reviewed
 
 Discover card text and empty states, onboarding, error messages, the account and feedback screens, and any text the app builds in `app.js`. Best checked on the running app.
+
+## Notes on what was applied
+
+- A2 and A3 only change what professionals see. Ordinary players already saw "How it tasted" on step 2, and step 3 is skipped for them.
+- C4 now reads "You tend to notice acidity more/less than is typical" because the plain dimension names (section E) were not approved.
+- B1 also changed the follow-up question to "How much does it dry your mouth?".
+- Still using the old wording, on purpose: the consent and privacy text ("learn your palate", "drying"), the account-deletion list ("trophies and palate"), the tagline, the professional tasting grid and the Editor. Changing the consent or privacy wording would need a `CONSENT_VERSION` bump, which asks every player to accept again.

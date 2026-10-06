@@ -11,12 +11,12 @@ import { dimsFor, dimMeta, clampDimValue, esc } from "./logic.js?v=10";
 
 // What can stand out, and how much (level 1, 2 or 3). Each effect is a change from the wine's expected level; sweetness is the step noticed.
 export const NOTES = [
-  { id: "sour", label: "Sour", ask: "How sour?", levels: ["A bit", "Quite", "Very sharp"], effects: { acidity: [1, 2, 3], tannin: [0, 1, 1] } },
+  { id: "sour", label: "Sour", ask: "How sour?", levels: ["A bit", "Quite", "Very sour"], effects: { acidity: [1, 2, 3], tannin: [0, 1, 1] } },
   { id: "fruity", label: "Fruity", ask: "How fruity?", levels: ["A bit", "Quite", "Very"], effects: { acidity: [-1, -1, -2] } },
   { id: "sweet", label: "Sweet", ask: "How sweet?", levels: ["A hint", "Clearly", "Dessert-like"], effects: { sweetness: [1, 2, 3] }, set: true },
   { id: "thin", label: "Thin", ask: "How thin?", levels: ["A bit", "Quite", "Very watery"], effects: { body: [-1, -2, -3] } },
   { id: "heavy", label: "Heavy", ask: "How heavy?", levels: ["A bit", "Quite", "Very"], effects: { body: [1, 2, 3] } },
-  { id: "drying", label: "Drying", ask: "How drying?", levels: ["A bit", "Quite", "Very grippy"], effects: { tannin: [1, 2, 3] }, needs: "tannin" },
+  { id: "drying", label: "Makes my mouth dry", ask: "How much does it dry your mouth?", levels: ["A bit", "Quite", "Very strong"], effects: { tannin: [1, 2, 3] }, needs: "tannin" },
 ];
 export const PAIRINGS = [{ id: "alone", label: "Alone" }, { id: "food", label: "With food" }, { id: "either", label: "Either" }];
 export const SNAP_KEYS = ["acidity", "body", "tannin", "oak", "sweetness"];
@@ -91,7 +91,7 @@ export function tasteInnerHtml(sheet) {
   h += `<div class="tq"><div class="tqtext">Would you drink it\u2026</div><div class="gopts">${PAIRINGS.map((p) => chip(t.pairing === p.id, "pairing:" + p.id, p.label)).join("")}</div></div>`;
   return h;
 }
-const NOTE = `<div class="muted small" style="margin-top:12px">Every question is optional. Your answers are private and only shape your palate profile; they do not change anything about the wine.</div>`;
+const NOTE = `<div class="muted small" style="margin-top:12px">Every question is optional. Your answers are private and only shape your taste profile; they do not change anything about the wine.</div>`;
 // For ordinary players: the whole of step 2.
 export function tastePageHtml(sheet) {
   return `<h3 class="serif">How did it taste?</h3><div data-tasteblock>${tasteInnerHtml(sheet)}</div>${NOTE}`;

@@ -251,9 +251,9 @@ export function syncChoiceControl(d, x, attr = "data-sheet", root = document) {
 }
 // The rating window is a short run of numbered pages. Swipe, use the corner arrows, or tap a number. Save is on every page.
 export const SHEET_PAGES = [
-  { id: "verdict", title: "Verdict" },
-  { id: "structure", title: "Structure" },
-  { id: "character", title: "Sweetness and CO\u2082" },
+  { id: "verdict", title: "Your take" },
+  { id: "structure", title: "How it tasted" },
+  { id: "character", title: "Sweetness and bubbles" },
   { id: "details", title: "Details" },
   { id: "notes", title: "Notes and photos" },
 ];
@@ -263,12 +263,12 @@ export const wineCardHtml = (sheet) => `<div class="winecard"><div class="muted 
 // Page 2: the type of wine, then all the sliders together (acidity, body, tannin, oak).
 export function structurePageHtml(sheet) {
   const bars = barDims(sheet.style).filter((d) => sheet.dims[d.key]).map((d) => dimControlHtml(d, sheet.dims[d.key])).join("");
-  return `<h3 class="serif">Wine structure</h3>${bars}`;
+  return `<h3 class="serif">How it tasted</h3>${bars}`;
 }
 // Page 3: the buttons together (sweetness, and CO2 for wines that are not red).
 export function characterPageHtml(sheet) {
   const choices = choiceDims(sheet.style).filter((d) => sheet.dims[d.key]).map((d) => dimControlHtml(d, sheet.dims[d.key])).join("");
-  return `<h3 class="serif">Sweetness and CO\u2082</h3><div class="muted small">Most wines are dry and still. Change only what you noticed.</div>${choices}`;
+  return `<h3 class="serif">Sweetness and bubbles</h3><div class="muted small">Most wines are dry and still. Change only what you noticed.</div>${choices}`;
 }
 // The big button at the bottom: Next on the first four pages, Save on the last. (Save stays at the top of every page.)
 // Page 1 waits for a verdict, because choosing one is what moves on.

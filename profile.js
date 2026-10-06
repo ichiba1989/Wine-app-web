@@ -2,7 +2,7 @@
 // The rules at the top are pure (no browser, no network) so they can be tested on their own.
 // The controller at the bottom loads what it needs from Supabase and draws the tab.
 import { DIMS, dimRange, VERDICTS, FLAGS, esc, styleLabel, verdictShort, entryCard, entryName } from "./logic.js?v=10";
-import { marksHtml } from "./views.js?v=15";
+import { marksHtml } from "./views.js?v=19";
 import { accountCardHtml } from "./account.js?v=5";
 import { feedbackCardHtml } from "./feedback.js?v=3";
 import { entryInfoLine } from "./wineline.js?v=1";
@@ -99,7 +99,7 @@ const listText = (a) => (a.length <= 1 ? a[0] || "" : `${a.slice(0, -1).join(", 
 
 // One paragraph that sums up the structure lean and the other preferences seen so far.
 export function palateSummary(entries, palate) {
-  if (entries.length < 2) return "Add a couple of wines to your journal and a summary of your palate will appear here.";
+  if (entries.length < 2) return "Add a couple of wines to your journal and a summary of your taste will appear here.";
   const top = (get, sign = 1, n = 2) => {
     const m = {};
     entries.forEach((e) => { const k = get(e); const w = weightOf(e.verdict) * sign; if (k && w > 0) m[k] = (m[k] || 0) + w; });
@@ -107,7 +107,7 @@ export function palateSummary(entries, palate) {
   };
   const out = [];
   const leans = leanWords(palate);
-  out.push(leans.length ? `So far you lean ${listText(leans)}.` : "There is no clear lean in wine structure yet.");
+  out.push(leans.length ? `So far you lean ${listText(leans)}.` : "We cannot see a clear pattern in what you like yet.");
   const grapes = top((e) => e.grape);
   const countries = top((e) => e.country);
   if (grapes.length && countries.length) out.push(`Your favorites include ${listText(grapes)}, most often from ${listText(countries)}.`);
@@ -207,7 +207,7 @@ export function computeTrophies({ journal, states, answers, questionsById, runs,
     T("bubbles", "sparkles", "Bubbles", (n) => `Rate ${n} sparkling wines`, rated.filter((e) => e.style === "sparkling").length, [1, 3, 10]),
     T("photos", "camera", "Shutterbug", (n) => `Add photos to ${n} reviews`, rated.filter((e) => e.first_photo_path).length, [1, 5, 20]),
     T("had", "check", "Been There", (n) => `Swipe up on ${n} bottles you've had`, states.filter((s) => s.familiarity === "had").length, [1, 5, 20]),
-    T("trust", "award", "Trust Your Palate", (n) => `Tell us what stood out in ${n} wines`, adjustedEntries, [5, 25, 100]),
+    T("trust", "award", "Trust Your Taste", (n) => `Tell us what stood out in ${n} wines`, adjustedEntries, [5, 25, 100]),
     T("correct", "cap", "Quiz Starter", (n) => `Answer ${n} questions correctly`, correct.length, [5, 25, 100, 300]),
     T("streak", "flame", "On a Roll", (n) => `Get ${n} correct in a row`, best, [5, 10, 20]),
     T("second", "rotate", "Second Chance", (n) => `Turn ${n} missed questions into correct answers`, fixed.size, [1, 5, 20]),
@@ -241,7 +241,7 @@ const PATHS = {
 };
 const SUBS = [
   { id: "overview", label: "Overview", icon: "grid" },
-  { id: "palate", label: "Palate", icon: "glass" },
+  { id: "palate", label: "Taste", icon: "glass" },
   { id: "knowledge", label: "Knowledge", icon: "cap" },
   { id: "explored", label: "Explored", icon: "compass" },
   { id: "trophies", label: "Trophies", icon: "trophy" },
@@ -259,7 +259,7 @@ function overviewHtml(P) {
   return `<h2 class="serif ph">Overview</h2>
     <div class="pgrid">${stat("Wines rated", rated.length)}${stat("Wines swiped", P.states.length)}${stat("Quiz completed", P.questions.length ? `${P.quiz.overall.completed}%` : "–")}${stat("Quiz correct", P.quiz.overall.correct === null ? "–" : `${P.quiz.overall.correct}%`)}</div>
     ${card("Trophies", `<div class="serif pbig">${acquired}</div><div class="prank">${esc(trophyRank(acquired))}</div>`)}
-    ${card("Your palate", `<p class="ptext">${leans.length ? `You lean ${esc(leans.join(", "))}.` : "Add a couple more wines to your journal to see your palate take shape."}</p>`)}
+    ${card("Your taste", `<p class="ptext">${leans.length ? `You lean ${esc(leans.join(", "))}.` : "Add a couple more wines to your journal to see your taste take shape."}</p>`)}
     ${latest ? card("Latest rating", `<div class="iname"><span class="serif">${esc(entryName(latest))}</span><button class="ed edbtn" data-action="wineinfo-entry:${latest.id}" aria-label="Change wine info">&#9998;</button>${marksHtml(entryCard(latest), 16)}</div>${entryInfoLine(latest, latest.wine_vintage_id ? (P.cards || []).find((c) => c.id === latest.wine_vintage_id) : null) ? `<div class="muted small">${esc(entryInfoLine(latest, latest.wine_vintage_id ? (P.cards || []).find((c) => c.id === latest.wine_vintage_id) : null))}</div>` : ""}<div class="small wine"><b>${esc(verdictShort(latest.verdict))}</b></div>`) : ""}
     ${accountCardHtml(P.user)}
     ${feedbackCardHtml()}
@@ -270,12 +270,12 @@ function palateHtml(P) {
   const bars = P.palate.map((d) => {
     const strong = d.n >= 2;
     const msg = !strong ? "Needs more wines" : d.lean > 0.2 ? `You lean ${d.hi}` : d.lean < -0.2 ? `You lean ${d.lo}` : "No clear lean yet";
-    const pmsg = d.pN >= 2 && Math.abs(d.offset) >= d.notice ? `You tend to notice ${d.key === "co2" ? d.name : d.name.toLowerCase()} ${d.offset > 0 ? "more" : "less"} than the baseline` : "";
+    const pmsg = d.pN >= 2 && Math.abs(d.offset) >= d.notice ? `You tend to notice ${d.key === "co2" ? d.name : d.name.toLowerCase()} ${d.offset > 0 ? "more" : "less"} than is typical` : "";
     return `<div class="dimrow2"><div class="dimends"><span>${d.lo}</span><b>${d.name}</b><span>${d.hi}</span></div>
       <div class="leanbar"><div class="knob" style="left:calc(${((d.lean + 1) / 2) * 100}% - 8px);opacity:${strong ? 1 : 0.35}"></div></div>
       <div class="small">${msg}</div>${pmsg ? `<div class="small slate">${pmsg}</div>` : ""}</div>`;
   }).join("");
-  return `<h2 class="serif ph">Your palate so far</h2><div class="pcard">${bars}</div><p class="ptext para">${esc(palateSummary(P.entries, P.palate))}</p>`;
+  return `<h2 class="serif ph">Your taste so far</h2><div class="pcard">${bars}</div><p class="ptext para">${esc(palateSummary(P.entries, P.palate))}</p>`;
 }
 
 const WHEEL_COLORS = ["#7B1E3A", "#3E5C76", "#3A4B40", "#B08A3E", "#7A5C8E"];

@@ -11,12 +11,12 @@ import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=2";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=2";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=18";
+  visualFor, discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=19";
 import { createLearn } from "./learn.js?v=3";
 import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=1";
 import { loadPrices, applyPrices, tidyFacts } from "./pricing.js?v=1";
-import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=4";
+import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=5";
 import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=2";
 import { applyVisualTables } from "./visualdata.js?v=1";
 import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=1";
@@ -24,10 +24,10 @@ import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent }
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
 import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting } from "./tasting.js?v=2";
 import { buildDeck } from "./deck.js?v=3";
-import { createProfile } from "./profile.js?v=13";
+import { createProfile } from "./profile.js?v=14";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=5";
 import { createFeedback } from "./feedback.js?v=3";
-import { createEditor } from "./editor.js?v=22";
+import { createEditor } from "./editor.js?v=23";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -524,7 +524,7 @@ function openSheet() {
 // Ordinary players do not see the structure sliders. Steps 2 and 3 are everyday words and questions instead (feel.js): "How did it taste?"
 // and "A bit more". Their answers set that bottle's structure ratings behind the scenes, and those feed only the player's own palate profile.
 // Professionals keep the sliders, with the words and the tasting grid (tasting.js) at the top of step 2.
-const STEP_TITLES = ["Verdict", "How it tasted", "", "Details", "Notes and photos"];
+const STEP_TITLES = ["Your take", "How it tasted", "", "Details", "Notes and photos"];
 const stepTitle = (i) => (state.pro ? SHEET_PAGES[i].title : STEP_TITLES[i]);
 // Ordinary players skip step 3 (sweetness and bubbles sliders): the questions on step 2 cover it.
 const pagesShown = () => [0, 1, 2, 3, 4].filter((i) => state.pro || i !== 2);
