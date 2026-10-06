@@ -46,6 +46,9 @@ export function marksHtml(card, size = 26) {
 // A small picture next to a wine name, when the user added a photo to its journal entry.
 export const thumbHtml = (urls, path, size = 40) => (path && urls && urls.get(path) ? `<img class="thumb" src="${esc(urls.get(path))}" alt="Your photo" width="${size}" height="${size}">` : "");
 
+// A small picture of the catalog bottle, when the wine has a bottle photo. Used in the Swipes and Journal lists only: the Discover card never shows photos.
+export const bottleThumbHtml = (card, size = 40) => (card && card.photo ? `<img class="thumb bottle" src="${esc(card.photo)}" alt="Bottle of ${esc(wineName(card))}" width="${size}" height="${size}" loading="lazy" decoding="async">` : "");
+
 // ---------------------------------------------------------------- Discover
 // What the card draws for a wine that is not a photo: a bottle shaped by its grape and tinted by its type, a map of its country with a pin,
 // and six flavors. Nothing here uses a label, a logo or a picture of a real bottle. stats is null until players have written enough about the wine.
@@ -63,7 +66,7 @@ export function cardHtml(c) {
   const v = visualFor(c), href = imageSearchUrl(c);
   const map = v.map ? `<${v.zoomable ? "button" : "div"} class="mapbtn${v.zoomable ? "" : " still"}"${v.zoomable ? ` data-zoom="${esc(c.id)}" aria-label="Show where this wine is from"` : ""}>${v.map}${v.zoomable ? '<span class="badge" aria-hidden="true">+</span>' : ""}</${v.zoomable ? "button" : "div"}>` : "";
   return `<div class="card" id="card">
-    <div class="image${c.photo ? " hasphoto" : ""}">${bottleSilhouette(v.shape, v.type)}${c.photo ? `<img class="winephoto" src="${esc(c.photo)}" alt="Bottle of ${esc(wineName(c))}" draggable="false" decoding="async">` : ""}${labels}</div>
+    <div class="image">${bottleSilhouette(v.shape, v.type)}${labels}</div>
     <div class="body">
       <div class="toprow"><div class="nameblock">
         <a class="winelink" data-wimg href="${esc(href)}" target="_blank" rel="noopener noreferrer" draggable="false" aria-label="Search Google Images for ${esc(wineName(c))}">
@@ -108,7 +111,7 @@ export function swipesHtml(lists, sw, photoUrls) {
   const listBody = (id, cards, actionsFor) => {
     if (!cards.length) return `<div class="muted small">Nothing here yet.</div>`;
     const sorted = sortCards(cards, sortOf(id), lists.order);
-    return (cards.length > 1 ? sortSelect(id, sortOf(id)) : "") + sorted.map((c) => item(c, actionsFor(c))).join("");
+    return (cards.length > 1 ? sortSelect(id, sortOf(id)) : "") + sorted.map((c) => item(c, actionsFor(c), "", bottleThumbHtml(c))).join("");
   };
   const review = (c) => pill(`review:${c.id}`, "Review the wine", true);
   const parts = [];
@@ -122,14 +125,14 @@ export function swipesHtml(lists, sw, photoUrls) {
   const triedBody = !lists.tried.length ? `<div class="muted small">Nothing here yet. Wines you rate are kept here.</div>`
     : (lists.tried.length > 1 ? sortSelect("tried", sortOf("tried")) : "") +
       sortCards(lists.tried, sortOf("tried"), lists.order).map((c) =>
-        item(c, pill(`entry:${c.entry.id}`, "View review", true), `<br>${esc(verdictShort(c.entry.verdict) || "")}, ${esc(c.entry.consumed_on || "")}`, thumbHtml(photoUrls, c.entry.first_photo_path))).join("");
+        item(c, pill(`entry:${c.entry.id}`, "View review", true), `<br>${esc(verdictShort(c.entry.verdict) || "")}, ${esc(c.entry.consumed_on || "")}`, thumbHtml(photoUrls, c.entry.first_photo_path) || bottleThumbHtml(c))).join("");
   parts.push(section("tried", "Wines Tried from Discover", lists.tried.length, isOpen("tried"), triedBody));
   // Bottom of the page on purpose: these already appear in the Journal.
   const hadBody = !lists.had.length ? `<div class="muted small">Nothing here yet.</div>`
     : (lists.had.length > 1 ? sortSelect("had", sortOf("had")) : "") +
       sortCards(lists.had, sortOf("had"), lists.order).map((c) => {
         const entry = lists.entryOf.get(c.id);
-        return item(c, entry ? pill(`entry:${entry.id}`, entry.verdict ? "View review" : "Rate this bottle", true) : pill(`review:${c.id}`, "Review the wine", true), "", thumbHtml(photoUrls, entry && entry.first_photo_path));
+        return item(c, entry ? pill(`entry:${entry.id}`, entry.verdict ? "View review" : "Rate this bottle", true) : pill(`review:${c.id}`, "Review the wine", true), "", thumbHtml(photoUrls, entry && entry.first_photo_path) || bottleThumbHtml(c));
       }).join("");
   const any = lists.rec.length + lists.unk.length + lists.notInt.length + lists.tried.length + lists.had.length;
   return (any ? "" : `<p class="muted">Swipe some wines in Discover and they will show up here.</p>`) +
@@ -169,7 +172,7 @@ export function journalListHtml(entries, j, photoUrls, cards = []) {
     const limit = j.limits[g.key] || GROUP_PAGE;
     const shown = g.items.slice(0, limit).map((e) => {
       const c = entryCard(e); const v = verdictShort(e.verdict);
-      return `<button class="jrow" data-action="entry:${e.id}">${thumbHtml(photoUrls, e.first_photo_path)}<span class="jl">
+      return `<button class="jrow" data-action="entry:${e.id}">${thumbHtml(photoUrls, e.first_photo_path) || bottleThumbHtml(e.wine_vintage_id ? cardsById.get(e.wine_vintage_id) : null)}<span class="jl">
         <span class="iname"><span class="serif trunc">${esc(entryName(e))}</span><span class="ed edbtn" role="button" tabindex="0" data-action="wineinfo-entry:${e.id}" aria-label="Change wine info">&#9998;</span>${marksHtml(c, 16)}</span>
         ${entryInfoLine(e, e.wine_vintage_id ? cardsById.get(e.wine_vintage_id) : null) ? `<span class="meta grapeline trunc">${esc(entryInfoLine(e, e.wine_vintage_id ? cardsById.get(e.wine_vintage_id) : null))}</span>` : ""}
         <span class="meta trunc"><b class="${v ? "wine" : ""}">${esc(v || "No verdict yet")}</b>${e.consumed_on ? ", " + esc(e.consumed_on) : ""}${e.food ? ", with " + esc(e.food) : ""}${e.is_outside_wine ? ", not in catalog" : ""}</span></span>

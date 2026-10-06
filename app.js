@@ -11,7 +11,7 @@ import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=2";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=2";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=19";
+  visualFor, discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=20";
 import { createLearn } from "./learn.js?v=3";
 import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=1";
@@ -239,20 +239,11 @@ document.addEventListener("error", (ev) => { const t = ev.target; if (t && t.cla
 function settlePhotos() {   // a photo that was already loaded before the page was drawn
   document.querySelectorAll("img.winephoto").forEach((i) => { if (i.complete) { if (i.naturalWidth) i.classList.add("ready"); else { const b = i.closest(".image"); if (b) b.classList.add("failed"); } } });
 }
-// The next few cards' photos are fetched ahead of time, so a swipe never waits for a download. (Skipped when the phone is saving data.)
+// Discover cards do not show bottle photos, so nothing is fetched ahead of time. (photoCache is kept only because window.__wine exposes it.)
 const photoCache = new Map();
-function preloadPhotos(n = 4) {
-  if (navigator.connection && navigator.connection.saveData) return;
-  state.deck.slice(0, n).forEach((c) => {
-    if (!c.photo || photoCache.has(c.photo)) return;
-    const im = new Image(); im.decoding = "async"; im.src = c.photo; photoCache.set(c.photo, im);
-  });
-  while (photoCache.size > 16) photoCache.delete(photoCache.keys().next().value);
-}
 function rebuildDeck() {
   const r = buildDeck({ cards: state.cards, states: state.states, journal: state.journal, quiz: state.quiz, refs: structureMap(state.cards, state.refs), crowd: state.crowd });
   state.deck = r.deck; state.deckInfo = r.info; state.deckMix = r.mix; state.sinceDeck = 0;
-  preloadPhotos();
 }
 
 // ---------------------------------------------------------------- drawing the page
@@ -289,7 +280,7 @@ function drawTab(body) {
     body.innerHTML = discoverHtml({ deck: state.deck, banner: null, counts: state.counts, feedback: state.feedback, flaggedId: state.wfDone, nudge: showNudge() });
     const card = $("#card");
     if (card) attachCard(card);
-    settlePhotos(); preloadPhotos();
+    settlePhotos();
   } else if (state.tab === "swipes") {
     body.innerHTML = swipesHtml(swipeLists(state.cards, state.states, state.journal), { ...state.sw, noFam: new Set(state.states.filter((x) => !x.familiarity).map((x) => x.wine_vintage_id)) }, state.photoUrls);
   } else if (state.tab === "learn") {
