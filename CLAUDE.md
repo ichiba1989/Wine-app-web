@@ -28,7 +28,7 @@ Convention: **pure logic files have no browser or network access**, so they can 
 
 | Layer | Files |
 |---|---|
-| Shell | `index.html` (CSS inline, CSP meta, boot-failure handler, loads `app.js`), `config.js`, `check.html` (self-diagnosis page), `privacy.html` |
+| Shell | `index.html` (CSS inline, CSP meta, boot-failure handler, loads `app.js`), `config.js`, `privacy.html` |
 | Orchestration | `app.js` (state, tab routing, event wiring; ~1000 lines) |
 | Pure rules | `logic.js` (verdicts, structure dims, swipe/drag math, sheet/form rules), `deck.js` (Discover deck ordering), `rules.js` + `structure.js` (suggested wine structure from grape/place/style), `catalog.js` (how player-added wines become catalog candidates), `flavors.js`, `pricing.js`, `sorting.js`, `blends.js`, `grapes.js`, `geo.js`, `wineline.js` |
 | Data access | `data.js` (**every** Supabase call lives here; each function takes the client and throws on error) |
@@ -40,15 +40,14 @@ Tabs: Discover, Swipes, Journal, Profile, Learn, and Editor (only for users with
 ## Critical conventions
 
 1. **Cache-busting version query strings.** Every import carries `?v=N` (e.g. `./data.js?v=15`) and `index.html` loads `app.js?v=33`. Browsers cache ES modules aggressively. **When you change a module, bump its `?v=` everywhere it is imported** (grep for the filename), and bump `app.js?v=` in `index.html` if `app.js` changed. Mismatched versions cause stale or broken loads. Commit history ("increment app version to 30") shows this is the established practice.
-2. **`check.html` is currently stale.** It embeds per-file hashes, char counts, query versions and expected exports (e.g. `app.js` listed as `v=26`, actual is `33`). Do not trust its output until it is regenerated, and do not hand-edit hashes. Say so if asked to rely on it.
-3. **Layering:** put rules in a pure file, Supabase calls in `data.js`, HTML in `views.js`, wiring in `app.js` or a feature controller. Keep pure files free of `document`, `fetch`, `localStorage` and Supabase imports.
-4. **Escape all interpolated text** in HTML strings with `esc()` from `logic.js`. Views build HTML strings; untrusted wine/user text must never be interpolated raw.
-5. **Storage access is wrapped in try/catch** (see the `get`/`set` helpers in `app.js`). Keep it that way (private browsing, blocked storage).
-6. **Style of code:** small, heavily commented files; comments explain *why* in plain language and open with a header describing the file's job. Match this. The code uses double quotes, semicolons, `const`/arrow functions, and section dividers like `// ------- name`.
-7. **Single-hop data rule:** the app reads curated rows/views (`v_catalog_cards`, `v_journal_entries`, `v_user_wine_state`, `v_wine_prices`, `v_wine_crowd`) rather than joining on the client.
-8. **Consent/age gate:** the app requires 21+ attestation and accepted terms (`consent.js`, `CONSENT_VERSION`). Change `CONSENT_VERSION` whenever the terms wording changes. Do not bypass the gate.
-9. **Accounts:** everyone starts as an anonymous guest; an email can be attached later and the user id stays the same (`account.js`). Account deletion and guest-merge go through RPCs.
-10. **Permissions:** editor/owner capabilities come from `my_staff_access` (permissions such as `catalog_edit`, `quiz_verify`, `feedback_read`, `found_online_photos`). Feature tiers (e.g. the `proTasting` grid) come from `feature_access`. UI gating is convenience only; **RLS in the database is the real enforcement.**
+2. **Layering:** put rules in a pure file, Supabase calls in `data.js`, HTML in `views.js`, wiring in `app.js` or a feature controller. Keep pure files free of `document`, `fetch`, `localStorage` and Supabase imports.
+3. **Escape all interpolated text** in HTML strings with `esc()` from `logic.js`. Views build HTML strings; untrusted wine/user text must never be interpolated raw.
+4. **Storage access is wrapped in try/catch** (see the `get`/`set` helpers in `app.js`). Keep it that way (private browsing, blocked storage).
+5. **Style of code:** small, heavily commented files; comments explain *why* in plain language and open with a header describing the file's job. Match this. The code uses double quotes, semicolons, `const`/arrow functions, and section dividers like `// ------- name`.
+6. **Single-hop data rule:** the app reads curated rows/views (`v_catalog_cards`, `v_journal_entries`, `v_user_wine_state`, `v_wine_prices`, `v_wine_crowd`) rather than joining on the client.
+7. **Consent/age gate:** the app requires 21+ attestation and accepted terms (`consent.js`, `CONSENT_VERSION`). Change `CONSENT_VERSION` whenever the terms wording changes. Do not bypass the gate.
+8. **Accounts:** everyone starts as an anonymous guest; an email can be attached later and the user id stays the same (`account.js`). Account deletion and guest-merge go through RPCs.
+9. **Permissions:** editor/owner capabilities come from `my_staff_access` (permissions such as `catalog_edit`, `quiz_verify`, `feedback_read`, `found_online_photos`). Feature tiers (e.g. the `proTasting` grid) come from `feature_access`. UI gating is convenience only; **RLS in the database is the real enforcement.**
 
 ## Domain model as implemented
 

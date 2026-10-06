@@ -379,7 +379,7 @@ Do not: let AI invent facts, infer characteristics, publish content, or compute 
 | 11 | **Privacy**: tasting/purchase/location data; community aggregates re-identification | Minimum cohort size, aggregates only, delete/export flows, consent versioning |
 | 12 | **Image/OCR recognition accuracy** on real photos | Candidate-only flow; confirm with user; measure on a test set |
 | 13 | **Schema drift / no migrations in repo** | Move schema to versioned migrations immediately |
-| 14 | **Prototype debt** if reused as-is: client does many joins; flat files; hand-maintained `check.html` hashes (currently stale) | Port logic to typed shared packages; add CI |
+| 14 | **Prototype debt** if reused as-is: client does many joins; flat files with hand-bumped `?v=` cache-busting versions | Port logic to typed shared packages; add CI |
 | 15 | **Market-data matching** (vintage, bottle size, retailer SKUs) | Separate review step; never merge into identity |
 
 ---
