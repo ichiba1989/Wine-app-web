@@ -21,6 +21,9 @@ export const HIGH_AT = 0.55, MEDIUM_AT = 0.28;
 // Whatever the numbers say, each deck holds at least this share of the wines left to swipe, so there is always something familiar
 // and always something new. The wines moved are the ones nearest the line: the least familiar go to low, the most familiar to high.
 export const MIN_SHARE = 0.15;
+// Verdicts count as likes and dislikes. A journal entry with no verdict yet is a faint like (they had the bottle).
+export const VERDICT_WEIGHT = { buy: 2, drink: 1, none: 0, respect: -0.5, no: -2 };
+export const UNRATED_WEIGHT = 0.25;
 // "How easy to find" (reach, set by editors, 1 to 5; 3 when nobody has set it) is the starting point for familiarity.
 export const DEFAULT_REACH = 3;
 
