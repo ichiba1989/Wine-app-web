@@ -33,7 +33,7 @@ Convention: **pure logic files have no browser or network access**, so they can 
 | Pure rules | `logic.js` (verdicts, structure dims, swipe/drag math, sheet/form rules), `deck.js` (Discover deck ordering), `rules.js` + `structure.js` (suggested wine structure from grape/place/style), `catalog.js` (how player-added wines become catalog candidates), `flavors.js`, `pricing.js`, `sorting.js`, `blends.js`, `grapes.js`, `geo.js`, `wineline.js` |
 | Data access | `data.js` (**every** Supabase call lives here; each function takes the client and throws on error) |
 | Rendering | `views.js` (functions return HTML strings, no network), `visuals.js` (SVG bottles/flavor icons), `maps.js` + `zoommap.js` + `geodata.js` (SVG maps), `flavordata.js`, `visualdata.js` |
-| Feature controllers | `learn.js` (quiz), `profile.js` (Overview/Palate/Knowledge/Explored/Trophies), `editor.js` (editor tab), `wineinfo.js`, `review.js`, `finder.js`, `winephotos.js`, `photos.js`, `sharing.js`, `account.js`, `consent.js`, `feedback.js`, `feel.js`, `tasting.js`, `mywine.js`, `winelinks.js` |
+| Feature controllers | `learn.js` (quiz), `profile.js` (Overview/Palate/Knowledge/Explored/Trophies), `editor.js` (editor tab), `wineinfo.js`, `review.js`, `finder.js`, `winephotos.js`, `photos.js`, `sharing.js`, `account.js`, `consent.js`, `feedback.js`, `feel.js`, `tasting.js`, `mywine.js`, `winelinks.js`, `settings.js` (the Settings sheet, opened by the gear in the header) |
 
 Tabs: Discover, Swipes, Journal, Profile, Learn, and Editor (only for users with editor permissions).
 
@@ -49,6 +49,8 @@ Tabs: Discover, Swipes, Journal, Profile, Learn, and Editor (only for users with
 8. **Accounts:** everyone starts as an anonymous guest; an email can be attached later and the user id stays the same (`account.js`). Account deletion and guest-merge go through RPCs.
 9. **Permissions:** editor/owner capabilities come from `my_staff_access` (permissions such as `catalog_edit`, `quiz_verify`, `feedback_read`, `found_online_photos`). Feature tiers (e.g. the `proTasting` grid) come from `feature_access`. UI gating is convenience only; **RLS in the database is the real enforcement.**
 
+10. **Card gestures and accessibility (Discover).** Swipe right / left / up answers (recognize / don't know / had); double-tapping near the right / left / top edge does the same; the same three answers are also visible buttons under the card. Two fingers pinch-zoom the card (up to 4x), a double-tap on the middle (or the Zoom button) zooms in and out, and **while zoomed, swiping and edge double-taps are paused** and one finger pans; the Reset zoom chip returns. All of this lives in `attachCard` in `app.js`. Do not reintroduce `user-scalable=no` in the viewport.
+11. **Settings are per device**, kept in `localStorage` under `wine.settings` (text size, answer by swiping, buttons under the card, motion). Swiping off forces the buttons on. **Every font size in the stylesheet is written `calc(Npx * var(--ts))`** so the Text size setting scales it; keep doing that for new CSS. Delete my account is reachable from Settings and still from Profile, Overview (the consent text names that path; see `docs/PRE_TEST_REVIEW.md`).
 ## Domain model as implemented
 
 - **Catalog:** `producers`, `wines`, `wine_vintages` (vintage or non-vintage), `wine_grapes`, `grapes`, `geo_areas` (country → region → appellation tree), `wine_images` (kinds include official, found online, verified user), `wine_reference_values` (structure baseline), `wine_source_records`, `sources`.

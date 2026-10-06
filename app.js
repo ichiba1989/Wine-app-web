@@ -11,7 +11,7 @@ import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=2";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=2";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=22";
+  visualFor, discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=23";
 import { createLearn } from "./learn.js?v=3";
 import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=1";
@@ -28,6 +28,7 @@ import { createProfile } from "./profile.js?v=14";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=5";
 import { createFeedback } from "./feedback.js?v=3";
 import { createEditor } from "./editor.js?v=23";
+import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=1";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -67,6 +68,7 @@ if (SUPABASE_KEY.startsWith("PASTE")) SUPABASE_KEY = store.get("wine_key") || SU
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
 const state = {
+  settings: parseSettings(store.get(SETTINGS_KEY)),   // this phone's choices from the gear in the header (settings.js)
   status: "loading",            // loading | setup | error | age | main
   error: null, banner: null, tab: "discover", underage: false,
   user: null, profile: null, sb: null,
@@ -264,7 +266,7 @@ async function carryOverGuest() {
 function shellHtml() {
   const tab = (id, label) => `<button data-action="tab:${id}">${label}</button>`;
   const editorLink = isEditor() ? tab("editor", "Editor") : "";
-  return `<div class="top"><h1 class="serif" id="title"></h1><span class="muted small">Early build</span></div>
+  return `<div class="top"><h1 class="serif" id="title"></h1><div class="topright"><span class="muted small">Early build</span><button class="gear" data-action="settings" aria-label="Settings">&#9881;</button></div></div>
     <div id="gbanner" class="banner gb" data-action="dismiss" hidden></div>
     <div class="content" id="content"><div id="tabbody"></div></div>
     <nav class="tabs">${tab("discover", "Discover")}${tab("swipes", "Swipes")}${tab("journal", "Journal")}${tab("profile", "Profile")}${tab("learn", "Learn")}${editorLink}</nav>`;
@@ -277,7 +279,7 @@ function renderBody() {
 }
 function drawTab(body) {
   if (state.tab === "discover") {
-    body.innerHTML = discoverHtml({ deck: state.deck, banner: null, counts: state.counts, feedback: state.feedback, flaggedId: state.wfDone, nudge: showNudge() });
+    body.innerHTML = discoverHtml({ deck: state.deck, banner: null, counts: state.counts, feedback: state.feedback, flaggedId: state.wfDone, nudge: showNudge(), buttons: state.settings.buttons });
     const card = $("#card");
     if (card) attachCard(card);
     settlePhotos();
@@ -329,7 +331,14 @@ function render() {
 }
 
 // ---------------------------------------------------------------- swiping (Discover)
-const reduceMotion = () => !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+const reduceMotion = () => state.settings.motion === "reduce" || !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+// Text size and motion are set on the page itself, so every screen follows them.
+function applySettings() {
+  document.documentElement.style.setProperty("--ts", String(textScale(state.settings)));
+  document.documentElement.classList.toggle("reduce-motion", state.settings.motion === "reduce");
+}
+function openSettings() { $("#overlay").innerHTML = settingsHtml(state.settings, state.user); }
+function closeSettings() { $("#overlay").innerHTML = ""; }
 const behindOf = (el) => (el && el.parentElement ? el.parentElement.querySelector(".behind") : null);
 // The card underneath rises toward the front as the top card is pulled away.
 function paintBehind(el, progress, ms = 0) {
@@ -412,10 +421,17 @@ function openImages(url) {
   lastImageOpen = Date.now();
   try { window.open(url, "_blank", "noopener,noreferrer"); } catch (_) { /* a blocked pop-up: nothing else to do */ }
 }
+// ---- zoom
+// Two fingers on the card pinch it larger (up to 4 times), a double-tap on the middle zooms in or back out, and the Zoom button does the same
+// for anyone who cannot pinch. While the card is zoomed, one finger moves the picture around and swiping is paused, so a pan can never
+// answer a wine by accident. The Reset zoom chip (or another double-tap) puts it back. The card's words, flavors and map are what zoom.
+const ZOOM_MAX = 4, ZOOM_TAP = 2.2, ZOOMED = 1.02;
+const clampTo = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 function attachCard(el) {
   // Forgiving double-tap: fingers may wobble a little, and the second tap can be slower or a bit off.
   const TAP_MOVE = 18, DOUBLE_TAP_MS = 500, TAP_APART = 70;
   let start = null, dx = 0, dy = 0, lastTap = null, hintTimer = null, samples = [];
+  const swipeOn = () => state.settings.swipe;
   const label = (k) => el.querySelector(`[data-label="${k}"]`);
   const clearHint = () => { clearTimeout(hintTimer); ["recognize", "unknown", "had"].forEach((k) => { label(k).style.opacity = 0; }); };
   const showHint = (edge) => { clearHint(); if (edge) { label(edge).style.opacity = 0.55; hintTimer = setTimeout(clearHint, DOUBLE_TAP_MS + 50); } };
@@ -430,15 +446,92 @@ function attachCard(el) {
     el.style.transition = reduceMotion() ? "transform 150ms ease-out" : "transform 460ms cubic-bezier(0.34, 1.6, 0.5, 1)";
     el.style.transform = ""; dx = dy = 0; paint(); paintBehind(el, 0, reduceMotion() ? 150 : 380);
   };
+
+  // zoom state: the picture is scaled s times, from its top-left corner, then moved by (tx, ty)
+  const body = el.querySelector(".body"), chip = el.querySelector("[data-zreset]");
+  const z = { s: 1, tx: 0, ty: 0 };
+  const pts = new Map();               // the fingers on the card now, by pointer id
+  let pinch = null, pan = null;
+  const zoomed = () => z.s > ZOOMED;
+  const fit = () => { const W = el.clientWidth, H = el.clientHeight; z.tx = clampTo(z.tx, W - z.s * W, 0); z.ty = clampTo(z.ty, H - z.s * H, 0); };
+  const paintZoom = (animate) => {
+    if (!body) return;
+    body.style.transformOrigin = "0 0";
+    body.style.transition = animate && !reduceMotion() ? "transform 180ms ease-out" : "none";
+    body.style.transform = z.s === 1 && !z.tx && !z.ty ? "" : `translate(${z.tx}px, ${z.ty}px) scale(${z.s})`;
+    if (chip) chip.hidden = !zoomed();
+    el.classList.toggle("zoomed", zoomed());
+  };
+  // Zoom to scale s keeping the point (fx, fy) of the card where it is under the finger.
+  const zoomAt = (s, fx, fy, animate) => {
+    const s1 = clampTo(s, 1, ZOOM_MAX), k = s1 / z.s;
+    z.tx = fx - (fx - z.tx) * k; z.ty = fy - (fy - z.ty) * k; z.s = s1;
+    if (s1 <= ZOOMED) { z.s = 1; z.tx = 0; z.ty = 0; } else fit();
+    paintZoom(animate);
+  };
+  const resetZoom = (animate = true) => { z.s = 1; z.tx = 0; z.ty = 0; paintZoom(animate); };
+  const toggleZoom = (fx, fy) => {
+    const r = el.getBoundingClientRect();
+    if (zoomed()) resetZoom(); else zoomAt(ZOOM_TAP, fx == null ? r.width / 2 : fx, fy == null ? r.height / 2 : fy, true);
+  };
+  el.__resetZoom = resetZoom;          // the answer buttons use these, through the card
+  el.__toggleZoom = () => { clearHint(); toggleZoom(); };
+  const local = (p) => { const r = el.getBoundingClientRect(); return { x: p.x - r.left, y: p.y - r.top }; };
+  const two = () => { const [a, b] = [...pts.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, m: local({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }) }; };
+
+  // A tap that barely moved (on a swipe, or on a zoomed card that was not dragged).
+  function tap(e, from) {
+    // A tap on the map is only ever a tap on the map: it never counts toward a double-tap, whatever part of the card it is on.
+    // The overlay opens a moment after the finger lifts, so the click that follows the tap lands on the card and not on the overlay.
+    const hit = document.elementFromPoint(e.clientX, e.clientY), mapEl = hit && hit.closest("[data-zoom]"), nameEl = hit && hit.closest("a[data-wimg]");
+    if (hit && hit.closest("[data-zreset]")) { lastTap = null; resetZoom(); return; }
+    if (mapEl) { lastTap = null; clearHint(); const id = mapEl.dataset.zoom; setTimeout(() => openZoom(id), 60); return; }
+    if (nameEl) { lastTap = null; clearHint(); openImages(nameEl.href); return; }
+    const now = Date.now();
+    const r = el.getBoundingClientRect();
+    const edge = swipeOn() && !zoomed() ? edgeOf((from.x - r.left) / r.width, (from.y - r.top) / r.height) : null;
+    const prev = lastTap;
+    if (prev && now - prev.t < DOUBLE_TAP_MS && Math.hypot(from.x - prev.x, from.y - prev.y) < TAP_APART) {
+      lastTap = null; clearHint();                                             // second tap: a double-tap
+      const kind2 = edge || prev.edge;                                         // if the second tap drifted inward, use the first tap's zone
+      if (kind2 && !zoomed()) { label(kind2).style.opacity = 1; fly(el, kind2); }
+      else toggleZoom(from.x - r.left, from.y - r.top);                        // not on an edge: zoom in, or back out
+    } else {
+      lastTap = { t: now, x: from.x, y: from.y, edge }; showHint(edge);
+    }
+  }
+
   el.addEventListener("pointerdown", (e) => {
-    if (state.busy) return;
-    start = { x: e.clientX, y: e.clientY }; dx = dy = 0; samples = [{ x: e.clientX, y: e.clientY, t: performance.now() }];
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     try { el.setPointerCapture(e.pointerId); } catch (_) {}
-    el.style.transition = "none"; el.classList.add("dragging");
+    if (pts.size === 2) {                                   // a second finger: pinch, and give up any swipe that had begun
+      if (start) { start = null; settle(); }
+      pan = null; lastTap = null; clearHint();
+      const t = two(); pinch = { d0: t.d, s0: z.s, m0: t.m, tx0: z.tx, ty0: z.ty };
+      return;
+    }
+    if (pts.size > 2 || state.busy) return;
+    if (zoomed()) { pan = { x: e.clientX, y: e.clientY, tx: z.tx, ty: z.ty, moved: false }; return; }   // zoomed: one finger moves the picture
+    start = { x: e.clientX, y: e.clientY }; dx = dy = 0; samples = [{ x: e.clientX, y: e.clientY, t: performance.now() }];
+    el.style.transition = "none"; if (swipeOn()) el.classList.add("dragging");
   });
   el.addEventListener("pointermove", (e) => {
+    if (pts.has(e.pointerId)) pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && pts.size >= 2) {
+      const t = two(), s1 = clampTo(pinch.s0 * t.d / pinch.d0, 1, ZOOM_MAX);
+      const k = s1 / pinch.s0;                              // keep the point that was between the fingers under them, even as they drift
+      z.s = s1; z.tx = t.m.x - (pinch.m0.x - pinch.tx0) * k; z.ty = t.m.y - (pinch.m0.y - pinch.ty0) * k; fit(); paintZoom(false);
+      return;
+    }
+    if (pan && pts.size === 1) {
+      const mx = e.clientX - pan.x, my = e.clientY - pan.y;
+      if (Math.hypot(mx, my) > TAP_MOVE) pan.moved = true;
+      if (pan.moved) { z.tx = pan.tx + mx; z.ty = pan.ty + my; fit(); paintZoom(false); }
+      return;
+    }
     if (!start) return;
     dx = e.clientX - start.x; dy = e.clientY - start.y;
+    if (!swipeOn()) return;                                 // swiping is off in Settings: the card stays put (a tap still works)
     samples.push({ x: e.clientX, y: e.clientY, t: performance.now() }); if (samples.length > 8) samples.shift();
     const pose = dragPose(dx, dy);
     el.style.transform = pose.transform;
@@ -446,32 +539,25 @@ function attachCard(el) {
     paint();
   });
   el.addEventListener("pointerup", (e) => {
+    pts.delete(e.pointerId);
+    if (pinch) {                                            // the pinch ends when a finger lifts; the other finger does nothing until it lifts too
+      if (pts.size < 2) { pinch = null; start = null; pan = null; if (!zoomed()) resetZoom(false); else paintZoom(false); }
+      return;
+    }
+    if (pan) {
+      const p = pan; pan = null;
+      if (!p.moved) tap(e, { x: p.x, y: p.y });
+      return;
+    }
     if (!start) return;
     const from = start; start = null;
     const { vx, vy } = releaseVelocity(samples);
-    const kind = decideSwipe(dx, dy, vx, vy);
+    const kind = swipeOn() ? decideSwipe(dx, dy, vx, vy) : null;
     if (kind) { fly(el, kind, { dx, dy, vx, vy }); return; }
     settle();
-    if (Math.hypot(e.clientX - from.x, e.clientY - from.y) < TAP_MOVE) {      // a tap that barely moved
-      // A tap on the map is only ever a tap on the map: it never counts toward a double-tap, whatever part of the card it is on.
-      // The overlay opens a moment after the finger lifts, so the click that follows the tap lands on the card and not on the overlay.
-      const hit = document.elementFromPoint(e.clientX, e.clientY), mapEl = hit && hit.closest("[data-zoom]"), nameEl = hit && hit.closest("a[data-wimg]");
-      if (mapEl) { lastTap = null; clearHint(); const id = mapEl.dataset.zoom; setTimeout(() => openZoom(id), 60); return; }
-      if (nameEl) { lastTap = null; clearHint(); openImages(nameEl.href); return; }
-      const now = Date.now();
-      const r = el.getBoundingClientRect();
-      const edge = edgeOf((from.x - r.left) / r.width, (from.y - r.top) / r.height);
-      const prev = lastTap;
-      if (prev && now - prev.t < DOUBLE_TAP_MS && Math.hypot(from.x - prev.x, from.y - prev.y) < TAP_APART) {
-        lastTap = null; clearHint();                                             // second tap: a double-tap
-        const kind2 = edge || prev.edge;                                         // if the second tap drifted inward, use the first tap's zone
-        if (kind2) { label(kind2).style.opacity = 1; fly(el, kind2); }
-      } else {
-        lastTap = { t: now, x: from.x, y: from.y, edge }; showHint(edge);
-      }
-    }
+    if (Math.hypot(e.clientX - from.x, e.clientY - from.y) < TAP_MOVE) tap(e, from);   // a tap that barely moved
   });
-  el.addEventListener("pointercancel", () => { start = null; settle(); });
+  el.addEventListener("pointercancel", (e) => { pts.delete(e.pointerId); pinch = null; pan = null; start = null; settle(); });
   // If a browser does deliver the click to the link itself, the tap was already handled above: do not open it twice. (A keyboard click, detail 0, follows the link normally.)
   el.addEventListener("click", (ev) => { const a = ev.target.closest && ev.target.closest("a[data-wimg]"); if (a && ev.detail !== 0) ev.preventDefault(); });
 }
@@ -951,6 +1037,20 @@ document.addEventListener("click", async (ev) => {
       state.banner = null; state.status = "loading"; render(); init();
     }
     else if (action === "notint") notInterested();
+    else if (action === "answer") {   // the same as swiping that way
+      const el = $("#card");
+      if (el) { if (el.__resetZoom) el.__resetZoom(false); const l = el.querySelector(`[data-label="${a}"]`); if (l) l.style.opacity = 1; }
+      fly(el, a);
+    }
+    else if (action === "zoomcard") { const el = $("#card"); if (el && el.__toggleZoom) el.__toggleZoom(); }
+    else if (action === "settings") openSettings();
+    else if (action === "setclose") closeSettings();
+    else if (action === "set") {      // set:text:large, set:swipe:off, ...
+      state.settings = changeSetting(state.settings, a, b);
+      store.set(SETTINGS_KEY, JSON.stringify(state.settings));
+      applySettings(); openSettings();
+      if (state.tab === "discover") renderBody();   // the buttons under the card may have appeared or gone
+    }
     else if (action === "wineinfo") openMyInfo(a);
     else if (action === "wineinfo-entry") openEntryInfo(state.journal.find((j) => j.id === a));
     else if (action === "unswipe") {   // "Put back" on a wine that was only marked not interested: it returns to the deck
@@ -1070,5 +1170,6 @@ document.addEventListener("change", async (ev) => {
 const report = (m) => { if (state.status === "main") setBanner("Something went wrong: " + m + ". If it keeps happening, tap Send feedback in Profile."); };
 window.addEventListener("unhandledrejection", (e) => report((e.reason && e.reason.message) || e.reason));
 window.addEventListener("error", (e) => { if (e.filename && e.filename.indexOf(location.origin) === 0) report(e.message); });
+applySettings();
 window.__wine = { state, fly, render, init, learn, rebuildDeck, photoCache, profile: profileTab, editor: editorTab, account, feedback };
 init();

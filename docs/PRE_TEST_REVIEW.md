@@ -41,6 +41,11 @@
 
 - _2026-10-06:_ The "Would you drink it alone or with food?" question is hidden in the rating sheet (`feel.js`, `SHOW_PAIRING = false`), and the "How did it taste?" / "How did the wine feel?" headings were removed. The consent text (`consent.js` line 24) and privacy page (line 36) still say players answer "whether you would drink it alone or with food". Decide whether to remove that phrase, or bring the question back. Old answers already saved are kept.
 
+## Notes (continued)
+
+- _2026-10-06:_ A Settings sheet (gear in the header) now holds text size, swiping on/off, answer buttons, motion, the account card and **Delete my account**. Settings are stored only on the phone, so no new data is collected. Delete my account is still also in Profile, Overview, because `consent.js` (line 49) and `privacy.html` (line 83) say "open Profile, then Overview". When the consent text is reviewed, update that sentence to mention Settings, then the duplicate link can stay or go.
+- _2026-10-06:_ The page no longer blocks pinch-zoom (`user-scalable=no` removed). Nothing for consent, but worth a check in testing on both iPhone and Android.
+
 ## Launch notes (decisions to carry into the native app)
 
 - **In-app browser sheet for "look up this wine" (liked by the owner, 2026-10-06).** In the native app, tapping the wine's name should open Google image search in an in-app browser sheet that slides up over the card, with a Done button to return (see `docs/mockups/browser-sheet-placeholder.png`). The sheet shows Google's own page; the app does not copy, frame or scrape it, and stores no images. The web prototype cannot do this (Google blocks being shown inside other pages), so it keeps opening a new tab.

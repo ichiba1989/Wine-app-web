@@ -70,7 +70,7 @@ export function cardHtml(c) {
   const flag = FLAGS[c.country];
   const summary = [t.label !== "Other" ? esc(t.label) : "", place ? `${flag ? `<span class="flag">${flag}</span> ` : ""}${esc(place)}` : ""].filter(Boolean).join(" · ");
   const facts = c.facts.filter((f) => f.text !== place);   // the place is already in the summary line
-  return `<div class="card" id="card">${labels}
+  return `<div class="card" id="card">${labels}<button class="zreset" data-zreset hidden aria-label="Reset zoom">Reset zoom</button>
     <div class="body">
       <a class="winelink" data-wimg href="${esc(href)}" target="_blank" rel="noopener noreferrer" draggable="false" aria-label="Search Google Images for ${esc(wineName(c))}">
         <div class="topline"><div class="producer serif">${esc(c.producer)}</div>${c.vintage ? `<span class="vpill">${esc(c.vintage)}</span>` : ""}</div>
@@ -80,7 +80,11 @@ export function cardHtml(c) {
       <div class="facts">${facts.map((f) => `<span class="${f.derived ? "derived" : ""}">${esc(f.text)}</span>`).join("")}</div>
     </div></div>`;
 }
-export function discoverHtml({ deck, interest, banner, counts, feedback = false, flaggedId = null, nudge = false }) {
+// The three answers as buttons, for anyone who would rather tap than swipe (the same as swiping right, left and up). They can be switched off in Settings.
+export const ANSWER_BUTTONS = [{ kind: "recognize", label: "I recognize it" }, { kind: "unknown", label: "I don't know it" }, { kind: "had", label: "I've had this bottle" }];
+export const answerButtonsHtml = () => `<div class="answers" role="group" aria-label="Your answer">${ANSWER_BUTTONS.map((a) =>
+  `<button class="ans" data-action="answer:${a.kind}" style="--c:${FAMILIARITY[a.kind].color}">${esc(a.label)}</button>`).join("")}</div>`;
+export function discoverHtml({ deck, interest, banner, counts, feedback = false, flaggedId = null, nudge = false, buttons = true }) {
   const bannerHtml = banner ? `<div class="banner" data-action="dismiss">${esc(banner)} (tap to dismiss)</div>` : "";
   if (!deck.length) {
     return `${bannerHtml}<div class="center"><div class="serif" style="font-size:22px">No more wines to show.</div>
@@ -89,7 +93,8 @@ export function discoverHtml({ deck, interest, banner, counts, feedback = false,
   // The card, its button row and the save-your-journal reminder are one block, centred between the header and the tab bar, so the space is even above and below.
   return `${bannerHtml}<div class="deckstage">
     <div class="cardwrap">${deck.length > 1 ? '<div class="behind"></div>' : ""}${cardHtml(deck[0])}</div>
-    <div class="belowcard"><button class="notint" data-action="notint" aria-pressed="false" aria-label="Not interested in this wine">Not interested</button>${feedback ? `<span class="fbline">${flaggedId === deck[0].id ? '<span class="muted">Thanks, an editor will review it.</span>' : '<button class="link" data-action="wineflag" aria-label="Report a problem with this wine">Report a problem</button>'}</span>` : ""}</div>
+    ${buttons ? answerButtonsHtml() : ""}
+    <div class="belowcard"><button class="notint" data-action="notint" aria-pressed="false" aria-label="Not interested in this wine">Not interested</button><button class="zoombtn" data-action="zoomcard" aria-label="Zoom in on the card">&#128269; Zoom</button>${feedback ? `<span class="fbline">${flaggedId === deck[0].id ? '<span class="muted">Thanks, an editor will review it.</span>' : '<button class="link" data-action="wineflag" aria-label="Report a problem with this wine">Report a problem</button>'}</span>` : ""}</div>
     ${nudge ? `<div class="nudge"><b>Don't lose your journal.</b> Save it with an email so it follows you to any phone.
       <div class="nudgeacts"><button class="btn primary slim" data-account="open:save">Save with email</button><button class="link" data-action="nudgeoff">Not now</button></div></div>` : ""}</div>`;
 }
