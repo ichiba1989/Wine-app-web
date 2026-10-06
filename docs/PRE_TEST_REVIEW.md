@@ -39,6 +39,8 @@
 
 - _2026-10-06:_ Everyday-wording pass (sections A, B, C of `COPY_REVIEW.md`) created items 2 to 4 above. Sections D, E and F of that list are not applied yet. If they are, check the consent and privacy text again for "varietal", "vintage" and "cuvée".
 
+- _2026-10-06:_ The "Would you drink it alone or with food?" question is hidden in the rating sheet (`feel.js`, `SHOW_PAIRING = false`), and the "How did it taste?" / "How did the wine feel?" headings were removed. The consent text (`consent.js` line 24) and privacy page (line 36) still say players answer "whether you would drink it alone or with food". Decide whether to remove that phrase, or bring the question back. Old answers already saved are kept.
+
 ## When testing starts (checklist)
 
 - [ ] Read `consent.js` and `privacy.html` side by side and align every sentence

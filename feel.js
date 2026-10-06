@@ -88,17 +88,20 @@ export function tasteInnerHtml(sheet) {
     h += notesFor(sheet.style).filter((n) => t.notes[n.id]).map((n) =>
       `<div class="tq sub"><div class="tqtext">${esc(n.ask)}</div><div class="gopts">${n.levels.map((lab, i) => chip(t.notes[n.id] === i + 1, `level:${n.id}:${i + 1}`, lab)).join("")}</div></div>`).join("");
   }
-  h += `<div class="tq"><div class="tqtext">Would you drink it\u2026</div><div class="gopts">${PAIRINGS.map((p) => chip(t.pairing === p.id, "pairing:" + p.id, p.label)).join("")}</div></div>`;
+  if (SHOW_PAIRING) h += `<div class="tq"><div class="tqtext">Would you drink it\u2026</div><div class="gopts">${PAIRINGS.map((p) => chip(t.pairing === p.id, "pairing:" + p.id, p.label)).join("")}</div></div>`;
   return h;
 }
+// The "Would you drink it alone or with food?" question is hidden for now (nothing uses the answer yet). Set this to true to bring it back;
+// answers already saved are kept and still load and save as before.
+const SHOW_PAIRING = false;
 const NOTE = `<div class="muted small" style="margin-top:12px">Every question is optional. Your answers are private and only shape your taste profile; they do not change anything about the wine.</div>`;
 // For ordinary players: the whole of step 2.
 export function tastePageHtml(sheet) {
-  return `<h3 class="serif">How did it taste?</h3><div data-tasteblock>${tasteInnerHtml(sheet)}</div>${NOTE}`;
+  return `<div data-tasteblock>${tasteInnerHtml(sheet)}</div>${NOTE}`;
 }
 // For professionals: a small block at the top of step 2, above the sliders it moves.
 export function feelBlockHtml(sheet) {
-  return `<div class="feelblock" data-feelblock><div class="serif" style="font-size:16px">How did the wine feel?</div><div data-tasteblock>${tasteInnerHtml(sheet)}</div></div>`;
+  return `<div class="feelblock" data-feelblock><div data-tasteblock>${tasteInnerHtml(sheet)}</div></div>`;
 }
 // A tap on a data-taste button -> the change to apply.
 export function changeFrom(data) {
