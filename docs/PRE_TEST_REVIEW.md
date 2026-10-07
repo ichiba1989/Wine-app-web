@@ -96,3 +96,6 @@
 - Built from the function and view texts the owner sent: `docs/soft_delete.sql` (run it in Supabase, then test with a throwaway guest) and `data.js` (reads skip hidden rows and fall back until the script is run; deleting an entry or swipe calls the new functions; photo files are never erased; replaced hand-typed wines are no longer deleted). The old `private.retained_*` anonymous copies are no longer written.
 - Live wording changed to match: `consent.js` "2026-10-d", `privacy.html`, the delete notes in `views.js`, the delete screen in `account.js`.
 - Both SQL scripts (`retain_after_delete.sql`, `soft_delete.sql`) must be run before anyone else uses the app. Community counts (price, "who has had it") still include hidden rows; send those view definitions if hidden rows should be left out.
+
+## Test checklist
+- The checks to run before inviting testers are in `docs/TEST_BEFORE_TESTERS.md`. Nothing in the 2026-10-07 database work has been run against the live database yet.
