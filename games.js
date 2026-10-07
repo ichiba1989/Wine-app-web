@@ -2,7 +2,7 @@
 // string; nothing touches the network. The rules (what fills a square, what unlocks a tier) are in bingo.js; app.js holds the screen state and clicks.
 import { esc, wineName, entryName } from "./logic.js?v=10";
 import { infoLine } from "./wineline.js?v=1";
-import { PAIRS, AXES, nextPair, answeredCount, pickedCount, isDone, leanings } from "./thisorthat.js?v=2";
+import { PAIRS, AXES, AXIS_ORDER, AXIS_VIEW, nextPair, answeredCount, pickedCount, isDone, leanings, axisValues, compareAxes, isClear } from "./thisorthat.js?v=3";
 import { TIERS, CARDS, CLEARS_TO_UNLOCK, cardById, cardsOfTier, tierOpen, clearedIn } from "./bingo.js?v=2";
 
 // g: { screen: "hub" | "bingo" | "card", cardId, sq }
@@ -108,19 +108,46 @@ function totScreen(g, { tot }) {
     <div class="tpair" role="group" aria-label="Pick one">${side("a", left.a)}<span class="tor" aria-hidden="true">or</span>${side("b", left.b)}</div>
     <div class="tskip"><button class="link" data-action="game:skip">I like neither</button>${pickedCount(a) >= 4 ? `<button class="link" data-action="game:totresults">See my results now</button>` : ""}</div></div>`;
 }
+// One line of the picture: a track with a centre mark and a bar growing toward the lower or higher end. v = { value: -1..1, n } or missing.
+// kind "journal" or "game". A line without enough to go on is drawn empty, with a short reason.
+function trackHtml(v, kind, view) {
+  const need = kind === "journal" ? (v && v.n >= 2) : (v && v.n >= 1);
+  if (!need) return `<div class="tcell"><div class="ttrack empty" aria-hidden="true"><i class="tmid"></i></div><div class="tcap muted">${kind === "journal" ? "Needs more rated wines" : "No picks on this"}</div></div>`;
+  const val = Math.max(-1, Math.min(1, v.value)), clear = isClear(val), w = Math.round(Math.abs(val) * 50);
+  const side = val >= 0 ? "hi" : "lo", style = side === "hi" ? `left:50%;width:${w}%` : `left:${50 - w}%;width:${w}%`;
+  const word = !clear ? "Even" : (side === "hi" ? view.hi : view.lo);
+  const soft = kind === "game" && v.n < 2 ? " soft" : "";
+  return `<div class="tcell"><div class="ttrack ${kind}${soft}" aria-hidden="true"><i class="tmid"></i>${clear ? `<i class="tfill" style="${style}"></i>` : ""}</div><div class="tcap">${esc(word)}${kind === "game" && v.n < 2 && clear ? ' <span class="muted">(a hint)</span>' : ""}</div></div>`;
+}
+// The two pictures side by side, line by line: your journal (what you rated well) on the left, your This or That picks on the right.
+function compareHtml(tot) {
+  const game = axisValues(tot.answers), jr = tot.taste && !tot.taste.error && !tot.taste.loading ? tot.taste : null;
+  const rows = AXIS_ORDER.filter((k) => game[k] || (jr && jr[k] && jr[k].n >= 2)).map((k) => {
+    const view = AXIS_VIEW[k];
+    return `<div class="tcrow" role="group" aria-label="${esc(view.name)}"><div class="tcends"><span>${esc(view.lo)}</span><b>${esc(view.name)}</b><span>${esc(view.hi)}</span></div>
+      <div class="tcpair">${jr ? trackHtml(jr[k], "journal", view) : `<div class="tcell"><div class="ttrack empty" aria-hidden="true"><i class="tmid"></i></div><div class="tcap muted">${tot.taste && tot.taste.error ? "Could not load" : "Loading\u2026"}</div></div>`}${trackHtml(game[k], "game", view)}</div></div>`;
+  }).join("");
+  let verdict = "";
+  if (jr) {
+    const c = compareAxes(jr, game), names = (a) => a.map((k) => AXIS_VIEW[k].name.toLowerCase());
+    const list = (a) => (a.length <= 1 ? a[0] || "" : `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}`);
+    const haveJournal = AXIS_ORDER.some((k) => jr[k] && jr[k].n >= 2);
+    if (!haveJournal) verdict = "Rate a few wines in your Journal and your own taste will fill in on the left, so the two can be compared.";
+    else if (c.agree.length || c.differ.length) verdict = [c.agree.length ? `Your picks and your journal agree on ${list(names(c.agree))}.` : "", c.differ.length ? `They point different ways on ${list(names(c.differ))}.` : ""].filter(Boolean).join(" ");
+    else verdict = "There is no clear match or mismatch yet. More picks and more rated wines will sharpen it.";
+  }
+  return `<div class="tcmp"><div class="tcheads"><span class="tkey journal">Your journal</span><span class="tkey game">This or That</span></div>${rows}</div>${verdict ? `<p class="ptext tverdict">${esc(verdict)}</p>` : ""}`;
+}
 function totResults(tot) {
   const ls = leanings(tot.answers).filter((l) => l.dir !== 0), picked = pickedCount(tot.answers);
   if (!picked) return `<p class="ptext">You have not picked anything yet.</p><button class="btn primary slim" data-action="game:totagain">Start</button>`;
-  const lines = ls.length
-    ? ls.map((l) => `<div class="tlean"><span class="serif">${esc(AXES[l.axis][l.dir > 0 ? "hi" : "lo"])}</span><span class="muted small"> ${l.strength === "lean" ? "You lean this way." : "Just a hint so far."}</span></div>`).join("")
-    : `<div class="muted small">Your picks went both ways, so there is no clear lean yet. That is fine: you like variety.</div>`;
   const wines = tot.matches.length
-    ? `<h3 class="serif gh2">Wines to try</h3><div class="muted small">Their profiles point the same way. A starting point, not a promise.</div>` +
+    ? `<h3 class="serif gh2">Wines to try</h3><div class="muted small">Their profiles point the same way as your picks. A starting point, not a promise.</div>` +
       tot.matches.map((m) => `<div class="brec"><div class="serif">${esc(wineName(m.card))}</div><div class="muted small">${esc(infoLine(m.card))}</div><div class="small brwhy">${esc(m.reason)}</div>
         <button class="pill" data-action="review:${esc(m.card.id)}">I've had it: rate it</button></div>`).join("")
     : (ls.length ? `<div class="muted small tnone">None of our wines fits those leanings well yet.</div>` : "");
-  return `<p class="ptext">${isDone(tot.answers) ? "All done. " : ""}You picked ${picked} ${picked === 1 ? "food" : "foods"}. Here is what that leans toward:</p>
-    <div class="tleans">${lines}</div>${wines}
+  return `<p class="ptext">${isDone(tot.answers) ? "All done. " : ""}You picked ${picked} ${picked === 1 ? "food or thing" : "foods and things"}. Here is how that compares with the wines you have rated:</p>
+    ${compareHtml(tot)}${wines}
     <div class="tskip"><button class="btn outline slim" data-action="game:totagain">Play again</button></div>
-    <div class="muted small bnote">Just for fun: the leanings come from a simple list of pairs, not from a test of your taste.</div>`;
+    <div class="muted small bnote">Just for fun: the picks come from a simple list of pairs, not from a test of your taste.</div>`;
 }

@@ -5,6 +5,7 @@ import { DIMS, dimRange, VERDICTS, FLAGS, esc, styleLabel, verdictShort, entryCa
 import { marksHtml } from "./views.js?v=27";
 import { accountCardHtml } from "./account.js?v=8";
 import { feedbackCardHtml } from "./feedback.js?v=3";
+import { worldOf } from "./thisorthat.js?v=3";
 import { entryInfoLine } from "./wineline.js?v=1";
 
 // ---------------------------------------------------------------- settings
@@ -93,6 +94,20 @@ export function computePalate(entries) {
     const lean = absW ? Math.max(-1, Math.min(1, sum / (absW * half))) : 0;
     return { ...d, lean, n, offset: pN ? pSum / pN : 0, pN, notice: (max - min) / 4 };
   });
+}
+// The lines the This or That game compares with: the five structure lines the journal already measures, plus "where from" (Old World or New World, from each wine's
+// country by the rule in thisorthat.js). { axis: { value: -1..1, n: wines counted } }. Wines the player liked pull toward their side, wines they disliked push away.
+export function palateAxes(entries, palate) {
+  const out = {};
+  for (const d of palate) if (["body", "acidity", "sweetness", "tannin", "oak"].includes(d.key)) out[d.key] = { value: d.lean, n: d.n };
+  let sum = 0, abs = 0, n = 0;
+  entries.forEach((e) => {
+    const side = worldOf(e.country), w = weightOf(e.verdict);
+    if (side === null || w === 0) return;
+    sum += w * side; abs += Math.abs(w); n += 1;
+  });
+  out.world = { value: abs ? Math.max(-1, Math.min(1, sum / abs)) : 0, n };
+  return out;
 }
 export const leanWords = (palate) => palate.filter((d) => d.n >= 2 && Math.abs(d.lean) > 0.2).map((d) => (d.lean > 0 ? d.hi : d.lo));
 const listText = (a) => (a.length <= 1 ? a[0] || "" : `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}`);
@@ -412,8 +427,24 @@ export function createProfile(ctx) {
     else if (action === "retry") load();
   });
 
+  // The same taste numbers as the Taste page, worked out on their own for the This or That results (it does not need the Profile tab to have been opened).
+  async function tasteForGame() {
+    const sb = ctx.sb();
+    const [perceptions, vintages, reference, defaults] = await Promise.all([
+      allRows(() => sb.from("perceptions").select("consumption_id, dimension_key, value, adjusted")),
+      allRows(() => sb.from("wine_vintages").select("id, wine_id")),
+      sb.from("wine_reference_values").select("wine_id, wine_vintage_id, dimension_key, value").then(must),
+      sb.from("wine_default_values").select("wine_id, dimension_key, value").then(must),
+    ]);
+    let tastes = []; try { tastes = await allRows(() => sb.from("consumptions").select("id, taste").is("deleted_at", null)); } catch (_) { try { tastes = await allRows(() => sb.from("consumptions").select("id, taste")); } catch (_2) { tastes = []; } }
+    const baselineFor = baselines({ vintageToWine: new Map(vintages.map((v) => [v.id, v.wine_id])), reference, defaults, rules: ctx.ruleBase });
+    const entries = palateEntries(ctx.journal(), perceptions, baselineFor, new Map(tastes.filter((t) => t.taste).map((t) => [t.id, t.taste])));
+    return palateAxes(entries, computePalate(entries));
+  }
+
   return {
     state: P,
+    tasteForGame,
     // Opens on Overview every time, with fresh numbers.
     mount(el) { root = el; P.sub = "overview"; P.loaded = false; P.userId = ctx.userId ? ctx.userId() : null; P.user = ctx.user ? ctx.user() : null; draw(); load(); },
     leave() { root = null; loadId++; },

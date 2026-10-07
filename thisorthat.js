@@ -121,5 +121,35 @@ export function matchWines({ answers, cards, structure, exclude = new Set(), lim
   }
   // best fit first; a tie goes to the name, so the list does not shuffle between visits
   out.sort((x, y) => y.score - x.score || String(x.card.producer).localeCompare(String(y.card.producer)));
-  return out.slice(0, limit).map((m) => ({ card: m.card, reason: m.world && m.why.length === 1 ? `It is from ${m.card.country}: ${m.why[0]}.` : "It points to " + m.why.slice(0, 2).join(" and ") + "." }));
+  return out.slice(0, limit).map((m) => ({ card: m.card, reason: m.world && m.why.length === 1 ? `It is from ${m.card.country}, which fits ${m.why[0]}.` : "It points to " + m.why.slice(0, 2).join(" and ") + "." }));
 }
+
+// ---------------------------------------------------------------- the side-by-side picture (results screen)
+// How each line is shown to a player: a short name and the two ends, in everyday words. Same lines as AXES, in the same order (AXIS_ORDER).
+export const AXIS_VIEW = {
+  body: { name: "Weight", lo: "Lighter", hi: "Bolder" },
+  acidity: { name: "Zing", lo: "Soft", hi: "Zesty" },
+  sweetness: { name: "Sweetness", lo: "Drier", hi: "Sweeter" },
+  tannin: { name: "Grip", lo: "Smooth", hi: "Grippy" },
+  oak: { name: "Toast", lo: "Clean", hi: "Toasty" },
+  world: { name: "Where from", lo: "Old World", hi: "New World" },
+};
+// Where the picks sit on each line, from -1 (the low end) to 1 (the high end): { axis: { value, n } }. n is how many picks touched the line.
+export function axisValues(answers) {
+  const out = {};
+  for (const l of leanings(answers)) out[l.axis] = { value: l.score / l.n, n: l.n };
+  return out;
+}
+const CLEAR = 0.2;   // a lean smaller than this counts as "no clear lean"
+// Both pictures use the same lines, so they can be compared. journal: { axis: { value, n } } from profile.js palateAxes (what the player rated well in their journal),
+// game: from axisValues. Only lines where both have a clear lean are compared. A journal line needs at least two rated wines, a game line one pick.
+export function compareAxes(journal, game) {
+  const agree = [], differ = [];
+  for (const k of AXIS_ORDER) {
+    const j = journal && journal[k], g = game && game[k];
+    if (!j || !g || j.n < 2 || g.n < 1 || Math.abs(j.value) < CLEAR || Math.abs(g.value) < CLEAR) continue;
+    (Math.sign(j.value) === Math.sign(g.value) ? agree : differ).push(k);
+  }
+  return { agree, differ };
+}
+export const isClear = (v) => Math.abs(v) >= CLEAR;

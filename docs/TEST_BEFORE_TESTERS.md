@@ -31,6 +31,7 @@ Keep this list current. Tick each item (and date it) only after trying it on a t
 
 ## 4. This or That
 - [ ] After `this_or_that.sql`, play through all 17 questions: a row per answer appears in `this_or_that_answers` with the right `axis`, `dir`, `pair_kind`; answering again replaces the row (no duplicates).
+- [ ] The results page shows your journal taste (left) beside your picks (right), line by line, plus the agree/differ sentence. With no rated wines the left side is empty with "Needs more rated wines"; with rated wines it matches the Profile, Taste page (weight/zing/sweetness/grip/toast) and "where from" follows the countries of the wines you liked. A hidden (deleted) entry does not count.
 - [ ] The results page shows leanings, and wines for the Old World / New World answers use the wine's country (check a few US, French and Italian wines).
 - [ ] Offline or before the script is run, the game still works and the browser console shows "This or That answer not saved" only.
 - [ ] Rows from a guest and from an email account both save; a second player cannot read the first player's rows (RLS).

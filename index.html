@@ -434,6 +434,24 @@
   .tlean { padding: 10px 12px; margin-top: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; font-size: calc(16px * var(--ts)); }
   .gh2 { font-size: calc(18px * var(--ts)); font-weight: 400; margin: 16px 0 4px; }
   .tnone { margin-top: 12px; }
+  /* This or That results: your journal and your picks, side by side, line by line */
+  .tcmp { margin: 10px 0 4px; }
+  .tcheads, .tcpair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .tkey { font-size: calc(13px * var(--ts)); font-weight: 700; display: flex; align-items: center; gap: 6px; }
+  .tkey::before { content: ""; width: 12px; height: 12px; border-radius: 3px; background: var(--slate); }
+  .tkey.game::before { background: var(--wine); }
+  .tcrow { margin-top: 12px; }
+  .tcends { display: flex; justify-content: space-between; align-items: baseline; font-size: calc(12px * var(--ts)); color: var(--muted); margin-bottom: 4px; }
+  .tcends b { color: var(--ink); font-size: calc(13px * var(--ts)); }
+  .ttrack { position: relative; height: 16px; border-radius: 8px; background: #fff; border: 1px solid var(--line); overflow: hidden; }
+  .ttrack.empty { background: repeating-linear-gradient(45deg, #fff, #fff 5px, #eef2ec 5px, #eef2ec 10px); }
+  .tmid { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--line); z-index: 1; }
+  .tfill { position: absolute; top: 2px; bottom: 2px; border-radius: 6px; }
+  .ttrack.journal .tfill { background: var(--slate); }
+  .ttrack.game .tfill { background: var(--wine); }
+  .ttrack.soft .tfill { opacity: .45; }
+  .tcap { font-size: calc(12px * var(--ts)); margin-top: 3px; min-height: calc(15px * var(--ts)); }
+  .tverdict { margin-top: 14px; }
   .gtile { display: block; width: 100%; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px; margin-top: 12px; }
   .gtile.soon { opacity: .6; border-style: dashed; }
   .gt-title { font-size: calc(22px * var(--ts)); margin-bottom: 4px; }
@@ -535,6 +553,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=59" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=60" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>

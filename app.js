@@ -24,13 +24,13 @@ import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent }
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
 import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting } from "./tasting.js?v=2";
 import { buildDeck, userModel } from "./deck.js?v=4";
-import { createProfile } from "./profile.js?v=14";
+import { createProfile } from "./profile.js?v=15";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=8";
 import { createFeedback } from "./feedback.js?v=3";
 import { createEditor } from "./editor.js?v=23";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=3";
-import { gamesHtml } from "./games.js?v=8";
-import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=2";
+import { gamesHtml } from "./games.js?v=9";
+import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=3";
 import { demoHtml, attachDemo, STEPS as DEMO_STEPS } from "./demo.js?v=3";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=2";
 import { recommendMix, recommend } from "./recommend.js?v=3";
@@ -81,7 +81,7 @@ const state = {
   owner: { ...OWNER_START },                       // the Owner page (owner.js)
   g: { screen: "hub", cardId: null, sq: null },   // the Games tab: which screen is open
   gamesMemory: parseMemory(store.get(GAMES_KEY)),
-  totAnswers: parseAnswers(store.get(TOT_KEY)),
+  totAnswers: parseAnswers(store.get(TOT_KEY)), totTaste: null,
   settings: parseSettings(store.get(SETTINGS_KEY)),   // this phone's choices from the gear in the header (settings.js)
   status: "loading",            // loading | setup | error | age | main
   error: null, banner: null, tab: "discover", underage: false,
@@ -363,6 +363,13 @@ const ownerWineInfo = createWineInfo({
 });
 
 // Wine Bingo is worked out from the journal each time the Games tab is drawn: only rated wines count (see bingo.js).
+// The This or That results put the player's journal taste beside their picks. It is worked out once when the results open (profile.js tasteForGame) and the screen redraws when it arrives.
+function ensureTotTaste() {
+  if (state.totTaste || state.totLoading) return;
+  state.totLoading = true; state.totTaste = { loading: true };
+  profileTab.tasteForGame().then((t) => { state.totTaste = t; }, () => { state.totTaste = { error: true }; })
+    .then(() => { state.totLoading = false; if (state.tab === "games" && state.g.screen === "tot") renderBody(); });
+}
 function gamesView() {
   const cardsById = new Map(state.cards.map((c) => [c.id, c]));
   const progress = allProgress(ratedWines(state.journal, cardsById, new Date(), state.photoUrls));
@@ -372,7 +379,7 @@ function gamesView() {
   const c = state.g.screen === "card" ? bingoCard(state.g.cardId) : null;
   if (c && Number.isInteger(state.g.sq) && !progress.get(c.id).done[state.g.sq]) help = squareHelp(c.squares[state.g.sq], cardsById);
   // The wines for the This or That results are only worked out on that screen.
-  const tot = { answers: state.totAnswers, matches: [] };
+  const tot = { answers: state.totAnswers, matches: [], taste: state.totTaste };
   if (state.g.screen === "tot" && (state.g.totResults || !nextPair(state.totAnswers))) tot.matches = matchWines({ answers: state.totAnswers, cards: state.cards, structure: structureMap(state.cards, state.refs) });
   return gamesHtml(state.g, { progress, memory, news, help, tot });
 }
@@ -1183,7 +1190,7 @@ document.addEventListener("click", async (ev) => {
       else if (a === "bingo") state.g = { screen: "bingo", cardId: null, sq: null };
       else if (a === "card") state.g = { screen: "card", cardId: b, sq: null };
       else if (a === "sq") state.g = { ...state.g, sq: Number(b) };
-      else if (a === "tot") state.g = { screen: "tot", cardId: null, sq: null, totResults: false };
+      else if (a === "tot") { state.g = { screen: "tot", cardId: null, sq: null, totResults: false }; state.totTaste = null; }
       else if (a === "pick" || a === "skip") {   // This or That: the answer goes to the next question that has none yet
         const left = nextPair(state.totAnswers);
         if (left) {
@@ -1195,8 +1202,9 @@ document.addEventListener("click", async (ev) => {
         }
       }
       else if (a === "totresults") state.g = { ...state.g, totResults: true };
-      else if (a === "totagain") { state.totAnswers = {}; store.set(TOT_KEY, "{}"); state.g = { screen: "tot", cardId: null, sq: null, totResults: false }; }
+      else if (a === "totagain") { state.totAnswers = {}; store.set(TOT_KEY, "{}"); state.g = { screen: "tot", cardId: null, sq: null, totResults: false }; state.totTaste = null; }
       renderBody();
+      if (state.g.screen === "tot" && (state.g.totResults || !nextPair(state.totAnswers))) ensureTotTaste();   // the results need the player's own taste to compare with
       if (a === "sq") {                 // the details sit under the grid: bring them into view
         const d = document.querySelector(".bdetail");
         if (d && d.scrollIntoView) d.scrollIntoView({ block: "nearest", behavior: reduceMotion() ? "auto" : "smooth" });
