@@ -3,6 +3,10 @@
 // what the picks lean toward, in everyday words, and lists a few catalog wines whose starting profile points the same way.
 // This file is pure (no browser, no network). The screens are in games.js; app.js holds the clicks and remembers the answers on the phone.
 //
+// Some pairs are not food at all (an old town or a modern city): they test whether the player leans toward Old World or New World styles. Every pick is
+// also saved to the database (data.js saveThisOrThat, table this_or_that_answers, docs/this_or_that.sql) so the owner can study how food and other tastes
+// relate to wine taste. See answerRow below for exactly what is saved.
+//
 // What the data means: a "lean" is { axis, dir }. It says that choosing this food nudges toward the high (+1) or low (-1) end of one structure line
 // (the same lines as DIMS in logic.js). These nudges are a game's best guess about taste, NOT wine facts and not a score of the player; they are not saved to the
 // database and do not change the Discover deck. An editor should read the list before testers use it (docs/PRE_TEST_REVIEW.md).
@@ -14,10 +18,19 @@ export const AXES = {
   tannin: { lo: "smooth wines", hi: "dry, grippy reds", range: [1, 5] },
   sweetness: { lo: "dry wines", hi: "sweeter wines", range: [0, 3] },
   oak: { lo: "clean, fresh wines", hi: "toasty, buttery wines", range: [0, 2] },
+  // "world" is not a structure line: it is the classic split by where the wine is from (see WORLD). -1 = Old World, +1 = New World.
+  world: { lo: "Old World wines: classic, earthy and restrained", hi: "New World wines: ripe, fruity and bold", range: [-1, 1] },
 };
-export const AXIS_ORDER = ["body", "acidity", "sweetness", "tannin", "oak"];
+export const AXIS_ORDER = ["body", "acidity", "sweetness", "tannin", "oak", "world"];
+// The usual Old World / New World split, by the wine's country (a defined rule, not a guess from the name). A country not listed is left out.
+export const WORLD = {
+  old: ["France", "Italy", "Spain", "Portugal", "Germany", "Austria", "Greece", "Hungary", "Switzerland", "Slovenia", "Croatia", "Romania", "Georgia"],
+  new: ["USA", "United States", "Australia", "New Zealand", "Chile", "Argentina", "South Africa", "Canada", "Uruguay", "Brazil"],
+};
+export const worldOf = (country) => (WORLD.old.includes(country) ? -1 : WORLD.new.includes(country) ? 1 : null);
 
 const L = (axis, dir) => ({ axis, dir });
+// kind: "food" or "other" (a pair that is not about food). Pairs on the "world" line are the Old World / New World questions.
 // Pairs are plain data: add one by adding an entry. Keep both foods ordinary and the difference clear. emoji is only decoration.
 export const PAIRS = [
   { id: "steak", a: { label: "Ribeye", emoji: "🥩", lean: L("body", 1) }, b: { label: "Filet mignon", emoji: "🥩", lean: L("body", -1) } },
@@ -31,6 +44,11 @@ export const PAIRS = [
   { id: "dinner", a: { label: "Creamy pasta", emoji: "🍝", lean: L("body", 1) }, b: { label: "Crisp green salad", emoji: "🥗", lean: L("body", -1) } },
   { id: "cook", a: { label: "Charred barbecue", emoji: "🔥", lean: L("oak", 1) }, b: { label: "Steamed vegetables", emoji: "🥦", lean: L("oak", -1) } },
   { id: "cheese", a: { label: "Aged sharp cheddar", emoji: "🧀", lean: L("body", 1) }, b: { label: "Fresh mozzarella", emoji: "🧀", lean: L("body", -1) } },
+  { id: "shrooms", a: { label: "Earthy mushrooms", emoji: "\ud83c\udf44", lean: L("world", -1) }, b: { label: "Juicy ripe berries", emoji: "\ud83c\udf53", lean: L("world", 1) } },
+  { id: "town", kind: "other", a: { label: "Historic old town", emoji: "\ud83c\udff0", lean: L("world", -1) }, b: { label: "Sleek modern city", emoji: "\ud83c\udfd9\ufe0f", lean: L("world", 1) } },
+  { id: "home", kind: "other", a: { label: "Cozy stone cottage", emoji: "\ud83c\udfe1", lean: L("world", -1) }, b: { label: "Sunny beach house", emoji: "\ud83c\udfd6\ufe0f", lean: L("world", 1) } },
+  { id: "shop", kind: "other", a: { label: "Antique shop", emoji: "\ud83e\ude91", lean: L("world", -1) }, b: { label: "Brand-new gadget store", emoji: "\ud83d\udcf1", lean: L("world", 1) } },
+  { id: "film", kind: "other", a: { label: "Classic old movie", emoji: "\ud83c\udf9e\ufe0f", lean: L("world", -1) }, b: { label: "Big summer blockbuster", emoji: "\ud83c\udfac", lean: L("world", 1) } },
   { id: "cold", a: { label: "Lemon sorbet", emoji: "🍨", lean: L("acidity", 1) }, b: { label: "Vanilla ice cream", emoji: "🍦", lean: L("acidity", -1) } },
 ];
 export const pairById = (id) => PAIRS.find((p) => p.id === id) || null;
@@ -48,6 +66,15 @@ export function parseAnswers(text) {
 export function answer(answers, pairId, choice) {
   if (!pairById(pairId) || !["a", "b", "skip"].includes(choice)) return answers;
   return { ...answers, [pairId]: choice };
+}
+export const pairKind = (p) => p.kind || "food";
+// The one row saved to the database for an answer. It holds only: whose answer (the player's own account id), which pair, a or b or skip, the words of the food
+// or thing picked, the line it leans on and which way, and when. No name, email or wine. Skipped pairs save no lean.
+export function answerRow(userId, pairId, choice, now = new Date()) {
+  const p = pairById(pairId);
+  if (!userId || !p || !["a", "b", "skip"].includes(choice)) return null;
+  const pick = choice === "skip" ? null : p[choice];
+  return { user_id: userId, pair_id: p.id, pair_kind: pairKind(p), choice, picked: pick ? pick.label : null, axis: pick ? pick.lean.axis : null, dir: pick ? pick.lean.dir : null, answered_at: now.toISOString() };
 }
 export const nextPair = (answers) => PAIRS.find((p) => !answers[p.id]) || null;
 export const answeredCount = (answers) => PAIRS.filter((p) => answers[p.id]).length;
@@ -81,18 +108,18 @@ export function matchWines({ answers, cards, structure, exclude = new Set(), lim
   const out = [];
   for (const c of cards || []) {
     if (exclude.has(c.id) || !accept(c)) continue;
-    const prof = structure && structure.get(c.id); if (!prof) continue;
+    const prof = (structure && structure.get(c.id)) || {};
     let total = 0, weight = 0; const why = [];
     for (const l of leans) {
-      const p = place(l.axis, prof[l.axis]); if (p === null) continue;
+      const p = l.axis === "world" ? worldOf(c.country) : place(l.axis, prof[l.axis]); if (p === null) continue;
       const w = Math.min(l.n, 3);   // the more picks on a line, the more it counts, up to three
       total += p * l.dir * w; weight += w;
       if (p * l.dir >= 0.4) why.push(AXES[l.axis][l.dir > 0 ? "hi" : "lo"]);
     }
     if (!weight || total / weight < 0.35 || !why.length) continue;
-    out.push({ card: c, score: total / weight, why });
+    out.push({ card: c, score: total / weight, why, world: why.includes(AXES.world.lo) || why.includes(AXES.world.hi) });
   }
   // best fit first; a tie goes to the name, so the list does not shuffle between visits
   out.sort((x, y) => y.score - x.score || String(x.card.producer).localeCompare(String(y.card.producer)));
-  return out.slice(0, limit).map((m) => ({ card: m.card, reason: "Its profile points to " + m.why.slice(0, 2).join(" and ") + "." }));
+  return out.slice(0, limit).map((m) => ({ card: m.card, reason: m.world && m.why.length === 1 ? `It is from ${m.card.country}: ${m.why[0]}.` : "It points to " + m.why.slice(0, 2).join(" and ") + "." }));
 }

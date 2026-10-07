@@ -2,7 +2,7 @@
 // string; nothing touches the network. The rules (what fills a square, what unlocks a tier) are in bingo.js; app.js holds the screen state and clicks.
 import { esc, wineName, entryName } from "./logic.js?v=10";
 import { infoLine } from "./wineline.js?v=1";
-import { PAIRS, AXES, nextPair, answeredCount, pickedCount, isDone, leanings } from "./thisorthat.js?v=1";
+import { PAIRS, AXES, nextPair, answeredCount, pickedCount, isDone, leanings } from "./thisorthat.js?v=2";
 import { TIERS, CARDS, CLEARS_TO_UNLOCK, cardById, cardsOfTier, tierOpen, clearedIn } from "./bingo.js?v=2";
 
 // g: { screen: "hub" | "bingo" | "card", cardId, sq }
@@ -122,5 +122,5 @@ function totResults(tot) {
   return `<p class="ptext">${isDone(tot.answers) ? "All done. " : ""}You picked ${picked} ${picked === 1 ? "food" : "foods"}. Here is what that leans toward:</p>
     <div class="tleans">${lines}</div>${wines}
     <div class="tskip"><button class="btn outline slim" data-action="game:totagain">Play again</button></div>
-    <div class="muted small bnote">Just for fun: the leanings come from a simple list of food pairs, not from a test of your taste. It is kept on this phone and does not change your Discover cards.</div>`;
+    <div class="muted small bnote">Just for fun: the leanings come from a simple list of pairs, not from a test of your taste. Your picks are also saved with your account, without your name, to help us learn how food and wine tastes connect. They do not change your Discover cards.</div>`;
 }

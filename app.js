@@ -6,7 +6,7 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=10";
-import * as db from "./data.js?v=15";
+import * as db from "./data.js?v=16";
 import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=2";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=2";
 import { shrinkImage } from "./photos.js?v=5";
@@ -29,8 +29,8 @@ import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from
 import { createFeedback } from "./feedback.js?v=3";
 import { createEditor } from "./editor.js?v=23";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=3";
-import { gamesHtml } from "./games.js?v=6";
-import { parseAnswers, answer as totAnswer, nextPair, matchWines } from "./thisorthat.js?v=1";
+import { gamesHtml } from "./games.js?v=7";
+import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=2";
 import { demoHtml, attachDemo, STEPS as DEMO_STEPS } from "./demo.js?v=3";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=2";
 import { recommendMix, recommend } from "./recommend.js?v=3";
@@ -1188,7 +1188,13 @@ document.addEventListener("click", async (ev) => {
       else if (a === "tot") state.g = { screen: "tot", cardId: null, sq: null, totResults: false };
       else if (a === "pick" || a === "skip") {   // This or That: the answer goes to the next question that has none yet
         const left = nextPair(state.totAnswers);
-        if (left) { state.totAnswers = totAnswer(state.totAnswers, left.id, a === "skip" ? "skip" : b); store.set(TOT_KEY, JSON.stringify(state.totAnswers)); }
+        if (left) {
+          const choice = a === "skip" ? "skip" : b;
+          state.totAnswers = totAnswer(state.totAnswers, left.id, choice); store.set(TOT_KEY, JSON.stringify(state.totAnswers));
+          // Saved for the owner's research (see thisorthat.js answerRow). The game never waits for it, and a failed save (for example, the table is not there yet) is not shown.
+          const row = answerRow(state.user && state.user.id, left.id, choice);
+          if (row && state.sb) db.saveThisOrThat(state.sb, row).catch((e) => console.warn("This or That answer not saved:", e && e.message));
+        }
       }
       else if (a === "totresults") state.g = { ...state.g, totResults: true };
       else if (a === "totagain") { state.totAnswers = {}; store.set(TOT_KEY, "{}"); state.g = { screen: "tot", cardId: null, sq: null, totResults: false }; }

@@ -530,3 +530,8 @@ export async function saveWineReach(sb, wineId, reach) {
   const rows = must(await sb.from("wines").update({ reach: reach === null ? null : Number(reach) }).eq("id", wineId).select("id"));
   if (!rows || !rows.length) throw new Error("The change was not saved. Your access may not allow it, or database update 15 has not been run.");
 }
+
+// This or That (thisorthat.js): one row per player and pair. Needs the table from docs/this_or_that.sql; until it exists the save fails and the game still works.
+export async function saveThisOrThat(sb, row) {
+  must(await sb.from("this_or_that_answers").upsert(row, { onConflict: "user_id,pair_id" }));
+}
