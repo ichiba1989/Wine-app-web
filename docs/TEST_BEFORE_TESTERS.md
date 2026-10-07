@@ -3,12 +3,12 @@
 Keep this list current. Tick each item (and date it) only after trying it on a throwaway account with the live database. Nothing here has been run against the real Supabase yet.
 
 ## 1. Run the database scripts (in this order), then reload the app twice
-- [ ] `docs/this_or_that.sql` (This or That tables; the account script needs them)
-- [ ] `docs/retain_after_delete.sql` (account deletion keeps data anonymously)
-- [ ] `docs/soft_delete.sql` (deleting an entry, swipe or photo only hides it). Copy it from the GitHub file if chat copying adds `<` or `[` marks. Run part 1 before part 2 (the views).
+- [x] (2026-10-07, owner ran it) `docs/this_or_that.sql` (This or That tables; the account script needs them)
+- [x] (2026-10-07, owner ran it) `docs/retain_after_delete.sql` (account deletion keeps data anonymously)
+- [x] (2026-10-07, owner ran it; the two views then needed `security_invoker` set again, done) `docs/soft_delete.sql` (deleting an entry, swipe or photo only hides it). Copy it from the GitHub file if chat copying adds `<` or `[` marks. Run part 1 before part 2 (the views).
 - [ ] Each script runs with no error, and a second run also finishes cleanly.
 
-- [ ] **Privacy check:** with no one signed in, the public key must see nothing. Run `curl -s -H "apikey: PUBLIC_KEY" -H "Authorization: Bearer PUBLIC_KEY" "SUPABASE_URL/rest/v1/v_journal_entries?select=id&limit=1"` and the same for `v_user_wine_state`, `consumptions`, `encounters`, `journal_photos`: each must return `[]` (or a permission error). Any row means the views lost `security_invoker` (see the end of `docs/soft_delete.sql`).
+- [x] (2026-10-07, checked with the public key: all returned `[]`, and the four delete functions answered "Not signed in") **Privacy check:** with no one signed in, the public key must see nothing. Run `curl -s -H "apikey: PUBLIC_KEY" -H "Authorization: Bearer PUBLIC_KEY" "SUPABASE_URL/rest/v1/v_journal_entries?select=id&limit=1"` and the same for `v_user_wine_state`, `consumptions`, `encounters`, `journal_photos`: each must return `[]` (or a permission error). Any row means the views lost `security_invoker` (see the end of `docs/soft_delete.sql`).
 
 ## 2. Deleting in the app only hides (use a throwaway guest account)
 - [ ] Swipe up on a wine (I've had it), add a photo to the entry, rate it, then delete the entry: it disappears from Journal, Swipes counts and Profile.
