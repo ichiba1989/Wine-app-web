@@ -1,5 +1,6 @@
 // The one consent page. Two ticks: "I am 21 or older" and "I accept the terms and conditions", where the words link to the full terms and privacy
-// policy (privacy.html, the one place the terms are written). They must accept both to use the app. Nothing about how data is used or kept is repeated here.
+// policy (privacy.html, the one place the terms are written). A small scrolling window shows that same page (an iframe, so the text is never copied here).
+// They must accept both to use the app.
 // It is shown once, and again whenever CONSENT_VERSION changes (change it whenever the wording of the terms changes).
 // The rules at the top are pure (no browser, no network). acceptConsents at the bottom talks to Supabase.
 import { esc } from "./logic.js?v=10";
@@ -38,6 +39,8 @@ export function consentHtml({ accepted = {}, underage = false, busy = false, err
       <span><b>${labelHtml(c)}</b></span></label>`;
   return `<div class="consentpage"><div class="serif" style="font-size:28px;line-height:1.1">A game that learns your palate while teaching you about wine.</div>
     ${tick(CONSENTS[0])}
+    <div class="termshead">Terms and conditions <span class="muted small">(scroll to read it all)</span></div>
+    <div class="termsbox"><iframe src="${TERMS_URL}?embed=1" title="Terms and conditions and privacy policy" loading="eager"></iframe></div>
     ${tick(CONSENTS[1])}
     <div id="consentErr" class="err">${esc(error)}</div>
     <button class="btn primary" data-consent-go="1"${allAccepted(accepted) && !busy ? "" : " disabled"}>${busy ? "Saving\u2026" : "Accept and continue"}</button>

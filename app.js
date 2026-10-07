@@ -20,7 +20,7 @@ import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, c
 import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=3";
 import { applyVisualTables } from "./visualdata.js?v=1";
 import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=1";
-import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=5";
+import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=6";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
 import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting } from "./tasting.js?v=2";
 import { buildDeck, userModel } from "./deck.js?v=4";

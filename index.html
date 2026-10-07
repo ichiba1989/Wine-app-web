@@ -331,6 +331,10 @@
   .gopt.cat.open { border-color: var(--slate); }
   .gsub { margin: 6px 0 8px; padding: 8px 10px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
   .gsub[hidden] { display: none; }
+  /* the terms window on the consent screen: big enough to notice and scroll, small enough to leave room for the logo and the rest */
+  .termshead { font-size: calc(14px * var(--ts)); font-weight: 600; margin: 14px 0 6px; text-align: left; }
+  .termsbox { height: clamp(170px, 32dvh, 300px); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #fff; }
+  .termsbox iframe { display: block; width: 100%; height: 100%; border: 0; }
   .consentpage > a.link { display: inline-block; margin: 6px 0 2px; }
   /* How did it taste? (the steps that replace the structure sliders) */
   .tq { margin-top: 14px; }
@@ -531,6 +535,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=58" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=59" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>

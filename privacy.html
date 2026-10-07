@@ -10,9 +10,15 @@
   .muted { color: #4b5a50; font-size: 14px; }
   a { color: #3e5c76; }
   .box { background: #f3f6f1; border: 1px solid #c3cfc1; border-radius: 14px; padding: 4px 16px 10px; margin-top: 14px; }
-</style></head>
+  /* shown inside the box on the consent screen (?embed): no back link, no page margins */
+  .embed body { background: #fff; }
+  .embed main { padding: 6px 14px 20px; }
+  .embed .backlink { display: none; }
+  .embed h1 { font-size: 22px; }
+</style>
+<script>if (/[?&]embed\b/.test(location.search)) document.documentElement.className = "embed";</script></head>
 <body><main>
-<p><a href="index.html">&larr; Back to the app</a></p>
+<p class="backlink"><a href="index.html">&larr; Back to the app</a></p>
 <h1>Terms and privacy policy</h1>
 <p class="muted">Last updated: October 2026. DRAFT, being reviewed by our lawyers, so the wording may change. This is an early test version of the app. This one page is our terms and conditions and our privacy policy, in plain language: the rules for using the app and what it does with your information. By tapping "I accept the terms and conditions" you agree to all of it.</p>
 
