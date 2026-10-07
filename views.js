@@ -327,8 +327,8 @@ export function confirmHtml({ title, body = "", more = "", yes = "Delete", error
     <div id="confirmErr" class="err">${esc(error)}</div>
     <div class="two"><button class="btn outline" data-confirm="no"${busy ? " disabled" : ""}>Cancel</button><button class="btn danger" data-confirm="yes"${busy ? " disabled" : ""}>${esc(yes)}</button></div></div></div>`;
 }
-export const KEPT_NOTE = "Your name, account, photos and notes are removed. Only the anonymous rating is kept, and if you enter this wine again it replaces that copy.";
-export const SWIPE_KEPT_NOTE = "Your account link is removed. Only an anonymous record of the swipe is kept, and if you swipe this wine again it replaces that copy.";
+export const KEPT_NOTE = "It disappears from your journal. We keep a copy in our records, without your name, to help us learn and improve the app.";
+export const SWIPE_KEPT_NOTE = "It disappears from your swipes. We keep a record of it, without your name, to help us learn and improve the app.";
 
 // ---------------------------------------------------------------- add a wine by hand
 export function formPhotosHtml(form) {

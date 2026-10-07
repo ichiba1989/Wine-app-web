@@ -53,6 +53,6 @@ For people 21 and older in the United States. If we learn someone under 21 has u
 If we change this policy we will update the date and ask you to accept it again. Questions or requests: issei.wine@gmail.com
 
 ## What must be built before this is true
-1. **Account deletion keeps data anonymously**: built (`docs/retain_after_delete.sql`), not yet run in the live database.
-2. **Entry, swipe and photo deletion hide instead of remove**: not built. It needs a `deleted_at` marker on journal entries, swipes and photo records, screens and views that skip marked rows, `delete_my_journal_entry` / `delete_my_swipe` and the photo deletes changed to mark instead of remove (and the app no longer erasing photo files), and a check that adding the same wine again still works. The database functions' current text must be read first (see the checks in the chat).
-3. Rewrite `consent.js`, `privacy.html` and the delete screens to this wording once lawyers approve it, and bump `CONSENT_VERSION`.
+1. **Account deletion keeps data anonymously**: written (`docs/retain_after_delete.sql`), to be run in Supabase.
+2. **Entry, swipe and photo deletion hide instead of remove**: written (`docs/soft_delete.sql`, plus the `data.js` changes), to be run in Supabase. Run it soon after this app version loads.
+3. The live `consent.js` (`CONSENT_VERSION` "2026-10-d"), `privacy.html`, the delete screens and the delete notes now say this. Lawyers still need to approve the wording, and the policy text above in this file is the fuller Vivino-style version.

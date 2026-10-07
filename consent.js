@@ -4,13 +4,13 @@
 // The rules at the top are pure (no browser, no network). acceptConsents at the bottom talks to Supabase.
 import { esc } from "./logic.js?v=10";
 
-export const CONSENT_VERSION = "2026-10-c";
+export const CONSENT_VERSION = "2026-10-d";
 export const AGE_RULE = "US-21";
 export const CONTACT_EMAIL = "issei.wine@gmail.com";
 
 export const CONSENTS = [
   { id: "age", label: "I am 21 or older.", detail: "The app is for people 21 and older in the United States." },
-  { id: "terms", label: "I have read and agree to the terms and privacy policy.", detail: "This includes photos of catalog wines being shown to other players after an editor checks them, prices being averaged anonymously, and what you add being kept, without your name, if you delete your account." },
+  { id: "terms", label: "I have read and agree to the terms and privacy policy.", detail: "This includes photos of catalog wines being shown to other players after an editor checks them, prices being averaged anonymously, and what you add being kept, without your name, even if you delete it or your account." },
 ];
 
 // The terms, consolidated from the privacy policy page. h = heading, p = paragraphs, ul = a list.
@@ -39,7 +39,7 @@ export const TERMS = [
     "Please only add photos of the bottle: no people, children, other personal information or anything you do not have the right to share. By accepting you confirm that photos you add are yours to share. Editors may reject a photo for any reason.",
   ] },
   { h: "Prices", p: ["The price you enter for a bottle stays in your journal. It is also added, without your name, to the other prices entered for the same wine, so the app can show a typical price on that wine's card. An average is used only once at least three different players have entered a price, and it is blended with a price set by our editors. Nobody can see an individual player's price."] },
-  { h: "How it tasted and tasting notes", p: ["Your answers about how a wine tasted, and the tasting notes made with the professional tasting grid, belong to your journal entry. They are private to you and only shape your own palate profile. They are deleted when you delete the entry or your account."] },
+  { h: "How it tasted and tasting notes", p: ["Your answers about how a wine tasted, and the tasting notes made with the professional tasting grid, belong to your journal entry. They are private to you and only shape your own palate profile. They disappear from your view when you delete the entry or your account; we keep a copy without your name, as described under Deleting your information."] },
   { h: "Who else handles it", ul: [
     "Supabase: our database, sign-in system and private storage for your photos.",
     "GitHub Pages: hosts the website.",
@@ -48,10 +48,10 @@ export const TERMS = [
   ], p: ["They handle your information only to provide their service. The people who run this app can technically access the database for maintenance and support; each person's data is protected by rules that stop other users from reading it, and photos are kept in private storage (except photos of catalog wines, as above)."] },
   { h: "No selling, no ads", p: ["We do not sell your information, show ads, or use advertising or analytics trackers."] },
   { h: "Deleting your information", ul: [
-    "Delete one journal entry or one swipe: it is removed with its notes, food, occasion and photos, including any shared copies of its photos. If you want something gone for good, delete it before you delete your account.",
+    "Delete a journal entry, a swipe or a photo: it disappears from your account and your screens, and any shared copies of its photos are taken down for other players. We keep a copy in our records without your name, and use it only as described here.",
     "Delete your whole account: in the app open Profile, then Overview, then \"Delete my account\". This erases your account, sign-in, email address, profile, consent record, trophies and palate summary, and takes back any photos you had shared for the catalog.",
     "What stays: everything else you added, that is your swipes, journal entries and notes, photos, own wines and private wine changes, quiz answers, game answers and feedback. We keep it without your name or email and with nothing that links it to your account. It is filed under a random code, so it stays together as one anonymous person's data. It is kept for research and to improve the app.",
-    "Because the link to you is cut, after you delete your account we cannot find your data again, show it to you, or remove it later. Notes and photos can show things about a person, so please do not put in anything you would not want kept.",
+    "Because the link to you is cut, after you delete your account we cannot find your data again or show it to you. Notes and photos can show things about a person, so please do not put in anything you would not want kept. If something we keep is harmful, unlawful or shows private information about someone, write to us and we will review it.",
     "We do not currently delete inactive accounts automatically.",
   ] },
   { h: "Your choices and changes", p: ["You can use the app as a guest, change or delete what you add, or delete your account at any time. Depending on where you live you may have further rights, such as asking for a copy of your information. If we change these terms we will update the date and ask you to accept them again. Last updated: October 2026."] },

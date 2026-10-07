@@ -91,3 +91,8 @@
 
 ## Update 2026-10-07 (later): owner wants in-app deletes to keep the data too
 - Owner decision: deleting an entry, swipe or photo in the app should not remove the information from our records either (it disappears for the player only). Today it does remove it. This is not built: it needs the text of `delete_my_journal_entry`, `delete_my_swipe` and the views, then a `deleted_at` design. See `docs/DATA_POLICY_DRAFT.md` ("What must be built") for the plan and the Vivino-style draft policy. `consent.js` and `privacy.html` must not be changed to promise this until it works.
+
+## Update 2026-10-07 (latest): in-app deletes now hide instead of remove
+- Built from the function and view texts the owner sent: `docs/soft_delete.sql` (run it in Supabase, then test with a throwaway guest) and `data.js` (reads skip hidden rows and fall back until the script is run; deleting an entry or swipe calls the new functions; photo files are never erased; replaced hand-typed wines are no longer deleted). The old `private.retained_*` anonymous copies are no longer written.
+- Live wording changed to match: `consent.js` "2026-10-d", `privacy.html`, the delete notes in `views.js`, the delete screen in `account.js`.
+- Both SQL scripts (`retain_after_delete.sql`, `soft_delete.sql`) must be run before anyone else uses the app. Community counts (price, "who has had it") still include hidden rows; send those view definitions if hidden rows should be left out.

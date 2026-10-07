@@ -3,6 +3,13 @@ import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.j
 import { BUCKET, newPhotoPath } from "./photos.js?v=5";
 
 const must = ({ data, error }) => { if (error) throw error; return data; };
+// Deleting in the app only hides things from the player (docs/soft_delete.sql): a row gets deleted_at filled in and stays in the database.
+// Reads of those tables skip hidden rows. Until that script has been run the column does not exist, so a read that fails for that reason is repeated without the filter.
+const active = async (build) => {
+  const r = await build(true);
+  return r.error && /deleted_at|column/i.test(String(r.error.message || "")) ? build(false) : r;
+};
+const onlyActive = (q, on) => (on ? q.is("deleted_at", null) : q);
 // Reads every row, 1000 at a time (Supabase returns at most 1000 rows per request).
 async function allRows(makeQuery) {
   const out = [];
@@ -50,8 +57,8 @@ export async function loadPerceptions(sb, consumptionId) {
 }
 export async function countRows(sb) {
   const [s, j] = await Promise.all([
-    sb.from("encounters").select("id", { count: "exact", head: true }),
-    sb.from("consumptions").select("id", { count: "exact", head: true }),
+    active((on) => onlyActive(sb.from("encounters").select("id", { count: "exact", head: true }), on)),
+    active((on) => onlyActive(sb.from("consumptions").select("id", { count: "exact", head: true }), on)),
   ]);
   return { swipes: s.count || 0, journal: j.count || 0 };
 }
@@ -104,7 +111,7 @@ export async function signedUrls(sb, paths) {
   return new Map(data.filter((d) => d.signedUrl).map((d) => [d.path, d.signedUrl]));
 }
 export async function loadEntryPhotos(sb, consumptionId) {
-  const rows = must(await sb.from("journal_photos").select("id, storage_path, created_at, share_status").eq("consumption_id", consumptionId).order("created_at", { ascending: true }));
+  const rows = must(await active((on) => onlyActive(sb.from("journal_photos").select("id, storage_path, created_at, share_status").eq("consumption_id", consumptionId), on).order("created_at", { ascending: true })));
   const urls = await signedUrls(sb, rows.map((r) => r.storage_path));
   return rows.map((r) => ({ ...r, url: urls.get(r.storage_path) || null }));
 }
@@ -130,8 +137,7 @@ export async function deletePhotos(sb, existing) {
   for (const p of existing) {
     try {
       if (p.status === "submitted" || p.status === "approved") await unshareMyPhoto(sb, p.id);   // taking a photo out of the journal also takes it back from the community
-      must(await sb.from("journal_photos").delete().eq("id", p.id));
-      await sb.storage.from(BUCKET).remove([p.path]);
+      must(await sb.rpc("delete_my_photo", { p_photo_id: p.id }));   // hides it from the player; the file and the record stay
     } catch (e) { failed.push({ photo: p, message: e.message || String(e) }); }
   }
   return failed;
@@ -227,15 +233,11 @@ export async function saveReferences(sb, userId, wineId, values, existingRows) {
 }
 
 // ---------------------------------------------------------------- deleting entries and swipes
-// The database functions remove the link to the account and keep only an anonymous rating (see the update script).
-// Photos are private files, so they are erased first; if that fails nothing else is deleted and the person can try again.
+// Deleting only hides the entry from the player: the database functions mark it deleted and keep everything, photos and their files included
+// (docs/soft_delete.sql). Photos the player had shared for the catalog are taken back first; if that fails nothing else changes.
 export async function deleteJournalEntry(sb, consumptionId) {
-  const rows = must(await sb.from("journal_photos").select("id, storage_path, share_status").eq("consumption_id", consumptionId));
-  await withdrawShared(sb, rows);   // shared copies go first; if that fails nothing else is deleted
-  if (rows.length) {
-    const r = await sb.storage.from(BUCKET).remove(rows.map((x) => x.storage_path));
-    if (r.error) throw r.error;
-  }
+  const rows = must(await active((on) => onlyActive(sb.from("journal_photos").select("id, storage_path, share_status").eq("consumption_id", consumptionId), on)));
+  await withdrawShared(sb, rows);
   must(await sb.rpc("delete_my_journal_entry", { p_consumption_id: consumptionId }));
 }
 export async function deleteSwipe(sb, wineVintageId) {
@@ -351,7 +353,6 @@ export async function changeJournalWine(sb, userId, entry, plan) {
     must(await sb.from("user_wines").update(plan.row).eq("id", plan.userWineId));
     return { userWineId: plan.userWineId };
   }
-  const oldUserWine = entry.user_wine_id || null;
   let patch, created = null;
   if (plan.action === "link_catalog") {
     patch = { wine_vintage_id: plan.wineVintageId, user_wine_id: null, style_override: plan.styleOverride || null };
@@ -361,11 +362,7 @@ export async function changeJournalWine(sb, userId, entry, plan) {
   }
   try { must(await sb.from("consumptions").update(patch).eq("id", entry.id)); }
   catch (e) { if (created) await sb.from("user_wines").delete().eq("id", created); throw e; }   // do not leave a stray wine behind
-  if (oldUserWine && oldUserWine !== created) {
-    // the old hand-typed wine goes if no other entry uses it
-    const rest = must(await sb.from("consumptions").select("id").eq("user_wine_id", oldUserWine).limit(1));
-    if (!rest.length) await sb.from("user_wines").delete().eq("id", oldUserWine);
-  }
+  // The old hand-typed wine is kept (nothing the player typed is ever removed); it simply has no entry pointing at it any more.
   return created ? { userWineId: created } : { wineVintageId: plan.wineVintageId };
 }
 
