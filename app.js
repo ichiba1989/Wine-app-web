@@ -29,7 +29,8 @@ import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from
 import { createFeedback } from "./feedback.js?v=3";
 import { createEditor } from "./editor.js?v=23";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=3";
-import { gamesHtml } from "./games.js?v=5";
+import { gamesHtml } from "./games.js?v=6";
+import { parseAnswers, answer as totAnswer, nextPair, matchWines } from "./thisorthat.js?v=1";
 import { demoHtml, attachDemo, STEPS as DEMO_STEPS } from "./demo.js?v=3";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=2";
 import { recommendMix, recommend } from "./recommend.js?v=3";
@@ -74,11 +75,13 @@ if (SUPABASE_KEY.startsWith("PASTE")) SUPABASE_KEY = store.get("wine_key") || SU
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
 const OWNER_START = { tab: "wines", q: "", issue: "all", sort: { wines: { key: "producer", dir: 1 }, bingo: { key: "tier", dir: 1 } }, lens: "confident", player: "me", seed: "", weights: {}, open: {}, msg: "", wineIds: null, config: null, configError: "" };
+const TOT_KEY = "wine.thisorthat";   // the This or That picks (thisorthat.js): only on this phone
 const GAMES_KEY = "wine.games";   // which bingo cards this phone has cleared (bingo.js)
 const state = {
   owner: { ...OWNER_START },                       // the Owner page (owner.js)
   g: { screen: "hub", cardId: null, sq: null },   // the Games tab: which screen is open
   gamesMemory: parseMemory(store.get(GAMES_KEY)),
+  totAnswers: parseAnswers(store.get(TOT_KEY)),
   settings: parseSettings(store.get(SETTINGS_KEY)),   // this phone's choices from the gear in the header (settings.js)
   status: "loading",            // loading | setup | error | age | main
   error: null, banner: null, tab: "discover", underage: false,
@@ -368,7 +371,10 @@ function gamesView() {
   let help = null;
   const c = state.g.screen === "card" ? bingoCard(state.g.cardId) : null;
   if (c && Number.isInteger(state.g.sq) && !progress.get(c.id).done[state.g.sq]) help = squareHelp(c.squares[state.g.sq], cardsById);
-  return gamesHtml(state.g, { progress, memory, news, help });
+  // The wines for the This or That results are only worked out on that screen.
+  const tot = { answers: state.totAnswers, matches: [] };
+  if (state.g.screen === "tot" && (state.g.totResults || !nextPair(state.totAnswers))) tot.matches = matchWines({ answers: state.totAnswers, cards: state.cards, structure: structureMap(state.cards, state.refs) });
+  return gamesHtml(state.g, { progress, memory, news, help, tot });
 }
 // Help for an empty square: a wine already in the journal that only needs rating, or else a few wines that would fill it, each from a different angle
 // (recommend.js lenses: a safe bet, something different, a stretch). Other games can call recommendMix() or recommend() with their own accept() and lenses.
@@ -1174,11 +1180,18 @@ document.addEventListener("click", async (ev) => {
       fly(el, a);
     }
     else if (action === "zoomcard") { const el = $("#card"); if (el && el.__toggleZoom) el.__toggleZoom(); }
-    else if (action === "game") {     // game:hub, game:bingo, game:card:ID, game:sq:N
+    else if (action === "game") {     // game:hub, game:bingo, game:card:ID, game:sq:N, game:tot, game:pick:a|b, game:skip, game:totresults, game:totagain
       if (a === "hub") state.g = { screen: "hub", cardId: null, sq: null };
       else if (a === "bingo") state.g = { screen: "bingo", cardId: null, sq: null };
       else if (a === "card") state.g = { screen: "card", cardId: b, sq: null };
       else if (a === "sq") state.g = { ...state.g, sq: Number(b) };
+      else if (a === "tot") state.g = { screen: "tot", cardId: null, sq: null, totResults: false };
+      else if (a === "pick" || a === "skip") {   // This or That: the answer goes to the next question that has none yet
+        const left = nextPair(state.totAnswers);
+        if (left) { state.totAnswers = totAnswer(state.totAnswers, left.id, a === "skip" ? "skip" : b); store.set(TOT_KEY, JSON.stringify(state.totAnswers)); }
+      }
+      else if (a === "totresults") state.g = { ...state.g, totResults: true };
+      else if (a === "totagain") { state.totAnswers = {}; store.set(TOT_KEY, "{}"); state.g = { screen: "tot", cardId: null, sq: null, totResults: false }; }
       renderBody();
       if (a === "sq") {                 // the details sit under the grid: bring them into view
         const d = document.querySelector(".bdetail");

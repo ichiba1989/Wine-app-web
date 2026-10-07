@@ -2,6 +2,7 @@
 // string; nothing touches the network. The rules (what fills a square, what unlocks a tier) are in bingo.js; app.js holds the screen state and clicks.
 import { esc, wineName, entryName } from "./logic.js?v=10";
 import { infoLine } from "./wineline.js?v=1";
+import { PAIRS, AXES, nextPair, answeredCount, pickedCount, isDone, leanings } from "./thisorthat.js?v=1";
 import { TIERS, CARDS, CLEARS_TO_UNLOCK, cardById, cardsOfTier, tierOpen, clearedIn } from "./bingo.js?v=2";
 
 // g: { screen: "hub" | "bingo" | "card", cardId, sq }
@@ -10,15 +11,19 @@ import { TIERS, CARDS, CLEARS_TO_UNLOCK, cardById, cardsOfTier, tierOpen, cleare
 export function gamesHtml(g, data) {
   if (g.screen === "card" && cardById(g.cardId)) return cardScreen(cardById(g.cardId), g, data);
   if (g.screen === "bingo") return bingoScreen(data);
+  if (g.screen === "tot") return totScreen(g, data);
   return hubScreen(data);
 }
 
-function hubScreen({ memory }) {
+function hubScreen({ memory, tot }) {
   const cleared = CARDS.filter((c) => memory.cleared[c.id]).length;
   return `<div class="games"><h2 class="serif gh">Games</h2>
     <button class="gtile" data-action="game:bingo"><div class="serif gt-title">Wine Bingo</div>
       <div class="muted small">Rate wines to fill nine-square cards. Three in a row clears a card, and clearing cards opens harder ones.</div>
       <div class="gt-meta">${cleared} of ${CARDS.length} cards cleared</div></button>
+    <button class="gtile" data-action="game:tot"><div class="serif gt-title">This or That</div>
+      <div class="muted small">Pick between two foods. We will tell you what your picks say about the wines you may enjoy.</div>
+      <div class="gt-meta">${tot && isDone(tot.answers) ? "Finished: see your results" : tot && answeredCount(tot.answers) ? `${answeredCount(tot.answers)} of ${PAIRS.length} answered` : `${PAIRS.length} quick choices`}</div></button>
     <div class="gtile soon" aria-disabled="true"><div class="serif gt-title">More games</div><div class="muted small">Coming later.</div></div></div>`;
 }
 
@@ -88,4 +93,34 @@ function cardScreen(c, g, { progress, memory, news, help }) {
     <div class="bgrid" role="group" aria-label="${esc(c.title)} bingo card">${squares}</div>
     <div class="bdetail">${detail}</div>
     ${c.draft ? `<div class="muted small bnote">This list is still being checked by our editors. ${esc(c.note || "")}</div>` : c.note ? `<div class="muted small bnote">${esc(c.note)}</div>` : ""}</div>`;
+}
+
+// ---------------------------------------------------------------- This or That (thisorthat.js): one question at a time, then the results
+// data.tot: { answers, matches: [{ card, reason }] }. g.totResults: show the results even if some pairs are left.
+function totScreen(g, { tot }) {
+  const a = tot.answers, left = nextPair(a);
+  const head = `<button class="link back" data-action="game:hub">\u2039 Games</button><h2 class="serif gh">This or That</h2>`;
+  if (!left || g.totResults) return `<div class="games">${head}${totResults(tot)}</div>`;
+  const n = answeredCount(a), side = (k, o) => `<button class="tbtn" data-action="game:pick:${k}"><span class="temoji" aria-hidden="true">${o.emoji}</span><span class="serif tlabel">${esc(o.label)}</span></button>`;
+  return `<div class="games">${head}
+    <div class="muted small">Question ${n + 1} of ${PAIRS.length}. Go with your gut.</div>
+    <div class="tprog" aria-hidden="true"><i style="width:${Math.round((n / PAIRS.length) * 100)}%"></i></div>
+    <div class="tpair" role="group" aria-label="Pick one">${side("a", left.a)}<span class="tor" aria-hidden="true">or</span>${side("b", left.b)}</div>
+    <div class="tskip"><button class="link" data-action="game:skip">I like neither</button>${pickedCount(a) >= 4 ? `<button class="link" data-action="game:totresults">See my results now</button>` : ""}</div></div>`;
+}
+function totResults(tot) {
+  const ls = leanings(tot.answers).filter((l) => l.dir !== 0), picked = pickedCount(tot.answers);
+  if (!picked) return `<p class="ptext">You have not picked anything yet.</p><button class="btn primary slim" data-action="game:totagain">Start</button>`;
+  const lines = ls.length
+    ? ls.map((l) => `<div class="tlean"><span class="serif">${esc(AXES[l.axis][l.dir > 0 ? "hi" : "lo"])}</span><span class="muted small"> ${l.strength === "lean" ? "You lean this way." : "Just a hint so far."}</span></div>`).join("")
+    : `<div class="muted small">Your picks went both ways, so there is no clear lean yet. That is fine: you like variety.</div>`;
+  const wines = tot.matches.length
+    ? `<h3 class="serif gh2">Wines to try</h3><div class="muted small">Their profiles point the same way. A starting point, not a promise.</div>` +
+      tot.matches.map((m) => `<div class="brec"><div class="serif">${esc(wineName(m.card))}</div><div class="muted small">${esc(infoLine(m.card))}</div><div class="small brwhy">${esc(m.reason)}</div>
+        <button class="pill" data-action="review:${esc(m.card.id)}">I've had it: rate it</button></div>`).join("")
+    : (ls.length ? `<div class="muted small tnone">None of our wines fits those leanings well yet.</div>` : "");
+  return `<p class="ptext">${isDone(tot.answers) ? "All done. " : ""}You picked ${picked} ${picked === 1 ? "food" : "foods"}. Here is what that leans toward:</p>
+    <div class="tleans">${lines}</div>${wines}
+    <div class="tskip"><button class="btn outline slim" data-action="game:totagain">Play again</button></div>
+    <div class="muted small bnote">Just for fun: the leanings come from a simple list of food pairs, not from a test of your taste. It is kept on this phone and does not change your Discover cards.</div>`;
 }

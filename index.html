@@ -424,6 +424,20 @@
   /* ---- games */
   .games { padding: 4px 4px 24px; }
   .gh { font-size: calc(24px * var(--ts)); font-weight: 400; margin: 6px 0 6px; }
+  /* This or That (games.js) */
+  .tprog { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin: 8px 0 14px; }
+  .tprog i { display: block; height: 100%; background: var(--wine); }
+  .tpair { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+  .tbtn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 140px; padding: 16px; background: var(--panel); border: 2px solid var(--line); border-radius: 20px; text-align: center; }
+  .tbtn:active { border-color: var(--wine); background: #f6ecee; }
+  .temoji { font-size: calc(44px * var(--ts)); line-height: 1; }
+  .tlabel { font-size: calc(22px * var(--ts)); }
+  .tor { align-self: center; font-size: calc(14px * var(--ts)); color: var(--muted, #6a7a70); font-style: italic; }
+  .tskip { display: flex; justify-content: space-between; gap: 12px; margin-top: 16px; }
+  .tleans { margin: 8px 0 4px; }
+  .tlean { padding: 10px 12px; margin-top: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; font-size: calc(16px * var(--ts)); }
+  .gh2 { font-size: calc(18px * var(--ts)); font-weight: 400; margin: 16px 0 4px; }
+  .tnone { margin-top: 12px; }
   .gtile { display: block; width: 100%; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px; margin-top: 12px; }
   .gtile.soon { opacity: .6; border-style: dashed; }
   .gt-title { font-size: calc(22px * var(--ts)); margin-bottom: 4px; }
@@ -525,6 +539,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=51" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=52" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>

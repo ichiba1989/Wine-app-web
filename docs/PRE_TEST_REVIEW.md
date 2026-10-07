@@ -72,3 +72,7 @@
 ## How the card works (demo)
 - New walkthrough (`demo.js`) opens once for a brand-new player and from Settings. It uses a made-up sample card and collects/saves nothing; it stores only the flag `wine.demoSeen` on the phone. No consent or privacy wording changed.
 - Review: read the step text in `STEPS` for tone and accuracy before testers use it.
+
+## This or That (game)
+- _2026-10-07:_ **An editor should review the food pairs in `thisorthat.js` before testers use them.** Each food is tied to a taste direction (for example ribeye leans fuller, filet mignon lighter; dark chocolate leans toward dry and grippy). These are simple, commonly held pairings written without an outside source, shown as "just for fun", never as wine facts. Matched wines come only from the catalog's starting profiles (editor scores, then rules), so a wine with no profile never appears.
+- Data: the picks are stored only on the phone (`wine.thisorthat`); nothing is collected or sent, and the picks do not change Discover. If they ever feed the taste model or are saved to the account, update the consent text first. Open question: should they?
