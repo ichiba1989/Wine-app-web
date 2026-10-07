@@ -5,7 +5,7 @@ import { DIMS, dimRange, VERDICTS, FLAGS, esc, styleLabel, verdictShort, entryCa
 import { marksHtml } from "./views.js?v=27";
 import { accountCardHtml } from "./account.js?v=8";
 import { feedbackCardHtml } from "./feedback.js?v=3";
-import { worldOf } from "./thisorthat.js?v=3";
+import { worldOf } from "./thisorthat.js?v=4";
 import { entryInfoLine } from "./wineline.js?v=1";
 
 // ---------------------------------------------------------------- settings

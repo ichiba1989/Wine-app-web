@@ -31,6 +31,10 @@ export const worldOf = (country) => (WORLD.old.includes(country) ? -1 : WORLD.ne
 
 const L = (axis, dir) => ({ axis, dir });
 // kind: "food" or "other" (a pair that is not about food). Pairs on the "world" line are the Old World / New World questions.
+// TO EXPAND (owner's note, 2026-10-07): the list is short on purpose for now. Add many more pairs, across more foods and everyday choices and across all six lines
+// (weight, zing, sweetness, grip, toast, where from), so the game gathers more input about how tastes outside wine relate to wine taste, and so the results
+// become a more relevant picture of a wine taste profile. More pairs per line also makes each line's lean firmer than "a hint". Keep the count out of the screens
+// (the results do not state how many were picked) because it will change. See docs/ARCHITECTURE_PLAN.md (open questions) and the test list before adding.
 // Pairs are plain data: add one by adding an entry. Keep both foods ordinary and the difference clear. emoji is only decoration.
 export const PAIRS = [
   { id: "steak", a: { label: "Ribeye", emoji: "🥩", lean: L("body", 1) }, b: { label: "Filet mignon", emoji: "🥩", lean: L("body", -1) } },

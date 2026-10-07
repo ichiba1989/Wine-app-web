@@ -2,7 +2,7 @@
 // string; nothing touches the network. The rules (what fills a square, what unlocks a tier) are in bingo.js; app.js holds the screen state and clicks.
 import { esc, wineName, entryName } from "./logic.js?v=10";
 import { infoLine } from "./wineline.js?v=1";
-import { PAIRS, AXES, AXIS_ORDER, AXIS_VIEW, nextPair, answeredCount, pickedCount, isDone, leanings, axisValues, compareAxes, isClear } from "./thisorthat.js?v=3";
+import { PAIRS, AXES, AXIS_ORDER, AXIS_VIEW, nextPair, answeredCount, pickedCount, isDone, leanings, axisValues, compareAxes, isClear } from "./thisorthat.js?v=4";
 import { TIERS, CARDS, CLEARS_TO_UNLOCK, cardById, cardsOfTier, tierOpen, clearedIn } from "./bingo.js?v=2";
 
 // g: { screen: "hub" | "bingo" | "card", cardId, sq }
@@ -146,7 +146,7 @@ function totResults(tot) {
       tot.matches.map((m) => `<div class="brec"><div class="serif">${esc(wineName(m.card))}</div><div class="muted small">${esc(infoLine(m.card))}</div><div class="small brwhy">${esc(m.reason)}</div>
         <button class="pill" data-action="review:${esc(m.card.id)}">I've had it: rate it</button></div>`).join("")
     : (ls.length ? `<div class="muted small tnone">None of our wines fits those leanings well yet.</div>` : "");
-  return `<p class="ptext">${isDone(tot.answers) ? "All done. " : ""}You picked ${picked} ${picked === 1 ? "food or thing" : "foods and things"}. Here is how that compares with the wines you have rated:</p>
+  return `<p class="ptext">${isDone(tot.answers) ? "All done. " : ""}Here is how your picks compare with the wines you have rated:</p>
     ${compareHtml(tot)}${wines}
     <div class="tskip"><button class="btn outline slim" data-action="game:totagain">Play again</button></div>
     <div class="muted small bnote">Just for fun: the picks come from a simple list of pairs, not from a test of your taste.</div>`;

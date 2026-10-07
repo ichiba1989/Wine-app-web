@@ -467,3 +467,7 @@ Phases 3–5 ordering is a recommendation; reorder based on what Phase 2 learns.
 21. **Migrations:** where is the authoritative current schema (and RLS policies)? It is not in this repo.
 
 **Out of scope until you say otherwise:** monetization, subscriptions, advertising, price-gated features.
+
+## Open item: expand This or That (2026-10-07)
+- The game has a short list of food and everyday pairs (17 today; the number is deliberately not shown to players). The owner wants it expanded: more pairs across foods and everyday choices, covering every line the results compare (weight, zing, sweetness, grip, toast, where from), so there is more input data and the game becomes a more relevant picture of a wine taste profile.
+- Questions to settle: how many pairs per line make a lean firm; whether pairs are chosen at random or adaptively; whether the answers (already saved in `this_or_that_answers`) are analysed against journal ratings before deciding which pairs earn their place; who reviews new pairs (an editor, like Bingo's draft lists).
