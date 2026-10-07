@@ -8,6 +8,8 @@ Keep this list current. Tick each item (and date it) only after trying it on a t
 - [ ] `docs/soft_delete.sql` (deleting an entry, swipe or photo only hides it). Copy it from the GitHub file if chat copying adds `<` or `[` marks. Run part 1 before part 2 (the views).
 - [ ] Each script runs with no error, and a second run also finishes cleanly.
 
+- [ ] **Privacy check:** with no one signed in, the public key must see nothing. Run `curl -s -H "apikey: PUBLIC_KEY" -H "Authorization: Bearer PUBLIC_KEY" "SUPABASE_URL/rest/v1/v_journal_entries?select=id&limit=1"` and the same for `v_user_wine_state`, `consumptions`, `encounters`, `journal_photos`: each must return `[]` (or a permission error). Any row means the views lost `security_invoker` (see the end of `docs/soft_delete.sql`).
+
 ## 2. Deleting in the app only hides (use a throwaway guest account)
 - [ ] Swipe up on a wine (I've had it), add a photo to the entry, rate it, then delete the entry: it disappears from Journal, Swipes counts and Profile.
 - [ ] In the Supabase Table editor: the `consumptions` row is still there with `deleted_at` filled in; its `journal_photos` row also has `deleted_at`; the photo file is still in the `journal-photos` bucket.

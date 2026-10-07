@@ -82,7 +82,7 @@ begin
 end $function$;
 
 -- 5. the two views the app reads skip hidden rows
-create or replace view public.v_journal_entries as
+create or replace view public.v_journal_entries with (security_invoker = true) as
  SELECT c."id",
     c.user_id,
     c.consumed_on,
@@ -126,7 +126,7 @@ create or replace view public.v_journal_entries as
      LEFT JOIN user_wines uw ON ((uw."id" = c.user_wine_id)))
   WHERE c.deleted_at IS NULL;
 
-create or replace view public.v_user_wine_state as
+create or replace view public.v_user_wine_state with (security_invoker = true) as
  SELECT user_id,
     wine_vintage_id,
     (array_agg(familiarity ORDER BY created_at DESC, id DESC) FILTER (WHERE (familiarity IS NOT NULL)))[1] AS familiarity,
@@ -143,3 +143,7 @@ create or replace view public.v_user_wine_state as
 --  * Other database objects that read consumptions or encounters directly (for example the community price and "who has had it" views) still count hidden rows.
 --    That matches the rule that nothing is removed; if you want hidden rows left out of those counts, send me their definitions.
 --  * If step 2 changed an index you rely on, it is now partial (ignores hidden rows); the app does not use "on conflict" on these tables, so nothing else is affected.
+
+-- IMPORTANT: security_invoker keeps each player's own access rules on these two views, so a player only ever sees their own rows.
+-- (Without it anyone holding the app's public key could read every player's entries and swipes.) To check, run in a browser or curl with only the public key:
+--   .../rest/v1/v_journal_entries?select=id&limit=1   must return [] when nobody is signed in.
