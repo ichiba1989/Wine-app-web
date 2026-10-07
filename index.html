@@ -397,7 +397,26 @@
   .zoombtn { flex: 0 0 auto; border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 11px 16px; font-size: calc(15px * var(--ts)); font-weight: 500; }
   .zreset { position: absolute; top: 12px; right: 12px; z-index: 3; border: 0; background: var(--ink); color: #fff; border-radius: 999px; padding: 8px 14px; font-size: calc(13px * var(--ts)); font-weight: 600; }
   .zreset[hidden] { display: none; }
+  .zicon { position: absolute; top: 10px; right: 10px; z-index: 3; width: 48px; height: 48px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 50%; border: 1.5px solid var(--wine); background: rgba(255,255,255,.96); color: var(--wine); box-shadow: 0 3px 10px -3px rgba(22,38,29,.35); }
+  .zicon:active { background: var(--wine); color: #fff; }
+  .zicon.hint { animation: zpulse 1.7s ease-out 3; }
+  @keyframes zpulse { 0% { box-shadow: 0 0 0 0 rgba(123,30,58,.45), 0 3px 10px -3px rgba(22,38,29,.35); } 70% { box-shadow: 0 0 0 14px rgba(123,30,58,0), 0 3px 10px -3px rgba(22,38,29,.35); } 100% { box-shadow: 0 0 0 0 rgba(123,30,58,0), 0 3px 10px -3px rgba(22,38,29,.35); } }
+  @media (prefers-reduced-motion: reduce) { .zicon.hint { animation: none; } }
+  .card.zoomed .zicon { display: none; }
+  .topline { padding-right: 52px; }   /* room for the zoom icon in the corner */
   .card.zoomed .swipe-label { display: none; }
+  /* "How the card works" (demo.js): a practice card in a sheet */
+  .demo { padding-top: 0; }
+  .dsteps { display: flex; gap: 6px; justify-content: center; margin: 4px 0 8px; }
+  .ddot { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+  .ddot.done { background: var(--slate); }
+  .ddot.on { background: var(--wine); transform: scale(1.25); }
+  .dtitle { margin: 4px 0; font-size: calc(20px * var(--ts)); }
+  .demostage { position: relative; height: min(46vh, 380px); height: min(46dvh, 380px); min-height: 300px; margin: 8px 0; }
+  .dnote { min-height: calc(22px * var(--ts)); font-size: calc(14px * var(--ts)); color: var(--wine); margin: 6px 0; }
+  .dnote.ok { color: var(--slate); font-weight: 600; }
+  .dnav { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; }
+  .dnav .btn { flex: 1; }
   .srow { padding: 12px 0; border-top: 1px solid var(--line); }
   .stitle { font-size: calc(15px * var(--ts)); font-weight: 600; margin-bottom: 8px; }
   .snote { margin-top: 6px; line-height: 1.4; }
@@ -508,6 +527,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=48" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=50" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>

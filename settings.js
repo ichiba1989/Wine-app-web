@@ -54,6 +54,7 @@ export function settingsHtml(s, user, { owner = false } = {}) {
     ${row("Text size", TEXT_SIZES.map((t) => chip(s.text === t.id, `text:${t.id}`, t.label)).join(""), "Makes the words bigger across the app.")}
     ${row("Answer by swiping", onOff("swipe"), "Swipe the card, or double-tap near its edge. Turn this off if swipes happen by accident; the buttons under the card stay on.")}
     ${row("Buttons under the card", onOff("buttons", !s.swipe), s.swipe ? "Tap a button to answer without swiping." : "Always on while swiping is off.")}
+    <div class="srow"><div class="stitle">How the card works</div><button class="btn outline slim" data-action="demo:open">Practice with a sample card</button><div class="muted small snote">A short walkthrough of swiping, the buttons and zoom. Nothing is saved.</div></div>
     ${row("Zoom", "", "Pinch the card with two fingers, double-tap the middle of it, or tap Zoom under the card. While it is zoomed, swiping is paused. Tap Reset zoom to go back.")}
     ${row("Motion", MOTION.map((m) => chip(s.motion === m.id, `motion:${m.id}`, m.label)).join(""), "Reduces the card's movement and the fades.")}
     ${owner ? `<div class="srow"><div class="stitle">Owner</div><button class="btn outline slim" data-action="owner:open">Open the owner page</button><div class="muted small snote">Tables of wines, lenses, bingo cards, checks and settings.</div></div>` : ""}

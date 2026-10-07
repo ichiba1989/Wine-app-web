@@ -11,7 +11,7 @@ import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=2";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=2";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=23";
+  visualFor, discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, KEPT_NOTE, SWIPE_KEPT_NOTE, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=24";
 import { createLearn } from "./learn.js?v=3";
 import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=1";
@@ -28,8 +28,9 @@ import { createProfile } from "./profile.js?v=14";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=5";
 import { createFeedback } from "./feedback.js?v=3";
 import { createEditor } from "./editor.js?v=23";
-import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=2";
+import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=3";
 import { gamesHtml } from "./games.js?v=5";
+import { demoHtml, attachDemo, STEPS as DEMO_STEPS } from "./demo.js?v=2";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=2";
 import { recommendMix, recommend } from "./recommend.js?v=3";
 import { ownerHtml, ownerTableHtml, wineRows, checkCounts, bingoCoverage, toggleSort, nextConfigValue } from "./owner.js?v=1";
@@ -244,6 +245,7 @@ async function enterMain() {
   try { state.crowd = await db.loadCrowd(state.sb); } catch (_) { state.crowd = new Map(); }
   rebuildDeck();
   state.status = "main"; render();
+  maybeShowDemo();
 }
 // The Discover deck: three decks (familiar, getting warmer, new territory) mixed by what the person knows and likes. See deck.js.
 // ---------------------------------------------------------------- bottle photos on the cards
@@ -381,7 +383,7 @@ function squareHelp(square, cardsById) {
 }
 function drawTab(body) {
   if (state.tab === "discover") {
-    body.innerHTML = discoverHtml({ deck: state.deck, banner: null, counts: state.counts, feedback: state.feedback, flaggedId: state.wfDone, nudge: showNudge(), buttons: state.settings.buttons });
+    body.innerHTML = discoverHtml({ deck: state.deck, banner: null, counts: state.counts, feedback: state.feedback, flaggedId: state.wfDone, nudge: showNudge(), buttons: state.settings.buttons, zoomHint: zoomHintFor(state.deck[0]) });
     const card = $("#card");
     if (card) attachCard(card);
     settlePhotos();
@@ -443,6 +445,16 @@ const reduceMotion = () => state.settings.motion === "reduce" || !!(window.match
 function applySettings() {
   document.documentElement.style.setProperty("--ts", String(textScale(state.settings)));
   document.documentElement.classList.toggle("reduce-motion", state.settings.motion === "reduce");
+}
+// ---------------------------------------------------------------- "How the card works" (demo.js): once for a brand-new player, any time from Settings
+// Brand new = never seen it, no swipes and no journal entries yet (so a returning player on a new phone is not interrupted). Nothing is saved but the "seen" flag.
+function drawDemo() { $("#overlay").innerHTML = demoHtml(state.demo); attachDemo($("#overlay"), state.demo); }
+function openDemo() { state.demo = { step: 0, done: {}, note: "" }; drawDemo(); }
+function closeDemo() { state.demo = null; store.set("wine.demoSeen", "1"); $("#overlay").innerHTML = ""; }
+function maybeShowDemo() {
+  if (store.get("wine.demoSeen")) return;
+  const fresh = !(state.journal || []).length && !(state.states || []).length;
+  if (fresh && state.tab === "discover") openDemo(); else store.set("wine.demoSeen", "1");
 }
 function openSettings() { $("#overlay").innerHTML = settingsHtml(state.settings, state.user, { owner: isOwner() }); }
 function closeSettings() { $("#overlay").innerHTML = ""; }
@@ -591,6 +603,7 @@ function attachCard(el) {
     // A tap on the map is only ever a tap on the map: it never counts toward a double-tap, whatever part of the card it is on.
     // The overlay opens a moment after the finger lifts, so the click that follows the tap lands on the card and not on the overlay.
     const hit = document.elementFromPoint(e.clientX, e.clientY), mapEl = hit && hit.closest("[data-zoom]"), nameEl = hit && hit.closest("a[data-wimg]");
+    if (hit && hit.closest("[data-zoomicon]")) { lastTap = null; clearHint(); toggleZoom(); return; }
     if (hit && hit.closest("[data-zreset]")) { lastTap = null; resetZoom(); return; }
     if (mapEl) { lastTap = null; clearHint(); const id = mapEl.dataset.zoom; setTimeout(() => openZoom(id), 60); return; }
     if (nameEl) { lastTap = null; clearHint(); openImages(nameEl.href); return; }
@@ -666,7 +679,20 @@ function attachCard(el) {
   });
   el.addEventListener("pointercancel", (e) => { pts.delete(e.pointerId); pinch = null; pan = null; start = null; settle(); });
   // If a browser does deliver the click to the link itself, the tap was already handled above: do not open it twice. (A keyboard click, detail 0, follows the link normally.)
-  el.addEventListener("click", (ev) => { const a = ev.target.closest && ev.target.closest("a[data-wimg]"); if (a && ev.detail !== 0) ev.preventDefault(); });
+  el.addEventListener("click", (ev) => {
+    const a = ev.target.closest && ev.target.closest("a[data-wimg]"); if (a && ev.detail !== 0) ev.preventDefault();
+    if (ev.detail === 0 && ev.target.closest && ev.target.closest("[data-zoomicon]")) toggleZoom();   // from the keyboard (a finger's tap is handled above)
+    if (ev.detail === 0 && ev.target.closest && ev.target.closest("[data-zreset]")) resetZoom();
+  });
+}
+// The zoom icon pulses a little on the first few cards a new player sees, so they notice it. (Nothing pulses for reduced motion.)
+function zoomHintFor(card) {
+  if (!card) return false;
+  if (state.zoomHintId === card.id) return true;
+  const n = Number(store.get("wine.zoomHint") || 0);
+  if (n >= 3) return false;
+  store.set("wine.zoomHint", String(n + 1)); state.zoomHintId = card.id;
+  return true;
 }
 
 // ---------------------------------------------------------------- the rating sheet
@@ -1175,6 +1201,11 @@ document.addEventListener("click", async (ev) => {
     }
     else if (action === "settings") openSettings();
     else if (action === "setclose") closeSettings();
+    else if (action === "demo") {     // demo:open, demo:next, demo:back, demo:close
+      if (a === "open") openDemo();
+      else if (a === "close") closeDemo();
+      else if (state.demo) { state.demo.step = Math.max(0, Math.min(DEMO_STEPS.length - 1, state.demo.step + (a === "next" ? 1 : -1))); state.demo.note = ""; drawDemo(); }
+    }
     else if (action === "set") {      // set:text:large, set:swipe:off, ...
       state.settings = changeSetting(state.settings, a, b);
       store.set(SETTINGS_KEY, JSON.stringify(state.settings));

@@ -68,3 +68,7 @@
 - [ ] Decide the final wording, apply it in both files
 - [ ] Bump `CONSENT_VERSION` once, and bump the `?v=` for `consent.js` and `app.js`
 - [ ] Test the first-run screen, a returning player (sees the new terms once), and account deletion
+
+## How the card works (demo)
+- New walkthrough (`demo.js`) opens once for a brand-new player and from Settings. It uses a made-up sample card and collects/saves nothing; it stores only the flag `wine.demoSeen` on the phone. No consent or privacy wording changed.
+- Review: read the step text in `STEPS` for tone and accuracy before testers use it.
