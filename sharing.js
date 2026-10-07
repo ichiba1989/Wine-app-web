@@ -37,7 +37,6 @@ export function chipLabel(p) {
 export const approvalPlan = (currentKind) => ({ replaces: currentKind !== "official" });
 // Sharing is part of the consent page everyone accepts before using the app (consent.js), so there is no tick box here any more.
 // Photos added to a wine in the catalog are offered to the editors automatically; a person can take any photo back with one tap.
-export const SHARE_NOTE = "Photos of wines in the catalog are checked by our editors and may then appear on the wine's card, without your name. Tap Shared under a photo to take it back.";
 
 // ---------------------------------------------------------------- the rating window (players)
 const chipHtml = (p) => {
@@ -53,9 +52,8 @@ export function sheetPhotosHtml(sheet) {
   const existing = sheet.photos.existing.map((p) => `<div class="phwrap"><div class="ph${p.removed ? " gone" : ""}">${p.url ? `<img src="${esc(p.url)}" alt="Your photo">` : ""}<button class="phx" data-sheet="togglephoto:${p.id}" aria-label="${p.removed ? "Keep this photo" : "Remove this photo"}">${p.removed ? "↺" : "×"}</button></div>${catalog && !p.removed ? chipHtml(p) : ""}</div>`).join("");
   const queued = sheet.photos.queued.map((p) => `<div class="phwrap"><div class="ph"><img src="${esc(p.url)}" alt="New photo"><button class="phx" data-sheet="unqueue:${p.key}" aria-label="Remove this photo">×</button></div>${catalog ? `<div class="sharechip off">Shared after review</div>` : ""}</div>`).join("");
   const label = photoCount(sheet) ? "Add more photos" : "Add photos";
-  const note = catalog && photoCount(sheet) ? `<div class="muted tiny" style="margin-top:8px">${esc(SHARE_NOTE)}</div>` : "";
   return `<div class="phs">${existing}${queued}</div>
-    <label class="pill addph">${label}<input type="file" accept="image/*" multiple hidden data-photo="sheet"></label>${note}`;
+    <label class="pill addph">${label}<input type="file" accept="image/*" multiple hidden data-photo="sheet"></label>`;
 }
 // Carries out what the person chose for photos they already had. Returns the ones that failed, so Save can report them.
 export async function applyShareChanges(sb, existing) {

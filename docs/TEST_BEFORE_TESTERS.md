@@ -42,6 +42,7 @@ Keep this list current. Tick each item (and date it) only after trying it on a t
 - [ ] Card gestures still work on a real phone (swipe, edge double-tap, pinch, pan while zoomed).
 
 ## 6. Consent and privacy (lawyers first)
+- [ ] A brand-new guest sees only the two ticks ("I am 21 or older", "I accept the terms and conditions"), the link opens `privacy.html` ("Terms and privacy policy") in a new tab without ticking the box, and Accept and continue works only with both ticked. No privacy or data-use text appears elsewhere in the app (delete screens, photos, games).
 - [ ] The lawyers have reviewed `consent.js`, `privacy.html` and `docs/DATA_POLICY_DRAFT.md` / `docs/PRIVACY_DRAFT_NOTES.md`; their answers are in the wording; `CONSENT_VERSION` was bumped for any change.
 - [ ] What the text says matches what the database does (items 2 and 3 above): hidden, not removed; account deleted, data kept without a name.
 - [ ] The delete screens (`account.js`) and delete notes (`views.js`) say the same thing.

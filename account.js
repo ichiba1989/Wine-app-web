@@ -53,7 +53,7 @@ export function friendlyError(err, mode) {
 
 // ---------------------------------------------------------------- drawing
 // The card at the bottom of Profile, Overview.
-const footLinks = `<div class="acctfoot"><a class="link" href="privacy.html" target="_blank" rel="noopener">Privacy policy</a>
+const footLinks = `<div class="acctfoot"><a class="link" href="privacy.html" target="_blank" rel="noopener">Terms and privacy policy</a>
   <button class="link dangerlink" data-account="open:delete">Delete my account</button></div>`;
 export function accountCardHtml(user) {
   if (!user) return "";
@@ -72,8 +72,8 @@ export function accountCardHtml(user) {
 function deleteSheetHtml(A) {
   const ready = A.typed.trim().toUpperCase() === "DELETE";
   const body = A.step === "deleted"
-    ? `<div class="okbox">Your account has been deleted. What you added is kept without your name.</div><button class="btn primary" data-account="finish">Done</button>`
-    : `<p class="ptext"><b>Deleted for good:</b> your account and sign-in, your email address, your profile, your trophies and palate summary, and any photos you shared for the catalog.</p><p class="ptext"><b>Kept without your name:</b> the rest of what you added (swipes, journal entries, notes, photos, game answers and feedback), with nothing that links it to you. We cannot find or remove it after you delete your account. </p>
+    ? `<div class="okbox">Your account has been deleted.</div><button class="btn primary" data-account="finish">Done</button>`
+    : `<p class="ptext">This closes your account and signs you out for good. What we keep is described in the <a href="privacy.html" target="_blank" rel="noopener">terms and privacy policy</a>.</p>
       <input class="field" data-acct-confirm placeholder="Type DELETE to confirm" autocapitalize="characters" autocomplete="off" spellcheck="false" value="${esc(A.typed)}">
       <div id="acctErr" class="err">${esc(A.error)}</div>
       <button class="btn danger" data-account="deleteNow" id="deleteBtn"${ready && !A.busy ? "" : " disabled"}>Delete my account</button>

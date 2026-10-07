@@ -99,3 +99,6 @@
 
 ## Test checklist
 - The checks to run before inviting testers are in `docs/TEST_BEFORE_TESTERS.md`. Nothing in the 2026-10-07 database work has been run against the live database yet.
+
+## Update 2026-10-07 (consent simplified)
+- The consent page is now two ticks, "I am 21 or older" and "I accept the terms and conditions" (link to `privacy.html`, renamed "Terms and privacy policy" and now holding the use rules too). `CONSENT_VERSION` "2026-10-e". The in-app explanations were removed: the "What is kept?" notes on delete, the long delete-account text (now one line plus the link), the photo-sharing note under photos, and the data note in This or That. Lawyers: the sharing of catalog photos and the keep-after-delete rule are now disclosed only on `privacy.html`, so check that is enough.

@@ -319,16 +319,13 @@ export function sheetHtml(sheet, { saving = false, error = "", page = 0 } = {}) 
 }
 
 // A confirmation that sits on top of whatever is open. Buttons carry data-confirm="yes" or "no".
-// Short on purpose: the title, which wine, and the two buttons. What is kept is one small tap away.
-export function confirmHtml({ title, body = "", more = "", yes = "Delete", error = "", busy = false }) {
+// Short on purpose: the title, which wine, and the two buttons.
+export function confirmHtml({ title, body = "", yes = "Delete", error = "", busy = false }) {
   return `<div class="overlay top"><div class="sheet small" role="alertdialog" aria-label="${esc(title)}">
     <div class="serif big">${esc(title)}</div>${body ? `<div class="serif confirmname">${body}</div>` : ""}
-    ${more ? `<details class="whatkept"><summary>What is kept?</summary><p class="muted small">${more}</p></details>` : ""}
     <div id="confirmErr" class="err">${esc(error)}</div>
     <div class="two"><button class="btn outline" data-confirm="no"${busy ? " disabled" : ""}>Cancel</button><button class="btn danger" data-confirm="yes"${busy ? " disabled" : ""}>${esc(yes)}</button></div></div></div>`;
 }
-export const KEPT_NOTE = "It disappears from your journal. We keep a copy in our records, without your name, to help us learn and improve the app.";
-export const SWIPE_KEPT_NOTE = "It disappears from your swipes. We keep a record of it, without your name, to help us learn and improve the app.";
 
 // ---------------------------------------------------------------- add a wine by hand
 export function formPhotosHtml(form) {

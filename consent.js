@@ -1,61 +1,18 @@
-// The one consent page. Two ticks: "I am 21 or older" and "I agree to the terms and privacy policy", with all the terms in a small scrolling
-// window so everything can be read on one page. They must accept both to use the app.
+// The one consent page. Two ticks: "I am 21 or older" and "I accept the terms and conditions", where the words link to the full terms and privacy
+// policy (privacy.html, the one place the terms are written). They must accept both to use the app. Nothing about how data is used or kept is repeated here.
 // It is shown once, and again whenever CONSENT_VERSION changes (change it whenever the wording of the terms changes).
 // The rules at the top are pure (no browser, no network). acceptConsents at the bottom talks to Supabase.
 import { esc } from "./logic.js?v=10";
 
-export const CONSENT_VERSION = "2026-10-d";
+export const CONSENT_VERSION = "2026-10-e";
 export const AGE_RULE = "US-21";
 export const CONTACT_EMAIL = "issei.wine@gmail.com";
 
+// link: the words in the label that become a link to the terms page.
+export const TERMS_URL = "privacy.html";
 export const CONSENTS = [
-  { id: "age", label: "I am 21 or older.", detail: "The app is for people 21 and older in the United States." },
-  { id: "terms", label: "I have read and agree to the terms and privacy policy.", detail: "This includes photos of catalog wines being shown to other players after an editor checks them, prices being averaged anonymously, and what you add being kept, without your name, even if you delete it or your account." },
-];
-
-// The terms, consolidated from the privacy policy page. h = heading, p = paragraphs, ul = a list.
-export const TERMS = [
-  { h: "Who can use the app", p: ["The app is for people 21 and older in the United States. If we learn that someone under 21 has been using it, we will delete their account."] },
-  { h: "Using the app", p: ["This is an early test version and it is provided as it is. It is for fun and for learning about wine, for your own use. It is not health or medical advice, and please drink responsibly. We may change or stop the app, and we may remove content that breaks these terms."] },
-  { h: "What we keep", ul: [
-    "A guest ID the app creates automatically. It is not your name.",
-    "Your email address, only if you choose to save your progress with email or sign in. It is used to send you sign-in codes and links.",
-    "That you confirmed you are 21 or older, and when. We do not ask for or store your date of birth.",
-    "What you do in the app: wines you swipe on; journal entries (the wine, your verdict, how it tasted, whether you would drink it alone or with food, the date, price, food, occasion and notes); your own private changes to a wine's details; photos you add; quiz answers and timed rounds; your trophies; and the palate summary worked out from these.",
-    "Your answers in the games, such as This or That (the foods and everyday things you pick between), and which games and cards you finish.",
-    "Feedback you send, such as a report that a wine or a quiz question looks wrong.",
-    "Technical information: your browser keeps a sign-in token and a few settings on your device, and the services below see technical details such as your IP address when your device connects to them.",
-  ] },
-  { h: "How we use it", ul: [
-    "To run the app: show your journal and swipes, learn your palate, track your quiz progress, and sign you in.",
-    "To improve the wine information and quiz questions, using the feedback people send, and to keep the app working and safe.",
-    "For research: to study how what people like to eat, drink and do relates to the wines they enjoy, and to make the app's suggestions better. We may publish or share what we find only as combined results about many people, never about one person.",
-  ] },
-  { h: "Games", p: ["In games like This or That you pick between two foods or everyday things. Your picks are saved with your account and are used for the research above and for the suggestions in the game. They do not change the wines shown to you in Discover. Wine is not named in the questions, and there are no right or wrong answers."] },
-  { h: "Photos of wines in the catalog", p: [
-    "You agree that photos you add to journal entries for wines in our catalog may be shown to other players. There is no tick box on each photo. Photos of wines you type in yourself are never shared.",
-    "Each photo is offered to our editors first. They see the picture and the wine only: not your name, email, notes, price or anything else in your journal. An editor approves or rejects it, and a rejected photo is never shown. An approved photo may appear on that wine's card for every player, and may be copied to other vintages of the same wine. It is shown without your name.",
-    "You can take a photo back at any time (tap Shared under the photo). The shared copies are deleted, and also when you delete the photo, the entry or your account. An editor can also take a shared photo down.",
-    "Please only add photos of the bottle: no people, children, other personal information or anything you do not have the right to share. By accepting you confirm that photos you add are yours to share. Editors may reject a photo for any reason.",
-  ] },
-  { h: "Prices", p: ["The price you enter for a bottle stays in your journal. It is also added, without your name, to the other prices entered for the same wine, so the app can show a typical price on that wine's card. An average is used only once at least three different players have entered a price, and it is blended with a price set by our editors. Nobody can see an individual player's price."] },
-  { h: "How it tasted and tasting notes", p: ["Your answers about how a wine tasted, and the tasting notes made with the professional tasting grid, belong to your journal entry. They are private to you and only shape your own palate profile. They disappear from your view when you delete the entry or your account; we keep a copy without your name, as described under Deleting your information."] },
-  { h: "Who else handles it", ul: [
-    "Supabase: our database, sign-in system and private storage for your photos.",
-    "GitHub Pages: hosts the website.",
-    "Brevo: delivers the sign-in emails, only if you use email sign-in.",
-    "esm.sh and jsDelivr: deliver a piece of code the app needs; they see your IP address and browser details when it loads.",
-  ], p: ["They handle your information only to provide their service. The people who run this app can technically access the database for maintenance and support; each person's data is protected by rules that stop other users from reading it, and photos are kept in private storage (except photos of catalog wines, as above)."] },
-  { h: "No selling, no ads", p: ["We do not sell your information, show ads, or use advertising or analytics trackers."] },
-  { h: "Deleting your information", ul: [
-    "Delete a journal entry, a swipe or a photo: it disappears from your account and your screens, and any shared copies of its photos are taken down for other players. We keep a copy in our records without your name, and use it only as described here.",
-    "Delete your whole account: in the app open Profile, then Overview, then \"Delete my account\". This erases your account, sign-in, email address, profile, consent record, trophies and palate summary, and takes back any photos you had shared for the catalog.",
-    "What stays: everything else you added, that is your swipes, journal entries and notes, photos, own wines and private wine changes, quiz answers, game answers and feedback. We keep it without your name or email and with nothing that links it to your account. It is filed under a random code, so it stays together as one anonymous person's data. It is kept for research and to improve the app.",
-    "Because the link to you is cut, after you delete your account we cannot find your data again or show it to you. Notes and photos can show things about a person, so please do not put in anything you would not want kept. If something we keep is harmful, unlawful or shows private information about someone, write to us and we will review it.",
-    "We do not currently delete inactive accounts automatically.",
-  ] },
-  { h: "Your choices and changes", p: ["You can use the app as a guest, change or delete what you add, or delete your account at any time. Depending on where you live you may have further rights, such as asking for a copy of your information. If we change these terms we will update the date and ask you to accept them again. Last updated: October 2026."] },
-  { h: "Contact", p: [`Questions or requests: ${CONTACT_EMAIL}`] },
+  { id: "age", label: "I am 21 or older." },
+  { id: "terms", label: "I accept the terms and conditions.", link: "terms and conditions" },
 ];
 
 // accepted: { age: true, terms: true }. The person can continue only when both are ticked.
@@ -67,23 +24,20 @@ export function needsConsent(profile, stored) {
   return profile.consent_version !== CONSENT_VERSION && stored !== CONSENT_VERSION;
 }
 
-export function termsHtml() {
-  return TERMS.map((s) => `<h4>${esc(s.h)}</h4>${(s.p || []).map((x) => `<p>${linkEmail(x)}</p>`).join("")}${s.ul ? `<ul>${s.ul.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}`).join("");
-}
-// The email address in the text becomes a link.
-const linkEmail = (text) => esc(text).replace(esc(CONTACT_EMAIL), `<a href="mailto:${esc(CONTACT_EMAIL)}">${esc(CONTACT_EMAIL)}</a>`);
+// The label, with the linked words (if any) as a link that opens the terms in a new tab.
+const labelHtml = (c) => {
+  const text = esc(c.label);
+  return c.link ? text.replace(esc(c.link), `<a href="${TERMS_URL}" target="_blank" rel="noopener">${esc(c.link)}</a>`) : text;
+};
 
 export function consentHtml({ accepted = {}, underage = false, busy = false, error = "" } = {}) {
   if (underage) {
     return `<div class="center"><div class="serif" style="font-size:28px;line-height:1.15">This app is for people 21 and older.</div><div class="muted">Come back when you are 21.</div></div>`;
   }
   const tick = (c) => `<label class="consent${accepted[c.id] ? " on" : ""}"><input type="checkbox" data-consent="${c.id}"${accepted[c.id] ? " checked" : ""}>
-      <span><b>${esc(c.label)}</b><span class="muted small">${esc(c.detail)}</span></span></label>`;
+      <span><b>${labelHtml(c)}</b></span></label>`;
   return `<div class="consentpage"><div class="serif" style="font-size:28px;line-height:1.1">A game that learns your palate while teaching you about wine.</div>
     ${tick(CONSENTS[0])}
-    <div class="termshead">Terms and privacy policy <span class="muted small">(scroll to read it all)</span></div>
-    <div class="termsbox" tabindex="0" role="region" aria-label="Terms and privacy policy">${termsHtml()}</div>
-    <a class="link small" href="privacy.html" target="_blank" rel="noopener">Open the full privacy policy in a new tab</a>
     ${tick(CONSENTS[1])}
     <div id="consentErr" class="err">${esc(error)}</div>
     <button class="btn primary" data-consent-go="1"${allAccepted(accepted) && !busy ? "" : " disabled"}>${busy ? "Saving\u2026" : "Accept and continue"}</button>

@@ -1,6 +1,6 @@
 # Privacy and consent: the owner's ideal draft, for the lawyers (2026-10-07)
 
-Status: **draft**. `consent.js` (`CONSENT_VERSION` "2026-10-c") and `privacy.html` were rewritten to say what the owner wants the product to do. Nobody but the owner has used the app, so no one needs to re-accept anything. These notes list what the draft promises and what the lawyers should decide. The wording is not legal advice.
+Status: **draft**. `privacy.html` (the single terms and privacy page) was rewritten; on 2026-10-07 the consent page was cut down to two ticks with a link to it (`CONSENT_VERSION` "2026-10-e"), and the privacy and data-use explanations were removed from the rest of the app. Earlier text was rewritten to say what the owner wants the product to do. Nobody but the owner has used the app, so no one needs to re-accept anything. These notes list what the draft promises and what the lawyers should decide. The wording is not legal advice.
 
 ## What the draft says the product does
 1. **Research use.** Everything players add (swipes, journal, notes, photos, own wines, quiz and game answers, feedback) is used to study how what people eat, drink and do relates to the wines they enjoy, and to improve suggestions. Findings are published or shared only as combined results.
