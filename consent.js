@@ -4,13 +4,13 @@
 // The rules at the top are pure (no browser, no network). acceptConsents at the bottom talks to Supabase.
 import { esc } from "./logic.js?v=10";
 
-export const CONSENT_VERSION = "2026-10-b";
+export const CONSENT_VERSION = "2026-10-c";
 export const AGE_RULE = "US-21";
 export const CONTACT_EMAIL = "issei.wine@gmail.com";
 
 export const CONSENTS = [
   { id: "age", label: "I am 21 or older.", detail: "The app is for people 21 and older in the United States." },
-  { id: "terms", label: "I have read and agree to the terms and privacy policy.", detail: "This includes photos of catalog wines being shown to other players after an editor checks them, and prices being averaged anonymously." },
+  { id: "terms", label: "I have read and agree to the terms and privacy policy.", detail: "This includes photos of catalog wines being shown to other players after an editor checks them, prices being averaged anonymously, and what you add being kept, without your name, if you delete your account." },
 ];
 
 // The terms, consolidated from the privacy policy page. h = heading, p = paragraphs, ul = a list.
@@ -22,13 +22,16 @@ export const TERMS = [
     "Your email address, only if you choose to save your progress with email or sign in. It is used to send you sign-in codes and links.",
     "That you confirmed you are 21 or older, and when. We do not ask for or store your date of birth.",
     "What you do in the app: wines you swipe on; journal entries (the wine, your verdict, how it tasted, whether you would drink it alone or with food, the date, price, food, occasion and notes); your own private changes to a wine's details; photos you add; quiz answers and timed rounds; your trophies; and the palate summary worked out from these.",
+    "Your answers in the games, such as This or That (the foods and everyday things you pick between), and which games and cards you finish.",
     "Feedback you send, such as a report that a wine or a quiz question looks wrong.",
     "Technical information: your browser keeps a sign-in token and a few settings on your device, and the services below see technical details such as your IP address when your device connects to them.",
   ] },
   { h: "How we use it", ul: [
     "To run the app: show your journal and swipes, learn your palate, track your quiz progress, and sign you in.",
     "To improve the wine information and quiz questions, using the feedback people send, and to keep the app working and safe.",
+    "For research: to study how what people like to eat, drink and do relates to the wines they enjoy, and to make the app's suggestions better. We may publish or share what we find only as combined results about many people, never about one person.",
   ] },
+  { h: "Games", p: ["In games like This or That you pick between two foods or everyday things. Your picks are saved with your account and are used for the research above and for the suggestions in the game. They do not change the wines shown to you in Discover. Wine is not named in the questions, and there are no right or wrong answers."] },
   { h: "Photos of wines in the catalog", p: [
     "You agree that photos you add to journal entries for wines in our catalog may be shown to other players. There is no tick box on each photo. Photos of wines you type in yourself are never shared.",
     "Each photo is offered to our editors first. They see the picture and the wine only: not your name, email, notes, price or anything else in your journal. An editor approves or rejects it, and a rejected photo is never shown. An approved photo may appear on that wine's card for every player, and may be copied to other vintages of the same wine. It is shown without your name.",
@@ -45,9 +48,10 @@ export const TERMS = [
   ], p: ["They handle your information only to provide their service. The people who run this app can technically access the database for maintenance and support; each person's data is protected by rules that stop other users from reading it, and photos are kept in private storage (except photos of catalog wines, as above)."] },
   { h: "No selling, no ads", p: ["We do not sell your information, show ads, or use advertising or analytics trackers."] },
   { h: "Deleting your information", ul: [
-    "Delete one journal entry or one swipe: it is removed with its notes, food, occasion and photos, including any shared copies of its photos.",
-    "Delete your whole account: in the app open Profile, then Overview, then \"Delete my account and all my data\". This erases your account, sign-in, email address, journal, notes, photos (including any you had shared), swipes, quiz history, trophies and palate.",
-    "What stays: an anonymous record of the structured part of what you rated or swiped (the wine, the verdict, the structure ratings, the price and the month). It has no name, email, photos or notes, and it is filed under a one-way code so that if you add the same wine again, the new entry replaces it.",
+    "Delete one journal entry or one swipe: it is removed with its notes, food, occasion and photos, including any shared copies of its photos. If you want something gone for good, delete it before you delete your account.",
+    "Delete your whole account: in the app open Profile, then Overview, then \"Delete my account\". This erases your account, sign-in, email address, profile, consent record, trophies and palate summary, and takes back any photos you had shared for the catalog.",
+    "What stays: everything else you added, that is your swipes, journal entries and notes, photos, own wines and private wine changes, quiz answers, game answers and feedback. We keep it without your name or email and with nothing that links it to your account. It is filed under a random code, so it stays together as one anonymous person's data. It is kept for research and to improve the app.",
+    "Because the link to you is cut, after you delete your account we cannot find your data again, show it to you, or remove it later. Notes and photos can show things about a person, so please do not put in anything you would not want kept.",
     "We do not currently delete inactive accounts automatically.",
   ] },
   { h: "Your choices and changes", p: ["You can use the app as a guest, change or delete what you add, or delete your account at any time. Depending on where you live you may have further rights, such as asking for a copy of your information. If we change these terms we will update the date and ask you to accept them again. Last updated: October 2026."] },

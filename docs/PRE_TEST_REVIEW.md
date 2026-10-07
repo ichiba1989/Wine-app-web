@@ -84,3 +84,7 @@
 - Needed first: run `docs/retain_after_delete_check.sql` (read-only) and use the results to write the database change (tables whose account link becomes empty on deletion, a replacement for `delete_my_account` that removes only the sign-in, email and profile, and the photo files staying in private storage).
 - Risks to decide on: photos can show faces, homes, handwriting and places; free-text notes can name people; so "anonymous" is weaker for those than for ratings. Options: keep photos private and unshared forever, or keep only ratings and notes. Photos are re-drawn through a canvas before upload (`photos.js`), which drops the camera's location data. Photo file paths contain the account id, which after deletion matches no one.
 - Also decide: a retention limit, and what happens if a player asks (for example under a privacy law) to have the retained data removed.
+
+## Update 2026-10-07: privacy review started, retention built
+- The owner started the review. `consent.js` / `privacy.html` were rewritten as the owner's ideal draft and `CONSENT_VERSION` is now "2026-10-c". See `docs/PRIVACY_DRAFT_NOTES.md` for what it promises and the questions for the lawyers. Re-acceptance is not needed (only the owner has used the app).
+- Keeping data after account deletion is built: run `docs/retain_after_delete.sql` in Supabase (test with a throwaway account first). Until it is run, the app's delete screen and the consent text say data is kept, but the OLD database function still erases everything, so do not let testers in before running it.

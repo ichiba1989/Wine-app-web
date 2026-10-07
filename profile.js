@@ -3,7 +3,7 @@
 // The controller at the bottom loads what it needs from Supabase and draws the tab.
 import { DIMS, dimRange, VERDICTS, FLAGS, esc, styleLabel, verdictShort, entryCard, entryName } from "./logic.js?v=10";
 import { marksHtml } from "./views.js?v=25";
-import { accountCardHtml } from "./account.js?v=5";
+import { accountCardHtml } from "./account.js?v=6";
 import { feedbackCardHtml } from "./feedback.js?v=3";
 import { entryInfoLine } from "./wineline.js?v=1";
 

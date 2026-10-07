@@ -2,7 +2,7 @@
 // They are kept on this phone (in the browser), not in the database, so each device can be set up differently.
 // The rules at the top are pure (no browser, no network) so they can be tested on their own. The sheet is drawn by settingsHtml.
 import { esc } from "./logic.js?v=10";
-import { accountCardHtml } from "./account.js?v=5";
+import { accountCardHtml } from "./account.js?v=6";
 
 export const SETTINGS_KEY = "wine.settings";
 // How much bigger the words get. The page multiplies every font size by this number (the CSS variable --ts).

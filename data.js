@@ -252,15 +252,12 @@ export async function claimGuestMerge(sb, token) {
 }
 
 // ---------------------------------------------------------------- deleting the whole account
-// Photos are private files, so they are erased first. If that fails nothing else is deleted and the person can try again.
-// The database function then keeps only anonymous ratings, erases everything else, and removes the account.
+// Deleting the account keeps what the player gave us, anonymously (docs/retain_after_delete.sql): the photo files stay in private storage and the database
+// function cuts the link to the person. Only the photos the player SHARED for the catalog are taken back first. If that fails nothing else is deleted and the
+// person can try again.
 export async function deleteMyAccount(sb) {
   const rows = await allRows(() => sb.from("journal_photos").select("id, storage_path, share_status"));
   await withdrawShared(sb, rows);   // shared copies go first; if that fails nothing else is deleted
-  for (let i = 0; i < rows.length; i += 100) {
-    const r = await sb.storage.from(BUCKET).remove(rows.slice(i, i + 100).map((x) => x.storage_path));
-    if (r.error) throw r.error;
-  }
   must(await sb.rpc("delete_my_account"));
 }
 

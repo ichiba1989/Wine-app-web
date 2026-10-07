@@ -6,7 +6,7 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=10";
-import * as db from "./data.js?v=16";
+import * as db from "./data.js?v=17";
 import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=2";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=2";
 import { shrinkImage } from "./photos.js?v=5";
@@ -20,12 +20,12 @@ import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, c
 import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=3";
 import { applyVisualTables } from "./visualdata.js?v=1";
 import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=1";
-import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=2";
+import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=3";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
 import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting } from "./tasting.js?v=2";
 import { buildDeck, userModel } from "./deck.js?v=4";
 import { createProfile } from "./profile.js?v=14";
-import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=5";
+import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=6";
 import { createFeedback } from "./feedback.js?v=3";
 import { createEditor } from "./editor.js?v=23";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=3";
