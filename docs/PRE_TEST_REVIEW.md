@@ -88,3 +88,6 @@
 ## Update 2026-10-07: privacy review started, retention built
 - The owner started the review. `consent.js` / `privacy.html` were rewritten as the owner's ideal draft and `CONSENT_VERSION` is now "2026-10-c". See `docs/PRIVACY_DRAFT_NOTES.md` for what it promises and the questions for the lawyers. Re-acceptance is not needed (only the owner has used the app).
 - Keeping data after account deletion is built: run `docs/retain_after_delete.sql` in Supabase (test with a throwaway account first). Until it is run, the app's delete screen and the consent text say data is kept, but the OLD database function still erases everything, so do not let testers in before running it.
+
+## Update 2026-10-07 (later): owner wants in-app deletes to keep the data too
+- Owner decision: deleting an entry, swipe or photo in the app should not remove the information from our records either (it disappears for the player only). Today it does remove it. This is not built: it needs the text of `delete_my_journal_entry`, `delete_my_swipe` and the views, then a `deleted_at` design. See `docs/DATA_POLICY_DRAFT.md` ("What must be built") for the plan and the Vivino-style draft policy. `consent.js` and `privacy.html` must not be changed to promise this until it works.
