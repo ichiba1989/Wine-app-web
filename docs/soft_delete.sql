@@ -83,47 +83,47 @@ end $function$;
 
 -- 5. the two views the app reads skip hidden rows
 create or replace view public.v_journal_entries as
- SELECT c.id,
+ SELECT c."id",
     c.user_id,
     c.consumed_on,
     c.verdict,
     c.origin,
-    c.food,
+    c."food",
     c.occasion,
     c.notes,
     c.purchase_price_cents,
     c.wine_vintage_id,
     c.user_wine_id,
     (c.user_wine_id IS NOT NULL) AS is_outside_wine,
-    COALESCE(p.name, uw.producer) AS producer,
-    COALESCE(w.name, uw.wine_name) AS wine_name,
+    COALESCE(p."name", uw.producer) AS producer,
+    COALESCE(w."name", uw.wine_name) AS wine_name,
     COALESCE(wv.vintage_year, uw.vintage_year) AS vintage_year,
     COALESCE(wv.is_non_vintage, uw.is_non_vintage) AS is_non_vintage,
-    COALESCE(c.style_override, w.style, uw.style) AS style,
-    ( SELECT geo_areas.name
+    COALESCE(c.style_override, w."style", uw."style") AS style,
+    ( SELECT geo_areas."name"
            FROM geo_areas
-          WHERE (geo_areas.id = geo_ancestor(w.appellation_id, 'country'::geo_level))) AS country,
-    COALESCE(( SELECT geo_areas.name
+          WHERE (geo_areas."id" = geo_ancestor(w.appellation_id, 'country'::geo_level))) AS country,
+    COALESCE(( SELECT geo_areas."name"
            FROM geo_areas
-          WHERE (geo_areas.id = geo_ancestor(w.appellation_id, 'region'::geo_level))), uw.region_text) AS region,
-    COALESCE(( SELECT g.name
+          WHERE (geo_areas."id" = geo_ancestor(w.appellation_id, 'region'::geo_level))), uw.region_text) AS region,
+    COALESCE(( SELECT g."name"
            FROM (wine_grapes wg
-             JOIN grapes g ON ((g.id = wg.grape_id)))
-          WHERE (wg.wine_id = w.id)
-          ORDER BY g.name
+             JOIN grapes g ON ((g."id" = wg.grape_id)))
+          WHERE (wg.wine_id = w."id")
+          ORDER BY g."name"
          LIMIT 1), uw.grape_text) AS grape,
     ( SELECT jp.storage_path
            FROM journal_photos jp
-          WHERE (jp.consumption_id = c.id) AND jp.deleted_at IS NULL
+          WHERE (jp.consumption_id = c."id") AND jp.deleted_at IS NULL
           ORDER BY jp.created_at
          LIMIT 1) AS first_photo_path,
     c.created_at,
-    COALESCE(w.style, uw.style) AS catalog_style
+    COALESCE(w."style", uw."style") AS catalog_style
    FROM ((((consumptions c
-     LEFT JOIN wine_vintages wv ON ((wv.id = c.wine_vintage_id)))
-     LEFT JOIN wines w ON ((w.id = wv.wine_id)))
-     LEFT JOIN producers p ON ((p.id = w.producer_id)))
-     LEFT JOIN user_wines uw ON ((uw.id = c.user_wine_id)))
+     LEFT JOIN wine_vintages wv ON ((wv."id" = c.wine_vintage_id)))
+     LEFT JOIN wines w ON ((w."id" = wv.wine_id)))
+     LEFT JOIN producers p ON ((p."id" = w.producer_id)))
+     LEFT JOIN user_wines uw ON ((uw."id" = c.user_wine_id)))
   WHERE c.deleted_at IS NULL;
 
 create or replace view public.v_user_wine_state as
