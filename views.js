@@ -62,17 +62,17 @@ export function visualFor(c, stats = null) {
 // the producer, a one-line summary (type and place), then one soft tinted panel holding an abstract bottle, the six flavors and the map, and last the facts in small type.
 // A wine with no separate wine name shows just the producer. The name is a link to a Google image search for that wine
 // (winelinks.js); wine info is not edited from the deck. The card never shows a bottle photo.
-// The zoom icon in the card's corner: a magnifier with a plus. Tapping it zooms the card (pinch and double-tap do too). Reset zoom replaces it while zoomed.
-export const zoomIconHtml = (hint = false) => `<button class="zicon${hint ? " hint" : ""}" data-zoomicon aria-label="Zoom in on the card"><svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><circle cx="13" cy="13" r="8.5" fill="none" stroke="currentColor" stroke-width="2.6"/><path d="M19.5 19.5 L27 27" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/><path d="M13 9.2 V16.8 M9.2 13 H16.8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>`;
-export function cardHtml(c, { zoomHint = false } = {}) {
+// The zoom icon on the map: a small magnifier with a plus in the map's corner, so it is clear the map can be tapped to see where the wine is from.
+export const mapZoomIconHtml = (hint = false) => `<span class="badge${hint ? " hint" : ""}" aria-hidden="true"><svg viewBox="0 0 32 32" width="20" height="20"><circle cx="13" cy="13" r="8.5" fill="none" stroke="currentColor" stroke-width="3"/><path d="M19.5 19.5 L27 27" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"/><path d="M13 9 V17 M9 13 H17" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg></span>`;
+export function cardHtml(c, { mapHint = false } = {}) {
   const labels = ["recognize", "unknown", "had"].map((k) => `<div class="swipe-label" data-label="${k}" style="background:${FAMILIARITY[k].color}">${esc(FAMILIARITY[k].label)}</div>`).join("");
   const v = visualFor(c), href = imageSearchUrl(c), t = tintFor(v.type);
-  const map = v.map ? `<${v.zoomable ? "button" : "div"} class="mapbtn${v.zoomable ? "" : " still"}"${v.zoomable ? ` data-zoom="${esc(c.id)}" aria-label="Show where this wine is from"` : ""}>${v.map}${v.zoomable ? '<span class="badge" aria-hidden="true">+</span>' : ""}</${v.zoomable ? "button" : "div"}>` : "";
+  const map = v.map ? `<${v.zoomable ? "button" : "div"} class="mapbtn${v.zoomable ? "" : " still"}"${v.zoomable ? ` data-zoom="${esc(c.id)}" aria-label="Show where this wine is from"` : ""}>${v.map}${v.zoomable ? mapZoomIconHtml(mapHint) : ""}</${v.zoomable ? "button" : "div"}>` : "";
   const place = c.appellation || c.region || c.country || "";
   const flag = FLAGS[c.country];
   const summary = [t.label !== "Other" ? esc(t.label) : "", place ? `${flag ? `<span class="flag">${flag}</span> ` : ""}${esc(place)}` : ""].filter(Boolean).join(" · ");
   const facts = c.facts.filter((f) => f.text !== place);   // the place is already in the summary line
-  return `<div class="card" id="card">${labels}<button class="zreset" data-zreset hidden aria-label="Reset zoom">Reset zoom</button>${zoomIconHtml(zoomHint)}
+  return `<div class="card" id="card">${labels}<button class="zreset" data-zreset hidden aria-label="Reset zoom">Reset zoom</button>
     <div class="body">
       <a class="winelink" data-wimg href="${esc(href)}" target="_blank" rel="noopener noreferrer" draggable="false" aria-label="Search Google Images for ${esc(wineName(c))}">
         <div class="topline"><div class="producer serif">${esc(c.producer)}</div>${c.vintage ? `<span class="vpill">${esc(c.vintage)}</span>` : ""}</div>
@@ -86,7 +86,7 @@ export function cardHtml(c, { zoomHint = false } = {}) {
 export const ANSWER_BUTTONS = [{ kind: "recognize", label: "I recognize it" }, { kind: "unknown", label: "I don't know it" }, { kind: "had", label: "I've had this bottle" }];
 export const answerButtonsHtml = () => `<div class="answers" role="group" aria-label="Your answer">${ANSWER_BUTTONS.map((a) =>
   `<button class="ans" data-action="answer:${a.kind}" style="--c:${FAMILIARITY[a.kind].color}">${esc(a.label)}</button>`).join("")}</div>`;
-export function discoverHtml({ deck, interest, banner, counts, feedback = false, flaggedId = null, nudge = false, buttons = true, zoomHint = false }) {
+export function discoverHtml({ deck, interest, banner, counts, feedback = false, flaggedId = null, nudge = false, buttons = true, mapHint = false }) {
   const bannerHtml = banner ? `<div class="banner" data-action="dismiss">${esc(banner)} (tap to dismiss)</div>` : "";
   if (!deck.length) {
     return `${bannerHtml}<div class="center"><div class="serif" style="font-size:22px">No more wines to show.</div>
@@ -94,7 +94,7 @@ export function discoverHtml({ deck, interest, banner, counts, feedback = false,
   }
   // The card, its button row and the save-your-journal reminder are one block, centred between the header and the tab bar, so the space is even above and below.
   return `${bannerHtml}<div class="deckstage">
-    <div class="cardwrap">${deck.length > 1 ? '<div class="behind"></div>' : ""}${cardHtml(deck[0], { zoomHint })}</div>
+    <div class="cardwrap">${deck.length > 1 ? '<div class="behind"></div>' : ""}${cardHtml(deck[0], { mapHint })}</div>
     ${buttons ? answerButtonsHtml() : ""}
     <div class="belowcard"><button class="notint" data-action="notint" aria-pressed="false" aria-label="Not interested in this wine">Not interested</button><button class="zoombtn" data-action="zoomcard" aria-label="Zoom in on the card">&#128269; Zoom</button>${feedback ? `<span class="fbline">${flaggedId === deck[0].id ? '<span class="muted">Thanks, an editor will review it.</span>' : '<button class="link" data-action="wineflag" aria-label="Report a problem with this wine">Report a problem</button>'}</span>` : ""}</div>
     ${nudge ? `<div class="nudge"><b>Don't lose your journal.</b> Save it with an email so it follows you to any phone.
