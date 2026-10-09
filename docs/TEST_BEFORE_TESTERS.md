@@ -3,7 +3,7 @@
 > **REMINDERS (owner, 2026-10-09)**
 > 1. **Test importing from other apps** (Vivino, CellarTracker and others) with real exports **before friends and family try the app**. This matters for testing: see section 10.
 > 2. **Revisit the rating rule** for imports (`USE_RATING_RULE` in `importer.js`, currently off) before testing.
-> 3. Run `docs/import_tier.sql` and put the friends-and-family accounts that should import 500 wines on the `pro` tier.
+> 3. Run `docs/import_tier.sql` and `docs/import_limit.sql` and put the friends-and-family accounts that should import 500 wines on the `pro` tier.
 
 Keep this list current. Tick each item (and date it) only after trying it on a throwaway account with the live database. Nothing here has been run against the real Supabase yet.
 
@@ -77,6 +77,7 @@ Keep this list current. Tick each item (and date it) only after trying it on a t
 - [ ] Journal tab, "Import wines from a file": choose a CSV (try the template, and a real export from a spreadsheet). The columns are detected, the summary is right, and Add puts the wines in the Journal with the right date, price and notes. Imported wines arrive **unrated** (the rating rule is on hold).
 - [ ] **Revisit the rating rule** with the owner before testers: decide whether to turn on `USE_RATING_RULE` (thresholds in `RATING_RULE`).
 - [ ] A wine in the catalog (same producer, wine name and vintage) is linked to the catalog entry; other wines are the player's own, and none of them appear in Discover or the catalog until an editor approves them through the candidate flow (default: 10 entries for the same wine).
+- [ ] **Run `docs/import_limit.sql`**, then check: a regular test account imports 100 wines and the next import is refused with "Limit reached" (and the sheet says it once); the same account moved to `pro` (or an editor) can add up to 500 per 24 hours; the Owner Config tab shows `import_limit_regular`, `import_limit_extended`, `import_window_hours` and changing one takes effect. Also check normal use (swiping up, adding one wine, rating) is not blocked.
 - [ ] Limits: a regular account is told "Up to 100 wines per file" and only the first 100 rows are used; staff accounts and accounts on the `pro` tier see 500. (Run `docs/import_tier.sql`, then `update profiles set tier = 'pro' ...` for a test account.)
 - [ ] Importing the same file twice adds nothing the second time (all skipped as already in the journal).
 - [ ] Imported wines appear on the Profile, Taste page and in Bingo only once rated; unrated ones offer "Rate it".

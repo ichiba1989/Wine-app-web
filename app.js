@@ -6,7 +6,7 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=10";
-import * as db from "./data.js?v=20";
+import * as db from "./data.js?v=21";
 import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=3";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=2";
 import { shrinkImage } from "./photos.js?v=5";
@@ -36,7 +36,7 @@ import { recommendMix, recommend } from "./recommend.js?v=3";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null;
 const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=1"));
-const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=2"));
+const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=3"));
 const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=3"));
 import { createWineInfo } from "./wineinfo.js?v=13";
 
@@ -513,9 +513,12 @@ function drawImport() {
 async function openImport() {
   await loadImportModule();
   // Editors and the owner (anyone with staff access) and people on a tier listed in the importLarge feature switch may import more at once.
+  // The database says how many this player may still add (docs/import_limit.sql). Until that script has been run, the page works the limit out itself.
+  let allowance = null;
+  try { allowance = await db.importAllowance(state.sb); } catch (_) { allowance = null; }
   const tier = (state.profile || {}).tier || "default";
-  const large = (!!state.access && (isOwner() || state.access.permissions.length > 0)) || await db.loadFeature(state.sb, IMP.FEATURE).then((r) => feedbackOn(r, tier), () => false);
-  state.imp = { step: "pick", headers: [], rows: [], mapping: {}, useRatings: false, scale: 5, error: "", busy: false, result: null, text: "", limit: large ? IMP.LIMIT_EXTENDED : IMP.LIMIT_REGULAR };
+  const large = (!!state.access && (isOwner() || state.access.permissions.length > 0)) || (allowance ? false : await db.loadFeature(state.sb, IMP.FEATURE).then((r) => feedbackOn(r, tier), () => false));
+  state.imp = { step: "pick", headers: [], rows: [], mapping: {}, useRatings: false, scale: 5, error: "", busy: false, result: null, text: "", allowance, limit: allowance ? Math.max(allowance.remaining, 0) : (large ? IMP.LIMIT_EXTENDED : IMP.LIMIT_REGULAR) };
   drawImport();
 }
 function readImportText(text) {

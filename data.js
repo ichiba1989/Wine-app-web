@@ -539,8 +539,15 @@ export async function countSwipesAndJournal(sb) {
 // Import (importer.js): adds many journal entries at once. Items are { kind: "catalog" | "outside", wine_vintage_id | wine (a user_wines row), consumed_on, verdict, purchase_price_cents, notes }.
 // Hand-typed wines are saved first, 50 at a time, then the entries that point at them. If a batch is refused, its rows are tried one by one so one bad row cannot sink the rest.
 // Returns { added, failed: [{ label, message }] }.
+export async function importAllowance(sb) {   // { limit, used, remaining, hours }; needs docs/import_limit.sql
+  const r = await sb.rpc("my_import_allowance");
+  if (r.error) throw r.error;
+  if (!r.data) throw new Error("no allowance");
+  return r.data;
+}
+const isLimitError = (e) => !!e && (e.hint === "import_limit" || /^Limit reached/.test(String(e.message || "")));
 export async function importJournal(sb, userId, items, today) {
-  const result = { added: 0, failed: [] };
+  const result = { added: 0, failed: [], stopped: null };
   const entry = (x) => ({ user_id: userId, origin: "manual", consumed_on: x.consumed_on || today, verdict: x.verdict || null, purchase_price_cents: x.purchase_price_cents ?? null, notes: x.notes || null });
   for (let i = 0; i < items.length; i += 50) {
     const chunk = items.slice(i, i + 50), ready = [];
@@ -548,7 +555,10 @@ export async function importJournal(sb, userId, items, today) {
     let ids = [];
     if (outside.length) {
       const r = await sb.from("user_wines").insert(outside.map((x) => x.wine)).select("id");
-      if (r.error) outside.forEach((x) => result.failed.push({ label: x.label, message: r.error.message })); else ids = r.data.map((d) => d.id);
+      if (r.error) {
+        outside.forEach((x) => result.failed.push({ label: x.label, message: r.error.message }));
+        if (isLimitError(r.error)) { result.stopped = r.error.message; chunk.forEach((x) => { if (x.kind === "catalog") result.failed.push({ label: x.label, message: r.error.message }); }); items.slice(i + 50).forEach((x) => result.failed.push({ label: x.label, message: r.error.message })); break; }
+      } else ids = r.data.map((d) => d.id);
     }
     let o = 0;
     for (const x of chunk) {
@@ -559,6 +569,12 @@ export async function importJournal(sb, userId, items, today) {
     if (!ready.length) continue;
     const bulk = await sb.from("consumptions").insert(ready.map((r) => r.row));
     if (!bulk.error) { result.added += ready.length; continue; }
+    if (isLimitError(bulk.error)) {   // the database says this player is over their allowance: stop asking, tidy up the wines just saved, and report it once
+      result.stopped = bulk.error.message;
+      for (const r of ready) { result.failed.push({ label: r.x.label, message: bulk.error.message }); if (r.wineId) await sb.from("user_wines").delete().eq("id", r.wineId); }
+      items.slice(i + 50).forEach((x) => result.failed.push({ label: x.label, message: bulk.error.message }));
+      break;
+    }
     for (const r of ready) {
       const one = await sb.from("consumptions").insert(r.row);
       if (one.error) {

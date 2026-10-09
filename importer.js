@@ -160,7 +160,7 @@ export function importHtml(I, items, lk) {
     const r = I.result || { added: 0, failed: [] };
     return wrap(`${head("Import finished")}<div class="okbox">Added ${r.added} ${r.added === 1 ? "wine" : "wines"} to your journal.</div>
       ${I.skipped ? `<p class="muted small">${esc(I.skipped)}</p>` : ""}
-      ${r.failed.length ? `<div class="err">${r.failed.length} could not be saved: ${esc(r.failed.slice(0, 3).map((f) => f.label + " (" + f.message + ")").join("; "))}${r.failed.length > 3 ? "…" : ""}</div>` : ""}
+      ${r.stopped ? `<div class="err">${esc(r.stopped)} ${r.failed.length} ${r.failed.length === 1 ? "wine was" : "wines were"} not added. Try again later, or ask us about the pro tier.</div>` : r.failed.length ? `<div class="err">${r.failed.length} could not be saved: ${esc(r.failed.slice(0, 3).map((f) => f.label + " (" + f.message + ")").join("; "))}${r.failed.length > 3 ? "…" : ""}</div>` : ""}
       <button class="btn primary" data-action="import:done">Open my journal</button>`);
   }
   if (I.step === "map") {
@@ -181,8 +181,13 @@ export function importHtml(I, items, lk) {
       <div id="impErr" class="err">${esc(I.error || "")}</div>
       <div class="two"><button class="btn outline" data-action="import:back"${I.busy ? " disabled" : ""}>Back</button><button class="btn primary" data-action="import:go"${s.add && !I.busy ? "" : " disabled"}>${I.busy ? "Importing…" : `Add ${s.add} ${s.add === 1 ? "wine" : "wines"}`}</button></div>`);
   }
+  if (I.allowance && I.allowance.remaining <= 0) {
+    return wrap(`${head("Import wines", "Bring in a list you already keep.")}
+    <p class="ptext">You have reached your limit for now: ${I.allowance.limit} wines every ${I.allowance.hours} hours. Try again later, or ask us about the pro tier for more.</p>
+    <button class="btn outline" data-action="import:close">Close</button>`);
+  }
   return wrap(`${head("Import wines", "Bring in a list you already keep.")}
-    <p class="ptext">Choose a CSV file (you can export one from a spreadsheet, Vivino, CellarTracker and most other wine apps), or paste the rows. The first line should name the columns, such as Producer, Wine name, Vintage and Date drunk. Photos cannot be imported. Up to ${I.limit} wines per file.</p>
+    <p class="ptext">Choose a CSV file (you can export one from a spreadsheet, Vivino, CellarTracker and most other wine apps), or paste the rows. The first line should name the columns, such as Producer, Wine name, Vintage and Date drunk. Photos cannot be imported. ${I.allowance ? `You can add up to ${I.allowance.remaining} more ${I.allowance.remaining === 1 ? "wine" : "wines"} now (${I.allowance.limit} every ${I.allowance.hours} hours).` : `Up to ${I.limit} wines per file.`}</p>
     <label class="btn primary impfile">Choose a file<input type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" hidden data-import-file></label>
     <div class="stitle impor">or paste</div>
     <textarea class="field imptext" data-import-text rows="5" placeholder="Producer,Wine name,Vintage&#10;Sample Estate,Reserve Red,2019" spellcheck="false">${esc(I.text || "")}</textarea>
