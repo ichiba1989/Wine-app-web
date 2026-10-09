@@ -536,6 +536,40 @@ export async function countSwipesAndJournal(sb) {
   return { swipes: s.count || 0, journal: j.count || 0 };
 }
 
+// Import (importer.js): adds many journal entries at once. Items are { kind: "catalog" | "outside", wine_vintage_id | wine (a user_wines row), consumed_on, verdict, purchase_price_cents, notes }.
+// Hand-typed wines are saved first, 50 at a time, then the entries that point at them. If a batch is refused, its rows are tried one by one so one bad row cannot sink the rest.
+// Returns { added, failed: [{ label, message }] }.
+export async function importJournal(sb, userId, items, today) {
+  const result = { added: 0, failed: [] };
+  const entry = (x) => ({ user_id: userId, origin: "manual", consumed_on: x.consumed_on || today, verdict: x.verdict || null, purchase_price_cents: x.purchase_price_cents ?? null, notes: x.notes || null });
+  for (let i = 0; i < items.length; i += 50) {
+    const chunk = items.slice(i, i + 50), ready = [];
+    const outside = chunk.filter((x) => x.kind === "outside");
+    let ids = [];
+    if (outside.length) {
+      const r = await sb.from("user_wines").insert(outside.map((x) => x.wine)).select("id");
+      if (r.error) outside.forEach((x) => result.failed.push({ label: x.label, message: r.error.message })); else ids = r.data.map((d) => d.id);
+    }
+    let o = 0;
+    for (const x of chunk) {
+      if (x.kind === "catalog") ready.push({ x, row: { ...entry(x), wine_vintage_id: x.wine_vintage_id } });
+      else if (ids[o] !== undefined) { ready.push({ x, row: { ...entry(x), user_wine_id: ids[o] }, wineId: ids[o] }); o += 1; }
+      else o += 1;
+    }
+    if (!ready.length) continue;
+    const bulk = await sb.from("consumptions").insert(ready.map((r) => r.row));
+    if (!bulk.error) { result.added += ready.length; continue; }
+    for (const r of ready) {
+      const one = await sb.from("consumptions").insert(r.row);
+      if (one.error) {
+        result.failed.push({ label: r.x.label, message: one.error.message });
+        if (r.wineId) await sb.from("user_wines").delete().eq("id", r.wineId);   // do not leave a wine behind with no entry
+      } else result.added += 1;
+    }
+  }
+  return result;
+}
+
 // This or That (thisorthat.js): one row per player and pair. Needs the table from docs/this_or_that.sql; until it exists the save fails and the game still works.
 export async function saveThisOrThat(sb, row) {
   must(await sb.from("this_or_that_answers").upsert(row, { onConflict: "user_id,pair_id" }));

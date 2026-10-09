@@ -4,7 +4,7 @@
 // The steps and the messages are plain data at the top. The screen is drawn by demoHtml; attachDemo wires the practice card to the page (it touches
 // the page, like the other feature controllers); app.js holds the open/next/back/close clicks and remembers that the walkthrough was seen.
 import { esc, dragPose, decideSwipe, flyPlan, releaseVelocity, clampN, FAMILIARITY } from "./logic.js?v=10";
-import { cardHtml } from "./views.js?v=27";
+import { cardHtml } from "./views.js?v=28";
 
 // A card shaped like a catalog card, with made-up names. (Pinot Noir and Oregon only give it a real-looking bottle, flavors and map.)
 export const DEMO_CARD = {

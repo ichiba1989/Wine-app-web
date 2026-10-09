@@ -66,3 +66,11 @@ Keep this list current. Tick each item (and date it) only after trying it on a t
 - [ ] The Owner page and the first-time walkthrough still open (they load on first use).
 - [ ] Optional: run the journal view timing query from the chat (`explain analyze select * from v_journal_entries` as an authenticated user) and note the time here: ____ ms.
 - Measured with a stand-in database and a fixed 150 ms per request: start-up to the first card 2.6 s before, 0.9 s after; a tab tap to a changed screen about 200 ms before, 40 to 80 ms after. Real numbers depend on the phone and network.
+
+## 10. Import wines into the journal (added 2026-10-09)
+- [ ] Journal tab, "Import wines from a file": choose a CSV (try the template, and a real export from a spreadsheet; ideally a real Vivino or CellarTracker export, which has not been tried yet). The columns are detected, the summary is right, and Add puts the wines in the Journal with the right date, price, notes and (if chosen) verdict.
+- [ ] A wine that is in the catalog (same producer, wine name and vintage) is linked to the catalog entry; other wines are the player's own and show in the list with no catalog details.
+- [ ] Importing the same file twice adds nothing the second time (all skipped as already in the journal).
+- [ ] Wines added by import appear on the Profile, Taste page and in Bingo only once rated; unrated ones offer "Rate it".
+- [ ] Works on a real phone: choosing a file from Files / Google Drive, and pasting rows copied from a spreadsheet app.
+- [ ] A 500-row file imports in a reasonable time and a bad row does not stop the others.

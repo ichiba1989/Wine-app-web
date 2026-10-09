@@ -452,6 +452,19 @@
   .ttrack.soft .tfill { opacity: .45; }
   .tcap { font-size: calc(12px * var(--ts)); margin-top: 3px; min-height: calc(15px * var(--ts)); }
   .tverdict { margin-top: 14px; }
+  /* Import wines (importer.js) */
+  .jimp { text-align: right; margin-top: 2px; }
+  .impfile { display: block; text-align: center; margin-top: 8px; cursor: pointer; }
+  .impor { margin: 12px 0 4px; }
+  .imptext { width: 100%; font-family: ui-monospace, Menlo, monospace; font-size: calc(13px * var(--ts)); }
+  .improws { margin-top: 6px; }
+  .improw { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 0; font-size: calc(14px * var(--ts)); }
+  .improw .sortsel { width: 55%; margin: 0; padding: 8px 10px; font-size: calc(13px * var(--ts)); }
+  .imprule { margin: 6px 0 0; padding-left: 18px; }
+  .impprev { margin-top: 8px; }
+  .impit { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+  .impit.dup, .impit.skip { opacity: .6; }
+  .two a.btn { display: flex; align-items: center; justify-content: center; text-decoration: none; color: var(--ink); }
   .gtile { display: block; width: 100%; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px; margin-top: 12px; }
   .gtile.soon { opacity: .6; border-style: dashed; }
   .gt-title { font-size: calc(22px * var(--ts)); margin-bottom: 4px; }
@@ -553,6 +566,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=62" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=63" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>

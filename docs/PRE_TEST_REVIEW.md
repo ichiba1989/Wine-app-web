@@ -102,3 +102,8 @@
 
 ## Update 2026-10-07 (consent simplified)
 - The consent page is now two ticks, "I am 21 or older" and "I accept the terms and conditions" (link to `privacy.html`, renamed "Terms and privacy policy" and now holding the use rules too). `CONSENT_VERSION` "2026-10-e". The in-app explanations were removed: the "What is kept?" notes on delete, the long delete-account text (now one line plus the link), the photo-sharing note under photos, and the data note in This or That. Lawyers: the sharing of catalog photos and the keep-after-delete rule are now disclosed only on `privacy.html`, so check that is enough.
+
+## Import wines into the journal (2026-10-09)
+- New feature (`importer.js`). Owner decisions to confirm: (1) the rule that turns an imported rating into one of the five answers (85% / 70% / 50% of the scale; see `RATING_RULE`), or whether imported wines should always arrive unrated; (2) whether an exact match to a catalog wine should link to it (it does now); (3) the 500-row limit.
+- Not verified: the column names of real Vivino, CellarTracker and other app exports (the detection uses common header words and lets the player fix the mapping). Try real exports before promising "works with Vivino".
+- Data: imported entries are ordinary journal entries (kept or hidden like any other; see the terms page). No photos are imported. Lawyers: the terms page does not mention importing data the player did not create (a list from another app); check whether it should.

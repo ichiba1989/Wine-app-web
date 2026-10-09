@@ -158,7 +158,8 @@ export function journalShellHtml(j) {
       <div class="jsel">
         <select class="sortsel" data-jby aria-label="Group by">${GROUPS.map((g) => opt(g.id, "Group: " + g.label, j.by)).join("")}</select>
         <select class="sortsel" data-jverdict aria-label="Filter by verdict">${opt("all", "All verdicts", j.verdict)}${VERDICTS.map((v) => opt(v.code, v.short, j.verdict)).join("")}${opt("none", "No verdict yet", j.verdict)}</select>
-      </div></div>
+      </div>
+      <div class="jimp"><button class="link small" data-action="import:open">Import wines from a file</button></div></div>
     <div id="jmeta" class="jmeta"></div><div id="jlist"></div>`;
 }
 export function journalMetaHtml(entries, filtered, j, groups) {
@@ -176,7 +177,7 @@ export function journalListHtml(entries, j, photoUrls, cards = []) {
   const filtered = filterEntries(entries, { q: j.q, verdict: j.verdict });
   const groups = groupEntries(filtered, j.by);
   const searching = j.q.trim() !== "";
-  if (!entries.length) return `<p class="muted">No wines logged yet. Swipe up on a bottle you've had, or tap "+ Add a wine".</p>`;
+  if (!entries.length) return `<p class="muted">No wines logged yet. Swipe up on a bottle you've had, tap "+ Add a wine", or import a list you already keep.</p>`;
   if (!filtered.length) return `<p class="muted">No wines match.</p>`;
   const rows = (g) => {
     const limit = j.limits[g.key] || GROUP_PAGE;

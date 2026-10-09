@@ -6,12 +6,12 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=10";
-import * as db from "./data.js?v=19";
+import * as db from "./data.js?v=20";
 import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=3";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=2";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=27";
+  visualFor, discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=28";
 import { createLearn } from "./learn.js?v=3";
 import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=1";
@@ -34,8 +34,9 @@ import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } fr
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=2";
 import { recommendMix, recommend } from "./recommend.js?v=3";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
-let OWN = null, DEMO = null;
+let OWN = null, DEMO = null, IMP = null;
 const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=1"));
+const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=1"));
 const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=3"));
 import { createWineInfo } from "./wineinfo.js?v=13";
 
@@ -502,6 +503,54 @@ function maybeShowDemo() {
   const fresh = !(state.journal || []).length && !(state.states || []).length;
   if (fresh && state.tab === "discover") openDemo().catch(() => {}); else store.set("wine.demoSeen", "1");
 }
+// ---------------------------------------------------------------- import wines into the journal (importer.js, loaded when first opened)
+function drawImport() {
+  const I = state.imp; if (!I) return;
+  const items = I.step === "map" ? IMP.buildItems(I.rows, { mapping: I.mapping, useRatings: I.useRatings, scale: I.scale, lookups: IMP.lookups(state.journal, state.cards), userId: state.user.id }) : [];
+  $("#overlay").innerHTML = IMP.importHtml(I, items);
+  return items;
+}
+async function openImport() {
+  await loadImportModule();
+  state.imp = { step: "pick", headers: [], rows: [], mapping: {}, useRatings: true, scale: 5, error: "", busy: false, result: null, text: "" };
+  drawImport();
+}
+function readImportText(text) {
+  const I = state.imp; if (!I) return;
+  const t = IMP.parseCsv(text);
+  if (!t.headers.length || !t.rows.length) { I.error = "I could not find any rows. The first line should name the columns, and there should be at least one wine under it."; return drawImport(); }
+  I.headers = t.headers; I.rows = t.rows; I.mapping = IMP.detectMapping(t.headers); I.error = ""; I.step = "map";
+  const col = I.mapping.rating;
+  I.useRatings = col != null; I.scale = col != null ? IMP.guessScale(t.rows.map((r) => r[col] || "")) : 5;
+  drawImport();
+}
+async function runImport() {
+  const I = state.imp; if (!I || I.busy) return;
+  const items = IMP.buildItems(I.rows, { mapping: I.mapping, useRatings: I.useRatings, scale: I.scale, lookups: IMP.lookups(state.journal, state.cards), userId: state.user.id });
+  const toAdd = items.filter((x) => x.status === "add");
+  if (!toAdd.length) return;
+  I.busy = true; I.error = ""; drawImport();
+  try {
+    const today = new Date().toLocaleDateString("en-CA");
+    I.result = await db.importJournal(state.sb, state.user.id, toAdd, today);
+    const s = IMP.summarize(items);
+    I.skipped = [s.dup ? `${s.dup} skipped as already there or listed twice.` : "", s.skip ? `${s.skip} skipped for having no producer.` : ""].filter(Boolean).join(" ");
+    lastRefreshAt = 0; await refreshData();
+    I.step = "done";
+  } catch (e) { I.error = "Could not import: " + (e.message || e); }
+  I.busy = false; drawImport();
+}
+document.addEventListener("change", async (ev) => {
+  const t = ev.target, I = state.imp;
+  if (!I || !t || !t.dataset) return;
+  if (t.dataset.importFile !== undefined && t.files && t.files[0]) {
+    const f = t.files[0];
+    if (f.size > 2 * 1024 * 1024) { I.error = "That file is too large (2 MB at most)."; return drawImport(); }
+    try { readImportText(await f.text()); } catch (e) { I.error = "Could not read that file."; drawImport(); }
+  } else if (t.dataset.importMap) { I.mapping = { ...I.mapping, [t.dataset.importMap]: Number(t.value) }; if (t.dataset.importMap === "rating" && Number(t.value) >= 0) { I.scale = IMP.guessScale(I.rows.map((r) => r[Number(t.value)] || "")); I.useRatings = true; } drawImport(); }
+  else if (t.dataset.importScale !== undefined) { I.scale = Number(t.value); drawImport(); }
+});
+document.addEventListener("input", (ev) => { const t = ev.target; if (state.imp && t && t.dataset && t.dataset.importText !== undefined) state.imp.text = t.value; });
 function openSettings() { $("#overlay").innerHTML = settingsHtml(state.settings, state.user, { owner: isOwner() }); }
 function closeSettings() { $("#overlay").innerHTML = ""; }
 const behindOf = (el) => (el && el.parentElement ? el.parentElement.querySelector(".behind") : null);
@@ -1259,6 +1308,15 @@ document.addEventListener("click", async (ev) => {
     }
     else if (action === "settings") openSettings();
     else if (action === "setclose") closeSettings();
+    else if (action === "import") {   // import:open, import:paste, import:back, import:ratings:on|off, import:go, import:done, import:close
+      if (a === "open") await openImport();
+      else if (a === "close") { state.imp = null; $("#overlay").innerHTML = ""; }
+      else if (a === "paste") readImportText(state.imp ? state.imp.text : "");
+      else if (a === "back" && state.imp) { state.imp.step = "pick"; state.imp.error = ""; drawImport(); }
+      else if (a === "ratings" && state.imp) { state.imp.useRatings = b === "on"; drawImport(); }
+      else if (a === "go") await runImport();
+      else if (a === "done") { state.imp = null; $("#overlay").innerHTML = ""; state.tab = "journal"; render(); }
+    }
     else if (action === "demo") {     // demo:open, demo:next, demo:back, demo:close
       if (a === "open") await openDemo();
       else if (a === "close") closeDemo();
