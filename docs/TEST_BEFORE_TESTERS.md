@@ -59,3 +59,10 @@ Keep this list current. Tick each item (and date it) only after trying it on a t
 ## 8. General
 - [ ] Hard reload the page twice after each deploy (cached files); the GitHub Pages build shows a green tick.
 - [ ] Test on a real phone in a private window and in a normal window (storage blocked vs allowed), as a guest and with email sign-in.
+
+## 9. Speed (changed 2026-10-09)
+- [ ] On a real phone with the live database: the first Discover card appears noticeably faster than before; tapping Swipes, Journal, Profile and Games changes the screen at once; data that changed (a new swipe, a deleted entry) is there on the next visit.
+- [ ] After a swipe up (I've had it), the new journal entry shows on the Journal tab on the first visit (the list is refetched in the background and the tab redraws).
+- [ ] The Owner page and the first-time walkthrough still open (they load on first use).
+- [ ] Optional: run the journal view timing query from the chat (`explain analyze select * from v_journal_entries` as an authenticated user) and note the time here: ____ ms.
+- Measured with a stand-in database and a fixed 150 ms per request: start-up to the first card 2.6 s before, 0.9 s after; a tab tap to a changed screen about 200 ms before, 40 to 80 ms after. Real numbers depend on the phone and network.

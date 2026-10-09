@@ -401,6 +401,8 @@ export function createProfile(ctx) {
       // What the player answered about how each wine tasted (database update 23); before it, nothing is known and the palate works as before.
       let tastes = []; try { tastes = await allRows(() => sb.from("consumptions").select("id, taste")); } catch (_) { tastes = []; }
       if (my !== loadId) return;
+      if (ctx.fresh) await ctx.fresh();   // the journal may still be refreshing in the background (app.js refreshInBackground)
+      if (my !== loadId) return;
       P.journal = ctx.journal(); P.states = ctx.states(); P.cards = ctx.cards();
       P.questions = questions;
       const questionsById = new Map(questions.map((q) => [q.id, q]));

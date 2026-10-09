@@ -6,7 +6,7 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=10";
-import * as db from "./data.js?v=18";
+import * as db from "./data.js?v=19";
 import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=3";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=2";
 import { shrinkImage } from "./photos.js?v=5";
@@ -24,17 +24,19 @@ import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent }
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
 import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting } from "./tasting.js?v=2";
 import { buildDeck, userModel } from "./deck.js?v=4";
-import { createProfile } from "./profile.js?v=15";
+import { createProfile } from "./profile.js?v=16";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=8";
 import { createFeedback } from "./feedback.js?v=3";
 import { createEditor } from "./editor.js?v=23";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=3";
 import { gamesHtml } from "./games.js?v=10";
 import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=4";
-import { demoHtml, attachDemo, STEPS as DEMO_STEPS } from "./demo.js?v=3";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=2";
 import { recommendMix, recommend } from "./recommend.js?v=3";
-import { ownerHtml, ownerTableHtml, wineRows, checkCounts, bingoCoverage, toggleSort, nextConfigValue } from "./owner.js?v=1";
+// owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
+let OWN = null, DEMO = null;
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=1"));
+const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=3"));
 import { createWineInfo } from "./wineinfo.js?v=13";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
@@ -125,7 +127,7 @@ const TITLES = { discover: "Discover", swipes: "Swipes", journal: "Journal", pro
 // The Learn tab lives in learn.js. It saves quiz answers itself and reports save problems through the banner.
 const learn = createLearn({ sb: () => state.sb, user: () => state.user, profile: () => state.profile, onError: (m) => setBanner(m) });
 // The Profile tab lives in profile.js. It reads the journal and swipes the app already loaded.
-const profileTab = createProfile({ ruleBase: (vid, entry) => ruleBase(vid, entry), sb: () => state.sb, userId: () => state.user.id, user: () => state.user, journal: () => state.journal, states: () => state.states, cards: () => state.cards });
+const profileTab = createProfile({ fresh: () => state.refreshing || Promise.resolve(), ruleBase: (vid, entry) => ruleBase(vid, entry), sb: () => state.sb, userId: () => state.user.id, user: () => state.user, journal: () => state.journal, states: () => state.states, cards: () => state.cards });
 // Email accounts live in account.js: a guest can attach an email, or sign in to an account they already have.
 // Signing in or out reloads the page so everything starts clean for the right person.
 const account = createAccount({
@@ -154,29 +156,39 @@ function addVineyard(card) {
   card.facts = [...card.facts.slice(0, leading), { text: card.vineyard, derived: false }, ...card.facts.slice(leading)];
   return card;
 }
+// Reads that do not depend on who is signed in (the catalog, the flavor tables, the references) are started as soon as the database client exists, so they run
+// while sign-in and the profile load instead of after them. state.early holds the pending requests; once() uses one if it is there (and asks again if it failed).
+const keepQuiet = (p) => { p.catch(() => {}); return p; };
+function startEarlyLoads() {
+  state.early = { visual: keepQuiet(applyVisualTables(state.sb)), cards: keepQuiet(db.loadCards(state.sb)), vintages: keepQuiet(db.loadVintageWines(state.sb)), refs: keepQuiet(db.loadReferenceRows(state.sb)) };
+}
+const once = (key, fn) => {
+  const p = state.early && state.early[key];
+  if (!p) return fn();
+  delete state.early[key];
+  return p.catch(() => fn());
+};
 async function loadAllCards() {
-  await applyVisualTables(state.sb);   // flavor weights and place nudges the Owner or an editor tuned in the database (the built-in set is used if there are none)
-  try { state.mine = await loadMyInfo(state.sb); } catch (_) { state.mine = new Map(); }   // before database update 24 nobody has private changes
+  // The flavor tables, the player's private wine changes, the catalog and the prices are separate requests that do not need each other: ask for them together.
+  const [, mine, rawCards, prices] = await Promise.all([
+    once("visual", () => applyVisualTables(state.sb)),   // flavor weights and place nudges the Owner or an editor tuned in the database (the built-in set is used if there are none)
+    loadMyInfo(state.sb).catch(() => new Map()),          // before database update 24 nobody has private changes
+    once("cards", () => db.loadCards(state.sb)),
+    loadPrices(state.sb).then((p) => ({ p }), () => null),
+  ]);
+  state.mine = mine;
   const cards = [];
-  for (const c of await db.loadCards(state.sb)) {
+  for (const c of rawCards) {
     try {
       c.catalogForm = wineEditForm({ style: c.style }, c, null);   // the catalog's own details, kept so a change can be compared and undone
       cards.push(addVineyard(patchCard(c, state.mine.get(c.id))));
     } catch (e) { console.warn("A wine could not be read and was left out:", e); }   // one bad row must not take the whole deck down
   }
-  try { applyPrices(cards, await loadPrices(state.sb)); } catch (_) { cards.forEach(tidyFacts); }
+  try { if (!prices) throw new Error("no prices"); applyPrices(cards, prices.p); } catch (_) { cards.forEach(tidyFacts); }
   return cards;
 }
 // Counts for the Discover screen. Only swipes count as swipes (not later changes of interest).
-async function loadCounts() {
-  const [s, j] = await Promise.all([
-    state.sb.from("encounters").select("id", { count: "exact", head: true }).eq("event", "swipe"),
-    state.sb.from("consumptions").select("id", { count: "exact", head: true }),
-  ]);
-  if (s.error) throw s.error;
-  if (j.error) throw j.error;
-  return { swipes: s.count || 0, journal: j.count || 0 };
-}
+const loadCounts = () => db.countSwipesAndJournal(state.sb);
 
 // ---------------------------------------------------------------- start up
 async function init() {
@@ -195,6 +207,7 @@ async function init() {
     const linkError = back.get("error_description");
     const createClient = await loadSupabaseLibrary();
     state.sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+    startEarlyLoads();   // the catalog and other public reads run while sign-in and the profile load
     state.user = await db.ensureUser(state.sb);
     if (location.hash) history.replaceState(null, "", location.pathname + location.search);
     if (linkError) state.banner = "That email link did not work: " + linkError.replace(/\+/g, " ") + " Ask for a new code.";
@@ -224,28 +237,46 @@ async function dateStates(states) {
   } catch (_) { /* the wines are still listed; they just sort by name */ }
   return states;
 }
-async function refreshData() {
+let lastRefreshAt = 0;   // when the journal and swipes were last fetched; opening a tab only refetches them if this is old (see refreshInBackground)
+async function refreshData(afterMine = null) {
   const [states0, journal, counts] = await Promise.all([db.loadStates(state.sb), db.loadJournal(state.sb), loadCounts()]);
+  if (afterMine) await afterMine;   // at start-up the private wine changes arrive with the catalog; they must be in place before the journal is patched
   const states = await dateStates(states0);
   state.states = states;
   if (state.mine.size) journal.forEach((e, i) => { if (e.wine_vintage_id && state.mine.has(e.wine_vintage_id)) journal[i] = patchEntry(e, state.mine.get(e.wine_vintage_id)); }); state.journal = journal; state.counts = counts;
   // A photo link that cannot be made only means that picture is not shown; it never blocks the app.
   try { state.photoUrls = await db.signedUrls(state.sb, journal.map((j) => j.first_photo_path)); } catch (_) { state.photoUrls = new Map(); }
+  lastRefreshAt = Date.now();
+}
+// Opening Swipes, Journal, Profile or Games shows the tab at once from what is already loaded and fetches fresh data behind it (at most every 30 seconds, or sooner
+// after the player changes something). The tab is redrawn when the data arrives, unless it was Profile (which waits for this itself, see profile.js).
+function refreshInBackground(tab) {
+  if (state.refreshing || Date.now() - lastRefreshAt < 30000) return;
+  state.refreshing = refreshData()
+    .then(() => { if (state.tab === tab && tab !== "profile") renderBody(); }, (e) => console.warn("Could not refresh:", (e && e.message) || e))
+    .then(() => { state.refreshing = null; });
 }
 async function loadReferences() {
   try {
-    const [vintageToWine, rows] = await Promise.all([db.loadVintageWines(state.sb), db.loadReferenceRows(state.sb)]);
+    const [vintageToWine, rows] = await Promise.all([once("vintages", () => db.loadVintageWines(state.sb)), once("refs", () => db.loadReferenceRows(state.sb))]);
     state.refs = refsByVintage(vintageToWine, rows);
   } catch (_) { state.refs = new Map(); }
 }
 async function enterMain() {
-  state.cards = await loadAllCards();
-  await Promise.all([refreshData(), loadReferences()]);
-  try { state.feedback = feedbackOn(await db.loadFeature(state.sb, "contentFeedback"), (state.profile || {}).tier || "default"); } catch (_) { state.feedback = false; }
-  try { state.pro = feedbackOn(await db.loadFeature(state.sb, PRO_FEATURE), (state.profile || {}).tier || "default"); } catch (_) { state.pro = false; }   // off until database update 21 is run
-  // What the person knows and what other players know both help decide the deck. Neither is essential.
-  try { state.quiz = await db.loadQuizKnowledge(state.sb); } catch (_) { state.quiz = null; }
-  try { state.crowd = await db.loadCrowd(state.sb); } catch (_) { state.crowd = new Map(); }
+  const tier = (state.profile || {}).tier || "default";
+  // Everything the first screen needs is asked for at the same time (the catalog and references may already be on their way, see startEarlyLoads).
+  // The extras (feature switches, quiz knowledge, what other players know) are not essential: each falls back to "off" or empty if it fails.
+  const cardsP = loadAllCards();
+  const [cards, , , feedback, pro, quiz, crowd] = await Promise.all([
+    cardsP,
+    refreshData(cardsP),
+    loadReferences(),
+    db.loadFeature(state.sb, "contentFeedback").then((r) => feedbackOn(r, tier), () => false),
+    db.loadFeature(state.sb, PRO_FEATURE).then((r) => feedbackOn(r, tier), () => false),   // off until database update 21 is run
+    db.loadQuizKnowledge(state.sb).catch(() => null),   // what the person knows and what other players know both help decide the deck
+    db.loadCrowd(state.sb).catch(() => new Map()),
+  ]);
+  state.cards = cards; state.feedback = feedback; state.pro = pro; state.quiz = quiz; state.crowd = crowd;
   rebuildDeck();
   state.status = "main"; render();
   maybeShowDemo();
@@ -297,9 +328,9 @@ function renderBody() {
 // ---- the Owner page (owner.js). Tables are worked out from the catalog cards already loaded; saving goes through data.js.
 function ownerData() {
   const O = state.owner;
-  if (state._ownerFor !== state.cards) { state._ownerFor = state.cards; state._ownerCache = { rows: wineRows(state.cards), bingo: bingoCoverage(state.cards) }; }
+  if (state._ownerFor !== state.cards) { state._ownerFor = state.cards; state._ownerCache = { rows: OWN.wineRows(state.cards), bingo: OWN.bingoCoverage(state.cards) }; }
   const { rows, bingo } = state._ownerCache;
-  return { rows, bingo, checks: checkCounts(rows), config: O.config, configError: O.configError, seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
+  return { rows, bingo, checks: OWN.checkCounts(rows), config: O.config, configError: O.configError, seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
 }
 // The lens preview: the top picks of one lens for the owner's own profile, or for a brand-new player, using the weights typed on the page.
 function ownerLens() {
@@ -314,7 +345,7 @@ function ownerLens() {
   out.lensRows = picks.map((p) => ({ name: wineName(p.card), style: p.card.style || "", grapes: [...(p.card.grapes || []), ...(p.card.ruleGrapes || [])].join(", "), place: p.card.appellation || p.card.region || p.card.country || "", score: p.score, reason: p.reason }));
   return out;
 }
-const ownerRedraw = () => { const el = $("#ownerTable"); if (el && state.tab === "owner") el.innerHTML = ownerTableHtml(state.owner, ownerData()); };
+const ownerRedraw = () => { const el = $("#ownerTable"); if (el && state.tab === "owner") el.innerHTML = OWN.ownerTableHtml(state.owner, ownerData()); };
 function ownerSay(text) { state.owner.msg = text; const el = $("#ownerMsg"); if (el) el.textContent = text; }
 async function ownerWineId(vintageId) {
   if (!state.owner.wineIds) state.owner.wineIds = await db.loadVintageWines(state.sb);
@@ -347,7 +378,7 @@ async function ownerSavePrice(vintageId) {
 async function ownerSaveConfig(key) {
   const O = state.owner, row = (O.config || []).find((r) => r.key === key), input = document.querySelector(`[data-owner-cfg="${CSS.escape(key)}"]`);
   if (!row || !input) return;
-  const next = nextConfigValue(row.value, input.value);
+  const next = OWN.nextConfigValue(row.value, input.value);
   if (next === null) { ownerSay("Enter a number, 0 or more."); return; }
   try { await db.saveAppConfig(state.sb, key, next); row.value = next; ownerSay(`Saved: ${key}.`); }
   catch (e) { ownerSay("Could not save: " + (e.message || e)); }
@@ -403,7 +434,9 @@ function drawTab(body) {
   } else if (state.tab === "swipes") {
     body.innerHTML = swipesHtml(swipeLists(state.cards, state.states, state.journal), { ...state.sw, noFam: new Set(state.states.filter((x) => !x.familiarity).map((x) => x.wine_vintage_id)) }, state.photoUrls);
   } else if (state.tab === "owner") {
-    body.innerHTML = isOwner() ? ownerHtml(state.owner, ownerData()) : `<p class="muted">The owner page is only for the owner.</p>`;
+    if (!isOwner()) body.innerHTML = `<p class="muted">The owner page is only for the owner.</p>`;
+    else if (!OWN) { body.innerHTML = `<div class="center muted">Loading\u2026</div>`; loadOwnerModule().then(() => { if (state.tab === "owner") renderBody(); }); }
+    else body.innerHTML = OWN.ownerHtml(state.owner, ownerData());
     if (isOwner() && state.owner.tab === "config" && !state.owner.config && !state.owner.configError) loadOwnerConfig();
   } else if (state.tab === "games") {
     body.innerHTML = gamesView();
@@ -461,13 +494,13 @@ function applySettings() {
 }
 // ---------------------------------------------------------------- "How the card works" (demo.js): once for a brand-new player, any time from Settings
 // Brand new = never seen it, no swipes and no journal entries yet (so a returning player on a new phone is not interrupted). Nothing is saved but the "seen" flag.
-function drawDemo() { $("#overlay").innerHTML = demoHtml(state.demo); attachDemo($("#overlay"), state.demo); }
-function openDemo() { state.demo = { step: 0, done: {}, note: "" }; drawDemo(); }
+function drawDemo() { $("#overlay").innerHTML = DEMO.demoHtml(state.demo); DEMO.attachDemo($("#overlay"), state.demo); }
+async function openDemo() { await loadDemoModule(); state.demo = { step: 0, done: {}, note: "" }; drawDemo(); }
 function closeDemo() { state.demo = null; store.set("wine.demoSeen", "1"); $("#overlay").innerHTML = ""; }
 function maybeShowDemo() {
   if (store.get("wine.demoSeen")) return;
   const fresh = !(state.journal || []).length && !(state.states || []).length;
-  if (fresh && state.tab === "discover") openDemo(); else store.set("wine.demoSeen", "1");
+  if (fresh && state.tab === "discover") openDemo().catch(() => {}); else store.set("wine.demoSeen", "1");
 }
 function openSettings() { $("#overlay").innerHTML = settingsHtml(state.settings, state.user, { owner: isOwner() }); }
 function closeSettings() { $("#overlay").innerHTML = ""; }
@@ -485,6 +518,7 @@ function paintBehind(el, progress, ms = 0) {
 async function finishCard(card, save, row, failure, extra) {
   try {
     await save();
+    lastRefreshAt = 0;   // the swipe (and maybe a new journal entry) is not in the loaded lists yet: the next tab opened refetches them
     state.deck.shift();
     state.states = [...state.states.filter((x) => x.wine_vintage_id !== card.id), { wine_vintage_id: card.id, last_swiped_at: new Date().toISOString(), ...row }];
     if (++state.sinceDeck >= 8 || state.deck.length < 4) rebuildDeck();
@@ -1211,10 +1245,11 @@ document.addEventListener("click", async (ev) => {
       } else { const c = $("#content"); if (c) c.scrollTop = 0; }
     }
     else if (action === "owner" && isOwner()) {   // owner:open, owner:tab:ID, owner:sort:KEY, owner:toggle:ID, owner:filter:ISSUE, owner:resetw, owner:edit:ID, owner:saveprice:ID, owner:savecfg:KEY
+      await loadOwnerModule();
       const O = state.owner;
       if (a === "open") { closeSettings(); state.tab = "owner"; O.msg = ""; render(); }
       else if (a === "tab") { O.tab = b; O.q = ""; O.msg = ""; renderBody(); }
-      else if (a === "sort") { O.sort[O.tab] = toggleSort(O.sort[O.tab], b); ownerRedraw(); }
+      else if (a === "sort") { O.sort[O.tab] = OWN.toggleSort(O.sort[O.tab], b); ownerRedraw(); }
       else if (a === "toggle") { O.open[b] = !O.open[b]; ownerRedraw(); }
       else if (a === "filter") { O.tab = "wines"; O.issue = b; O.q = ""; renderBody(); }
       else if (a === "resetw") { O.weights = {}; renderBody(); }
@@ -1225,9 +1260,9 @@ document.addEventListener("click", async (ev) => {
     else if (action === "settings") openSettings();
     else if (action === "setclose") closeSettings();
     else if (action === "demo") {     // demo:open, demo:next, demo:back, demo:close
-      if (a === "open") openDemo();
+      if (a === "open") await openDemo();
       else if (a === "close") closeDemo();
-      else if (state.demo) { state.demo.step = Math.max(0, Math.min(DEMO_STEPS.length - 1, state.demo.step + (a === "next" ? 1 : -1))); state.demo.note = ""; drawDemo(); }
+      else if (state.demo) { state.demo.step = Math.max(0, Math.min(DEMO.STEPS.length - 1, state.demo.step + (a === "next" ? 1 : -1))); state.demo.note = ""; drawDemo(); }
     }
     else if (action === "set") {      // set:text:large, set:swipe:off, ...
       state.settings = changeSetting(state.settings, a, b);
@@ -1248,7 +1283,7 @@ document.addEventListener("click", async (ev) => {
       if (state.tab === "profile" && a !== "profile") profileTab.leave();
       if (state.tab === "editor" && a !== "editor") editorTab.leave();
       state.tab = a;
-      if (a === "swipes" || a === "journal" || a === "profile" || a === "games") await refreshData();
+      if (a === "swipes" || a === "journal" || a === "profile" || a === "games") refreshInBackground(a);   // the tab opens at once; fresh data is fetched behind it
       render();
     }
     else if (action === "toggle") { state.sw.open[a] = !state.sw.open[a]; renderBody(); }

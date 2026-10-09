@@ -525,6 +525,17 @@ export async function saveWineReach(sb, wineId, reach) {
   if (!rows || !rows.length) throw new Error("The change was not saved. Your access may not allow it, or database update 15 has not been run.");
 }
 
+// The Discover counts: swipes (not later changes of interest) and journal entries, leaving out the ones the player deleted (hidden, see soft_delete.sql).
+export async function countSwipesAndJournal(sb) {
+  const [s, j] = await Promise.all([
+    active((on) => onlyActive(sb.from("encounters").select("id", { count: "exact", head: true }).eq("event", "swipe"), on)),
+    active((on) => onlyActive(sb.from("consumptions").select("id", { count: "exact", head: true }), on)),
+  ]);
+  if (s.error) throw s.error;
+  if (j.error) throw j.error;
+  return { swipes: s.count || 0, journal: j.count || 0 };
+}
+
 // This or That (thisorthat.js): one row per player and pair. Needs the table from docs/this_or_that.sql; until it exists the save fails and the game still works.
 export async function saveThisOrThat(sb, row) {
   must(await sb.from("this_or_that_answers").upsert(row, { onConflict: "user_id,pair_id" }));
