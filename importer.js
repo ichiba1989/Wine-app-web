@@ -7,7 +7,12 @@
 import { esc, outsideRow, styleInfo } from "./logic.js?v=10";
 import { parsePrice } from "./pricing.js?v=1";
 
-export const MAX_ROWS = 500;
+// How many wines one file may add. Everyone gets the regular limit; people with the "pro" tier (the feature switch importLarge in feature_access, tiers listed there),
+// editors and the owner get the larger one. app.js decides which applies. This is a convenience limit in the page, not a database rule.
+export const LIMIT_REGULAR = 100, LIMIT_EXTENDED = 500, FEATURE = "importLarge";
+// ON HOLD (owner, 2026-10-09): turning a rating into one of the five answers is switched off until it is revisited before testing. While false, ratings in a file are
+// ignored (imported wines arrive unrated) and the rating column and rule are not shown. To bring it back, set this to true and check RATING_RULE with the owner.
+export const USE_RATING_RULE = false;
 
 // ---------------------------------------------------------------- reading the file
 // Splits CSV text into rows of cells. Handles quotes, doubled quotes, commas inside quotes, line breaks inside quotes, a leading byte-order mark and
@@ -112,13 +117,13 @@ export function lookups(entries, cards) {
   return { have, catalog };
 }
 
-// Builds one item per file row. opts: { mapping, useRatings, scale, today, lookups, userId }.
+// Builds one item per file row. opts: { mapping, useRatings, scale, today, lookups, userId, limit }.
 // Each item: { line, status: "add" | "dup" | "skip", reason?, kind?: "catalog" | "outside", label, wine?, wine_vintage_id?, consumed_on, verdict, purchase_price_cents, notes }
 export function buildItems(rows, opts) {
-  const { mapping, useRatings, scale, lookups: lk, userId } = opts, today = opts.today || new Date();
+  const { mapping, useRatings, scale, lookups: lk, userId } = opts, today = opts.today || new Date(), limit = opts.limit || LIMIT_REGULAR;
   const get = (r, f) => (mapping[f] == null || mapping[f] < 0 ? "" : (r[mapping[f]] || "").trim());
   const seen = new Set();
-  return rows.slice(0, MAX_ROWS).map((r, i) => {
+  return rows.slice(0, limit).map((r, i) => {
     const producer = get(r, "producer"), wine_name = get(r, "wine_name"), vintage = vintageOf(get(r, "vintage"));
     const label = [producer, wine_name, vintage].filter(Boolean).join(" ");
     if (!producer) return { line: i + 2, status: "skip", reason: "No producer", label: label || "(empty row)" };
@@ -129,7 +134,7 @@ export function buildItems(rows, opts) {
     const item = {
       line: i + 2, status: "add", label,
       consumed_on: dateOf(get(r, "date"), today) || null,
-      verdict: useRatings && mapping.rating != null ? verdictFor(get(r, "rating"), scale) : null,
+      verdict: USE_RATING_RULE && useRatings && mapping.rating != null ? verdictFor(get(r, "rating"), scale) : null,
       purchase_price_cents: typeof price === "number" && Number.isFinite(price) ? price : null,
       notes: get(r, "notes").slice(0, 2000) || null,
     };
@@ -160,8 +165,8 @@ export function importHtml(I, items, lk) {
   }
   if (I.step === "map") {
     const s = summarize(items), opts = (cur) => `<option value="-1"${cur == null || cur < 0 ? " selected" : ""}>(none)</option>` + I.headers.map((h, i) => `<option value="${i}"${cur === i ? " selected" : ""}>${esc(h || "Column " + (i + 1))}</option>`).join("");
-    const sel = FIELDS.map((f) => `<label class="improw"><span>${esc(f.label)}${f.required ? " *" : ""}</span><select class="sortsel" data-import-map="${f.id}">${opts(I.mapping[f.id])}</select></label>`).join("");
-    const rating = I.mapping.rating != null && I.mapping.rating >= 0
+    const sel = FIELDS.filter((f) => USE_RATING_RULE || f.id !== "rating").map((f) => `<label class="improw"><span>${esc(f.label)}${f.required ? " *" : ""}</span><select class="sortsel" data-import-map="${f.id}">${opts(I.mapping[f.id])}</select></label>`).join("");
+    const rating = USE_RATING_RULE && I.mapping.rating != null && I.mapping.rating >= 0
       ? `<div class="srow"><div class="stitle">Your ratings</div><div class="gopts"><button class="gopt${I.useRatings ? " on" : ""}" data-action="import:ratings:on" aria-pressed="${I.useRatings}">Use them</button><button class="gopt${!I.useRatings ? " on" : ""}" data-action="import:ratings:off" aria-pressed="${!I.useRatings}">Leave unrated</button></div>
          ${I.useRatings ? `<label class="improw"><span>Scale</span><select class="sortsel" data-import-scale>${[5, 10, 100].map((n) => `<option value="${n}"${I.scale === n ? " selected" : ""}>Out of ${n}</option>`).join("")}</select></label>
          <ul class="muted small imprule">${RATING_RULE.map((r) => `<li>${esc(r.text)}</li>`).join("")}</ul>` : `<div class="muted small">Wines will be added without a rating, so you can rate them yourself later.</div>`}</div>` : "";
@@ -169,17 +174,18 @@ export function importHtml(I, items, lk) {
     return wrap(`${head("Check the columns", `${I.rows.length} ${I.rows.length === 1 ? "row" : "rows"} in your file`)}
       <div class="improws">${sel}</div>${rating}
       <div class="srow"><div class="stitle">What will happen</div>
+        <div class="muted small">Wines are added without a rating, so you can rate them yourself afterwards.</div>
         <div class="ptext"><b>${s.add}</b> ${s.add === 1 ? "wine" : "wines"} will be added${s.catalog ? ` (${s.catalog} found in our catalog)` : ""}.${s.dup ? ` ${s.dup} skipped as already there or listed twice.` : ""}${s.skip ? ` ${s.skip} skipped for having no producer.` : ""}</div>
-        ${I.rows.length > MAX_ROWS ? `<div class="err">Only the first ${MAX_ROWS} rows are used. Import the rest in a second file.</div>` : ""}
+        ${I.rows.length > I.limit ? `<div class="err">Only the first ${I.limit} rows are used. Import the rest in a second file.</div>` : ""}
         <div class="impprev">${preview}</div></div>
       <div id="impErr" class="err">${esc(I.error || "")}</div>
       <div class="two"><button class="btn outline" data-action="import:back"${I.busy ? " disabled" : ""}>Back</button><button class="btn primary" data-action="import:go"${s.add && !I.busy ? "" : " disabled"}>${I.busy ? "Importing…" : `Add ${s.add} ${s.add === 1 ? "wine" : "wines"}`}</button></div>`);
   }
   return wrap(`${head("Import wines", "Bring in a list you already keep.")}
-    <p class="ptext">Choose a CSV file (you can export one from a spreadsheet, Vivino, CellarTracker and most other wine apps), or paste the rows. The first line should name the columns, such as Producer, Wine name, Vintage, Date drunk and Rating. Photos cannot be imported.</p>
+    <p class="ptext">Choose a CSV file (you can export one from a spreadsheet, Vivino, CellarTracker and most other wine apps), or paste the rows. The first line should name the columns, such as Producer, Wine name, Vintage and Date drunk. Photos cannot be imported. Up to ${I.limit} wines per file.</p>
     <label class="btn primary impfile">Choose a file<input type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" hidden data-import-file></label>
     <div class="stitle impor">or paste</div>
-    <textarea class="field imptext" data-import-text rows="5" placeholder="Producer,Wine name,Vintage,Rating&#10;Sample Estate,Reserve Red,2019,4" spellcheck="false">${esc(I.text || "")}</textarea>
+    <textarea class="field imptext" data-import-text rows="5" placeholder="Producer,Wine name,Vintage&#10;Sample Estate,Reserve Red,2019" spellcheck="false">${esc(I.text || "")}</textarea>
     <div id="impErr" class="err">${esc(I.error || "")}</div>
     <div class="two"><a class="btn outline" href="data:text/csv;charset=utf-8,${encodeURIComponent(TEMPLATE_CSV)}" download="wine-import-template.csv">Get a template</a><button class="btn primary" data-action="import:paste">Read my rows</button></div>`);
 }

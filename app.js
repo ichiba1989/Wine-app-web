@@ -36,7 +36,7 @@ import { recommendMix, recommend } from "./recommend.js?v=3";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null;
 const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=1"));
-const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=1"));
+const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=2"));
 const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=3"));
 import { createWineInfo } from "./wineinfo.js?v=13";
 
@@ -506,13 +506,16 @@ function maybeShowDemo() {
 // ---------------------------------------------------------------- import wines into the journal (importer.js, loaded when first opened)
 function drawImport() {
   const I = state.imp; if (!I) return;
-  const items = I.step === "map" ? IMP.buildItems(I.rows, { mapping: I.mapping, useRatings: I.useRatings, scale: I.scale, lookups: IMP.lookups(state.journal, state.cards), userId: state.user.id }) : [];
+  const items = I.step === "map" ? IMP.buildItems(I.rows, { mapping: I.mapping, useRatings: I.useRatings, scale: I.scale, lookups: IMP.lookups(state.journal, state.cards), userId: state.user.id, limit: I.limit }) : [];
   $("#overlay").innerHTML = IMP.importHtml(I, items);
   return items;
 }
 async function openImport() {
   await loadImportModule();
-  state.imp = { step: "pick", headers: [], rows: [], mapping: {}, useRatings: true, scale: 5, error: "", busy: false, result: null, text: "" };
+  // Editors and the owner (anyone with staff access) and people on a tier listed in the importLarge feature switch may import more at once.
+  const tier = (state.profile || {}).tier || "default";
+  const large = (!!state.access && (isOwner() || state.access.permissions.length > 0)) || await db.loadFeature(state.sb, IMP.FEATURE).then((r) => feedbackOn(r, tier), () => false);
+  state.imp = { step: "pick", headers: [], rows: [], mapping: {}, useRatings: false, scale: 5, error: "", busy: false, result: null, text: "", limit: large ? IMP.LIMIT_EXTENDED : IMP.LIMIT_REGULAR };
   drawImport();
 }
 function readImportText(text) {
@@ -521,12 +524,12 @@ function readImportText(text) {
   if (!t.headers.length || !t.rows.length) { I.error = "I could not find any rows. The first line should name the columns, and there should be at least one wine under it."; return drawImport(); }
   I.headers = t.headers; I.rows = t.rows; I.mapping = IMP.detectMapping(t.headers); I.error = ""; I.step = "map";
   const col = I.mapping.rating;
-  I.useRatings = col != null; I.scale = col != null ? IMP.guessScale(t.rows.map((r) => r[col] || "")) : 5;
+  I.useRatings = IMP.USE_RATING_RULE && col != null; I.scale = col != null ? IMP.guessScale(t.rows.map((r) => r[col] || "")) : 5;
   drawImport();
 }
 async function runImport() {
   const I = state.imp; if (!I || I.busy) return;
-  const items = IMP.buildItems(I.rows, { mapping: I.mapping, useRatings: I.useRatings, scale: I.scale, lookups: IMP.lookups(state.journal, state.cards), userId: state.user.id });
+  const items = IMP.buildItems(I.rows, { mapping: I.mapping, useRatings: I.useRatings, scale: I.scale, lookups: IMP.lookups(state.journal, state.cards), userId: state.user.id, limit: I.limit });
   const toAdd = items.filter((x) => x.status === "add");
   if (!toAdd.length) return;
   I.busy = true; I.error = ""; drawImport();
@@ -547,7 +550,7 @@ document.addEventListener("change", async (ev) => {
     const f = t.files[0];
     if (f.size > 2 * 1024 * 1024) { I.error = "That file is too large (2 MB at most)."; return drawImport(); }
     try { readImportText(await f.text()); } catch (e) { I.error = "Could not read that file."; drawImport(); }
-  } else if (t.dataset.importMap) { I.mapping = { ...I.mapping, [t.dataset.importMap]: Number(t.value) }; if (t.dataset.importMap === "rating" && Number(t.value) >= 0) { I.scale = IMP.guessScale(I.rows.map((r) => r[Number(t.value)] || "")); I.useRatings = true; } drawImport(); }
+  } else if (t.dataset.importMap) { I.mapping = { ...I.mapping, [t.dataset.importMap]: Number(t.value) }; if (IMP.USE_RATING_RULE && t.dataset.importMap === "rating" && Number(t.value) >= 0) { I.scale = IMP.guessScale(I.rows.map((r) => r[Number(t.value)] || "")); I.useRatings = true; } drawImport(); }
   else if (t.dataset.importScale !== undefined) { I.scale = Number(t.value); drawImport(); }
 });
 document.addEventListener("input", (ev) => { const t = ev.target; if (state.imp && t && t.dataset && t.dataset.importText !== undefined) state.imp.text = t.value; });

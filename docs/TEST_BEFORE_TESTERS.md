@@ -1,5 +1,10 @@
 # Check before inviting testers
 
+> **REMINDERS (owner, 2026-10-09)**
+> 1. **Test importing from other apps** (Vivino, CellarTracker and others) with real exports **before friends and family try the app**. This matters for testing: see section 10.
+> 2. **Revisit the rating rule** for imports (`USE_RATING_RULE` in `importer.js`, currently off) before testing.
+> 3. Run `docs/import_tier.sql` and put the friends-and-family accounts that should import 500 wines on the `pro` tier.
+
 Keep this list current. Tick each item (and date it) only after trying it on a throwaway account with the live database. Nothing here has been run against the real Supabase yet.
 
 ## 1. Run the database scripts (in this order), then reload the app twice
@@ -68,9 +73,12 @@ Keep this list current. Tick each item (and date it) only after trying it on a t
 - Measured with a stand-in database and a fixed 150 ms per request: start-up to the first card 2.6 s before, 0.9 s after; a tab tap to a changed screen about 200 ms before, 40 to 80 ms after. Real numbers depend on the phone and network.
 
 ## 10. Import wines into the journal (added 2026-10-09)
-- [ ] Journal tab, "Import wines from a file": choose a CSV (try the template, and a real export from a spreadsheet; ideally a real Vivino or CellarTracker export, which has not been tried yet). The columns are detected, the summary is right, and Add puts the wines in the Journal with the right date, price, notes and (if chosen) verdict.
-- [ ] A wine that is in the catalog (same producer, wine name and vintage) is linked to the catalog entry; other wines are the player's own and show in the list with no catalog details.
+- [ ] **Other apps first (reminder): export your own data from Vivino, CellarTracker and any other app friends and family use, and import it.** Check the columns are detected (or fixable), the wines arrive right, and note which apps work. Detection uses common header words and has never been tried with a real export.
+- [ ] Journal tab, "Import wines from a file": choose a CSV (try the template, and a real export from a spreadsheet). The columns are detected, the summary is right, and Add puts the wines in the Journal with the right date, price and notes. Imported wines arrive **unrated** (the rating rule is on hold).
+- [ ] **Revisit the rating rule** with the owner before testers: decide whether to turn on `USE_RATING_RULE` (thresholds in `RATING_RULE`).
+- [ ] A wine in the catalog (same producer, wine name and vintage) is linked to the catalog entry; other wines are the player's own, and none of them appear in Discover or the catalog until an editor approves them through the candidate flow (default: 10 entries for the same wine).
+- [ ] Limits: a regular account is told "Up to 100 wines per file" and only the first 100 rows are used; staff accounts and accounts on the `pro` tier see 500. (Run `docs/import_tier.sql`, then `update profiles set tier = 'pro' ...` for a test account.)
 - [ ] Importing the same file twice adds nothing the second time (all skipped as already in the journal).
-- [ ] Wines added by import appear on the Profile, Taste page and in Bingo only once rated; unrated ones offer "Rate it".
+- [ ] Imported wines appear on the Profile, Taste page and in Bingo only once rated; unrated ones offer "Rate it".
 - [ ] Works on a real phone: choosing a file from Files / Google Drive, and pasting rows copied from a spreadsheet app.
 - [ ] A 500-row file imports in a reasonable time and a bad row does not stop the others.
