@@ -76,7 +76,10 @@ export async function countRows(sb) {
 // context is a small note of what the deck knew when the wine was shown ({ tier, fam, pref, skip }); it is stored with the answer so the deck can be studied later.
 export async function recordReaction(sb, wineVintageId, reaction, context = null) {
   const { error } = await sb.rpc("record_reaction", { p_wine_vintage_id: wineVintageId, p_reaction: reaction, p_context: context });
-  if (error) throw error;
+  if (error) {
+    if (error.code === "PGRST202" || /record_reaction/.test(String(error.message || ""))) throw new Error("The database needs one more update (docs/reactions.sql) before swipes can be saved.");
+    throw error;
+  }
 }
 // The old model's swipe, kept so the first version of the deck can still be restored. Not used by the current app.
 export async function recordSwipe(sb, wineVintageId, familiarity, interest) {
