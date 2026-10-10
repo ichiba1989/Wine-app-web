@@ -3,7 +3,7 @@
 // They must accept both to use the app.
 // It is shown once, and again whenever CONSENT_VERSION changes (change it whenever the wording of the terms changes).
 // The rules at the top are pure (no browser, no network). acceptConsents at the bottom talks to Supabase.
-import { esc } from "./logic.js?v=10";
+import { esc } from "./logic.js?v=11";
 
 export const CONSENT_VERSION = "2026-10-e";
 export const AGE_RULE = "US-21";

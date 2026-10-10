@@ -4,7 +4,7 @@
 // The grid is an extra on top of the normal rating. Its answers for acidity, tannin, body, sweetness, oak and bubbles also move the
 // five structure sliders, so the palate and the Discover deck keep working from the same lines for everyone.
 // The rules at the top are pure (no browser, no network). The functions at the bottom talk to Supabase.
-import { esc, dimsFor } from "./logic.js?v=10";
+import { esc, dimsFor } from "./logic.js?v=11";
 
 export const METHOD = "grid1";
 export const FEATURE = "proTasting";

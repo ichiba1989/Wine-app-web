@@ -1,6 +1,6 @@
 // Feedback from testers: a short form, opened from Profile, Overview. Editors read it in the Editor tab.
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
-import { esc } from "./logic.js?v=10";
+import { esc } from "./logic.js?v=11";
 
 export const KINDS = [
   { id: "bug", label: "Something is broken" },

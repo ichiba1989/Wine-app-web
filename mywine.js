@@ -2,7 +2,7 @@
 // only they see the change and the catalog never moves. The change is stored as the few fields that differ from the catalog, and is laid over
 // the wine everywhere the player sees it: the Discover card, Swipes, the Journal, the rating window and the structure rules.
 // The rules at the top are pure (no browser, no network). loadMyInfo and saveMyInfo at the bottom talk to Supabase.
-import { cardFromRow } from "./logic.js?v=10";
+import { cardFromRow } from "./logic.js?v=11";
 import { splitGrapeText, fold } from "./grapes.js?v=1";
 import { splitPlace } from "./blends.js?v=1";
 

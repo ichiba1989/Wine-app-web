@@ -300,9 +300,8 @@
   .subrow { align-items: flex-start; }
   .subthumb { flex: 0 0 auto; width: 84px; height: 112px; object-fit: contain; background: linear-gradient(180deg,#E3EAE0,#CBD8C9); border-radius: 8px; border: 1px solid var(--line); }
   .subthumb.empty { display: block; }
-  /* The one "Not interested" button under the Discover card */
-  .notint { flex: 0 0 auto; border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 11px 22px; font-size: calc(15px * var(--ts)); font-weight: 500; }
-  .notint.on { background: var(--moss); color: #fff; border-color: var(--moss); }
+  /* "I've had this bottle" under the answers */
+  .hadbtn { flex: 0 0 auto; border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 11px 18px; font-size: calc(14px * var(--ts)); font-weight: 500; }
   /* The professional tasting grid */
   .problock { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin: 6px 0 12px; }
   .gridsheet { max-height: 94vh; max-height: 94dvh; }
@@ -392,7 +391,7 @@
   .topright { display: flex; align-items: center; gap: 10px; }
   .gear { border: 0; background: transparent; font-size: calc(22px * var(--ts)); line-height: 1; padding: 6px 8px; min-width: 44px; min-height: 44px; color: var(--ink); }
   body[data-tab="discover"] .gear { min-height: 36px; padding: 2px 8px; }
-  .answers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+  .answers { display: grid; grid-template-columns: 1fr 1.25fr 1fr; gap: 8px; margin-top: 10px; }
   .ans { border: 1.5px solid var(--c, var(--line)); color: var(--c, var(--ink)); background: #fff; border-radius: 14px; padding: 8px 6px; min-height: 48px; font-size: calc(13px * var(--ts)); font-weight: 600; line-height: 1.2; }
   .ans:active { background: var(--c); color: #fff; }
   .zoombtn { flex: 0 0 auto; border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 11px 16px; font-size: calc(15px * var(--ts)); font-weight: 500; }
@@ -566,6 +565,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=65" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=66" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>

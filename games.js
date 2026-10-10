@@ -1,6 +1,6 @@
 // The Games tab: a list of games (Wine Bingo is the first), then the bingo tiers, then one card. Every function here takes data and returns an HTML
 // string; nothing touches the network. The rules (what fills a square, what unlocks a tier) are in bingo.js; app.js holds the screen state and clicks.
-import { esc, wineName, entryName } from "./logic.js?v=10";
+import { esc, wineName, entryName } from "./logic.js?v=11";
 import { infoLine } from "./wineline.js?v=1";
 import { PAIRS, AXES, AXIS_ORDER, AXIS_VIEW, nextPair, answeredCount, pickedCount, isDone, leanings, axisValues, compareAxes, isClear } from "./thisorthat.js?v=4";
 import { TIERS, CARDS, CLEARS_TO_UNLOCK, cardById, cardsOfTier, tierOpen, clearedIn } from "./bingo.js?v=2";

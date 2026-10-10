@@ -2,7 +2,7 @@
 // The rules here (what counts as missing, what the choices are) are pure, so they can be tested on their own.
 // The upload step shrinks the picture in the browser first, then saves it through data.js.
 import { shrinkImage } from "./photos.js?v=5";
-import * as db from "./data.js?v=21";
+import * as db from "./data.js?v=22";
 import { looseKey } from "./catalog.js?v=2";
 
 // Bottle photos are saved at about 900 px on the longest side: sharp on a phone card, small to download.

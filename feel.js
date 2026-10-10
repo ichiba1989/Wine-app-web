@@ -7,7 +7,7 @@
 // expected (a difference of zero), so a player who says Yes a lot and a player who finds things out of the ordinary look different.
 // Professionals keep the sliders and the tasting grid; for them the same questions are a shortcut that moves the sliders.
 // The rules at the top are pure (no browser, no network). loadTaste and saveTaste at the bottom talk to Supabase.
-import { dimsFor, dimMeta, clampDimValue, esc } from "./logic.js?v=10";
+import { dimsFor, dimMeta, clampDimValue, esc } from "./logic.js?v=11";
 
 // What can stand out, and how much (level 1, 2 or 3). Each effect is a change from the wine's expected level; sweetness is the step noticed.
 export const NOTES = [

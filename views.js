@@ -2,8 +2,9 @@
 import {
   FAMILIARITY, FLAGS, VERDICTS, isChoice, GROUPS, GROUP_PAGE, SORTS, YEARS,
   esc, wineName, entryCard, entryName, verdictShort, groupEntries, filterEntries, sortCards,
-  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims } from "./logic.js?v=10";
+  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims } from "./logic.js?v=11";
 import { splitGrapeParts, splitPlace } from "./blends.js?v=1";
+import { REACTIONS } from "./reactions.js?v=1";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
 import { flavorsForCard, placeFor } from "./flavors.js?v=1";
 import { bottleSilhouette, flavorRowHtml, tintFor } from "./visuals.js?v=2";
@@ -65,7 +66,7 @@ export function visualFor(c, stats = null) {
 // The zoom icon on the map: a small magnifier with a plus in the map's corner, so it is clear the map can be tapped to see where the wine is from.
 export const mapZoomIconHtml = (hint = false) => `<span class="badge${hint ? " hint" : ""}" aria-hidden="true"><svg viewBox="0 0 32 32" width="20" height="20"><circle cx="13" cy="13" r="8.5" fill="none" stroke="currentColor" stroke-width="3"/><path d="M19.5 19.5 L27 27" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"/><path d="M13 9 V17 M9 13 H17" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg></span>`;
 export function cardHtml(c, { mapHint = false } = {}) {
-  const labels = ["recognize", "unknown", "had"].map((k) => `<div class="swipe-label" data-label="${k}" style="background:${FAMILIARITY[k].color}">${esc(FAMILIARITY[k].label)}</div>`).join("");
+  const labels = ["like", "dislike", "had", "dont_know"].map((k) => `<div class="swipe-label" data-label="${k}" style="background:${REACTIONS[k].color}">${esc(REACTIONS[k].label)}</div>`).join("");
   const v = visualFor(c), href = imageSearchUrl(c), t = tintFor(v.type);
   const map = v.map ? `<${v.zoomable ? "button" : "div"} class="mapbtn${v.zoomable ? "" : " still"}"${v.zoomable ? ` data-zoom="${esc(c.id)}" aria-label="Show where this wine is from"` : ""}>${v.map}${v.zoomable ? mapZoomIconHtml(mapHint) : ""}</${v.zoomable ? "button" : "div"}>` : "";
   const place = c.appellation || c.region || c.country || "";
@@ -82,10 +83,11 @@ export function cardHtml(c, { mapHint = false } = {}) {
       <div class="facts">${facts.map((f) => `<span class="${f.derived ? "derived" : ""}">${esc(f.text)}</span>`).join("")}</div>
     </div></div>`;
 }
-// The three answers as buttons, for anyone who would rather tap than swipe (the same as swiping right, left and up). They can be switched off in Settings.
-export const ANSWER_BUTTONS = [{ kind: "recognize", label: "I recognize it" }, { kind: "unknown", label: "I don't know it" }, { kind: "had", label: "I've had this bottle" }];
+// The answers as buttons: Dislike (swipe left), I don't know it (buttons only) and Like (swipe right), in the order they sit on the screen. "I've had this bottle"
+// (swipe up) is the small button under them. The row can be switched off in Settings when swiping is on.
+export const ANSWER_BUTTONS = [{ kind: "dislike", label: "Dislike" }, { kind: "dont_know", label: "I don't know it" }, { kind: "like", label: "Like" }];
 export const answerButtonsHtml = () => `<div class="answers" role="group" aria-label="Your answer">${ANSWER_BUTTONS.map((a) =>
-  `<button class="ans" data-action="answer:${a.kind}" style="--c:${FAMILIARITY[a.kind].color}">${esc(a.label)}</button>`).join("")}</div>`;
+  `<button class="ans" data-action="answer:${a.kind}" style="--c:${REACTIONS[a.kind].color}">${esc(a.label)}</button>`).join("")}</div>`;
 export function discoverHtml({ deck, interest, banner, counts, feedback = false, flaggedId = null, nudge = false, buttons = true, mapHint = false }) {
   const bannerHtml = banner ? `<div class="banner" data-action="dismiss">${esc(banner)} (tap to dismiss)</div>` : "";
   if (!deck.length) {
@@ -96,7 +98,7 @@ export function discoverHtml({ deck, interest, banner, counts, feedback = false,
   return `${bannerHtml}<div class="deckstage">
     <div class="cardwrap">${deck.length > 1 ? '<div class="behind"></div>' : ""}${cardHtml(deck[0], { mapHint })}</div>
     ${buttons ? answerButtonsHtml() : ""}
-    <div class="belowcard"><button class="notint" data-action="notint" aria-pressed="false" aria-label="Not interested in this wine">Not interested</button><button class="zoombtn" data-action="zoomcard" aria-label="Zoom in on the card">&#128269; Zoom</button>${feedback ? `<span class="fbline">${flaggedId === deck[0].id ? '<span class="muted">Thanks, an editor will review it.</span>' : '<button class="link" data-action="wineflag" aria-label="Report a problem with this wine">Report a problem</button>'}</span>` : ""}</div>
+    <div class="belowcard"><button class="hadbtn" data-action="answer:had" aria-label="I've had this bottle: it goes into your journal">I've had this bottle</button><button class="zoombtn" data-action="zoomcard" aria-label="Zoom in on the card">&#128269; Zoom</button>${feedback ? `<span class="fbline">${flaggedId === deck[0].id ? '<span class="muted">Thanks, an editor will review it.</span>' : '<button class="link" data-action="wineflag" aria-label="Report a problem with this wine">Report a problem</button>'}</span>` : ""}</div>
     ${nudge ? `<div class="nudge"><b>Don't lose your journal.</b> Save it with an email so it follows you to any phone.
       <div class="nudgeacts"><button class="btn primary slim" data-account="open:save">Save with email</button><button class="link" data-action="nudgeoff">Not now</button></div></div>` : ""}</div>`;
 }
@@ -126,12 +128,15 @@ export function swipesHtml(lists, sw, photoUrls) {
   const review = (c) => pill(`review:${c.id}`, "Review the wine", true);
   const parts = [];
   const isOpen = (id) => !!sw.open[id];
-  parts.push(section("rec", "Recognized", lists.rec.length, isOpen("rec"),
-    listBody("rec", lists.rec, (c) => review(c) + pill(`setint:${c.id}:nope`, "Not interested"))));
-  parts.push(section("unk", "Don't know it", lists.unk.length, isOpen("unk"),
-    listBody("unk", lists.unk, (c) => review(c) + pill(`setint:${c.id}:nope`, "Not interested"))));
-  parts.push(section("notint", "Not interested", lists.notInt.length, isOpen("notint"),
-    listBody("notint", lists.notInt, (c) => review(c) + (sw.noFam && sw.noFam.has(c.id) ? pill(`unswipe:${c.id}`, "Put back") : pill(`setint:${c.id}:try`, "Put back")))));
+  // Likes and dislikes can be switched to the other; "Put back" returns the wine to the deck. Old answers ("Recognized") keep their old buttons.
+  parts.push(section("liked", "Liked", lists.liked.length, isOpen("liked"),
+    listBody("liked", lists.liked, (c) => review(c) + pill(`react:${c.id}:dislike`, "Dislike instead") + pill(`unswipe:${c.id}`, "Put back"))));
+  parts.push(section("disliked", "Disliked", lists.disliked.length, isOpen("disliked"),
+    listBody("disliked", lists.disliked, (c) => review(c) + pill(`react:${c.id}:like`, "Like instead") + (sw.noFam && sw.noFam.has(c.id) ? pill(`unswipe:${c.id}`, "Put back") : pill(`unswipe:${c.id}`, "Put back")))));
+  parts.push(section("dontKnow", "I don't know it", lists.dontKnow.length, isOpen("dontKnow"),
+    listBody("dontKnow", lists.dontKnow, (c) => review(c) + pill(`react:${c.id}:like`, "Like") + pill(`react:${c.id}:dislike`, "Dislike") + pill(`unswipe:${c.id}`, "Put back"))));
+  if (lists.rec.length) parts.push(section("rec", "Recognized (earlier answers)", lists.rec.length, isOpen("rec"),
+    listBody("rec", lists.rec, (c) => review(c) + pill(`react:${c.id}:like`, "Like") + pill(`react:${c.id}:dislike`, "Dislike"))));
   const triedBody = !lists.tried.length ? `<div class="muted small">Nothing here yet. Wines you rate are kept here.</div>`
     : (lists.tried.length > 1 ? sortSelect("tried", sortOf("tried")) : "") +
       sortCards(lists.tried, sortOf("tried"), lists.order).map((c) =>
@@ -144,7 +149,7 @@ export function swipesHtml(lists, sw, photoUrls) {
         const entry = lists.entryOf.get(c.id);
         return item(c, entry ? pill(`entry:${entry.id}`, entry.verdict ? "View review" : "Rate this bottle", true) : pill(`review:${c.id}`, "Review the wine", true), "", thumbHtml(photoUrls, entry && entry.first_photo_path) || bottleThumbHtml(c));
       }).join("");
-  const any = lists.rec.length + lists.unk.length + lists.notInt.length + lists.tried.length + lists.had.length;
+  const any = lists.liked.length + lists.disliked.length + lists.dontKnow.length + lists.rec.length + lists.tried.length + lists.had.length;
   return (any ? "" : `<p class="muted">Swipe some wines in Discover and they will show up here.</p>`) +
     `<div class="stack">${parts.join("")}</div><div class="stack" style="margin-top:36px">${section("had", "Had this bottle (also in your Journal)", lists.had.length, isOpen("had"), hadBody)}</div>`;
 }

@@ -1,7 +1,7 @@
 // Wine info (editors only): change a catalog wine's details. Producer, wine name, vineyard, vintage, type of wine,
 // place, the grapes printed on the label, and other grapes in the wine (for blends the label does not list).
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
-import { esc, WINE_STYLES } from "./logic.js?v=10";
+import { esc, WINE_STYLES } from "./logic.js?v=11";
 import { checkGrapeText, grapeProblem, grapeIndex, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES } from "./blends.js?v=1";
 import { infoLine } from "./wineline.js?v=1";
@@ -9,7 +9,7 @@ import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, place
 import { loadWinePrice, saveWinePrice, parsePrice, centsToField, blendPrice, formatPrice } from "./pricing.js?v=1";
 import { archivePlanFor } from "./catalog.js?v=2";
 import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=3";
-import * as db from "./data.js?v=21";
+import * as db from "./data.js?v=22";
 
 const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 

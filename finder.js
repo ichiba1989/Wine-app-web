@@ -3,8 +3,8 @@
 //   Review       -> each candidate is shown one at a time. Approve (it becomes a "Found online" photo of that wine, shrunk to a deck-sized picture),
 //                   Skip (look at it later), or Reject with a reason (it is never suggested again for that wine).
 // Nothing reaches players until it is approved. The rules at the top are pure (no browser, no network); the functions below talk to Supabase.
-import * as db from "./data.js?v=21";
-import { esc } from "./logic.js?v=10";
+import * as db from "./data.js?v=22";
+import { esc } from "./logic.js?v=11";
 
 export const CANDIDATES = "photo-candidates";   // the private holding bucket
 export const PUBLIC = "wine-images";            // where approved photos go

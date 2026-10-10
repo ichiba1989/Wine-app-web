@@ -5,13 +5,13 @@ import {
   wineName, esc, clamp01, filterEntries, groupEntries, swipeLists,
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
-  dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=10";
-import * as db from "./data.js?v=21";
+  dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=11";
+import * as db from "./data.js?v=22";
 import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=3";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=2";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=28";
+  visualFor, discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=29";
 import { createLearn } from "./learn.js?v=3";
 import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=1";
@@ -23,13 +23,14 @@ import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywin
 import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=6";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
 import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting } from "./tasting.js?v=2";
-import { buildDeck, userModel } from "./deck.js?v=4";
-import { createProfile } from "./profile.js?v=16";
+import { buildDeck, userModel } from "./deck.js?v=5";
+import { createProfile } from "./profile.js?v=17";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=8";
 import { createFeedback } from "./feedback.js?v=3";
 import { createEditor } from "./editor.js?v=23";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=3";
 import { gamesHtml } from "./games.js?v=10";
+import { setSwipeConfig, reactionOf, LEGACY_OF } from "./reactions.js?v=1";
 import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=4";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=2";
 import { recommendMix, recommend } from "./recommend.js?v=3";
@@ -37,7 +38,7 @@ import { recommendMix, recommend } from "./recommend.js?v=3";
 let OWN = null, DEMO = null, IMP = null;
 const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=1"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=3"));
-const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=3"));
+const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=4"));
 import { createWineInfo } from "./wineinfo.js?v=13";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
@@ -276,6 +277,7 @@ async function enterMain() {
     db.loadFeature(state.sb, PRO_FEATURE).then((r) => feedbackOn(r, tier), () => false),   // off until database update 21 is run
     db.loadQuizKnowledge(state.sb).catch(() => null),   // what the person knows and what other players know both help decide the deck
     db.loadCrowd(state.sb).catch(() => new Map()),
+    db.loadSwipeConfig(state.sb).then(setSwipeConfig, () => {}),   // the owner's numbers for likes, dislikes and "I don't know it"
   ]);
   state.cards = cards; state.feedback = feedback; state.pro = pro; state.quiz = quiz; state.crowd = crowd;
   rebuildDeck();
@@ -422,7 +424,7 @@ function squareHelp(square, cardsById) {
   if (unrated.length) return { unrated, recs: [] };
   const refs = structureMap(state.cards, state.refs);
   const model = userModel({ cards: state.cards, states: state.states, journal: state.journal, quiz: state.quiz, refs });
-  const leaveOut = new Set([...state.journal.filter((e) => e.verdict && e.wine_vintage_id).map((e) => e.wine_vintage_id), ...state.states.filter((x) => x.interest === "nope").map((x) => x.wine_vintage_id)]);
+  const leaveOut = new Set([...state.journal.filter((e) => e.verdict && e.wine_vintage_id).map((e) => e.wine_vintage_id), ...state.states.filter((x) => reactionOf(x) === "dislike").map((x) => x.wine_vintage_id)]);
   const cold = model.swipeCount + model.journalCount < 5;   // too little history to say "your taste"
   return { unrated: [], cold, recs: recommendMix({ cards: state.cards, model, refs, crowd: state.crowd, journal: state.journal, states: state.states, exclude: leaveOut, accept: (c) => bingoMatches(square.test, cardFacts(c)), lenses: ["confident", "unique", "challenge"] }) };
 }
@@ -568,7 +570,7 @@ function paintBehind(el, progress, ms = 0) {
   b.style.opacity = String(0.7 + 0.3 * progress);
 }
 // The card leaves the way it was thrown, at the speed it was thrown. A tap or a double-tap sends it with a gentler push.
-// Both ways of leaving a card (a swipe, and "Not interested") end the same way: save it, take the card out of the deck, remember what it taught us straight away,
+// Every way of leaving a card (a swipe, a button) ends the same way: save it, take the card out of the deck, remember what it taught us straight away,
 // re-rank the rest every 8 swipes (or when the deck runs low), then draw the next card, which settles forward from where the one underneath was.
 async function finishCard(card, save, row, failure, extra) {
   try {
@@ -594,7 +596,7 @@ async function fly(el, kind, v = { dx: 0, dy: 0, vx: 0, vy: 0 }) {
   const card = state.deck[0];
   if (el) try {
     el.classList.remove("dragging"); el.classList.add("leaving");
-    const plan = flyPlan(kind, v.dx, v.dy, v.vx || (kind === "recognize" ? 0.9 : kind === "unknown" ? -0.9 : 0), v.vy || (kind === "had" ? -1.1 : 0), window.innerWidth, window.innerHeight);
+    const plan = flyPlan(kind, v.dx, v.dy, v.vx || (kind === "like" ? 0.9 : kind === "dislike" ? -0.9 : 0), v.vy || (kind === "had" ? -1.1 : kind === "dont_know" ? 0.9 : 0), window.innerWidth, window.innerHeight);
     paintBehind(el, 1, plan.duration);
     if (el.animate && !reduceMotion()) {
       const from = el.style.transform || "translate3d(0px, 0px, 0)";
@@ -607,33 +609,16 @@ async function fly(el, kind, v = { dx: 0, dy: 0, vx: 0, vy: 0 }) {
     }
     if (navigator.vibrate) { try { navigator.vibrate(8); } catch (_) {} }
   } catch (_) { /* the exit animation is only for show: the card is still saved and removed */ }
-  // interest is implied: a wine the person swipes is a wine they are open to
-  await finishCard(card, () => db.recordSwipe(state.sb, card.id, kind, "try"), { familiarity: kind, interest: "try" }, "Could not save that swipe: ", async () => { state.counts = await loadCounts(); });
+  // The answer, with a small note of what the deck knew about the wine when it was shown (kept for studying the deck later).
+  const [familiarity, interest] = LEGACY_OF[kind];
+  await finishCard(card, () => db.recordReaction(state.sb, card.id, kind, contextFor(card)), { reaction: kind, familiarity, interest }, "Could not save that swipe: ", async () => { state.counts = await loadCounts(); });
 }
+const contextFor = (card) => { const i = state.deckInfo && state.deckInfo.get(card.id); const r2 = (n) => Math.round(n * 100) / 100; return i ? { tier: i.tier, fam: r2(i.fam), pref: r2(i.pref), skip: r2(i.skip || 0) } : null; };
 
-// "Not interested": the button turns on for this one wine and the wine is filed under Not interested in Swipes straight away.
-// It records that interest only (no "I recognize it" or "don't know it" is claimed), so it says nothing about what the person knows.
-async function notInterested() {
-  if (state.busy || !state.deck.length) return;
-  state.busy = true;
-  const card = state.deck[0], el = $("#card"), btn = document.querySelector("[data-action='notint']");
-  if (btn) { btn.classList.add("on"); btn.setAttribute("aria-pressed", "true"); }
-  if (el) try {
-    el.classList.remove("dragging"); el.classList.add("leaving");
-    paintBehind(el, 1, 260);
-    if (el.animate && !reduceMotion()) {
-      const anim = el.animate([{ transform: "translate3d(0px, 0px, 0)", opacity: 1 }, { transform: `translate3d(0px, ${window.innerHeight * 0.9}px, 0) rotate(4deg)`, opacity: 0.2 }],
-        { duration: 280, easing: "cubic-bezier(0.4, 0, 0.8, 0.6)", fill: "forwards" });
-      try { await anim.finished; } catch (_) {}
-    } else await sleep(120);
-  } catch (_) { /* the exit animation is only for show: the card is still saved and removed */ }
-  await finishCard(card, () => db.changeInterest(state.sb, state.user.id, card.id, "nope"), { familiarity: null, interest: "nope" }, "Could not save that: ");
-}
-
-// The double-tap zones: a narrow strip down each side (left = don't know it, right = recognize it) and a thin strip across the top (had it).
+// The double-tap zones: a narrow strip down each side (left = dislike, right = like) and a thin strip across the top (had it).
 // Everything in the middle of the card is not a zone, so a double-tap there does nothing. These are fractions of the card's width and height.
 const EDGE_SIDE = 0.14, EDGE_TOP = 0.09;
-const edgeOf = (fx, fy) => (fy < EDGE_TOP ? "had" : fx < EDGE_SIDE ? "unknown" : fx > 1 - EDGE_SIDE ? "recognize" : null);
+const edgeOf = (fx, fy) => (fy < EDGE_TOP ? "had" : fx < EDGE_SIDE ? "dislike" : fx > 1 - EDGE_SIDE ? "like" : null);
 // The wine's name is a link to a Google image search. A finger on the card is captured by the card, so the browser would not follow the link by itself:
 // the card opens it when a tap lands on it (once, even if the tap was a double-tap).
 let lastImageOpen = 0;
@@ -654,11 +639,11 @@ function attachCard(el) {
   let start = null, dx = 0, dy = 0, lastTap = null, hintTimer = null, samples = [];
   const swipeOn = () => state.settings.swipe;
   const label = (k) => el.querySelector(`[data-label="${k}"]`);
-  const clearHint = () => { clearTimeout(hintTimer); ["recognize", "unknown", "had"].forEach((k) => { label(k).style.opacity = 0; }); };
+  const clearHint = () => { clearTimeout(hintTimer); ["like", "dislike", "had", "dont_know"].forEach((k) => { label(k).style.opacity = 0; }); };
   const showHint = (edge) => { clearHint(); if (edge) { label(edge).style.opacity = 0.55; hintTimer = setTimeout(clearHint, DOUBLE_TAP_MS + 50); } };
   const paint = () => {
-    label("recognize").style.opacity = clamp01((dx - 40) / 80);
-    label("unknown").style.opacity = clamp01((-dx - 40) / 80);
+    label("like").style.opacity = clamp01((dx - 40) / 80);
+    label("dislike").style.opacity = clamp01((-dx - 40) / 80);
     label("had").style.opacity = clamp01((-dy - 40) / 80);
   };
   // Not far enough: the card springs back past the middle and settles, like something with weight.
@@ -1267,7 +1252,14 @@ document.addEventListener("click", async (ev) => {
       SUPABASE_URL = u; SUPABASE_KEY = k; store.set("wine_url", SUPABASE_URL); store.set("wine_key", SUPABASE_KEY);
       state.banner = null; state.status = "loading"; render(); init();
     }
-    else if (action === "notint") notInterested();
+    else if (action === "react") {   // change one answer from the Swipes tab: react:WINE:like|dislike
+      if (b === "like" || b === "dislike") {
+        await db.recordReaction(state.sb, a, b, null);
+        const [familiarity, interest] = LEGACY_OF[b];
+        state.states = state.states.map((x) => (x.wine_vintage_id === a ? { ...x, reaction: b, familiarity, interest } : x));
+        lastRefreshAt = 0; renderBody();
+      }
+    }
     else if (action === "answer") {   // the same as swiping that way
       const el = $("#card");
       if (el) { if (el.__resetZoom) el.__resetZoom(false); const l = el.querySelector(`[data-label="${a}"]`); if (l) l.style.opacity = 1; }

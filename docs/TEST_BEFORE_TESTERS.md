@@ -84,3 +84,13 @@ Keep this list current. Tick each item (and date it) only after trying it on a t
 - [ ] Imported wines appear on the Profile, Taste page and in Bingo only once rated; unrated ones offer "Rate it".
 - [ ] Works on a real phone: choosing a file from Files / Google Drive, and pasting rows copied from a spreadsheet app.
 - [ ] A 500-row file imports in a reasonable time and a bad row does not stop the others.
+
+## 11. Like / Dislike deck (added 2026-10-10)
+- [ ] **Run `docs/reactions.sql` in Supabase first.** Until it is run, swiping in the new app shows "Could not save that swipe".
+- [ ] On a real phone: swipe right (Like), swipe left (Dislike), tap I don't know it, swipe up and tap "I've had this bottle" (adds a journal entry), double-tap the left, right and top edges. Check each creates one row in `encounters` with the right `reaction` and a `context` note (tier, fam, pref, skip).
+- [ ] Likes and dislikes show on the Profile, Taste page (it moves slowly: the weights are provisional) and a wine you rated in the journal is not counted twice. **I don't know it changes nothing on the Taste page.**
+- [ ] After saying I don't know it to several wines of one grape, fewer wines of that grape show up, but some still do (about one every 8 cards), and none disappear.
+- [ ] Swipes tab: Liked, Disliked, I don't know it, and (if you had old swipes) "Recognized (earlier answers)". "Dislike instead", "Like instead" and "Put back" work.
+- [ ] Old swipes (made before this change) still keep their wines out of the deck and still count as before for the deck.
+- [ ] The practice walkthrough (Settings, Practice with a sample card) teaches the new answers.
+- [ ] **Owner decisions still open:** the like and dislike weights (`swipe_like_weight`, `swipe_dislike_weight`, editable on the Config tab once `reactions.sql` has run), whether "I've had this bottle" and the journal entry it creates should stay as they are, and when quizzes should start reading what the player does not know (`gapsOf` in `deck.js`).

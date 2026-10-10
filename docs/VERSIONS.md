@@ -24,5 +24,8 @@ The Discover deck as it works today, before the planned change to how swiping wo
 - **Make the live site use it again** (the site is served from the working branch): `git checkout -B claude/wine-discovery-architecture-3pithw origin/backup/deck-v1-three-answers` then `git push --force-with-lease origin claude/wine-discovery-architecture-3pithw`. This replaces the working branch with the saved version, so first save anything newer you want to keep as its own backup branch.
 - **Compare with now:** `git diff origin/backup/deck-v1-three-answers claude/wine-discovery-architecture-3pithw --stat`.
 
+## Like / Dislike deck, v2 (current, from 2026-10-10)
+Swipe right Like, swipe left Dislike, a button for I don't know it, swipe up / button for I've had this bottle. Likes and dislikes count toward the palate (provisional weights); I don't know it counts for nothing in the palate, pushes similar wines down the deck (never removes them) and is recorded for recommendations and quizzes. Needs `docs/reactions.sql` in the database. To go back to v1, see the steps above (the database keeps the extra `reaction` and `context` columns; v1 code ignores them and still reads the rows through the old familiarity and interest columns).
+
 ## How to save a new version
 `git push origin HEAD:refs/heads/backup/NAME` (a new name each time, never an existing one), and add a section here with the commit. Use clear names (for example `deck-v2-...`).

@@ -1,5 +1,5 @@
 // Everything that talks to Supabase. Each function takes the client and throws on an error.
-import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=10";
+import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=11";
 import { BUCKET, newPhotoPath } from "./photos.js?v=5";
 
 const must = ({ data, error }) => { if (error) throw error; return data; };
@@ -47,7 +47,15 @@ export async function loadCards(sb) {
   return must(await sb.from("v_catalog_cards").select("*")).map((r) => { const c = cardFromRow(r); c.photo = photoUrl(sb, c.image); c.imageKind = r.image_kind || null; c.imageNote = r.image_note || null; return { ...c, raw: r }; });   // raw: the full catalog row, used by the structure editor
 }   // raw: the full catalog row, used by the structure rules
 export async function loadStates(sb) {
-  return must(await sb.from("v_user_wine_state").select("wine_vintage_id, familiarity, interest, last_swiped_at"));
+  const r = await sb.from("v_user_wine_state").select("wine_vintage_id, familiarity, interest, reaction, last_swiped_at");
+  if (!r.error) return r.data;
+  if (!/reaction|column/i.test(String(r.error.message || ""))) throw r.error;
+  return must(await sb.from("v_user_wine_state").select("wine_vintage_id, familiarity, interest, last_swiped_at"));   // before docs/reactions.sql is run
+}
+// The numbers behind likes, dislikes and "I don't know it" (reactions.js setSwipeConfig). Anything missing keeps its default.
+export async function loadSwipeConfig(sb) {
+  const r = await sb.from("app_config").select("key, value").in("key", ["swipe_like_weight", "swipe_dislike_weight", "unknown_demote_strength", "unknown_teach_every"]);
+  return r.error ? [] : r.data;
 }
 export async function loadJournal(sb) {
   return must(await sb.from("v_journal_entries").select("*").order("consumed_on", { ascending: false }));
@@ -64,7 +72,13 @@ export async function countRows(sb) {
 }
 
 // ---------------------------------------------------------------- swiping
-// Swiping up ("had this bottle") also adds the wine to the journal, done together on the server.
+// One answer to a wine card: "like", "dislike", "dont_know" or "had" (docs/reactions.sql). "had" also adds the wine to the journal, done together on the server.
+// context is a small note of what the deck knew when the wine was shown ({ tier, fam, pref, skip }); it is stored with the answer so the deck can be studied later.
+export async function recordReaction(sb, wineVintageId, reaction, context = null) {
+  const { error } = await sb.rpc("record_reaction", { p_wine_vintage_id: wineVintageId, p_reaction: reaction, p_context: context });
+  if (error) throw error;
+}
+// The old model's swipe, kept so the first version of the deck can still be restored. Not used by the current app.
 export async function recordSwipe(sb, wineVintageId, familiarity, interest) {
   const { error } = await sb.rpc("record_swipe", { p_wine_vintage_id: wineVintageId, p_familiarity: familiarity, p_interest: interest });
   if (error) throw error;
