@@ -1,8 +1,15 @@
 // Everything that talks to Supabase. Each function takes the client and throws on an error.
-import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=10";
+import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=11";
 import { BUCKET, newPhotoPath } from "./photos.js?v=5";
 
 const must = ({ data, error }) => { if (error) throw error; return data; };
+// Deleting in the app only hides things from the player (docs/soft_delete.sql): a row gets deleted_at filled in and stays in the database.
+// Reads of those tables skip hidden rows. Until that script has been run the column does not exist, so a read that fails for that reason is repeated without the filter.
+const active = async (build) => {
+  const r = await build(true);
+  return r.error && /deleted_at|column/i.test(String(r.error.message || "")) ? build(false) : r;
+};
+const onlyActive = (q, on) => (on ? q.is("deleted_at", null) : q);
 // Reads every row, 1000 at a time (Supabase returns at most 1000 rows per request).
 async function allRows(makeQuery) {
   const out = [];
@@ -40,7 +47,15 @@ export async function loadCards(sb) {
   return must(await sb.from("v_catalog_cards").select("*")).map((r) => { const c = cardFromRow(r); c.photo = photoUrl(sb, c.image); c.imageKind = r.image_kind || null; c.imageNote = r.image_note || null; return { ...c, raw: r }; });   // raw: the full catalog row, used by the structure editor
 }   // raw: the full catalog row, used by the structure rules
 export async function loadStates(sb) {
-  return must(await sb.from("v_user_wine_state").select("wine_vintage_id, familiarity, interest, last_swiped_at"));
+  const r = await sb.from("v_user_wine_state").select("wine_vintage_id, familiarity, interest, reaction, last_swiped_at");
+  if (!r.error) return r.data;
+  if (!/reaction|column/i.test(String(r.error.message || ""))) throw r.error;
+  return must(await sb.from("v_user_wine_state").select("wine_vintage_id, familiarity, interest, last_swiped_at"));   // before docs/reactions.sql is run
+}
+// The numbers behind likes, dislikes and "I don't know it" (reactions.js setSwipeConfig). Anything missing keeps its default.
+export async function loadSwipeConfig(sb) {
+  const r = await sb.from("app_config").select("key, value").in("key", ["swipe_like_weight", "swipe_dislike_weight", "unknown_demote_strength", "unknown_teach_every"]);
+  return r.error ? [] : r.data;
 }
 export async function loadJournal(sb) {
   return must(await sb.from("v_journal_entries").select("*").order("consumed_on", { ascending: false }));
@@ -50,14 +65,20 @@ export async function loadPerceptions(sb, consumptionId) {
 }
 export async function countRows(sb) {
   const [s, j] = await Promise.all([
-    sb.from("encounters").select("id", { count: "exact", head: true }),
-    sb.from("consumptions").select("id", { count: "exact", head: true }),
+    active((on) => onlyActive(sb.from("encounters").select("id", { count: "exact", head: true }), on)),
+    active((on) => onlyActive(sb.from("consumptions").select("id", { count: "exact", head: true }), on)),
   ]);
   return { swipes: s.count || 0, journal: j.count || 0 };
 }
 
 // ---------------------------------------------------------------- swiping
-// Swiping up ("had this bottle") also adds the wine to the journal, done together on the server.
+// One answer to a wine card: "like", "dislike", "dont_know" or "had" (docs/reactions.sql). "had" also adds the wine to the journal, done together on the server.
+// context is a small note of what the deck knew when the wine was shown ({ tier, fam, pref, skip }); it is stored with the answer so the deck can be studied later.
+export async function recordReaction(sb, wineVintageId, reaction, context = null) {
+  const { error } = await sb.rpc("record_reaction", { p_wine_vintage_id: wineVintageId, p_reaction: reaction, p_context: context });
+  if (error) throw error;
+}
+// The old model's swipe, kept so the first version of the deck can still be restored. Not used by the current app.
 export async function recordSwipe(sb, wineVintageId, familiarity, interest) {
   const { error } = await sb.rpc("record_swipe", { p_wine_vintage_id: wineVintageId, p_familiarity: familiarity, p_interest: interest });
   if (error) throw error;
@@ -104,7 +125,7 @@ export async function signedUrls(sb, paths) {
   return new Map(data.filter((d) => d.signedUrl).map((d) => [d.path, d.signedUrl]));
 }
 export async function loadEntryPhotos(sb, consumptionId) {
-  const rows = must(await sb.from("journal_photos").select("id, storage_path, created_at, share_status").eq("consumption_id", consumptionId).order("created_at", { ascending: true }));
+  const rows = must(await active((on) => onlyActive(sb.from("journal_photos").select("id, storage_path, created_at, share_status").eq("consumption_id", consumptionId), on).order("created_at", { ascending: true })));
   const urls = await signedUrls(sb, rows.map((r) => r.storage_path));
   return rows.map((r) => ({ ...r, url: urls.get(r.storage_path) || null }));
 }
@@ -130,8 +151,7 @@ export async function deletePhotos(sb, existing) {
   for (const p of existing) {
     try {
       if (p.status === "submitted" || p.status === "approved") await unshareMyPhoto(sb, p.id);   // taking a photo out of the journal also takes it back from the community
-      must(await sb.from("journal_photos").delete().eq("id", p.id));
-      await sb.storage.from(BUCKET).remove([p.path]);
+      must(await sb.rpc("delete_my_photo", { p_photo_id: p.id }));   // hides it from the player; the file and the record stay
     } catch (e) { failed.push({ photo: p, message: e.message || String(e) }); }
   }
   return failed;
@@ -227,15 +247,11 @@ export async function saveReferences(sb, userId, wineId, values, existingRows) {
 }
 
 // ---------------------------------------------------------------- deleting entries and swipes
-// The database functions remove the link to the account and keep only an anonymous rating (see the update script).
-// Photos are private files, so they are erased first; if that fails nothing else is deleted and the person can try again.
+// Deleting only hides the entry from the player: the database functions mark it deleted and keep everything, photos and their files included
+// (docs/soft_delete.sql). Photos the player had shared for the catalog are taken back first; if that fails nothing else changes.
 export async function deleteJournalEntry(sb, consumptionId) {
-  const rows = must(await sb.from("journal_photos").select("id, storage_path, share_status").eq("consumption_id", consumptionId));
-  await withdrawShared(sb, rows);   // shared copies go first; if that fails nothing else is deleted
-  if (rows.length) {
-    const r = await sb.storage.from(BUCKET).remove(rows.map((x) => x.storage_path));
-    if (r.error) throw r.error;
-  }
+  const rows = must(await active((on) => onlyActive(sb.from("journal_photos").select("id, storage_path, share_status").eq("consumption_id", consumptionId), on)));
+  await withdrawShared(sb, rows);
   must(await sb.rpc("delete_my_journal_entry", { p_consumption_id: consumptionId }));
 }
 export async function deleteSwipe(sb, wineVintageId) {
@@ -252,15 +268,12 @@ export async function claimGuestMerge(sb, token) {
 }
 
 // ---------------------------------------------------------------- deleting the whole account
-// Photos are private files, so they are erased first. If that fails nothing else is deleted and the person can try again.
-// The database function then keeps only anonymous ratings, erases everything else, and removes the account.
+// Deleting the account keeps what the player gave us, anonymously (docs/retain_after_delete.sql): the photo files stay in private storage and the database
+// function cuts the link to the person. Only the photos the player SHARED for the catalog are taken back first. If that fails nothing else is deleted and the
+// person can try again.
 export async function deleteMyAccount(sb) {
   const rows = await allRows(() => sb.from("journal_photos").select("id, storage_path, share_status"));
   await withdrawShared(sb, rows);   // shared copies go first; if that fails nothing else is deleted
-  for (let i = 0; i < rows.length; i += 100) {
-    const r = await sb.storage.from(BUCKET).remove(rows.slice(i, i + 100).map((x) => x.storage_path));
-    if (r.error) throw r.error;
-  }
   must(await sb.rpc("delete_my_account"));
 }
 
@@ -354,7 +367,6 @@ export async function changeJournalWine(sb, userId, entry, plan) {
     must(await sb.from("user_wines").update(plan.row).eq("id", plan.userWineId));
     return { userWineId: plan.userWineId };
   }
-  const oldUserWine = entry.user_wine_id || null;
   let patch, created = null;
   if (plan.action === "link_catalog") {
     patch = { wine_vintage_id: plan.wineVintageId, user_wine_id: null, style_override: plan.styleOverride || null };
@@ -364,11 +376,7 @@ export async function changeJournalWine(sb, userId, entry, plan) {
   }
   try { must(await sb.from("consumptions").update(patch).eq("id", entry.id)); }
   catch (e) { if (created) await sb.from("user_wines").delete().eq("id", created); throw e; }   // do not leave a stray wine behind
-  if (oldUserWine && oldUserWine !== created) {
-    // the old hand-typed wine goes if no other entry uses it
-    const rest = must(await sb.from("consumptions").select("id").eq("user_wine_id", oldUserWine).limit(1));
-    if (!rest.length) await sb.from("user_wines").delete().eq("id", oldUserWine);
-  }
+  // The old hand-typed wine is kept (nothing the player typed is ever removed); it simply has no entry pointing at it any more.
   return created ? { userWineId: created } : { wineVintageId: plan.wineVintageId };
 }
 
@@ -513,4 +521,86 @@ export async function reuseWinePhoto(sb, fromVintageId, toVintageId, note, { rep
     await sb.storage.from(PHOTO_BUCKET).remove(have.map((h) => h.storage_path));
   }
   return path;
+}
+
+// ---------------------------------------------------------------- the Owner page
+// The numbers the app reads from the database (app_config: key, value, note). value is a number, or an object with a "value" number.
+export async function loadAppConfig(sb) {
+  return must(await sb.from("app_config").select("key, value, note").order("key"));
+}
+// Changes one setting. The database decides who may; if no row was changed this throws, so a refused save is never shown as done.
+export async function saveAppConfig(sb, key, value) {
+  const rows = must(await sb.from("app_config").update({ value }).eq("key", key).select("key"));
+  if (!rows || !rows.length) throw new Error("The setting was not saved. Your access may not allow changing it.");
+}
+// "How easy to find" for a wine (1 to 5), the same field the full editor sets. Needs database update 15.
+export async function saveWineReach(sb, wineId, reach) {
+  const rows = must(await sb.from("wines").update({ reach: reach === null ? null : Number(reach) }).eq("id", wineId).select("id"));
+  if (!rows || !rows.length) throw new Error("The change was not saved. Your access may not allow it, or database update 15 has not been run.");
+}
+
+// The Discover counts: swipes (not later changes of interest) and journal entries, leaving out the ones the player deleted (hidden, see soft_delete.sql).
+export async function countSwipesAndJournal(sb) {
+  const [s, j] = await Promise.all([
+    active((on) => onlyActive(sb.from("encounters").select("id", { count: "exact", head: true }).eq("event", "swipe"), on)),
+    active((on) => onlyActive(sb.from("consumptions").select("id", { count: "exact", head: true }), on)),
+  ]);
+  if (s.error) throw s.error;
+  if (j.error) throw j.error;
+  return { swipes: s.count || 0, journal: j.count || 0 };
+}
+
+// Import (importer.js): adds many journal entries at once. Items are { kind: "catalog" | "outside", wine_vintage_id | wine (a user_wines row), consumed_on, verdict, purchase_price_cents, notes }.
+// Hand-typed wines are saved first, 50 at a time, then the entries that point at them. If a batch is refused, its rows are tried one by one so one bad row cannot sink the rest.
+// Returns { added, failed: [{ label, message }] }.
+export async function importAllowance(sb) {   // { limit, used, remaining, hours }; needs docs/import_limit.sql
+  const r = await sb.rpc("my_import_allowance");
+  if (r.error) throw r.error;
+  if (!r.data) throw new Error("no allowance");
+  return r.data;
+}
+const isLimitError = (e) => !!e && (e.hint === "import_limit" || /^Limit reached/.test(String(e.message || "")));
+export async function importJournal(sb, userId, items, today) {
+  const result = { added: 0, failed: [], stopped: null };
+  const entry = (x) => ({ user_id: userId, origin: "manual", consumed_on: x.consumed_on || today, verdict: x.verdict || null, purchase_price_cents: x.purchase_price_cents ?? null, notes: x.notes || null });
+  for (let i = 0; i < items.length; i += 50) {
+    const chunk = items.slice(i, i + 50), ready = [];
+    const outside = chunk.filter((x) => x.kind === "outside");
+    let ids = [];
+    if (outside.length) {
+      const r = await sb.from("user_wines").insert(outside.map((x) => x.wine)).select("id");
+      if (r.error) {
+        outside.forEach((x) => result.failed.push({ label: x.label, message: r.error.message }));
+        if (isLimitError(r.error)) { result.stopped = r.error.message; chunk.forEach((x) => { if (x.kind === "catalog") result.failed.push({ label: x.label, message: r.error.message }); }); items.slice(i + 50).forEach((x) => result.failed.push({ label: x.label, message: r.error.message })); break; }
+      } else ids = r.data.map((d) => d.id);
+    }
+    let o = 0;
+    for (const x of chunk) {
+      if (x.kind === "catalog") ready.push({ x, row: { ...entry(x), wine_vintage_id: x.wine_vintage_id } });
+      else if (ids[o] !== undefined) { ready.push({ x, row: { ...entry(x), user_wine_id: ids[o] }, wineId: ids[o] }); o += 1; }
+      else o += 1;
+    }
+    if (!ready.length) continue;
+    const bulk = await sb.from("consumptions").insert(ready.map((r) => r.row));
+    if (!bulk.error) { result.added += ready.length; continue; }
+    if (isLimitError(bulk.error)) {   // the database says this player is over their allowance: stop asking, tidy up the wines just saved, and report it once
+      result.stopped = bulk.error.message;
+      for (const r of ready) { result.failed.push({ label: r.x.label, message: bulk.error.message }); if (r.wineId) await sb.from("user_wines").delete().eq("id", r.wineId); }
+      items.slice(i + 50).forEach((x) => result.failed.push({ label: x.label, message: bulk.error.message }));
+      break;
+    }
+    for (const r of ready) {
+      const one = await sb.from("consumptions").insert(r.row);
+      if (one.error) {
+        result.failed.push({ label: r.x.label, message: one.error.message });
+        if (r.wineId) await sb.from("user_wines").delete().eq("id", r.wineId);   // do not leave a wine behind with no entry
+      } else result.added += 1;
+    }
+  }
+  return result;
+}
+
+// This or That (thisorthat.js): one row per player and pair. Needs the table from docs/this_or_that.sql; until it exists the save fails and the game still works.
+export async function saveThisOrThat(sb, row) {
+  must(await sb.from("this_or_that_answers").upsert(row, { onConflict: "user_id,pair_id" }));
 }

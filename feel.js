@@ -1,5 +1,5 @@
 // "How did it taste?": the conversational way to rate structure. Players do not see the structure sliders.
-//   Was the wine balanced?   Yes: everything is as expected, nothing to adjust.   No: what stood out?
+//   Did the wine taste as expected? (stored as "balanced", an older name kept so saved answers still work.)   Yes: everything is as expected, nothing to adjust.   No: what stood out?
 //   Sour, Fruity, Sweet, Thin, Heavy or Drying (as many as apply), and for each one how much (a bit, quite, very).
 //   Would you drink it alone, with food, or either?
 // The answers are turned into the acidity, body, tannin and sweetness ratings of that bottle, relative to what the wine is expected to be.
@@ -7,16 +7,16 @@
 // expected (a difference of zero), so a player who says Yes a lot and a player who finds things out of the ordinary look different.
 // Professionals keep the sliders and the tasting grid; for them the same questions are a shortcut that moves the sliders.
 // The rules at the top are pure (no browser, no network). loadTaste and saveTaste at the bottom talk to Supabase.
-import { dimsFor, dimMeta, clampDimValue, esc } from "./logic.js?v=10";
+import { dimsFor, dimMeta, clampDimValue, esc } from "./logic.js?v=11";
 
 // What can stand out, and how much (level 1, 2 or 3). Each effect is a change from the wine's expected level; sweetness is the step noticed.
 export const NOTES = [
-  { id: "sour", label: "Sour", ask: "How sour?", levels: ["A bit", "Quite", "Very sharp"], effects: { acidity: [1, 2, 3], tannin: [0, 1, 1] } },
+  { id: "sour", label: "Sour", ask: "How sour?", levels: ["A bit", "Quite", "Very sour"], effects: { acidity: [1, 2, 3], tannin: [0, 1, 1] } },
   { id: "fruity", label: "Fruity", ask: "How fruity?", levels: ["A bit", "Quite", "Very"], effects: { acidity: [-1, -1, -2] } },
   { id: "sweet", label: "Sweet", ask: "How sweet?", levels: ["A hint", "Clearly", "Dessert-like"], effects: { sweetness: [1, 2, 3] }, set: true },
   { id: "thin", label: "Thin", ask: "How thin?", levels: ["A bit", "Quite", "Very watery"], effects: { body: [-1, -2, -3] } },
   { id: "heavy", label: "Heavy", ask: "How heavy?", levels: ["A bit", "Quite", "Very"], effects: { body: [1, 2, 3] } },
-  { id: "drying", label: "Drying", ask: "How drying?", levels: ["A bit", "Quite", "Very grippy"], effects: { tannin: [1, 2, 3] }, needs: "tannin" },
+  { id: "drying", label: "Makes my mouth dry", ask: "How much does it dry your mouth?", levels: ["A bit", "Quite", "Very strong"], effects: { tannin: [1, 2, 3] }, needs: "tannin" },
 ];
 export const PAIRINGS = [{ id: "alone", label: "Alone" }, { id: "food", label: "With food" }, { id: "either", label: "Either" }];
 export const SNAP_KEYS = ["acidity", "body", "tannin", "oak", "sweetness"];
@@ -80,7 +80,7 @@ const chip = (on, data, label) => `<button class="gopt${on ? " on" : ""}" data-t
 // The questions themselves. They are redrawn after each tap, because answering opens more options.
 export function tasteInnerHtml(sheet) {
   const t = sheet.taste || { balanced: null, notes: {}, pairing: null };
-  let h = `<div class="tq"><div class="tqtext">Was the wine balanced?</div><div class="gopts">${chip(t.balanced === true, "balanced:yes", "Yes")}${chip(t.balanced === false, "balanced:no", "No")}</div>
+  let h = `<div class="tq"><div class="tqtext">Did the wine taste as expected?</div><div class="gopts">${chip(t.balanced === true, "balanced:yes", "Yes")}${chip(t.balanced === false, "balanced:no", "No")}</div>
     <div class="muted small" style="margin-top:6px">${t.balanced === true ? "Nothing stood out: it tasted as expected." : t.balanced === false ? "" : "Yes if nothing stood out."}</div></div>`;
   if (t.balanced === false) {
     h += `<div class="tq"><div class="tqtext">What stood out?</div><div class="muted small" style="margin-bottom:6px">Pick as many as apply.</div>
@@ -88,17 +88,20 @@ export function tasteInnerHtml(sheet) {
     h += notesFor(sheet.style).filter((n) => t.notes[n.id]).map((n) =>
       `<div class="tq sub"><div class="tqtext">${esc(n.ask)}</div><div class="gopts">${n.levels.map((lab, i) => chip(t.notes[n.id] === i + 1, `level:${n.id}:${i + 1}`, lab)).join("")}</div></div>`).join("");
   }
-  h += `<div class="tq"><div class="tqtext">Would you drink it\u2026</div><div class="gopts">${PAIRINGS.map((p) => chip(t.pairing === p.id, "pairing:" + p.id, p.label)).join("")}</div></div>`;
+  if (SHOW_PAIRING) h += `<div class="tq"><div class="tqtext">Would you drink it\u2026</div><div class="gopts">${PAIRINGS.map((p) => chip(t.pairing === p.id, "pairing:" + p.id, p.label)).join("")}</div></div>`;
   return h;
 }
-const NOTE = `<div class="muted small" style="margin-top:12px">Every question is optional. Your answers are private and only shape your palate profile; they do not change anything about the wine.</div>`;
+// The "Would you drink it alone or with food?" question is hidden for now (nothing uses the answer yet). Set this to true to bring it back;
+// answers already saved are kept and still load and save as before.
+const SHOW_PAIRING = false;
+const NOTE = `<div class="muted small" style="margin-top:12px">Every question is optional. Your answers are private and only shape your taste profile; they do not change anything about the wine.</div>`;
 // For ordinary players: the whole of step 2.
 export function tastePageHtml(sheet) {
-  return `<h3 class="serif">How did it taste?</h3><div data-tasteblock>${tasteInnerHtml(sheet)}</div>${NOTE}`;
+  return `<div data-tasteblock>${tasteInnerHtml(sheet)}</div>${NOTE}`;
 }
 // For professionals: a small block at the top of step 2, above the sliders it moves.
 export function feelBlockHtml(sheet) {
-  return `<div class="feelblock" data-feelblock><div class="serif" style="font-size:16px">How did the wine feel?</div><div data-tasteblock>${tasteInnerHtml(sheet)}</div></div>`;
+  return `<div class="feelblock" data-feelblock><div data-tasteblock>${tasteInnerHtml(sheet)}</div></div>`;
 }
 // A tap on a data-taste button -> the change to apply.
 export function changeFrom(data) {

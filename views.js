@@ -2,12 +2,13 @@
 import {
   FAMILIARITY, FLAGS, VERDICTS, isChoice, GROUPS, GROUP_PAGE, SORTS, YEARS,
   esc, wineName, entryCard, entryName, verdictShort, groupEntries, filterEntries, sortCards,
-  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims } from "./logic.js?v=10";
+  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims } from "./logic.js?v=11";
 import { splitGrapeParts, splitPlace } from "./blends.js?v=1";
+import { REACTIONS } from "./reactions.js?v=1";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
 import { flavorsForCard, placeFor } from "./flavors.js?v=1";
-import { bottleSilhouette, flavorRowHtml } from "./visuals.js?v=1";
-import { countryMapSvg, zoomPlan } from "./maps.js?v=2";
+import { bottleSilhouette, flavorRowHtml, tintFor } from "./visuals.js?v=2";
+import { countryMapSvg, zoomPlan } from "./maps.js?v=3";
 import { imageSearchUrl } from "./winelinks.js?v=1";
 
 // The grape and place inputs shared by the two forms. The form keeps one grape text and one place text; these show them as
@@ -46,6 +47,9 @@ export function marksHtml(card, size = 26) {
 // A small picture next to a wine name, when the user added a photo to its journal entry.
 export const thumbHtml = (urls, path, size = 40) => (path && urls && urls.get(path) ? `<img class="thumb" src="${esc(urls.get(path))}" alt="Your photo" width="${size}" height="${size}">` : "");
 
+// A small picture of the catalog bottle, when the wine has a bottle photo. Used in the Swipes and Journal lists only: the Discover card never shows photos.
+export const bottleThumbHtml = (card, size = 40) => (card && card.photo ? `<img class="thumb bottle" src="${esc(card.photo)}" alt="Bottle of ${esc(wineName(card))}" width="${size}" height="${size}" loading="lazy" decoding="async">` : "");
+
 // ---------------------------------------------------------------- Discover
 // What the card draws for a wine that is not a photo: a bottle shaped by its grape and tinted by its type, a map of its country with a pin,
 // and six flavors. Nothing here uses a label, a logo or a picture of a real bottle. stats is null until players have written enough about the wine.
@@ -55,26 +59,36 @@ export function visualFor(c, stats = null) {
     return { shape: fl.shape, type: fl.type, flavors: fl.picks, map: countryMapSvg(c.country, place, fl.type, 64), zoomable: !!plan };
   } catch (e) { return { shape: "bordeaux", type: c.style, flavors: [], map: "", zoomable: false }; }   // a card that cannot be read still shows its name and facts
 }
-// The card, top to bottom: a small bottle, then the name with the map beside it, then the six flavors, then the facts.
-// The flavors sit above the facts so that a short phone clips the facts, never the flavors. The wine's name is a link to a Google image search for that wine
-// (winelinks.js); wine info is not edited from the deck.
-export function cardHtml(c) {
-  const labels = ["recognize", "unknown", "had"].map((k) => `<div class="swipe-label" data-label="${k}" style="background:${FAMILIARITY[k].color}">${esc(FAMILIARITY[k].label)}</div>`).join("");
-  const v = visualFor(c), href = imageSearchUrl(c);
-  const map = v.map ? `<${v.zoomable ? "button" : "div"} class="mapbtn${v.zoomable ? "" : " still"}"${v.zoomable ? ` data-zoom="${esc(c.id)}" aria-label="Show where this wine is from"` : ""}>${v.map}${v.zoomable ? '<span class="badge" aria-hidden="true">+</span>' : ""}</${v.zoomable ? "button" : "div"}>` : "";
-  return `<div class="card" id="card">
-    <div class="image${c.photo ? " hasphoto" : ""}">${bottleSilhouette(v.shape, v.type)}${c.photo ? `<img class="winephoto" src="${esc(c.photo)}" alt="Bottle of ${esc(wineName(c))}" draggable="false" decoding="async">` : ""}${labels}</div>
+// The card, top to bottom: the producer and the wine's name at the same large size (the producer matters as much as the wine) with the year beside
+// the producer, a one-line summary (type and place), then one soft tinted panel holding an abstract bottle, the six flavors and the map, and last the facts in small type.
+// A wine with no separate wine name shows just the producer. The name is a link to a Google image search for that wine
+// (winelinks.js); wine info is not edited from the deck. The card never shows a bottle photo.
+// The zoom icon on the map: a small magnifier with a plus in the map's corner, so it is clear the map can be tapped to see where the wine is from.
+export const mapZoomIconHtml = (hint = false) => `<span class="badge${hint ? " hint" : ""}" aria-hidden="true"><svg viewBox="0 0 32 32" width="20" height="20"><circle cx="13" cy="13" r="8.5" fill="none" stroke="currentColor" stroke-width="3"/><path d="M19.5 19.5 L27 27" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"/><path d="M13 9 V17 M9 13 H17" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg></span>`;
+export function cardHtml(c, { mapHint = false } = {}) {
+  const labels = ["like", "dislike", "had", "dont_know"].map((k) => `<div class="swipe-label" data-label="${k}" style="background:${REACTIONS[k].color}">${esc(REACTIONS[k].label)}</div>`).join("");
+  const v = visualFor(c), href = imageSearchUrl(c), t = tintFor(v.type);
+  const map = v.map ? `<${v.zoomable ? "button" : "div"} class="mapbtn${v.zoomable ? "" : " still"}"${v.zoomable ? ` data-zoom="${esc(c.id)}" aria-label="Show where this wine is from"` : ""}>${v.map}${v.zoomable ? mapZoomIconHtml(mapHint) : ""}</${v.zoomable ? "button" : "div"}>` : "";
+  const place = c.appellation || c.region || c.country || "";
+  const flag = FLAGS[c.country];
+  const summary = [t.label !== "Other" ? esc(t.label) : "", place ? `${flag ? `<span class="flag">${flag}</span> ` : ""}${esc(place)}` : ""].filter(Boolean).join(" · ");
+  const facts = c.facts.filter((f) => f.text !== place);   // the place is already in the summary line
+  return `<div class="card" id="card">${labels}<button class="zreset" data-zreset hidden aria-label="Reset zoom">Reset zoom</button>
     <div class="body">
-      <div class="toprow"><div class="nameblock">
-        <a class="winelink" data-wimg href="${esc(href)}" target="_blank" rel="noopener noreferrer" draggable="false" aria-label="Search Google Images for ${esc(wineName(c))}">
-        ${c.vintage ? `<div class="vintage serif">${esc(c.vintage)}</div>` : ""}
-        <div class="prow"><div class="producer serif">${esc(c.producer)}</div>${marksHtml(c)}</div>
-        ${c.cuvee ? `<div class="cuvee serif">${esc(c.cuvee)}</div>` : ""}</a></div>${map}</div>
-      ${flavorRowHtml(v.flavors)}
-      <div class="facts">${c.facts.map((f) => `<div class="${f.derived ? "derived" : ""}">${esc(f.text)}</div>`).join("")}</div>
+      <a class="winelink" data-wimg href="${esc(href)}" target="_blank" rel="noopener noreferrer" draggable="false" aria-label="Search Google Images for ${esc(wineName(c))}">
+        <div class="topline"><div class="producer serif">${esc(c.producer)}</div>${c.vintage ? `<span class="vpill">${esc(c.vintage)}</span>` : ""}</div>
+        ${c.cuvee ? `<div class="title serif">${esc(c.cuvee)}</div>` : ""}</a>
+      ${summary ? `<div class="metaline"><span class="tdot" style="background:${t.dot}"></span><span>${summary}</span></div>` : ""}
+      <div class="visrow" style="background:${t.pin}1a">${bottleSilhouette(v.shape, v.type)}${flavorRowHtml(v.flavors)}${map}</div>
+      <div class="facts">${facts.map((f) => `<span class="${f.derived ? "derived" : ""}">${esc(f.text)}</span>`).join("")}</div>
     </div></div>`;
 }
-export function discoverHtml({ deck, interest, banner, counts, feedback = false, flaggedId = null, nudge = false }) {
+// The answers as buttons: Dislike (swipe left), I don't know it (buttons only) and Like (swipe right), in the order they sit on the screen. "I've had this bottle"
+// (swipe up) is the small button under them. The row can be switched off in Settings when swiping is on.
+export const ANSWER_BUTTONS = [{ kind: "dislike", label: "Dislike" }, { kind: "dont_know", label: "I don't know it" }, { kind: "like", label: "Like" }];
+export const answerButtonsHtml = () => `<div class="answers" role="group" aria-label="Your answer">${ANSWER_BUTTONS.map((a) =>
+  `<button class="ans" data-action="answer:${a.kind}" style="--c:${REACTIONS[a.kind].color}">${esc(a.label)}</button>`).join("")}</div>`;
+export function discoverHtml({ deck, interest, banner, counts, feedback = false, flaggedId = null, nudge = false, buttons = true, mapHint = false }) {
   const bannerHtml = banner ? `<div class="banner" data-action="dismiss">${esc(banner)} (tap to dismiss)</div>` : "";
   if (!deck.length) {
     return `${bannerHtml}<div class="center"><div class="serif" style="font-size:22px">No more wines to show.</div>
@@ -82,8 +96,9 @@ export function discoverHtml({ deck, interest, banner, counts, feedback = false,
   }
   // The card, its button row and the save-your-journal reminder are one block, centred between the header and the tab bar, so the space is even above and below.
   return `${bannerHtml}<div class="deckstage">
-    <div class="cardwrap">${deck.length > 1 ? '<div class="behind"></div>' : ""}${cardHtml(deck[0])}</div>
-    <div class="belowcard"><button class="notint" data-action="notint" aria-pressed="false" aria-label="Not interested in this wine">Not interested</button>${feedback ? `<span class="fbline">${flaggedId === deck[0].id ? '<span class="muted">Thanks, an editor will review it.</span>' : '<button class="link" data-action="wineflag" aria-label="Report a problem with this wine">Report a problem</button>'}</span>` : ""}</div>
+    <div class="cardwrap">${deck.length > 1 ? '<div class="behind"></div>' : ""}${cardHtml(deck[0], { mapHint })}</div>
+    ${buttons ? answerButtonsHtml() : ""}
+    <div class="belowcard"><button class="hadbtn" data-action="answer:had" aria-label="I've had this bottle: it goes into your journal">I've had this bottle</button><button class="zoombtn" data-action="zoomcard" aria-label="Zoom in on the card">&#128269; Zoom</button>${feedback ? `<span class="fbline">${flaggedId === deck[0].id ? '<span class="muted">Thanks, an editor will review it.</span>' : '<button class="link" data-action="wineflag" aria-label="Report a problem with this wine">Report a problem</button>'}</span>` : ""}</div>
     ${nudge ? `<div class="nudge"><b>Don't lose your journal.</b> Save it with an email so it follows you to any phone.
       <div class="nudgeacts"><button class="btn primary slim" data-account="open:save">Save with email</button><button class="link" data-action="nudgeoff">Not now</button></div></div>` : ""}</div>`;
 }
@@ -108,30 +123,33 @@ export function swipesHtml(lists, sw, photoUrls) {
   const listBody = (id, cards, actionsFor) => {
     if (!cards.length) return `<div class="muted small">Nothing here yet.</div>`;
     const sorted = sortCards(cards, sortOf(id), lists.order);
-    return (cards.length > 1 ? sortSelect(id, sortOf(id)) : "") + sorted.map((c) => item(c, actionsFor(c))).join("");
+    return (cards.length > 1 ? sortSelect(id, sortOf(id)) : "") + sorted.map((c) => item(c, actionsFor(c), "", bottleThumbHtml(c))).join("");
   };
   const review = (c) => pill(`review:${c.id}`, "Review the wine", true);
   const parts = [];
   const isOpen = (id) => !!sw.open[id];
-  parts.push(section("rec", "Recognized", lists.rec.length, isOpen("rec"),
-    listBody("rec", lists.rec, (c) => review(c) + pill(`setint:${c.id}:nope`, "Not interested"))));
-  parts.push(section("unk", "Don't know it", lists.unk.length, isOpen("unk"),
-    listBody("unk", lists.unk, (c) => review(c) + pill(`setint:${c.id}:nope`, "Not interested"))));
-  parts.push(section("notint", "Not interested", lists.notInt.length, isOpen("notint"),
-    listBody("notint", lists.notInt, (c) => review(c) + (sw.noFam && sw.noFam.has(c.id) ? pill(`unswipe:${c.id}`, "Put back") : pill(`setint:${c.id}:try`, "Put back")))));
+  // Likes and dislikes can be switched to the other; "Put back" returns the wine to the deck. Old answers ("Recognized") keep their old buttons.
+  parts.push(section("liked", "Liked", lists.liked.length, isOpen("liked"),
+    listBody("liked", lists.liked, (c) => review(c) + pill(`react:${c.id}:dislike`, "Dislike instead") + pill(`unswipe:${c.id}`, "Put back"))));
+  parts.push(section("disliked", "Disliked", lists.disliked.length, isOpen("disliked"),
+    listBody("disliked", lists.disliked, (c) => review(c) + pill(`react:${c.id}:like`, "Like instead") + (sw.noFam && sw.noFam.has(c.id) ? pill(`unswipe:${c.id}`, "Put back") : pill(`unswipe:${c.id}`, "Put back")))));
+  parts.push(section("dontKnow", "I don't know it", lists.dontKnow.length, isOpen("dontKnow"),
+    listBody("dontKnow", lists.dontKnow, (c) => review(c) + pill(`react:${c.id}:like`, "Like") + pill(`react:${c.id}:dislike`, "Dislike") + pill(`unswipe:${c.id}`, "Put back"))));
+  if (lists.rec.length) parts.push(section("rec", "Recognized (earlier answers)", lists.rec.length, isOpen("rec"),
+    listBody("rec", lists.rec, (c) => review(c) + pill(`react:${c.id}:like`, "Like") + pill(`react:${c.id}:dislike`, "Dislike"))));
   const triedBody = !lists.tried.length ? `<div class="muted small">Nothing here yet. Wines you rate are kept here.</div>`
     : (lists.tried.length > 1 ? sortSelect("tried", sortOf("tried")) : "") +
       sortCards(lists.tried, sortOf("tried"), lists.order).map((c) =>
-        item(c, pill(`entry:${c.entry.id}`, "View review", true), `<br>${esc(verdictShort(c.entry.verdict) || "")}, ${esc(c.entry.consumed_on || "")}`, thumbHtml(photoUrls, c.entry.first_photo_path))).join("");
+        item(c, pill(`entry:${c.entry.id}`, "View review", true), `<br>${esc(verdictShort(c.entry.verdict) || "")}, ${esc(c.entry.consumed_on || "")}`, thumbHtml(photoUrls, c.entry.first_photo_path) || bottleThumbHtml(c))).join("");
   parts.push(section("tried", "Wines Tried from Discover", lists.tried.length, isOpen("tried"), triedBody));
   // Bottom of the page on purpose: these already appear in the Journal.
   const hadBody = !lists.had.length ? `<div class="muted small">Nothing here yet.</div>`
     : (lists.had.length > 1 ? sortSelect("had", sortOf("had")) : "") +
       sortCards(lists.had, sortOf("had"), lists.order).map((c) => {
         const entry = lists.entryOf.get(c.id);
-        return item(c, entry ? pill(`entry:${entry.id}`, entry.verdict ? "View review" : "Rate this bottle", true) : pill(`review:${c.id}`, "Review the wine", true), "", thumbHtml(photoUrls, entry && entry.first_photo_path));
+        return item(c, entry ? pill(`entry:${entry.id}`, entry.verdict ? "View review" : "Rate this bottle", true) : pill(`review:${c.id}`, "Review the wine", true), "", thumbHtml(photoUrls, entry && entry.first_photo_path) || bottleThumbHtml(c));
       }).join("");
-  const any = lists.rec.length + lists.unk.length + lists.notInt.length + lists.tried.length + lists.had.length;
+  const any = lists.liked.length + lists.disliked.length + lists.dontKnow.length + lists.rec.length + lists.tried.length + lists.had.length;
   return (any ? "" : `<p class="muted">Swipe some wines in Discover and they will show up here.</p>`) +
     `<div class="stack">${parts.join("")}</div><div class="stack" style="margin-top:36px">${section("had", "Had this bottle (also in your Journal)", lists.had.length, isOpen("had"), hadBody)}</div>`;
 }
@@ -145,7 +163,8 @@ export function journalShellHtml(j) {
       <div class="jsel">
         <select class="sortsel" data-jby aria-label="Group by">${GROUPS.map((g) => opt(g.id, "Group: " + g.label, j.by)).join("")}</select>
         <select class="sortsel" data-jverdict aria-label="Filter by verdict">${opt("all", "All verdicts", j.verdict)}${VERDICTS.map((v) => opt(v.code, v.short, j.verdict)).join("")}${opt("none", "No verdict yet", j.verdict)}</select>
-      </div></div>
+      </div>
+      <div class="jimp"><button class="link small" data-action="import:open">Import wines from a file</button></div></div>
     <div id="jmeta" class="jmeta"></div><div id="jlist"></div>`;
 }
 export function journalMetaHtml(entries, filtered, j, groups) {
@@ -163,13 +182,13 @@ export function journalListHtml(entries, j, photoUrls, cards = []) {
   const filtered = filterEntries(entries, { q: j.q, verdict: j.verdict });
   const groups = groupEntries(filtered, j.by);
   const searching = j.q.trim() !== "";
-  if (!entries.length) return `<p class="muted">No wines logged yet. Swipe up on a bottle you've had, or tap "+ Add a wine".</p>`;
+  if (!entries.length) return `<p class="muted">No wines logged yet. Swipe up on a bottle you've had, tap "+ Add a wine", or import a list you already keep.</p>`;
   if (!filtered.length) return `<p class="muted">No wines match.</p>`;
   const rows = (g) => {
     const limit = j.limits[g.key] || GROUP_PAGE;
     const shown = g.items.slice(0, limit).map((e) => {
       const c = entryCard(e); const v = verdictShort(e.verdict);
-      return `<button class="jrow" data-action="entry:${e.id}">${thumbHtml(photoUrls, e.first_photo_path)}<span class="jl">
+      return `<button class="jrow" data-action="entry:${e.id}">${thumbHtml(photoUrls, e.first_photo_path) || bottleThumbHtml(e.wine_vintage_id ? cardsById.get(e.wine_vintage_id) : null)}<span class="jl">
         <span class="iname"><span class="serif trunc">${esc(entryName(e))}</span><span class="ed edbtn" role="button" tabindex="0" data-action="wineinfo-entry:${e.id}" aria-label="Change wine info">&#9998;</span>${marksHtml(c, 16)}</span>
         ${entryInfoLine(e, e.wine_vintage_id ? cardsById.get(e.wine_vintage_id) : null) ? `<span class="meta grapeline trunc">${esc(entryInfoLine(e, e.wine_vintage_id ? cardsById.get(e.wine_vintage_id) : null))}</span>` : ""}
         <span class="meta trunc"><b class="${v ? "wine" : ""}">${esc(v || "No verdict yet")}</b>${e.consumed_on ? ", " + esc(e.consumed_on) : ""}${e.food ? ", with " + esc(e.food) : ""}${e.is_outside_wine ? ", not in catalog" : ""}</span></span>
@@ -251,9 +270,9 @@ export function syncChoiceControl(d, x, attr = "data-sheet", root = document) {
 }
 // The rating window is a short run of numbered pages. Swipe, use the corner arrows, or tap a number. Save is on every page.
 export const SHEET_PAGES = [
-  { id: "verdict", title: "Verdict" },
-  { id: "structure", title: "Structure" },
-  { id: "character", title: "Sweetness and CO\u2082" },
+  { id: "verdict", title: "Your take" },
+  { id: "structure", title: "How it tasted" },
+  { id: "character", title: "Sweetness and bubbles" },
   { id: "details", title: "Details" },
   { id: "notes", title: "Notes and photos" },
 ];
@@ -263,12 +282,12 @@ export const wineCardHtml = (sheet) => `<div class="winecard"><div class="muted 
 // Page 2: the type of wine, then all the sliders together (acidity, body, tannin, oak).
 export function structurePageHtml(sheet) {
   const bars = barDims(sheet.style).filter((d) => sheet.dims[d.key]).map((d) => dimControlHtml(d, sheet.dims[d.key])).join("");
-  return `<h3 class="serif">Wine structure</h3>${bars}`;
+  return `<h3 class="serif">How it tasted</h3>${bars}`;
 }
 // Page 3: the buttons together (sweetness, and CO2 for wines that are not red).
 export function characterPageHtml(sheet) {
   const choices = choiceDims(sheet.style).filter((d) => sheet.dims[d.key]).map((d) => dimControlHtml(d, sheet.dims[d.key])).join("");
-  return `<h3 class="serif">Sweetness and CO\u2082</h3><div class="muted small">Most wines are dry and still. Change only what you noticed.</div>${choices}`;
+  return `<h3 class="serif">Sweetness and bubbles</h3><div class="muted small">Most wines are dry and still. Change only what you noticed.</div>${choices}`;
 }
 // The big button at the bottom: Next on the first four pages, Save on the last. (Save stays at the top of every page.)
 // Page 1 waits for a verdict, because choosing one is what moves on.
@@ -306,16 +325,13 @@ export function sheetHtml(sheet, { saving = false, error = "", page = 0 } = {}) 
 }
 
 // A confirmation that sits on top of whatever is open. Buttons carry data-confirm="yes" or "no".
-// Short on purpose: the title, which wine, and the two buttons. What is kept is one small tap away.
-export function confirmHtml({ title, body = "", more = "", yes = "Delete", error = "", busy = false }) {
+// Short on purpose: the title, which wine, and the two buttons.
+export function confirmHtml({ title, body = "", yes = "Delete", error = "", busy = false }) {
   return `<div class="overlay top"><div class="sheet small" role="alertdialog" aria-label="${esc(title)}">
     <div class="serif big">${esc(title)}</div>${body ? `<div class="serif confirmname">${body}</div>` : ""}
-    ${more ? `<details class="whatkept"><summary>What is kept?</summary><p class="muted small">${more}</p></details>` : ""}
     <div id="confirmErr" class="err">${esc(error)}</div>
     <div class="two"><button class="btn outline" data-confirm="no"${busy ? " disabled" : ""}>Cancel</button><button class="btn danger" data-confirm="yes"${busy ? " disabled" : ""}>${esc(yes)}</button></div></div></div>`;
 }
-export const KEPT_NOTE = "Your name, account, photos and notes are removed. Only the anonymous rating is kept, and if you enter this wine again it replaces that copy.";
-export const SWIPE_KEPT_NOTE = "Your account link is removed. Only an anonymous record of the swipe is kept, and if you swipe this wine again it replaces that copy.";
 
 // ---------------------------------------------------------------- add a wine by hand
 export function formPhotosHtml(form) {

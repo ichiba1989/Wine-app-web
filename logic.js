@@ -1,10 +1,12 @@
 import { fold, splitGrapeText, checkGrapeText, grapeProblem } from "./grapes.js?v=1";
+import { reactionOf } from "./reactions.js?v=1";
 // Pure logic for the wine app web page. No browser and no network in this file,
 // so every rule here can be tested on its own.
 
 export const COLORS = { ink: "#16261D", muted: "#5A6A5F", wine: "#7B1E3A", slate: "#3E5C76", moss: "#3A4B40", line: "#C3CFC1" };
 
-// A swipe records how familiar the wine is; the switch under the card records interest.
+// OLD MODEL (kept so earlier answers still read): a swipe recorded how familiar the wine was, and the switch under the card recorded interest.
+// The current answers (like, dislike, I don't know it, I've had this bottle) are in reactions.js.
 export const FAMILIARITY = {
   recognize: { label: "I recognize it", color: COLORS.slate },
   unknown: { label: "I don't know it", color: COLORS.moss },
@@ -88,12 +90,12 @@ export const shuffle = (a) => { const b = [...a]; for (let i = b.length - 1; i >
 // ---------------------------------------------------------------- swiping
 // Double-tapping near an edge of the card does the same as swiping that way.
 export function tapEdge(nx, ny) {
-  const [kind, dist] = [["unknown", nx], ["recognize", 1 - nx], ["had", ny]].sort((a, b) => a[1] - b[1])[0];
+  const [kind, dist] = [["dislike", nx], ["like", 1 - nx], ["had", ny]].sort((a, b) => a[1] - b[1])[0];
   return dist < 0.35 ? kind : null;
 }
 export function swipeKind(dx, dy, t = 100) {
-  if (dx > t) return "recognize";
-  if (dx < -t) return "unknown";
+  if (dx > t) return "like";
+  if (dx < -t) return "dislike";
   if (dy < -t) return "had";
   return null;
 }
@@ -125,7 +127,7 @@ export function decideSwipe(dx, dy, vx = 0, vy = 0, t = 100) {
 }
 // Where a released card flies to and how long it takes: it keeps going the way it was thrown, at the speed it was thrown.
 export function flyPlan(kind, dx, dy, vx, vy, W, H) {
-  const to = kind === "recognize" ? [W * 1.3, dy + vy * 120] : kind === "unknown" ? [-W * 1.3, dy + vy * 120] : [dx + vx * 120, -H * 1.1];
+  const to = kind === "like" ? [W * 1.3, dy + vy * 120] : kind === "dislike" ? [-W * 1.3, dy + vy * 120] : kind === "dont_know" ? [dx + vx * 120, H * 1.1] : [dx + vx * 120, -H * 1.1];
   const left = Math.hypot(to[0] - dx, to[1] - dy);
   const duration = Math.round(clampN(left / Math.max(Math.hypot(vx, vy), 1.1), 190, 400));
   return { to, rot: clampN(to[0] / 14, -30, 30), duration };
@@ -277,6 +279,8 @@ export function sortCards(list, by, order, get = (x) => x) {
 }
 
 // Builds the Swipes tab lists from the catalog cards, the user's swipe states and the journal.
+// liked / disliked / dontKnow follow the current answers; answers from the old model are folded in (an old "not interested" is a dislike, an old "I don't know it" is
+// "I don't know it"); an old "I recognize it" has no match in the new model and stays in `rec` ("Recognized earlier").
 export function swipeLists(cards, states, journal) {
   const byId = new Map(cards.map((c) => [c.id, c]));
   const entryOf = new Map(journal.filter((j) => j.wine_vintage_id).map((j) => [j.wine_vintage_id, j]));
@@ -284,15 +288,17 @@ export function swipeLists(cards, states, journal) {
   [...states].sort((a, b) => ((a.last_swiped_at || "") < (b.last_swiped_at || "") ? -1 : 1)).forEach((s, i) => { order[s.wine_vintage_id] = i; });
   const cardsWhere = (test) => states.filter((s) => byId.has(s.wine_vintage_id) && test(s)).map((s) => byId.get(s.wine_vintage_id));
   const notInJournal = (s) => !entryOf.has(s.wine_vintage_id);
+  const is = (k) => (s) => reactionOf(s) === k && notInJournal(s);
   return {
     order, entryOf,
     interestOf: Object.fromEntries(states.map((s) => [s.wine_vintage_id, s.interest])),
-    rec: cardsWhere((s) => s.familiarity === "recognize" && s.interest === "try" && notInJournal(s)),
-    unk: cardsWhere((s) => s.familiarity === "unknown" && s.interest === "try" && notInJournal(s)),
-    notInt: cardsWhere((s) => s.interest === "nope" && notInJournal(s)),
+    liked: cardsWhere(is("like")),
+    disliked: cardsWhere(is("dislike")),
+    dontKnow: cardsWhere(is("dont_know")),
+    rec: cardsWhere(is("recognized")),
     tried: states.filter((s) => byId.has(s.wine_vintage_id) && entryOf.has(s.wine_vintage_id) && entryOf.get(s.wine_vintage_id).verdict)
       .map((s) => ({ ...byId.get(s.wine_vintage_id), entry: entryOf.get(s.wine_vintage_id) })),
-    had: cardsWhere((s) => s.familiarity === "had"),
+    had: cardsWhere((s) => reactionOf(s) === "had"),
   };
 }
 

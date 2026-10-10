@@ -2,8 +2,8 @@
 // is a shape for it). Tap again, the close button, outside the box, or Escape: it closes. Each view zooms out from the pin while the next one zooms in
 // from small (about 0.75 s); with reduced motion on there is only a quick crossfade. The caption changes with each step.
 // The rules at the top are pure (no browser); app.js puts the markup on the page and handles the taps.
-import { zoomPlan, captionFor, countryViewSvg, regionViewSvg, vineyardViewSvg, regionPin, countryPin } from "./maps.js?v=2";
-import { esc } from "./logic.js?v=10";
+import { zoomPlan, captionFor, countryViewSvg, regionViewSvg, vineyardViewSvg, regionPin, countryPin } from "./maps.js?v=3";
+import { esc } from "./logic.js?v=11";
 
 // What a tap does now: the next step number, or null to close.
 export const nextStep = (plan, step) => (step + 1 < plan.steps.length ? step + 1 : null);

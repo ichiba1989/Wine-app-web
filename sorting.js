@@ -1,7 +1,7 @@
 // Sorting for the Editor lists that hold a lot of data: wines (Structure, Photos), quiz questions, flags and feedback.
 // Pure: no browser, no network, so every rule can be tested on its own. A value that is missing always sorts last, and equal values
 // keep a sensible second order (producer, then newest vintage), so a list never jumps around.
-import { esc } from "./logic.js?v=10";
+import { esc } from "./logic.js?v=11";
 
 const fold = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 const LAST = "\uffff";

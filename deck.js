@@ -14,6 +14,8 @@
 // eases back toward familiar; if they recognize everything it moves toward new territory. Inside each deck the wines they are
 // likelier to like come first, with some randomness so it never feels fixed, and the same producer or place does not repeat back to back.
 
+import { SWIPE_WEIGHT, DECK_CONFIG, reactionOf } from "./reactions.js?v=1";
+
 export const TIERS = ["high", "medium", "low"];
 export const TIER_LABEL = { high: "Familiar", medium: "Getting warmer", low: "New territory" };
 // A wine with fam at or above HIGH_AT goes in the high deck; at or above MEDIUM_AT in the medium deck; below that, low.
@@ -21,11 +23,6 @@ export const HIGH_AT = 0.55, MEDIUM_AT = 0.28;
 // Whatever the numbers say, each deck holds at least this share of the wines left to swipe, so there is always something familiar
 // and always something new. The wines moved are the ones nearest the line: the least familiar go to low, the most familiar to high.
 export const MIN_SHARE = 0.15;
-// A wine with a real bottle photo is put ahead of the wines without one inside its deck. The bonus is bigger than the whole spread of
-// the taste-and-randomness score (0 to 1.35), so it is a strict priority: photo wines are used first, and wines without a photo follow
-// once the photo wines of that deck run out. The mix of familiar, warmer and new territory is not touched.
-export const PHOTO_BONUS = 2;
-export const hasPhoto = (c) => !!(c && (c.photo || c.image));
 // Verdicts count as likes and dislikes. A journal entry with no verdict yet is a faint like (they had the bottle).
 export const VERDICT_WEIGHT = { buy: 2, drink: 1, none: 0, respect: -0.5, no: -2 };
 export const UNRATED_WEIGHT = 0.25;
@@ -48,7 +45,9 @@ export const reachOf = (c) => { const r = Number(c.reach); return r >= 1 && r <=
 export const isLive = (c) => !c.archived && (!c.wineStatus || c.wineStatus === "verified");
 
 // ---------------------------------------------------------------- what we know about the person
-// states: [{ wine_vintage_id, familiarity: 'recognize'|'unknown'|'had', interest: 'try'|'nope', last_swiped_at }]
+// states: [{ wine_vintage_id, reaction: 'like'|'dislike'|'dont_know'|'had' (older answers: familiarity and interest instead), last_swiped_at }]
+// A like or a dislike teaches the deck what they enjoy (SWIPE_WEIGHT) and shows they had an opinion. "I don't know it" teaches nothing about taste:
+// it marks the grapes, places and producers they have not met so similar wines are shown less (skipOf) and so recommendations and quizzes can see the gaps (gapsOf).
 // journal: [{ wine_vintage_id, verdict, is_outside_wine, producer, style, ... }]
 // quiz: { Grapes: { correct, answered }, Regions: {...}, Producers: {...} } (optional)
 export function userModel({ cards, states = [], journal = [], quiz = null, refs = new Map() }) {
@@ -60,11 +59,19 @@ export function userModel({ cards, states = [], journal = [], quiz = null, refs 
   const ordered = [...states].sort((a, b) => String(b.last_swiped_at || "").localeCompare(String(a.last_swiped_at || "")));
   states.forEach((s) => {
     const c = byId.get(s.wine_vintage_id); if (!c) return;
-    // A wine only marked "not interested" has no familiarity: it says what they dislike, not what they know.
-    if (s.familiarity === "unknown") { unknown++; eachKey(c, (k) => add(unk, k, 1)); }
-    else if (s.familiarity) { recognized++; eachKey(c, (k) => add(rec, k, s.familiarity === "had" ? 1.5 : 1)); }
-    if (s.interest === "try") eachKey(c, (k, kind) => add(pref, k, kind === "style" ? 0.4 : 0.6));
-    else if (s.interest === "nope") eachKey(c, (k, kind) => add(pref, k, kind === "style" ? -0.4 : -0.6));
+    const r = reactionOf(s);
+    if (r === "dont_know") { unknown++; eachKey(c, (k) => add(unk, k, 1)); }        // no taste evidence at all
+    else if (r === "like" || r === "dislike") {
+      recognized++; eachKey(c, (k) => add(rec, k, 0.5));                              // they judged it, so they were not lost
+      const w = SWIPE_WEIGHT[r];
+      eachKey(c, (k, kind) => add(pref, k, w * (kind === "style" ? 0.8 : 1.2)));
+    } else if (r === "had" || r === "recognized") {                                   // had it: the journal rating adds its own weight; "recognized" is an old answer
+      recognized++; eachKey(c, (k) => add(rec, k, r === "had" ? 1.5 : 1));
+      if (s.interest !== "nope") eachKey(c, (k, kind) => add(pref, k, kind === "style" ? 0.4 : 0.6));
+    }
+    // A wine only marked "not interested" in the old model has no familiarity: it says what they dislike, not what they know.
+    if (r === "dislike" && !s.reaction) eachKey(c, (k, kind) => add(pref, k, kind === "style" ? -0.4 : -0.6));
+    if (r === "recognized" && s.interest === "nope") eachKey(c, (k, kind) => add(pref, k, kind === "style" ? -0.4 : -0.6));
   });
   // The journal: a wine in it is a wine they know. Verdicts say how much they liked it.
   const liked = [];
@@ -94,9 +101,28 @@ export function userModel({ cards, states = [], journal = [], quiz = null, refs 
   // Overall knowledge, 0 to 1. A brand new person starts around a quarter.
   const knowledge = clamp01(0.35 * (quizAnswered >= 5 && quizAcc != null ? quizAcc : 0.3) + 0.35 * (recRate != null ? recRate : 0.4) + 0.30 * Math.min(1, journal.length / 25));
   // How the last ten swipes went: the share they recognized (only once there are at least four).
-  const recent = ordered.filter((s) => s.familiarity).slice(0, 10);
-  const recentRate = recent.length >= 4 ? recent.filter((s) => s.familiarity !== "unknown").length / recent.length : null;
+  const recent = ordered.filter((s) => { const r = reactionOf(s); return r && !(r === "dislike" && !s.reaction && !s.familiarity); }).slice(0, 10);
+  const recentRate = recent.length >= 4 ? recent.filter((s) => reactionOf(s) !== "dont_know").length / recent.length : null;
   return { rec, unk, pref, palate, palateDims, quizAcc, quizAnswered, knowledge, recentRate, swipeCount, journalCount: journal.length };
+}
+
+// What the player has said "I don't know it" to, as the grapes, places, producers and styles those wines share: [{ key, kind, name, dontKnow, known }], the
+// least known first. Recommendations and quizzes can read this to choose what to teach. `known` is the evidence on the other side (recognized, had, rated).
+export function gapsOf(model) {
+  const out = [];
+  model.unk.forEach((u, key) => {
+    const [kind, ...rest] = key.split(":");
+    out.push({ key, kind, name: rest.join(":"), dontKnow: u, known: model.rec.get(key) || 0 });
+  });
+  return out.sort((a, b) => (b.dontKnow - b.known) - (a.dontKnow - a.known) || b.dontKnow - a.dontKnow);
+}
+// How much a wine looks like the ones they did not know, 0 (nothing alike) to just under 1. The producer counts most, then the grape, then the place.
+// Evidence on the other side (they recognized or rated wines from the same producer, grape or place) lowers it, so a place they know well is not held back.
+const SKIP_PART = { producer: 1, grape: 0.8, region: 0.7, country: 0.35, style: 0.15 };
+export function skipOf(c, model) {
+  const k = cardKeys(c);
+  const part = (key, kind) => { if (!key) return 0; const u = model.unk.get(key) || 0, r = model.rec.get(key) || 0; return u ? SKIP_PART[kind] * (u / (u + r + 1.5)) : 0; };
+  return Math.max(part(k.producer, "producer"), ...k.grapes.map((g) => part(g, "grape")), part(k.region, "region"), part(k.country, "country"), part(k.style, "style"));
 }
 
 // ---------------------------------------------------------------- scoring one wine
@@ -170,16 +196,22 @@ export function buildDeck({ cards, states = [], journal = [], quiz = null, refs 
     entries.push({ c, fam, pref, tier: tierOf(fam), tie: rnd() });
   });
   balanceTiers(entries);
+  // Wines that look like ones the player did not know go lower in their deck (DECK_CONFIG.demote) and a few of them are held back to be spread thinly through it
+  // (see `teach` below): less fun to swipe, but never gone, because meeting them is how a player learns.
+  const teach = [];
   entries.forEach((e) => {
-    info.set(e.c.id, { tier: e.tier, fam: e.fam, pref: e.pref });
-    queues[e.tier].push({ c: e.c, score: e.pref + 0.35 * rnd() + (hasPhoto(e.c) ? PHOTO_BONUS : 0) });   // photo wines first, then likelier favourites, with enough randomness to stay fresh
+    const skip = skipOf(e.c, model);
+    info.set(e.c.id, { tier: e.tier, fam: e.fam, pref: e.pref, skip });
+    const item = { c: e.c, score: e.pref + 0.35 * rnd() - DECK_CONFIG.demote * skip };
+    if (skip >= DECK_CONFIG.teachFrom) teach.push(item); else queues[e.tier].push(item);
   });
   TIERS.forEach((t) => queues[t].sort((a, b) => b.score - a.score));
+  teach.sort((a, b) => b.score - a.score);   // the ones they are likeliest to enjoy anyway come first
   const mix = mixFor(model);
   const credits = { high: 0, medium: 0, low: 0 };
   const deck = [], recent = [];
   const total = queues.high.length + queues.medium.length + queues.low.length;
-  const want = Math.min(size, total);
+  const want = total;   // every wine that is not held back for `teach`; the size limit is applied after the held-back ones are spread in
   const conflicts = (c) => {
     const k = cardKeys(c);
     return recent.slice(-3).some((r) => r.producer && r.producer === k.producer) || recent.slice(-2).some((r) => r.country && r.country === k.country && r.style === k.style && r.grape === (k.grapes[0] || ""));
@@ -191,12 +223,21 @@ export function buildDeck({ cards, states = [], journal = [], quiz = null, refs 
     const pick = open.reduce((best, t) => (credits[t] > credits[best] ? t : best), open[0]);
     credits[pick] -= 1;
     const q = queues[pick];
-    // Avoid repeating a producer or place back to back, but only among wines that are equally ahead: a photo wine is never passed over for one without a photo.
-    const lead = hasPhoto(q[0].c);
-    let i = q.slice(0, 6).findIndex((x) => hasPhoto(x.c) === lead && !conflicts(x.c)); if (i < 0) i = 0;
+    // Avoid repeating a producer or place back to back: take the first of the next few wines that does not repeat.
+    let i = q.slice(0, 6).findIndex((x) => !conflicts(x.c)); if (i < 0) i = 0;
     const [{ c }] = q.splice(i, 1);
     deck.push(c);
     const k = cardKeys(c); recent.push({ producer: k.producer, country: k.country, style: k.style, grape: k.grapes[0] || "" });
   }
-  return { deck, info, mix, model };
+  // The held-back wines go back in thinly, never dropped: about one every DECK_CONFIG.teachEvery cards when there are many of them, and spread across the whole deck
+  // when there are only a few (so a few wines like the unknown ones do not turn up sooner than they would have). The first lands from the 4th card on.
+  if (teach.length) {
+    const spacing = Math.max(DECK_CONFIG.teachEvery, Math.floor(deck.length / teach.length));
+    let at = 3 + Math.floor(rnd() * Math.min(spacing, Math.max(1, deck.length)));
+    for (const { c } of teach) {
+      if (at >= deck.length) deck.push(c); else deck.splice(at, 0, c);
+      at += spacing;
+    }
+  }
+  return { deck: Number.isFinite(size) ? deck.slice(0, size) : deck, info, mix, model };
 }

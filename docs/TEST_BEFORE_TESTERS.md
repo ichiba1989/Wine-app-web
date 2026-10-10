@@ -1,0 +1,96 @@
+# Check before inviting testers
+
+> **REMINDERS (owner, 2026-10-09)**
+> 1. **Test importing from other apps** (Vivino, CellarTracker and others) with real exports **before friends and family try the app**. This matters for testing: see section 10.
+> 2. **Revisit the rating rule** for imports (`USE_RATING_RULE` in `importer.js`, currently off) before testing.
+> 3. Run `docs/import_tier.sql` and `docs/import_limit.sql` and put the friends-and-family accounts that should import 500 wines on the `pro` tier.
+
+Keep this list current. Tick each item (and date it) only after trying it on a throwaway account with the live database. Nothing here has been run against the real Supabase yet.
+
+## 1. Run the database scripts (in this order), then reload the app twice
+- [x] (2026-10-07, owner ran it) `docs/this_or_that.sql` (This or That tables; the account script needs them)
+- [x] (2026-10-07, owner ran it) `docs/retain_after_delete.sql` (account deletion keeps data anonymously)
+- [x] (2026-10-07, owner ran it; the two views then needed `security_invoker` set again, done) `docs/soft_delete.sql` (deleting an entry, swipe or photo only hides it). Copy it from the GitHub file if chat copying adds `<` or `[` marks. Run part 1 before part 2 (the views).
+- [ ] Each script runs with no error, and a second run also finishes cleanly.
+
+- [x] (2026-10-07, checked with the public key: all returned `[]`, and the four delete functions answered "Not signed in") **Privacy check:** with no one signed in, the public key must see nothing. Run `curl -s -H "apikey: PUBLIC_KEY" -H "Authorization: Bearer PUBLIC_KEY" "SUPABASE_URL/rest/v1/v_journal_entries?select=id&limit=1"` and the same for `v_user_wine_state`, `consumptions`, `encounters`, `journal_photos`: each must return `[]` (or a permission error). Any row means the views lost `security_invoker` (see the end of `docs/soft_delete.sql`).
+
+## 2. Deleting in the app only hides (use a throwaway guest account)
+- [ ] Swipe up on a wine (I've had it), add a photo to the entry, rate it, then delete the entry: it disappears from Journal, Swipes counts and Profile.
+- [ ] In the Supabase Table editor: the `consumptions` row is still there with `deleted_at` filled in; its `journal_photos` row also has `deleted_at`; the photo file is still in the `journal-photos` bucket.
+- [ ] Delete a swipe: it leaves the Swipes list, goes back into the Discover deck, and the `encounters` rows remain with `deleted_at` filled in.
+- [ ] Swipe the same wine again and add the same wine to the Journal again: both work (this proves the "only one of these" rules were rebuilt).
+- [ ] Delete one photo from an entry: it disappears from the entry, the file and row remain.
+- [ ] A photo that was shared for the catalog: deleting the entry or the photo takes the public copy down (`wine-images` bucket) while the private file stays.
+- [ ] Editing a hand-typed wine: the old version is kept in `user_wines` (not deleted) and the entry shows the new one.
+
+## 3. Deleting the account keeps the data anonymously
+- [ ] Before deleting, note the account's user id. Create data first: a swipe, a journal entry with a note and photo, an own wine, a quiz answer, a This or That answer, a private wine change (`my_wine_info`), feedback.
+- [ ] Delete the account from Profile, Overview (and from Settings). The app finishes and shows the "kept without your name" message.
+- [ ] In the Table editor: the rows in `consumptions`, `encounters`, `journal_photos`, `user_wines`, `quiz_answers`, `app_feedback`, `my_wine_info`, `this_or_that_answers` are still there, `user_id` is empty, and `retired_key` (or `player_key`) is the same random value across tables.
+- [ ] `profiles` row, the sign-in (`auth.users`), `palate_state` and `trophy_awards` for that user are gone.
+- [ ] No row still holds the old user id (search each table for it, and the photo file paths that start with it are the only trace).
+- [ ] Another account's data is untouched.
+- [ ] If the delete fails (for example a database trigger objects to the emptied `user_id`), the app shows "Could not delete" and nothing was lost. Report the error text.
+- [ ] Anything shared for the catalog was taken back before the deletion.
+
+## 4. This or That
+- [ ] After `this_or_that.sql`, play through all 17 questions: a row per answer appears in `this_or_that_answers` with the right `axis`, `dir`, `pair_kind`; answering again replaces the row (no duplicates).
+- [ ] The results page shows your journal taste (left) beside your picks (right), line by line, plus the agree/differ sentence. With no rated wines the left side is empty with "Needs more rated wines"; with rated wines it matches the Profile, Taste page (weight/zing/sweetness/grip/toast) and "where from" follows the countries of the wines you liked. A hidden (deleted) entry does not count.
+- [ ] The results page shows leanings, and wines for the Old World / New World answers use the wine's country (check a few US, French and Italian wines).
+- [ ] Offline or before the script is run, the game still works and the browser console shows "This or That answer not saved" only.
+- [ ] Rows from a guest and from an email account both save; a second player cannot read the first player's rows (RLS).
+
+## 5. First-time experience and the card
+- [ ] A brand-new guest sees "How the card works" once after accepting the terms; Skip and Start swiping both close it; it does not return; Settings, "Practice with a sample card" reopens it.
+- [ ] The practice card: swipes right, left, up, the buttons, the Zoom button, pinch and double-tap zoom all give feedback and save nothing.
+- [ ] The map's magnifier badge shows and pulses on the first 3 cards; tapping the map still opens it. Check on a small phone and at the Larger text size.
+- [ ] Card gestures still work on a real phone (swipe, edge double-tap, pinch, pan while zoomed).
+
+## 6. Consent and privacy (lawyers first)
+- [ ] The terms window on the consent screen loads the terms (not the app itself), scrolls on a real phone (including iPhone Safari), has no back link, and leaves room for the logo. Remove the "DRAFT, being reviewed by our lawyers" line in `privacy.html` once the lawyers sign off.
+- [ ] A brand-new guest sees the two ticks with the terms window between them ("I am 21 or older", "I accept the terms and conditions"), the link opens `privacy.html` ("Terms and privacy policy") in a new tab without ticking the box, and Accept and continue works only with both ticked. No privacy or data-use text appears elsewhere in the app (delete screens, photos, games).
+- [ ] The lawyers have reviewed `consent.js`, `privacy.html` and `docs/DATA_POLICY_DRAFT.md` / `docs/PRIVACY_DRAFT_NOTES.md`; their answers are in the wording; `CONSENT_VERSION` was bumped for any change.
+- [ ] What the text says matches what the database does (items 2 and 3 above): hidden, not removed; account deleted, data kept without a name.
+- [ ] The delete screens (`account.js`) and delete notes (`views.js`) say the same thing.
+- [ ] Decide: keep photos after account deletion or not; how long data is kept; how to answer privacy-law requests when the data cannot be linked back.
+- [ ] Photo file paths still start with the old account id (see the notes); decide whether that is acceptable.
+
+## 7. Games and the Owner page
+- [ ] Bingo: rate wines and watch squares fill; hidden (deleted) entries do not fill squares; tier 4 "Draft" lists are checked by an editor.
+- [ ] Owner page (owner only): the tables load, search and sort work, Reach, Price and Config saves are accepted by the database or shown as failed.
+- [ ] Community counts (price averages, "who has had it") still include hidden rows; decide if that is right (send the view definitions to change it).
+
+## 8. General
+- [ ] Hard reload the page twice after each deploy (cached files); the GitHub Pages build shows a green tick.
+- [ ] Test on a real phone in a private window and in a normal window (storage blocked vs allowed), as a guest and with email sign-in.
+
+## 9. Speed (changed 2026-10-09)
+- [ ] On a real phone with the live database: the first Discover card appears noticeably faster than before; tapping Swipes, Journal, Profile and Games changes the screen at once; data that changed (a new swipe, a deleted entry) is there on the next visit.
+- [ ] After a swipe up (I've had it), the new journal entry shows on the Journal tab on the first visit (the list is refetched in the background and the tab redraws).
+- [ ] The Owner page and the first-time walkthrough still open (they load on first use).
+- [ ] Optional: run the journal view timing query from the chat (`explain analyze select * from v_journal_entries` as an authenticated user) and note the time here: ____ ms.
+- Measured with a stand-in database and a fixed 150 ms per request: start-up to the first card 2.6 s before, 0.9 s after; a tab tap to a changed screen about 200 ms before, 40 to 80 ms after. Real numbers depend on the phone and network.
+
+## 10. Import wines into the journal (added 2026-10-09)
+- [ ] **Other apps first (reminder): export your own data from Vivino, CellarTracker and any other app friends and family use, and import it.** Check the columns are detected (or fixable), the wines arrive right, and note which apps work. Detection uses common header words and has never been tried with a real export.
+- [ ] Journal tab, "Import wines from a file": choose a CSV (try the template, and a real export from a spreadsheet). The columns are detected, the summary is right, and Add puts the wines in the Journal with the right date, price and notes. Imported wines arrive **unrated** (the rating rule is on hold).
+- [ ] **Revisit the rating rule** with the owner before testers: decide whether to turn on `USE_RATING_RULE` (thresholds in `RATING_RULE`).
+- [ ] A wine in the catalog (same producer, wine name and vintage) is linked to the catalog entry; other wines are the player's own, and none of them appear in Discover or the catalog until an editor approves them through the candidate flow (default: 10 entries for the same wine).
+- [ ] **Run `docs/import_limit.sql`**, then check: a regular test account imports 100 wines and the next import is refused with "Limit reached" (and the sheet says it once); the same account moved to `pro` (or an editor) can add up to 500 per 24 hours; the Owner Config tab shows `import_limit_regular`, `import_limit_extended`, `import_window_hours` and changing one takes effect. Also check normal use (swiping up, adding one wine, rating) is not blocked.
+- [x] (2026-10-09) Who can change the limits: only people with the `settings_edit` permission can write `feature_access` and `app_config`; players cannot edit their own `tier`, `role` or `staff_role`. Re-check that an editor without `settings_edit` cannot change them.
+- [ ] Limits: a regular account is told "Up to 100 wines per file" and only the first 100 rows are used; staff accounts and accounts on the `pro` tier see 500. (Run `docs/import_tier.sql`, then `update profiles set tier = 'pro' ...` for a test account.)
+- [ ] Importing the same file twice adds nothing the second time (all skipped as already in the journal).
+- [ ] Imported wines appear on the Profile, Taste page and in Bingo only once rated; unrated ones offer "Rate it".
+- [ ] Works on a real phone: choosing a file from Files / Google Drive, and pasting rows copied from a spreadsheet app.
+- [ ] A 500-row file imports in a reasonable time and a bad row does not stop the others.
+
+## 11. Like / Dislike deck (added 2026-10-10)
+- [ ] **Run `docs/reactions.sql` in Supabase first.** Until it is run, swiping in the new app shows "Could not save that swipe".
+- [ ] On a real phone: swipe right (Like), swipe left (Dislike), tap I don't know it, swipe up and tap "I've had this bottle" (adds a journal entry), double-tap the left, right and top edges. Check each creates one row in `encounters` with the right `reaction` and a `context` note (tier, fam, pref, skip).
+- [ ] Likes and dislikes show on the Profile, Taste page (it moves slowly: the weights are provisional) and a wine you rated in the journal is not counted twice. **I don't know it changes nothing on the Taste page.**
+- [ ] After saying I don't know it to several wines of one grape, fewer wines of that grape show up, but some still do (about one every 8 cards), and none disappear.
+- [ ] Swipes tab: Liked, Disliked, I don't know it, and (if you had old swipes) "Recognized (earlier answers)". "Dislike instead", "Like instead" and "Put back" work.
+- [ ] Old swipes (made before this change) still keep their wines out of the deck and still count as before for the deck.
+- [ ] The practice walkthrough (Settings, Practice with a sample card) teaches the new answers.
+- [ ] **Owner decisions still open:** the like and dislike weights (`swipe_like_weight`, `swipe_dislike_weight`, editable on the Config tab once `reactions.sql` has run), whether "I've had this bottle" and the journal entry it creates should stay as they are, and when quizzes should start reading what the player does not know (`gapsOf` in `deck.js`).

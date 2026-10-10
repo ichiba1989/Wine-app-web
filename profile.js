@@ -1,10 +1,12 @@
 // Profile tab: Overview, Palate, Knowledge, Explored and Trophies.
 // The rules at the top are pure (no browser, no network) so they can be tested on their own.
 // The controller at the bottom loads what it needs from Supabase and draws the tab.
-import { DIMS, dimRange, VERDICTS, FLAGS, esc, styleLabel, verdictShort, entryCard, entryName } from "./logic.js?v=10";
-import { marksHtml } from "./views.js?v=15";
-import { accountCardHtml } from "./account.js?v=5";
+import { DIMS, dimRange, VERDICTS, FLAGS, esc, styleLabel, verdictShort, entryCard, entryName } from "./logic.js?v=11";
+import { marksHtml } from "./views.js?v=29";
+import { accountCardHtml } from "./account.js?v=8";
 import { feedbackCardHtml } from "./feedback.js?v=3";
+import { worldOf } from "./thisorthat.js?v=4";
+import { reactionOf, palateWeightOf } from "./reactions.js?v=1";
 import { entryInfoLine } from "./wineline.js?v=1";
 
 // ---------------------------------------------------------------- settings
@@ -32,6 +34,8 @@ export const trophyRank = (n) => TROPHY_RANKS.find((r) => n >= r.min).title;
 export const TIER_NAMES = ["Bronze", "Silver", "Gold", "Platinum"];
 export const TIER_COLORS = ["#A8743A", "#8C959B", "#C2A03A", "#5F7A8C"];
 const weightOf = (verdict) => (verdict ? VERDICT_WEIGHTS[verdict] ?? 0 : UNRATED_WEIGHT);
+// An entry's weight: a swipe-made entry carries its own (SWIPE_WEIGHT in reactions.js); a journal entry weighs by its verdict.
+const wOf = (e) => (e.weight !== undefined ? e.weight : weightOf(e.verdict));
 const pctOf = (a, b) => (b ? Math.round((a / b) * 100) : null);
 
 // ---------------------------------------------------------------- palate
@@ -85,7 +89,7 @@ export function computePalate(entries) {
       if (b === null && !adj) return;
       const baseVal = b === null ? mid : b;
       const effective = adj ? (e.perception[d.key] + baseVal) / 2 : baseVal;
-      const w = weightOf(e.verdict);
+      const w = wOf(e);
       if (w !== 0) { sum += w * (effective - mid); absW += Math.abs(w); n += 1; }
       // "You notice more / less than the baseline" uses the raw difference, and only editor references.
       if (adj && e.ref && e.ref[d.key] != null) { pSum += e.perception[d.key] - e.ref[d.key]; pN += 1; }
@@ -94,20 +98,48 @@ export function computePalate(entries) {
     return { ...d, lean, n, offset: pN ? pSum / pN : 0, pN, notice: (max - min) / 4 };
   });
 }
+// The lines the This or That game compares with: the five structure lines the journal already measures, plus "where from" (Old World or New World, from each wine's
+// country by the rule in thisorthat.js). { axis: { value: -1..1, n: wines counted } }. Wines the player liked pull toward their side, wines they disliked push away.
+export function palateAxes(entries, palate) {
+  const out = {};
+  for (const d of palate) if (["body", "acidity", "sweetness", "tannin", "oak"].includes(d.key)) out[d.key] = { value: d.lean, n: d.n };
+  let sum = 0, abs = 0, n = 0;
+  entries.forEach((e) => {
+    const side = worldOf(e.country), w = wOf(e);
+    if (side === null || w === 0) return;
+    sum += w * side; abs += Math.abs(w); n += 1;
+  });
+  out.world = { value: abs ? Math.max(-1, Math.min(1, sum / abs)) : 0, n };
+  return out;
+}
+// Likes and dislikes made by swiping count toward the palate, lightly (SWIPE_WEIGHT). "I don't know it" never does. A wine that is in the journal is left to its journal entry
+// (the rating says more than a swipe did). Swipes before the likes-and-dislikes model have no weight. baselineFor is the same function palateEntries uses.
+export function swipePalateEntries(states, cards, journal, baselineFor = () => ({ base: null, ref: null })) {
+  const byId = new Map((cards || []).map((c) => [c.id, c]));
+  const inJournal = new Set((journal || []).map((e) => e.wine_vintage_id).filter(Boolean));
+  const out = [];
+  for (const s of states || []) {
+    const weight = palateWeightOf(s), c = byId.get(s.wine_vintage_id);
+    if (!weight || !c || inJournal.has(s.wine_vintage_id)) continue;
+    const { base, ref } = baselineFor(s.wine_vintage_id, c);
+    out.push({ id: "swipe:" + s.wine_vintage_id, verdict: null, weight, fromSwipe: true, grape: c.grape, country: c.country, style: c.style, perception: {}, adjusted: {}, base, ref });
+  }
+  return out;
+}
 export const leanWords = (palate) => palate.filter((d) => d.n >= 2 && Math.abs(d.lean) > 0.2).map((d) => (d.lean > 0 ? d.hi : d.lo));
 const listText = (a) => (a.length <= 1 ? a[0] || "" : `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}`);
 
 // One paragraph that sums up the structure lean and the other preferences seen so far.
 export function palateSummary(entries, palate) {
-  if (entries.length < 2) return "Add a couple of wines to your journal and a summary of your palate will appear here.";
+  if (entries.length < 2) return "Add a couple of wines to your journal and a summary of your taste will appear here.";
   const top = (get, sign = 1, n = 2) => {
     const m = {};
-    entries.forEach((e) => { const k = get(e); const w = weightOf(e.verdict) * sign; if (k && w > 0) m[k] = (m[k] || 0) + w; });
+    entries.forEach((e) => { const k = get(e); const w = wOf(e) * sign; if (k && w > 0) m[k] = (m[k] || 0) + w; });
     return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, n).map((x) => x[0]);
   };
   const out = [];
   const leans = leanWords(palate);
-  out.push(leans.length ? `So far you lean ${listText(leans)}.` : "There is no clear lean in wine structure yet.");
+  out.push(leans.length ? `So far you lean ${listText(leans)}.` : "We cannot see a clear pattern in what you like yet.");
   const grapes = top((e) => e.grape);
   const countries = top((e) => e.country);
   if (grapes.length && countries.length) out.push(`Your favorites include ${listText(grapes)}, most often from ${listText(countries)}.`);
@@ -118,7 +150,7 @@ export function palateSummary(entries, palate) {
   const lessKeen = top((e) => e.grape, -1).filter((g) => !grapes.includes(g));
   if (lessKeen.length) out.push(`You have been less keen on ${listText(lessKeen)}.`);
   if (entries.some((e) => e.verdict === "respect")) out.push("You can appreciate wines that are not your style without writing off the whole category.");
-  const unrated = entries.filter((e) => !e.verdict).length;
+  const unrated = entries.filter((e) => !e.verdict && !e.fromSwipe).length;
   out.push(unrated > 0
     ? `${unrated} ${unrated === 1 ? "wine in your journal is" : "wines in your journal are"} not rated yet. Rating and reviewing ${unrated === 1 ? "it" : "them"} will make this more accurate.`
     : "Rate and review more wines in your journal to keep sharpening this.");
@@ -164,10 +196,11 @@ export function timedStats(runs) {
 export function exploredStats(journal, states, cards) {
   const fam = (k) => states.filter((s) => s.familiarity === k).length;
   const int = (k) => states.filter((s) => s.interest === k).length;
+  const rx = (k) => states.filter((s) => reactionOf(s) === k).length;
   const tried = [...new Set(journal.map((e) => e.country).filter(Boolean))];
   const all = [...new Set(cards.map((c) => c.country).filter(Boolean))];
   return {
-    recognized: fam("recognize"), unknown: fam("unknown"), had: fam("had"), interested: int("try"), notInterested: int("nope"),
+    recognized: rx("recognized"), liked: rx("like"), disliked: rx("dislike"), unknown: rx("dont_know"), had: fam("had"), interested: int("try"), notInterested: int("nope"),
     verdicts: VERDICTS.map((v) => ({ label: v.short, count: journal.filter((e) => e.verdict === v.code).length })),
     unrated: journal.filter((e) => !e.verdict).length,
     countries: tried, notYet: all.filter((c) => !tried.includes(c)),
@@ -206,8 +239,8 @@ export function computeTrophies({ journal, states, answers, questionsById, runs,
     T("countries", "globe", "Globetrotter", (n) => `Rate wines from ${n} countries`, new Set(rated.map((e) => e.country).filter(Boolean)).size, [3, 6, 10]),
     T("bubbles", "sparkles", "Bubbles", (n) => `Rate ${n} sparkling wines`, rated.filter((e) => e.style === "sparkling").length, [1, 3, 10]),
     T("photos", "camera", "Shutterbug", (n) => `Add photos to ${n} reviews`, rated.filter((e) => e.first_photo_path).length, [1, 5, 20]),
-    T("had", "check", "Been There", (n) => `Swipe up on ${n} bottles you've had`, states.filter((s) => s.familiarity === "had").length, [1, 5, 20]),
-    T("trust", "award", "Trust Your Palate", (n) => `Tell us what stood out in ${n} wines`, adjustedEntries, [5, 25, 100]),
+    T("had", "check", "Been There", (n) => `Mark ${n} bottles you've had`, states.filter((s) => s.familiarity === "had").length, [1, 5, 20]),
+    T("trust", "award", "Trust Your Taste", (n) => `Tell us what stood out in ${n} wines`, adjustedEntries, [5, 25, 100]),
     T("correct", "cap", "Quiz Starter", (n) => `Answer ${n} questions correctly`, correct.length, [5, 25, 100, 300]),
     T("streak", "flame", "On a Roll", (n) => `Get ${n} correct in a row`, best, [5, 10, 20]),
     T("second", "rotate", "Second Chance", (n) => `Turn ${n} missed questions into correct answers`, fixed.size, [1, 5, 20]),
@@ -241,7 +274,7 @@ const PATHS = {
 };
 const SUBS = [
   { id: "overview", label: "Overview", icon: "grid" },
-  { id: "palate", label: "Palate", icon: "glass" },
+  { id: "palate", label: "Taste", icon: "glass" },
   { id: "knowledge", label: "Knowledge", icon: "cap" },
   { id: "explored", label: "Explored", icon: "compass" },
   { id: "trophies", label: "Trophies", icon: "trophy" },
@@ -259,7 +292,7 @@ function overviewHtml(P) {
   return `<h2 class="serif ph">Overview</h2>
     <div class="pgrid">${stat("Wines rated", rated.length)}${stat("Wines swiped", P.states.length)}${stat("Quiz completed", P.questions.length ? `${P.quiz.overall.completed}%` : "–")}${stat("Quiz correct", P.quiz.overall.correct === null ? "–" : `${P.quiz.overall.correct}%`)}</div>
     ${card("Trophies", `<div class="serif pbig">${acquired}</div><div class="prank">${esc(trophyRank(acquired))}</div>`)}
-    ${card("Your palate", `<p class="ptext">${leans.length ? `You lean ${esc(leans.join(", "))}.` : "Add a couple more wines to your journal to see your palate take shape."}</p>`)}
+    ${card("Your taste", `<p class="ptext">${leans.length ? `You lean ${esc(leans.join(", "))}.` : "Add a couple more wines to your journal to see your taste take shape."}</p>`)}
     ${latest ? card("Latest rating", `<div class="iname"><span class="serif">${esc(entryName(latest))}</span><button class="ed edbtn" data-action="wineinfo-entry:${latest.id}" aria-label="Change wine info">&#9998;</button>${marksHtml(entryCard(latest), 16)}</div>${entryInfoLine(latest, latest.wine_vintage_id ? (P.cards || []).find((c) => c.id === latest.wine_vintage_id) : null) ? `<div class="muted small">${esc(entryInfoLine(latest, latest.wine_vintage_id ? (P.cards || []).find((c) => c.id === latest.wine_vintage_id) : null))}</div>` : ""}<div class="small wine"><b>${esc(verdictShort(latest.verdict))}</b></div>`) : ""}
     ${accountCardHtml(P.user)}
     ${feedbackCardHtml()}
@@ -270,12 +303,12 @@ function palateHtml(P) {
   const bars = P.palate.map((d) => {
     const strong = d.n >= 2;
     const msg = !strong ? "Needs more wines" : d.lean > 0.2 ? `You lean ${d.hi}` : d.lean < -0.2 ? `You lean ${d.lo}` : "No clear lean yet";
-    const pmsg = d.pN >= 2 && Math.abs(d.offset) >= d.notice ? `You tend to notice ${d.key === "co2" ? d.name : d.name.toLowerCase()} ${d.offset > 0 ? "more" : "less"} than the baseline` : "";
+    const pmsg = d.pN >= 2 && Math.abs(d.offset) >= d.notice ? `You tend to notice ${d.key === "co2" ? d.name : d.name.toLowerCase()} ${d.offset > 0 ? "more" : "less"} than is typical` : "";
     return `<div class="dimrow2"><div class="dimends"><span>${d.lo}</span><b>${d.name}</b><span>${d.hi}</span></div>
       <div class="leanbar"><div class="knob" style="left:calc(${((d.lean + 1) / 2) * 100}% - 8px);opacity:${strong ? 1 : 0.35}"></div></div>
       <div class="small">${msg}</div>${pmsg ? `<div class="small slate">${pmsg}</div>` : ""}</div>`;
   }).join("");
-  return `<h2 class="serif ph">Your palate so far</h2><div class="pcard">${bars}</div><p class="ptext para">${esc(palateSummary(P.entries, P.palate))}</p>`;
+  return `<h2 class="serif ph">Your taste so far</h2><div class="pcard">${bars}</div><p class="ptext para">${esc(palateSummary(P.entries, P.palate))}</p>`;
 }
 
 const WHEEL_COLORS = ["#7B1E3A", "#3E5C76", "#3A4B40", "#B08A3E", "#7A5C8E"];
@@ -317,7 +350,7 @@ function exploredHtml(P) {
     ? x.verdicts.map((v) => `<div class="kv"><span>${esc(v.label)}</span><span class="muted">${v.count}</span></div>`).join("") + `<div class="kv"><span>No verdict yet</span><span class="muted">${x.unrated}</span></div>`
     : `<p class="muted small">Nothing logged yet.</p>`;
   return `<h2 class="serif ph">What you've explored</h2>
-    ${card("Your swipes", `<p class="ptext">${x.recognized} recognized, ${x.unknown} didn't know, ${x.had} had this bottle</p><p class="ptext">${x.notInterested} marked not interested</p>`)}
+    ${card("Your swipes", `<p class="ptext">${x.liked} liked, ${x.disliked} disliked, ${x.unknown} didn't know, ${x.had} had this bottle</p>${x.recognized ? `<p class="ptext">${x.recognized} recognized (earlier answers)</p>` : ""}`)}
     ${card("Wines you've had", verdicts)}
     ${card("Countries", `<p class="ptext">${x.countries.length ? x.countries.map(flagName).join(", ") : "None yet"}</p>${x.notYet.length ? `<div class="muted small" style="margin-top:10px">Not yet explored</div><p class="ptext">${x.notYet.map(flagName).join(", ")}</p>` : ""}`)}
     ${card("Grapes you've had", `<p class="ptext">${x.grapes.length ? esc(x.grapes.join(", ")) : "None yet"}</p>`)}`;
@@ -386,11 +419,13 @@ export function createProfile(ctx) {
       // What the player answered about how each wine tasted (database update 23); before it, nothing is known and the palate works as before.
       let tastes = []; try { tastes = await allRows(() => sb.from("consumptions").select("id, taste")); } catch (_) { tastes = []; }
       if (my !== loadId) return;
+      if (ctx.fresh) await ctx.fresh();   // the journal may still be refreshing in the background (app.js refreshInBackground)
+      if (my !== loadId) return;
       P.journal = ctx.journal(); P.states = ctx.states(); P.cards = ctx.cards();
       P.questions = questions;
       const questionsById = new Map(questions.map((q) => [q.id, q]));
       const baselineFor = baselines({ vintageToWine: new Map(vintages.map((v) => [v.id, v.wine_id])), reference, defaults, rules: ctx.ruleBase });
-      P.entries = palateEntries(P.journal, perceptions, baselineFor, new Map(tastes.filter((t) => t.taste).map((t) => [t.id, t.taste])));
+      P.entries = [...palateEntries(P.journal, perceptions, baselineFor, new Map(tastes.filter((t) => t.taste).map((t) => [t.id, t.taste]))), ...swipePalateEntries(P.states, P.cards, P.journal, baselineFor)];
       P.palate = computePalate(P.entries);
       P.quiz = quizProgress(questions, answers);
       P.timed = timedStats(runs);
@@ -412,8 +447,24 @@ export function createProfile(ctx) {
     else if (action === "retry") load();
   });
 
+  // The same taste numbers as the Taste page, worked out on their own for the This or That results (it does not need the Profile tab to have been opened).
+  async function tasteForGame() {
+    const sb = ctx.sb();
+    const [perceptions, vintages, reference, defaults] = await Promise.all([
+      allRows(() => sb.from("perceptions").select("consumption_id, dimension_key, value, adjusted")),
+      allRows(() => sb.from("wine_vintages").select("id, wine_id")),
+      sb.from("wine_reference_values").select("wine_id, wine_vintage_id, dimension_key, value").then(must),
+      sb.from("wine_default_values").select("wine_id, dimension_key, value").then(must),
+    ]);
+    let tastes = []; try { tastes = await allRows(() => sb.from("consumptions").select("id, taste").is("deleted_at", null)); } catch (_) { try { tastes = await allRows(() => sb.from("consumptions").select("id, taste")); } catch (_2) { tastes = []; } }
+    const baselineFor = baselines({ vintageToWine: new Map(vintages.map((v) => [v.id, v.wine_id])), reference, defaults, rules: ctx.ruleBase });
+    const entries = [...palateEntries(ctx.journal(), perceptions, baselineFor, new Map(tastes.filter((t) => t.taste).map((t) => [t.id, t.taste]))), ...swipePalateEntries(ctx.states(), ctx.cards(), ctx.journal(), baselineFor)];
+    return palateAxes(entries, computePalate(entries));
+  }
+
   return {
     state: P,
+    tasteForGame,
     // Opens on Overview every time, with fresh numbers.
     mount(el) { root = el; P.sub = "overview"; P.loaded = false; P.userId = ctx.userId ? ctx.userId() : null; P.user = ctx.user ? ctx.user() : null; draw(); load(); },
     leave() { root = null; loadId++; },

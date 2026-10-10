@@ -3,7 +3,7 @@
 // same, so nothing has to be copied. Someone who already has an account can sign in to it instead.
 // Both use a code sent by email (the email also contains a link that does the same thing).
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
-import { esc } from "./logic.js?v=10";
+import { esc } from "./logic.js?v=11";
 
 export const RESEND_SECONDS = 60;
 export const MERGE_KEY = "wine.pendingMerge";    // where the carry-over code waits while the person signs in
@@ -53,8 +53,8 @@ export function friendlyError(err, mode) {
 
 // ---------------------------------------------------------------- drawing
 // The card at the bottom of Profile, Overview.
-const footLinks = `<div class="acctfoot"><a class="link" href="privacy.html" target="_blank" rel="noopener">Privacy policy</a>
-  <button class="link dangerlink" data-account="open:delete">Delete my account and all my data</button></div>`;
+const footLinks = `<div class="acctfoot"><a class="link" href="privacy.html" target="_blank" rel="noopener">Terms and privacy policy</a>
+  <button class="link dangerlink" data-account="open:delete">Delete my account</button></div>`;
 export function accountCardHtml(user) {
   if (!user) return "";
   if (isGuest(user)) {
@@ -72,12 +72,11 @@ export function accountCardHtml(user) {
 function deleteSheetHtml(A) {
   const ready = A.typed.trim().toUpperCase() === "DELETE";
   const body = A.step === "deleted"
-    ? `<div class="okbox">Your account and your data have been deleted.</div><button class="btn primary" data-account="finish">Done</button>`
-    : `<p class="ptext"><b>Deleted for good:</b> your account and sign-in, your journal entries with their notes and photos, your swipes, your quiz history, trophies and palate, and your email address.</p>
-      <p class="ptext"><b>What stays:</b> an anonymous record of the wines you rated and swiped, with no name, email, photos or notes. It cannot be traced back to you in the app.</p>
+    ? `<div class="okbox">Your account has been deleted.</div><button class="btn primary" data-account="finish">Done</button>`
+    : `<p class="ptext">This closes your account and signs you out for good. What we keep is described in the <a href="privacy.html" target="_blank" rel="noopener">terms and privacy policy</a>.</p>
       <input class="field" data-acct-confirm placeholder="Type DELETE to confirm" autocapitalize="characters" autocomplete="off" spellcheck="false" value="${esc(A.typed)}">
       <div id="acctErr" class="err">${esc(A.error)}</div>
-      <button class="btn danger" data-account="deleteNow" id="deleteBtn"${ready && !A.busy ? "" : " disabled"}>Delete everything</button>
+      <button class="btn danger" data-account="deleteNow" id="deleteBtn"${ready && !A.busy ? "" : " disabled"}>Delete my account</button>
       <button class="btn outline" data-account="close"${A.busy ? " disabled" : ""}>Cancel</button>`;
   return `<div class="overlay"><div class="sheet" id="accountPanel">
     <div class="sheethead"><div class="sheettitle"><div class="serif big">Delete my account</div><div class="muted small">This cannot be undone.</div></div>
