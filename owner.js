@@ -3,12 +3,13 @@
 // still decides what anyone may change. The rules at the top (rows, search, sort, checks, coverage) are pure: no page, no network.
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
 import { esc } from "./logic.js?v=11";
-import { REACH_CHOICES } from "./wineinfo.js?v=13";
+import { REACH_CHOICES } from "./wineinfo.js?v=14";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=2";
 import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=3";
+import { TAG_KINDS } from "./tags.js?v=1";
 import { centsToField } from "./pricing.js?v=1";
 
-export const OWNER_TABS = [{ id: "wines", label: "Wines" }, { id: "lenses", label: "Lenses" }, { id: "bingo", label: "Bingo" }, { id: "checks", label: "Checks" }, { id: "config", label: "Config" }];
+export const OWNER_TABS = [{ id: "wines", label: "Wines" }, { id: "lenses", label: "Lenses" }, { id: "bingo", label: "Bingo" }, { id: "checks", label: "Checks" }, { id: "tags", label: "Tags" }, { id: "config", label: "Config" }];
 
 const fold = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const isLive = (c) => !c.archived && (!c.wineStatus || c.wineStatus === "verified");
@@ -126,7 +127,20 @@ function configTable(O, d) {
   const body = rows.map((r) => `<tr><td><b>${esc(r.key)}</b></td><td><input class="ofield onumin" inputmode="decimal" data-owner-cfg="${esc(r.key)}" value="${esc(shownConfigValue(r))}" aria-label="${esc(r.key)}"> <button class="opill" data-action="owner:savecfg:${esc(r.key)}">Save</button></td><td>${esc(r.note || "")}</td></tr>`).join("");
   return `<div class="muted small onote">Numbers the app reads from the database (thresholds and weights). Saving changes them for every player straight away.</div>${table("<th>Setting</th><th>Value</th><th>What it does</th>", body)}`;
 }
+// Quiz tags: the list editors tag questions from, with how many questions use each. Adding one here puts it in the editors' suggestions and pull-down.
+function tagsTable(O, d) {
+  if (!d.tags) return `<p class="muted">${d.tagsError ? esc(d.tagsError) : "Loading…"}</p>`;
+  const used = new Map();
+  for (const l of d.tags.links) used.set(l.tag_id, (used.get(l.tag_id) || 0) + 1);
+  const kindLabel = (id) => (TAG_KINDS.find((k) => k.id === id) || {}).label || id;
+  const rows = d.tags.tags.filter((t) => !O.q || fold(t.name + " " + kindLabel(t.kind)).includes(fold(O.q)))
+    .sort((a, b) => TAG_KINDS.findIndex((k) => k.id === a.kind) - TAG_KINDS.findIndex((k) => k.id === b.kind) || a.name.localeCompare(b.name)).slice(0, 400);
+  const body = rows.map((t) => `<tr><td>${esc(t.name)}</td><td>${esc(kindLabel(t.kind))}</td><td class="onum">${used.get(t.id) || 0}</td></tr>`).join("");
+  return `<div class="muted small onote">${rows.length} of ${d.tags.tags.length} tags. Tags say what a quiz question is about; the quiz asks sooner about the grapes, places and producers a player said "I don't know it" to. Editors tick suggested tags and may add two from this list per edit. A new tag below joins the suggestions and the list straight away.</div>
+    ${table("<th>Tag</th><th>Kind</th><th>Questions</th>", body, "No tag matches.")}`;
+}
 export function ownerTableHtml(O, d) {
+  if (O.tab === "tags") return tagsTable(O, d);
   if (O.tab === "lenses") return lensesTable(O, d);
   if (O.tab === "bingo") return bingoTable(O, d);
   if (O.tab === "checks") return checksTable(O, d);
@@ -140,6 +154,9 @@ export function ownerHtml(O, d) {
   if (O.tab === "wines") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search wines" value="${esc(O.q)}" aria-label="Search wines">
     <select class="ofield" data-owner-issue aria-label="Show"><option value="all">All wines</option>${ISSUES.map((i) => `<option value="${i.id}"${O.issue === i.id ? " selected" : ""}>${esc(i.label)}</option>`).join("")}</select>`;
   else if (O.tab === "bingo") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search cards or squares" value="${esc(O.q)}" aria-label="Search bingo cards">`;
+  else if (O.tab === "tags") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search tags" value="${esc(O.q)}" aria-label="Search tags">
+    <select class="ofield" data-owner-tagkind aria-label="Kind of new tag">${TAG_KINDS.map((k) => `<option value="${k.id}">${esc(k.label)}</option>`).join("")}</select>
+    <input class="ofield osearch" data-owner-tagname placeholder="New tag name" aria-label="New tag name" autocomplete="off"><button class="opill" data-action="owner:addtag">Add tag</button>`;
   else if (O.tab === "config") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search settings" value="${esc(O.q)}" aria-label="Search settings">`;
   else if (O.tab === "lenses") controls = `<select class="ofield" data-owner-lens aria-label="Lens">${LENS_IDS.map((id) => `<option value="${id}"${O.lens === id ? " selected" : ""}>${esc(LENSES[id].label)}</option>`).join("")}</select>
     <select class="ofield" data-owner-player aria-label="Player"><option value="me"${O.player === "me" ? " selected" : ""}>For me</option><option value="new"${O.player === "new" ? " selected" : ""}>For a new player</option></select>

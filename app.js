@@ -6,13 +6,15 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=11";
-import * as db from "./data.js?v=23";
-import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=3";
+import * as db from "./data.js?v=24";
+import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=4";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=2";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=29";
-import { createLearn } from "./learn.js?v=3";
+  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=30";
+import { createLearn } from "./learn.js?v=4";
+import { SW_START, defaultSortFor } from "./swipetabs.js?v=2";
+import { gapWeights } from "./tags.js?v=1";
 import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=1";
 import { loadPrices, applyPrices, tidyFacts, parsePrice, saveWinePrice } from "./pricing.js?v=1";
@@ -23,11 +25,11 @@ import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywin
 import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=6";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
 import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting } from "./tasting.js?v=2";
-import { buildDeck, userModel } from "./deck.js?v=5";
-import { createProfile } from "./profile.js?v=17";
+import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=5";
+import { createProfile } from "./profile.js?v=18";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=8";
 import { createFeedback } from "./feedback.js?v=3";
-import { createEditor } from "./editor.js?v=23";
+import { createEditor } from "./editor.js?v=24";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=3";
 import { gamesHtml } from "./games.js?v=10";
 import { setSwipeConfig, reactionOf, LEGACY_OF } from "./reactions.js?v=1";
@@ -36,10 +38,10 @@ import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, card
 import { recommendMix, recommend } from "./recommend.js?v=3";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=1"));
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=2"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=3"));
-const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=4"));
-import { createWineInfo } from "./wineinfo.js?v=13";
+const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=5"));
+import { createWineInfo } from "./wineinfo.js?v=14";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -78,7 +80,7 @@ if (SUPABASE_URL.startsWith("PASTE")) SUPABASE_URL = cleanProjectUrl(store.get("
 if (SUPABASE_KEY.startsWith("PASTE")) SUPABASE_KEY = store.get("wine_key") || SUPABASE_KEY;
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
-const OWNER_START = { tab: "wines", q: "", issue: "all", sort: { wines: { key: "producer", dir: 1 }, bingo: { key: "tier", dir: 1 } }, lens: "confident", player: "me", seed: "", weights: {}, open: {}, msg: "", wineIds: null, config: null, configError: "" };
+const OWNER_START = { tab: "wines", q: "", issue: "all", sort: { wines: { key: "producer", dir: 1 }, bingo: { key: "tier", dir: 1 } }, lens: "confident", player: "me", seed: "", weights: {}, open: {}, msg: "", wineIds: null, config: null, configError: "", tags: null, tagsError: "" };
 const TOT_KEY = "wine.thisorthat";   // the This or That picks (thisorthat.js): only on this phone
 const GAMES_KEY = "wine.games";   // which bingo cards this phone has cleared (bingo.js)
 const state = {
@@ -92,7 +94,7 @@ const state = {
   user: null, profile: null, sb: null,
   cards: [], deck: [], busy: false, counts: { swipes: 0, journal: 0 },
   states: [], journal: [],
-  sw: { open: { rec: true }, sort: {} },
+  sw: { ...SW_START, open: {} },
   j: { q: "", by: "verdict", verdict: "all", open: {}, limits: {} },
   sheet: null, sheetUi: { saving: false, error: "" },
   form: null,
@@ -127,7 +129,7 @@ const ruleBase = (wineVintageId, entry) => rulesFor(wineVintageId ? cardById(win
 const TITLES = { discover: "Discover", swipes: "Swipes", journal: "Journal", profile: "Profile", learn: "Learn", games: "Games", editor: "Editor", owner: "Owner" };
 
 // The Learn tab lives in learn.js. It saves quiz answers itself and reports save problems through the banner.
-const learn = createLearn({ sb: () => state.sb, user: () => state.user, profile: () => state.profile, onError: (m) => setBanner(m) });
+const learn = createLearn({ gapWeights: () => gapWeights(gapsOf(userModel({ cards: state.cards, states: state.states, journal: state.journal, quiz: state.quiz, refs: structureMap(state.cards, state.refs) }))), sb: () => state.sb, user: () => state.user, profile: () => state.profile, onError: (m) => setBanner(m) });
 // The Profile tab lives in profile.js. It reads the journal and swipes the app already loaded.
 const profileTab = createProfile({ fresh: () => state.refreshing || Promise.resolve(), ruleBase: (vid, entry) => ruleBase(vid, entry), sb: () => state.sb, userId: () => state.user.id, user: () => state.user, journal: () => state.journal, states: () => state.states, cards: () => state.cards });
 // Email accounts live in account.js: a guest can attach an email, or sign in to an account they already have.
@@ -333,7 +335,7 @@ function ownerData() {
   const O = state.owner;
   if (state._ownerFor !== state.cards) { state._ownerFor = state.cards; state._ownerCache = { rows: OWN.wineRows(state.cards), bingo: OWN.bingoCoverage(state.cards) }; }
   const { rows, bingo } = state._ownerCache;
-  return { rows, bingo, checks: OWN.checkCounts(rows), config: O.config, configError: O.configError, seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
+  return { rows, bingo, checks: OWN.checkCounts(rows), config: O.config, configError: O.configError, tags: O.tags, tagsError: O.tagsError, seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
 }
 // The lens preview: the top picks of one lens for the owner's own profile, or for a brand-new player, using the weights typed on the page.
 function ownerLens() {
@@ -367,6 +369,21 @@ async function ownerSaveReach(vintageId, value) {
   if (!card || value === "") { ownerRedraw(); return; }
   try { await db.saveWineReach(state.sb, await ownerWineId(vintageId), value); card.reach = Number(value); state._ownerFor = null; rebuildDeck(); ownerSay(`Saved: ${wineName(card)}, reach ${value}.`); }
   catch (e) { ownerSay("Could not save: " + (e.message || e)); }
+  ownerRedraw();
+}
+async function loadOwnerTags() {
+  try { state.owner.tags = await db.loadQuizTags(state.sb); state.owner.tagsError = ""; }
+  catch (e) { state.owner.tagsError = "Tags need one more database update (docs/quiz_tags.sql). " + (e.message || ""); }
+  if (state.tab === "owner" && state.owner.tab === "tags") ownerRedraw();
+}
+async function ownerAddTag() {
+  const kind = document.querySelector("[data-owner-tagkind]"), name = document.querySelector("[data-owner-tagname]");
+  if (!kind || !name || !name.value.trim()) { ownerSay("Write the tag name first."); return; }
+  try {
+    const row = await db.addQuizTag(state.sb, state.user.id, kind.value, name.value);
+    if (state.owner.tags) state.owner.tags.tags.push(row);
+    name.value = ""; ownerSay(`Added tag: ${row.name}.`);
+  } catch (e) { ownerSay(/duplicate|unique/i.test(e.message || "") ? "That tag already exists." : "Could not add: " + (e.message || e)); }
   ownerRedraw();
 }
 async function ownerSavePrice(vintageId) {
@@ -428,6 +445,13 @@ function squareHelp(square, cardsById) {
   const cold = model.swipeCount + model.journalCount < 5;   // too little history to say "your taste"
   return { unrated: [], cold, recs: recommendMix({ cards: state.cards, model, refs, crowd: state.crowd, journal: state.journal, states: state.states, exclude: leaveOut, accept: (c) => bingoMatches(square.test, cardFacts(c)), lenses: ["confident", "unique", "challenge"] }) };
 }
+// How well each wine fits the player (0 to 1, the deck's taste model), worked out only when the Swipes tab groups or sorts by it.
+function swipeMatch() {
+  if (state.sw.group !== "match" && state.sw.sort !== "match") return new Map();
+  const refs = structureMap(state.cards, state.refs);
+  const model = userModel({ cards: state.cards, states: state.states, journal: state.journal, quiz: state.quiz, refs });
+  return new Map(state.cards.map((c) => [c.id, prefOf(c, model, refs)]));
+}
 function drawTab(body) {
   if (state.tab === "discover") {
     body.innerHTML = discoverHtml({ deck: state.deck, banner: null, counts: state.counts, feedback: state.feedback, flaggedId: state.wfDone, nudge: showNudge(), buttons: state.settings.buttons, mapHint: mapHintFor(state.deck[0]) });
@@ -435,11 +459,12 @@ function drawTab(body) {
     if (card) attachCard(card);
     settlePhotos();
   } else if (state.tab === "swipes") {
-    body.innerHTML = swipesHtml(swipeLists(state.cards, state.states, state.journal), { ...state.sw, noFam: new Set(state.states.filter((x) => !x.familiarity).map((x) => x.wine_vintage_id)) }, state.photoUrls);
+    body.innerHTML = swipesHtml(swipeLists(state.cards, state.states, state.journal), state.sw, state.photoUrls, swipeMatch());
   } else if (state.tab === "owner") {
     if (!isOwner()) body.innerHTML = `<p class="muted">The owner page is only for the owner.</p>`;
     else if (!OWN) { body.innerHTML = `<div class="center muted">Loading\u2026</div>`; loadOwnerModule().then(() => { if (state.tab === "owner") renderBody(); }); }
     else body.innerHTML = OWN.ownerHtml(state.owner, ownerData());
+    if (isOwner() && state.owner.tab === "tags" && !state.owner.tags && !state.owner.tagsError) loadOwnerTags();
     if (isOwner() && state.owner.tab === "config" && !state.owner.config && !state.owner.configError) loadOwnerConfig();
   } else if (state.tab === "games") {
     body.innerHTML = gamesView();
@@ -1303,6 +1328,7 @@ document.addEventListener("click", async (ev) => {
       else if (a === "edit") { const card = cardById(b); if (card) await ownerWineInfo.open(card, ""); }
       else if (a === "saveprice") await ownerSavePrice(b);
       else if (a === "savecfg") await ownerSaveConfig(b);
+      else if (a === "addtag") await ownerAddTag();
     }
     else if (action === "settings") openSettings();
     else if (action === "setclose") closeSettings();
@@ -1343,6 +1369,9 @@ document.addEventListener("click", async (ev) => {
       render();
     }
     else if (action === "toggle") { state.sw.open[a] = !state.sw.open[a]; renderBody(); }
+    else if (action === "swtab") { state.sw = { ...state.sw, tab: a, status: "all", style: "all", q: "", group: state.sw.group }; renderBody(); }   // swtab:ld|dk|all
+    else if (action === "swsub") { state.sw = { ...state.sw, sub: a, style: "all" }; renderBody(); }
+    else if (action === "swg") { const key = decodeURIComponent(a), cur = state.sw.open[key]; state.sw.open[key] = cur === undefined ? false : !cur; renderBody(); }
     else if (action === "delswipe") askDeleteSwipe(a);
     else if (action === "setint") {
       await db.changeInterest(state.sb, state.user.id, a, b);
@@ -1424,7 +1453,16 @@ document.addEventListener("input", (ev) => {
   else if (t.dataset.jq !== undefined) { state.j.q = t.value; renderJournalList(); }
   else if (t.dataset.jby !== undefined) { state.j.by = t.value; renderJournalList(); }
   else if (t.dataset.jverdict !== undefined) { state.j.verdict = t.value; renderJournalList(); }
-  else if (t.dataset.sort) { state.sw.sort[t.dataset.sort] = t.value; renderBody(); }
+  else if (t.dataset.swsel) {   // group, sort, style or status on the Swipes tab
+    state.sw[t.dataset.swsel] = t.value;
+    if (t.dataset.swsel === "group") state.sw.sort = defaultSortFor(t.value === "recent" ? "recent" : t.value);
+    renderBody();
+  }
+  else if (t.dataset.swq !== undefined) {   // the search box only redraws the list, so it keeps focus
+    state.sw.q = t.value;
+    const el = $("#swList");
+    if (el) el.innerHTML = swipesListHtml(swipeLists(state.cards, state.states, state.journal), state.sw, state.photoUrls, swipeMatch());
+  }
   else if (t.dataset.wfnote !== undefined && state.wf) state.wf.note = t.value;
 });
 

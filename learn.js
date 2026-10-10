@@ -2,6 +2,7 @@
 // The rules at the top are pure (no browser, no network) so they can be tested on their own.
 // The controller at the bottom loads questions from Supabase, saves answers and draws the tab.
 import { esc, shuffle } from "./logic.js?v=11";
+import { weave, boostFor } from "./tags.js?v=1";
 
 // ---------------------------------------------------------------- settings
 export const DIFFS = [
@@ -67,9 +68,11 @@ export function poolFor(questions, p, { mode, diff = "all", review = "incorrect"
 }
 // No repeats until the full set has been answered once: unseen questions come first.
 // Once everything has been seen, each new round starts from a fresh random order.
-export function orderFor(pool, p, { mode, review }, rnd = shuffle) {
+// boost (optional): Map(question id -> how much it is about something the player has not met, from tags.js boostFor). Those unseen questions are woven in every other
+// place, so the quiz leans toward what the player said "I don't know it" to without becoming only that. Nothing is skipped: seen-once-everything still holds.
+export function orderFor(pool, p, { mode, review, boost = null }, rnd = shuffle) {
   if (mode === "review") return review === "archive" ? rnd(pool) : [...pool];
-  return [...rnd(pool.filter((id) => !p.seen.has(id))), ...rnd(pool.filter((id) => p.seen.has(id)))];
+  return [...weave(rnd(pool.filter((id) => !p.seen.has(id))), boost), ...rnd(pool.filter((id) => p.seen.has(id)))];
 }
 export const optionsFor = (q, rnd = shuffle) => rnd([q.correct_answer, ...(q.distractors || [])]);
 // choice null means "I don't know".
@@ -208,6 +211,8 @@ const must = ({ data, error }) => { if (error) throw error; return data; };
 
 // ctx: { sb(), user(), profile(), onError(message) }. mount(el) draws the tab into el; leave() stops timers.
 export function createLearn(ctx) {
+  // How much each question is about something the player has not met (needs ctx.gapWeights from app.js and the question tags).
+  const boostNow = () => { try { return ctx.gapWeights && L.tagsByQ ? boostFor(L.tagsByQ, ctx.gapWeights()) : null; } catch (_) { return null; } };
   const L = {
     loaded: false, loading: false, error: null, questions: [], byId: new Map(),
     progress: progressFrom([], []), feedback: false,
@@ -232,11 +237,16 @@ export function createLearn(ctx) {
         sb.from("feature_access").select("feature, all_tiers, tiers").eq("feature", "contentFeedback").maybeSingle(),
       ]);
       L.questions = must(qs);
+      L.tagsByQ = new Map();
+      try {   // quiz tags (docs/quiz_tags.sql); without them the quiz simply is not tag-aware
+        const [tg, lk] = await Promise.all([sb.from("quiz_tags").select("id, kind, name"), sb.from("quiz_question_tags").select("question_id, tag_id")]);
+        if (!tg.error && !lk.error) { const byId = new Map(tg.data.map((t) => [t.id, t])); lk.data.forEach((l) => { const t = byId.get(l.tag_id); if (t) { if (!L.tagsByQ.has(l.question_id)) L.tagsByQ.set(l.question_id, []); L.tagsByQ.get(l.question_id).push(t); } }); }
+      } catch (_) { L.tagsByQ = new Map(); }
       L.byId = new Map(L.questions.map((q) => [q.id, q]));
       L.progress = progressFrom(must(latest), must(arch));
       L.feedback = feedbackOn(must(feat), (ctx.profile() || {}).tier || "default");
       L.loaded = true;
-      L.run = newRun(L.questions, L.progress, L.sel);
+      L.run = newRun(L.questions, L.progress, { ...L.sel, boost: boostNow() });
     } catch (e) {
       L.error = "Could not load the quiz: " + (e.message || e);
     }
@@ -257,7 +267,7 @@ export function createLearn(ctx) {
     if (b) { b.style.width = `${(run.timeLeft / run.seconds) * 100}%`; b.style.background = run.timeLeft <= 15 ? "var(--wine)" : "var(--slate)"; }
   }
 
-  function startRound() { stopTimers(); closeFlag(); L.run = newRun(L.questions, L.progress, L.sel); draw(); }
+  function startRound() { stopTimers(); closeFlag(); L.run = newRun(L.questions, L.progress, { ...L.sel, boost: boostNow() }); draw(); }
 
   function startClock() {
     const run = L.run;
@@ -369,7 +379,7 @@ export function createLearn(ctx) {
     mount(el) {
       root = el;
       if (!L.loaded && !L.loading && !L.error) load();
-      else { if (L.loaded && !L.run) L.run = newRun(L.questions, L.progress, L.sel); draw(); }
+      else { if (L.loaded && !L.run) L.run = newRun(L.questions, L.progress, { ...L.sel, boost: boostNow() }); draw(); }
     },
     // Leaving the tab stops the clock. A timed round in progress is dropped, not saved.
     leave() {

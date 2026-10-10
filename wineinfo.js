@@ -8,8 +8,8 @@ import { infoLine } from "./wineline.js?v=1";
 import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, placeClassification, savePlace } from "./geo.js?v=1";
 import { loadWinePrice, saveWinePrice, parsePrice, centsToField, blendPrice, formatPrice } from "./pricing.js?v=1";
 import { archivePlanFor } from "./catalog.js?v=2";
-import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=3";
-import * as db from "./data.js?v=23";
+import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=4";
+import * as db from "./data.js?v=24";
 
 const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 

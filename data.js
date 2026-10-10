@@ -607,3 +607,24 @@ export async function importJournal(sb, userId, items, today) {
 export async function saveThisOrThat(sb, row) {
   must(await sb.from("this_or_that_answers").upsert(row, { onConflict: "user_id,pair_id" }));
 }
+
+// ---------------------------------------------------------------- quiz tags (docs/quiz_tags.sql)
+// All tags and which questions have which. Before the script is run these tables do not exist: the caller treats a failure as "no tags yet".
+export async function loadQuizTags(sb) {
+  const [tags, links] = await Promise.all([
+    allRows(() => sb.from("quiz_tags").select("id, kind, name").order("name")),
+    allRows(() => sb.from("quiz_question_tags").select("question_id, tag_id")),
+  ]);
+  return { tags, links };
+}
+// Changes the tags of one question: ids to add and ids to remove. The database lets only editors with quiz_verify do this.
+export async function saveQuestionTags(sb, userId, questionId, add, remove) {
+  if (remove.length) must(await sb.from("quiz_question_tags").delete().eq("question_id", questionId).in("tag_id", remove));
+  if (add.length) must(await sb.from("quiz_question_tags").insert(add.map((tagId) => ({ question_id: questionId, tag_id: tagId, tagged_by: userId }))));
+}
+// A new tag. Only the owner (settings_edit) may; a refusal is shown as a failure.
+export async function addQuizTag(sb, userId, kind, name) {
+  const rows = must(await sb.from("quiz_tags").insert({ kind, name: String(name).trim(), created_by: userId }).select("id, kind, name"));
+  if (!rows || !rows.length) throw new Error("The tag was not saved. Your access may not allow it.");
+  return rows[0];
+}

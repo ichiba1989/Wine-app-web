@@ -4,6 +4,8 @@
 //   Quiz:  edit each question, record its source if you have one, and verify it (verified questions are what players see).
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
 import { esc, wineName } from "./logic.js?v=11";
+import { suggestTags, pullGroups, canPull, tagDiff, MAX_PULLDOWN, TAG_KINDS } from "./tags.js?v=1";
+import * as db from "./data.js?v=24";
 import { sortFlags, sortFeedback, sortQuestions, sortSelectHtml, FLAG_SORTS, FEEDBACK_SORTS, QUESTION_SORTS } from "./sorting.js?v=1";
 
 export const TOPICS = ["Grapes", "Regions", "Producers", "Winemaking", "Other alcohol"];
@@ -144,17 +146,34 @@ function feedbackHtml(R) {
 function quizHtml(R) {
   if (R.error) return `<div class="err">${esc(R.error)}</div><button class="btn outline" data-review="retry">Try again</button>`;
   if (!R.loaded) return `<p class="muted">Loading questions…</p>`;
-  const list = sortQuestions(filterQuestions(R.questions, { q: R.qq, filter: R.quizFilter }), R.sort.quiz);
+  const list = sortQuestions(filterQuestions(R.questions, { q: R.qq, filter: R.quizFilter }), R.sort.quiz).filter((q) => !R.untagged || !R.tagsReady || !(R.links.get(q.id) || new Set()).size);
   const n = (fn) => R.questions.filter(fn).length;
   const rows = list.map((q) => `<button class="jrow" data-review="openq:${q.id}"><span class="jl"><span class="serif qline">${esc(q.question)}</span>
-      <span class="meta">${esc(q.topic)}, ${esc((DIFFS.find((d) => d.id === q.difficulty) || {}).label || q.difficulty)}</span>
+      <span class="meta">${esc(q.topic)}, ${esc((DIFFS.find((d) => d.id === q.difficulty) || {}).label || q.difficulty)}${R.tagsReady ? `, ${(R.links.get(q.id) || new Set()).size} tags` : ""}</span>
       <span class="meta trunc"><span class="okmark">&#10003;</span> ${esc(q.correct_answer)}</span></span>
       <span class="pill${q.status === "verified" ? "" : " dark"}">${STATUS_LABEL[q.status] || q.status}</span></button>`).join("");
   return `<div class="jbar"><input class="field" data-review-q placeholder="Search questions" value="${esc(R.qq)}" autocomplete="off">
-      <div class="chips left">${QUIZ_FILTERS.map((x) => `<button class="chip wide${R.quizFilter === x.id ? " on" : ""}" data-review="qf:${x.id}">${x.label}</button>`).join("")}</div>
+      <div class="chips left">${QUIZ_FILTERS.map((x) => `<button class="chip wide${R.quizFilter === x.id ? " on" : ""}" data-review="qf:${x.id}">${x.label}</button>`).join("")}${R.tagsReady ? `<button class="chip wide${R.untagged ? " on" : ""}" data-review="untagged">No tags</button>` : ""}</div>
       ${sortSelectHtml("data-review-sort", QUESTION_SORTS, R.sort.quiz, "quiz")}</div>
     <div class="jmeta"><span>${n(isDraft)} drafts, ${n((q) => q.status === "verified")} verified, ${n((q) => q.status === "retired")} retired</span></div>
     ${rows || `<p class="muted">No questions match.</p>`}`;
+}
+
+// The tags part of the question sheet: suggested tags to tick, ticked tags that were not suggested, and a pull-down for up to two more per edit.
+function tagsHtml(R) {
+  const f = R.form;
+  if (!R.tagsReady) return `<div class="qlabel">Tags</div><p class="muted small">${esc(R.tagsError || "Tags are not available yet.")}</p>`;
+  const byId = new Map(R.tags.map((t) => [t.id, t]));
+  const chip = (t) => `<button type="button" class="chip wide${f.tagSel.has(t.id) ? " on" : ""}" data-review="tag:${t.id}" aria-pressed="${f.tagSel.has(t.id)}">${esc(t.name)} <span class="small muted">${esc((TAG_KINDS.find((k) => k.id === t.kind) || {}).label || "")}</span></button>`;
+  const suggested = f.tagSuggest.map((id) => byId.get(id)).filter(Boolean);
+  const extra = [...f.tagSel].filter((id) => !f.tagSuggest.includes(id)).map((id) => byId.get(id)).filter(Boolean);
+  const full = !canPull(f.tagSel, f.tagPulled);
+  const groups = pullGroups(R.tags, new Set([...f.tagSel]));
+  const pull = groups.map((g) => `<optgroup label="${esc(g.kind.label)}">${g.tags.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join("")}</optgroup>`).join("");
+  return `<div class="qlabel">Tags <span class="muted small">(what this question is about)</span></div>
+    <div class="chips left">${suggested.map(chip).join("") || `<span class="muted small">No suggestions for this wording.</span>`}${extra.map(chip).join("")}</div>
+    <select class="field" data-review-pull aria-label="Add another tag"${full ? " disabled" : ""}><option value="">${full ? `Two added from the list (the most for one edit)` : `Add another tag from the list (up to ${MAX_PULLDOWN})`}</option>${pull}</select>
+    <button type="button" class="pill" data-review="resuggest">Suggest again</button>`;
 }
 
 function questionSheetHtml(R) {
@@ -180,6 +199,7 @@ function questionSheetHtml(R) {
     <input class="field wrong" data-rq="d2" placeholder="Wrong answer 3" value="${esc(f.d2)}" aria-label="Wrong answer 3">
     <div class="two"><select class="field" data-rq="topic" aria-label="Topic">${options(TOPICS, f.topic)}</select>
       <select class="field" data-rq="difficulty" aria-label="Difficulty">${options(DIFFS, f.difficulty)}</select></div>
+    ${tagsHtml(R)}
     <input class="field" data-rq="sourceName" placeholder="Source (optional): book, site, producer" value="${esc(f.sourceName)}">
     <input class="field" data-rq="sourceUrl" placeholder="Source link (optional)" value="${esc(f.sourceUrl)}">
     <div id="reviewErr" class="err">${esc(R.formError || "")}</div>${buttons}</div></div>`;
@@ -203,6 +223,7 @@ export function createReview(ctx) {
     flagFilter: "open", quizFilter: "draft", qq: "", flagError: null,
     feedback: [], feedbackFilter: "new", feedbackError: null, feedbackActionError: null,
     form: null, formError: "", saving: false, view: "flags",
+    tags: [], links: new Map(), usage: new Map(), tagsReady: false, tagsError: "", untagged: false,
   };
   let root = null;
   const overlay = () => document.querySelector("#overlay");
@@ -224,6 +245,17 @@ export function createReview(ctx) {
       R.flags = flags; R.questions = questions; R.sources = new Map(sources.map((s) => [s.id, s]));
       R.loaded = true;
     } catch (e) { R.error = "Could not load: " + (e.message || e); }
+    // Tags load on their own too: if the tags update has not been run, questions still open and save without them.
+    try {
+      const { tags, links } = await db.loadQuizTags(ctx.sb());
+      R.tags = tags; R.links = new Map(); R.usage = new Map();
+      for (const l of links) {
+        if (!R.links.has(l.question_id)) R.links.set(l.question_id, new Set());
+        R.links.get(l.question_id).add(l.tag_id);
+        R.usage.set(l.tag_id, (R.usage.get(l.tag_id) || 0) + 1);
+      }
+      R.tagsReady = true; R.tagsError = "";
+    } catch (e) { R.tagsReady = false; R.tagsError = "Tags need one more database update (docs/quiz_tags.sql). " + (e.message || ""); }
     draw();
     if (ctx.onChange) ctx.onChange();
   }
@@ -257,7 +289,27 @@ export function createReview(ctx) {
     if (!q) return;
     R.form = formFromQuestion(q, R.sources.get(q.source_id));
     R.formError = ""; R.saving = false;
+    R.form.tagBefore = [...(R.links.get(q.id) || [])];
+    R.form.tagSel = new Set(R.form.tagBefore);
+    R.form.tagPulled = new Set();
+    R.form.tagSuggest = R.tagsReady ? suggestTags(R.form, R.tags, R.usage).map((t) => t.id) : [];
     overlay().innerHTML = questionSheetHtml(R);
+  }
+  // Redraws the sheet after a tag change, keeping the scroll place (the typed text is already in R.form).
+  function redrawSheet() {
+    const o = overlay(), p = document.getElementById("reviewPanel"), top = p ? p.scrollTop : 0;
+    if (!o || !R.form) return;
+    o.innerHTML = questionSheetHtml(R);
+    const n = document.getElementById("reviewPanel"); if (n) n.scrollTop = top;
+  }
+  function toggleTag(id) {
+    const f = R.form; if (!f) return;
+    if (f.tagSel.has(id)) { f.tagSel.delete(id); f.tagPulled.delete(id); } else f.tagSel.add(id);
+    redrawSheet();
+  }
+  function pullTag(id) {
+    const f = R.form; if (!f || !id || !canPull(f.tagSel, f.tagPulled)) return;
+    f.tagSel.add(id); f.tagPulled.add(id); redrawSheet();
   }
   const closeQuestion = () => { R.form = null; const o = overlay(); if (o) o.innerHTML = ""; };
   function syncSheet() {
@@ -284,6 +336,10 @@ export function createReview(ctx) {
     try {
       const sourceId = await ensureSource(f.sourceName, f.sourceUrl);
       must(await ctx.sb().from("quiz_questions").update(questionPatch(f, mode, ctx.userId(), sourceId, new Date().toISOString())).eq("id", f.id));
+      if (R.tagsReady && mode !== "retire") {
+        const d = tagDiff(f.tagBefore, f.tagSel);
+        if (d.add.length || d.remove.length) await db.saveQuestionTags(ctx.sb(), ctx.userId(), f.id, d.add, d.remove);
+      }
       R.saving = false; closeQuestion(); await load();
     } catch (e) { R.saving = false; R.formError = "Could not save: " + (e.message || e); syncSheet(); }
   }
@@ -300,12 +356,16 @@ export function createReview(ctx) {
     else if (action === "editwine") { if (ctx.editWine) ctx.editWine(a); }
     else if (action === "openq") { if (ctx.gotoQuiz && R.view !== "quiz") ctx.gotoQuiz(a); else openQuestion(a); }
     else if (action === "retry") load();
+    else if (action === "tag") toggleTag(a);
+    else if (action === "resuggest") { if (R.form) { R.form.tagSuggest = suggestTags(R.form, R.tags, R.usage).map((x) => x.id); redrawSheet(); } }
+    else if (action === "untagged") { R.untagged = !R.untagged; draw(); }
     else if (action === "close") closeQuestion();
     else if (["save", "verify", "draft", "retire"].includes(action)) saveQuestion(action);
   });
   document.addEventListener("input", (ev) => {
     const t = ev.target;
     if (!t.dataset) return;
+    if (t.dataset.reviewPull !== undefined && R.form) { pullTag(t.value); return; }
     if (t.dataset.rq && R.form) { R.form[t.dataset.rq] = t.value; }
     else if (t.dataset.reviewSort) { R.sort[t.dataset.reviewSort] = t.value; draw(); }
     else if (t.dataset.reviewQ !== undefined) {

@@ -61,6 +61,12 @@
   .sect-head { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; border: 0; background: transparent; padding: 12px 14px; font-size: calc(14px * var(--ts)); font-weight: 600; text-align: left; }
   .sect-head .chev { font-size: calc(10px * var(--ts)); color: var(--muted); }
   .sect-body { padding: 0 14px 10px; }
+  .swtabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px; }
+  .swtab { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 10px 6px; font-size: calc(13px * var(--ts)); line-height: 1.15; }
+  .swtab.on { background: var(--ink, #222); color: #fff; border-color: transparent; }
+  .swrow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; margin-bottom: 8px; }
+  .swrow .sortsel { margin-bottom: 0; }
+  [data-swq] { margin-top: 8px; }
   .sortsel { width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 7px 10px; font-size: calc(12px * var(--ts)); background: #fff; margin-bottom: 4px; }
   .item { padding: 10px 0; border-top: 1px solid var(--line); }
   .iname { display: flex; align-items: center; gap: 8px; }
@@ -565,6 +571,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=67" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=68" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>

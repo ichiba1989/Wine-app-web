@@ -2,7 +2,7 @@
 // The rules at the top are pure (no browser, no network) so they can be tested on their own.
 // The controller at the bottom loads what it needs from Supabase and draws the tab.
 import { DIMS, dimRange, VERDICTS, FLAGS, esc, styleLabel, verdictShort, entryCard, entryName } from "./logic.js?v=11";
-import { marksHtml } from "./views.js?v=29";
+import { marksHtml } from "./views.js?v=30";
 import { accountCardHtml } from "./account.js?v=8";
 import { feedbackCardHtml } from "./feedback.js?v=3";
 import { worldOf } from "./thisorthat.js?v=4";

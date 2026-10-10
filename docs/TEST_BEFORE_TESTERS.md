@@ -94,3 +94,12 @@ Keep this list current. Tick each item (and date it) only after trying it on a t
 - [ ] Old swipes (made before this change) still keep their wines out of the deck and still count as before for the deck.
 - [ ] The practice walkthrough (Settings, Practice with a sample card) teaches the new answers.
 - [ ] **Owner decisions still open:** the like and dislike weights (`swipe_like_weight`, `swipe_dislike_weight`, editable on the Config tab once `reactions.sql` has run), whether "I've had this bottle" and the journal entry it creates should stay as they are, and when quizzes should start reading what the player does not know (`gapsOf` in `deck.js`).
+
+## 12. Quiz tags and the Swipes tab view (added 2026-10-10)
+- [ ] **Run `docs/quiz_tags.sql` in Supabase** (copy it from the repo file). Check `select kind, count(*) from quiz_tags group by kind;` shows grapes, regions, countries, producers and the five styles.
+- [ ] Editor tab, Quiz, open a question: 5 to 10 suggested tags appear, ticking and unticking works, the pull-down allows two more then says it is full, Save keeps them (reopen to check), and the list shows "N tags". The "No tags" chip lists only untagged questions.
+- [ ] An editor **without** `settings_edit` cannot add a tag from anywhere; the owner can, on the Owner page, Tags tab, and the new tag shows in an editor's pull-down.
+- [ ] Learn: after saying "I don't know it" to several wines of one grape, questions tagged with that grape come up sooner (about every other unseen question), and other questions still appear.
+- [ ] Swipes tab: Like and dislike (Liked, Disliked), Don't know and All; Group by each choice; open a group; search, Type and Sort work; "How well it fits you" puts wines in three bands; Dislike instead, Like instead, Put back, Review and Delete still work; rated and had-it wines open their journal entry.
+- [ ] Look at tag suggestions for 20 real questions and note where they miss (the rule only matches words on the screen).
+

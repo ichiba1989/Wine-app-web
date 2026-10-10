@@ -5,7 +5,7 @@
 // the page, like the other feature controllers); app.js holds the open/next/back/close clicks and remembers that the walkthrough was seen.
 import { esc, dragPose, decideSwipe, flyPlan, releaseVelocity, clampN } from "./logic.js?v=11";
 import { REACTIONS } from "./reactions.js?v=1";
-import { cardHtml } from "./views.js?v=29";
+import { cardHtml } from "./views.js?v=30";
 
 // A card shaped like a catalog card, with made-up names. (Pinot Noir and Oregon only give it a real-looking bottle, flavors and map.)
 export const DEMO_CARD = {
