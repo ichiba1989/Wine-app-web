@@ -1,8 +1,8 @@
 # Saved versions (restore points)
 
-Each saved version is a **git tag**: a permanent name for one exact state of every file. Tags never move, so a tag is a safe place to go back to.
+Each saved version is a **backup branch** on GitHub that is never changed after it is made: a permanent copy of one exact state of every file. (A git tag would be the usual way, but this environment cannot push tags, so a frozen branch is used. Never push new work to a backup branch.)
 
-## Three-Answer Deck, v1 (`deck-v1-three-answers`) — saved 2026-10-10
+## Three-Answer Deck, v1 (branch `backup/deck-v1-three-answers`, commit `9491ea5`) — saved 2026-10-10
 The Discover deck as it works today, before the planned change to how swiping works and what it registers.
 
 **How the deck works in this version**
@@ -15,15 +15,14 @@ The Discover deck as it works today, before the planned change to how swiping wo
 - Deleting a swipe or entry only hides it (`deleted_at`, `docs/soft_delete.sql`). Views read: `v_user_wine_state`, `v_journal_entries`.
 - Counts on the Discover screen come from `countSwipesAndJournal`.
 
-**The app at this point**: `app.js?v=65`; branch `claude/wine-discovery-architecture-3pithw`.
+**The app at this point**: `app.js?v=65`; saved from branch `claude/wine-discovery-architecture-3pithw` at commit `9491ea5`.
 
 **Database scripts that were run for this version** (all are additive; older code keeps working with them): `this_or_that.sql`, `retain_after_delete.sql`, `soft_delete.sql`, plus `import_tier.sql` and `import_limit.sql` (the last two are ready but the owner has not confirmed running them). The database is **not** part of a tag: going back restores the files only, not the data or the database functions.
 
 ### How to look at it, or go back to it
-- **See the files without changing anything:** `git checkout deck-v1-three-answers` (then `git checkout claude/wine-discovery-architecture-3pithw` to return).
-- **Make the live site use it again** (the site is served from the branch): `git checkout -B claude/wine-discovery-architecture-3pithw deck-v1-three-answers` then `git push --force-with-lease origin claude/wine-discovery-architecture-3pithw`. This replaces the branch with the saved version, so first save anything newer you want to keep under its own tag.
-- **Keep the old version next to the new one:** `git branch deck-v1 deck-v1-three-answers` and push that branch.
-- On GitHub: the tag is under Code, Tags (or Releases). You can download a zip of it from there.
+- **See the files without changing anything:** `git fetch origin backup/deck-v1-three-answers && git checkout origin/backup/deck-v1-three-answers` (then `git checkout claude/wine-discovery-architecture-3pithw` to return). Or on GitHub: switch the branch drop-down to `backup/deck-v1-three-answers`, and use Code, Download ZIP.
+- **Make the live site use it again** (the site is served from the working branch): `git checkout -B claude/wine-discovery-architecture-3pithw origin/backup/deck-v1-three-answers` then `git push --force-with-lease origin claude/wine-discovery-architecture-3pithw`. This replaces the working branch with the saved version, so first save anything newer you want to keep as its own backup branch.
+- **Compare with now:** `git diff origin/backup/deck-v1-three-answers claude/wine-discovery-architecture-3pithw --stat`.
 
 ## How to save a new version
-`git tag -a NAME -m "what this version is"` then `git push origin NAME`, and add a section here. Use clear names (for example `deck-v2-...`).
+`git push origin HEAD:refs/heads/backup/NAME` (a new name each time, never an existing one), and add a section here with the commit. Use clear names (for example `deck-v2-...`).
