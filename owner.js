@@ -2,10 +2,10 @@
 // Every table can be searched and sorted (tap a heading). It is reached from the gear (Settings) and only offered to the owner; the database
 // still decides what anyone may change. The rules at the top (rows, search, sort, checks, coverage) are pure: no page, no network.
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
-import { esc } from "./logic.js?v=11";
-import { REACH_CHOICES } from "./wineinfo.js?v=14";
+import { esc } from "./logic.js?v=12";
+import { REACH_CHOICES } from "./wineinfo.js?v=15";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=2";
-import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=3";
+import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=4";
 import { TAG_KINDS } from "./tags.js?v=1";
 import { centsToField } from "./pricing.js?v=1";
 
@@ -136,7 +136,7 @@ function tagsTable(O, d) {
   const rows = d.tags.tags.filter((t) => !O.q || fold(t.name + " " + kindLabel(t.kind)).includes(fold(O.q)))
     .sort((a, b) => TAG_KINDS.findIndex((k) => k.id === a.kind) - TAG_KINDS.findIndex((k) => k.id === b.kind) || a.name.localeCompare(b.name)).slice(0, 400);
   const body = rows.map((t) => `<tr><td>${esc(t.name)}</td><td>${esc(kindLabel(t.kind))}</td><td class="onum">${used.get(t.id) || 0}</td></tr>`).join("");
-  return `<div class="muted small onote">${rows.length} of ${d.tags.tags.length} tags. Tags say what a quiz question is about; the quiz asks sooner about the grapes, places and producers a player said "I don't know it" to. Editors tick suggested tags and may add two from this list per edit. A new tag below joins the suggestions and the list straight away.</div>
+  return `<div class="muted small onote">${rows.length} of ${d.tags.tags.length} tags. Tags say what a quiz question is about; the quiz asks sooner about the grapes, places and producers a player skipped. Editors tick suggested tags and may add two from this list per edit. A new tag below joins the suggestions and the list straight away.</div>
     ${table("<th>Tag</th><th>Kind</th><th>Questions</th>", body, "No tag matches.")}`;
 }
 export function ownerTableHtml(O, d) {

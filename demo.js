@@ -3,23 +3,23 @@
 // swipe right, left and up, tap the answer buttons, and zoom with the Zoom button, a pinch or a double-tap. NOTHING is saved or sent anywhere.
 // The steps and the messages are plain data at the top. The screen is drawn by demoHtml; attachDemo wires the practice card to the page (it touches
 // the page, like the other feature controllers); app.js holds the open/next/back/close clicks and remembers that the walkthrough was seen.
-import { esc, dragPose, decideSwipe, flyPlan, releaseVelocity, clampN } from "./logic.js?v=11";
-import { REACTIONS } from "./reactions.js?v=1";
-import { cardHtml } from "./views.js?v=30";
+import { esc, dragPose, decideSwipe, flyPlan, releaseVelocity, clampN } from "./logic.js?v=12";
+import { REACTIONS } from "./reactions.js?v=2";
+import { cardHtml, answerFace } from "./views.js?v=31";
 
 // A card shaped like a catalog card, with made-up names. (Pinot Noir and Oregon only give it a real-looking bottle, flavors and map.)
 export const DEMO_CARD = {
   id: "demo", producer: "Sample Cellars", cuvee: "Practice Red", vintage: "2021", style: "red", country: "USA", region: "Oregon", appellation: "Willamette Valley",
   grapes: ["Pinot Noir"], ruleGrapes: [], reach: 3, raw: {}, facts: [{ text: "Pinot Noir", derived: false }, { text: "Oregon, USA", derived: true }],
 };
-// want: what the player should do on this step (null = just read). The answers match the real card: like, dislike, "I don't know it", "I've had this bottle".
+// want: what the player should do on this step (null = just read). The answers match the real card: thumbs up, thumbs down, Skip, "I've had this bottle".
 export const STEPS = [
-  { id: "right", want: "like", title: "Swipe right if you like it", text: "If a wine looks like something you would enjoy, drag the card to the right." },
-  { id: "left", want: "dislike", title: "Swipe left if you don't", text: "If it does not appeal to you, drag the card to the left." },
-  { id: "button", want: "dont_know", title: "Not sure? Tap I don't know it", text: "That is fine: it is never counted against you. It helps us show you better wines and quiz questions. Tap I don't know it." },
+  { id: "right", want: "like", title: "Swipe right for a thumbs up", text: "If a wine looks like something you would enjoy, drag the card to the right." },
+  { id: "left", want: "dislike", title: "Swipe left for a thumbs down", text: "If it does not appeal to you, drag the card to the left." },
+  { id: "button", want: "dont_know", title: "Not sure? Tap Skip", text: "That is fine: it is never counted against you. The wine comes back once, later on. Skip it a second time and you won't see it again. It also helps us show you better wines and quiz questions. Tap Skip." },
   { id: "up", want: "had", title: "Swipe up if you've had this bottle", text: "It goes into your Journal so you can rate it. Drag the card up, or tap the small button under the answers." },
   { id: "zoom", want: "zoom", title: "Zoom in to read", text: "Tap the Zoom button under the card. You can also pinch with two fingers, or double-tap the middle of the card. Then tap Reset zoom to go back." },
-  { id: "more", want: null, title: "A few more taps", text: "Tap the little map (the one with the magnifier) to see where a wine is from. Tap the wine's name to look it up online. Your answers are kept in the Swipes tab, where you can change one. Likes and dislikes shape your taste profile, and rating wines you have tried adds to it and fills your Bingo cards." },
+  { id: "more", want: null, title: "A few more taps", text: "Tap the little map (the one with the magnifier) to see where a wine is from. Tap the wine's name to look it up online. Your answers are kept in the Swipes tab, where you can change one. Thumbs up and thumbs down shape your taste profile, and rating wines you have tried adds to it and fills your Bingo cards." },
 ];
 export const DIRECTION = { like: "right", dislike: "left", had: "up" };
 // What to tell the player after they do something. kind: "like" | "dislike" | "dont_know" | "had" | "zoom" | "map" | "name".
@@ -31,7 +31,7 @@ export function feedback(step, kind) {
   if (step.want === kind) return { ok: true, text: `Nice! That is "${label(kind)}".` };
   if (!step.want) return { ok: false, text: `That is "${label(kind)}". Nothing is saved while you practice.` };
   if (step.want === "zoom") return { ok: false, text: `That was "${label(kind)}". For this step, tap Zoom.` };
-  if (step.want === "dont_know") return { ok: false, text: `That was "${label(kind)}". For this step, tap "I don't know it".` };
+  if (step.want === "dont_know") return { ok: false, text: `That was "${label(kind)}". For this step, tap Skip.` };
   return { ok: false, text: `That was "${label(kind)}". For this step, swipe ${DIRECTION[step.want]}.` };
 }
 
@@ -40,7 +40,7 @@ export function demoHtml(D) {
   const step = STEPS[D.step], last = D.step === STEPS.length - 1;
   const dots = STEPS.map((s, i) => `<span class="ddot${i === D.step ? " on" : D.done[s.id] ? " done" : ""}" aria-hidden="true"></span>`).join("");
   const card = cardHtml(DEMO_CARD).replace('id="card"', 'id="demoCard"');   // not the real #card
-  const answerRow = `<div class="answers" role="group" aria-label="Practice answers">${["dislike", "dont_know", "like"].map((k) => `<button class="ans" data-demo-answer="${k}" style="--c:${REACTIONS[k].color}">${esc(REACTIONS[k].label)}</button>`).join("")}</div>`;
+  const answerRow = `<div class="answers" role="group" aria-label="Practice answers">${["dislike", "dont_know", "like"].map((k) => `<button class="ans" data-demo-answer="${k}" aria-label="${esc(REACTIONS[k].label)}" style="--c:${REACTIONS[k].color}">${answerFace(k)}</button>`).join("")}</div>`;
   const hadBtn = `<button class="hadbtn" data-demo-answer="had">I've had this bottle</button>`;
   const controls = step.id === "button" ? answerRow
     : step.id === "up" ? `<div class="belowcard">${hadBtn}</div>`

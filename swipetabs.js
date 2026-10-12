@@ -3,11 +3,11 @@
 // An "entry" is { card, kind } where kind is liked, disliked, dontKnow, rec (older "recognized" answers), tried (rated wines found through Discover) or had.
 import { fold } from "./tags.js?v=1";
 
-export const SW_START = { tab: "ld", sub: "liked", status: "all", group: "varietal", sort: "recent", q: "", style: "all", open: {} };
-export const SW_TABS = [{ id: "ld", label: "Like and dislike" }, { id: "dk", label: "Don't know" }, { id: "all", label: "All" }];
-export const SW_SUBS = [{ id: "liked", label: "Liked" }, { id: "disliked", label: "Disliked" }];
+export const SW_START = { tab: "like", status: "all", group: "recent", sort: "recent", q: "", style: "all", more: false, open: {} };
+// One row of four: thumbs up, thumbs down, skip, all. `icon` names a picture in reactions.js ICONS; the label is what screen readers say.
+export const SW_TABS = [{ id: "like", label: "Thumbs up", icon: "like" }, { id: "dislike", label: "Thumbs down", icon: "dislike" }, { id: "skip", label: "Skipped", icon: "dont_know" }, { id: "all", label: "All", icon: "all" }];
 export const SW_KINDS = [
-  { id: "liked", label: "Liked" }, { id: "disliked", label: "Disliked" }, { id: "dontKnow", label: "I don't know it" },
+  { id: "liked", label: "Thumbs up" }, { id: "disliked", label: "Thumbs down" }, { id: "dontKnow", label: "Skipped" },
   { id: "tried", label: "Rated" }, { id: "had", label: "Had this bottle" }, { id: "rec", label: "Recognized (earlier answers)" },
 ];
 export const SW_GROUPS = [
@@ -22,15 +22,19 @@ const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 // The wines on the current tab, as entries. All gathers every list (a rated wine and a had-it wine appear once each).
 export function entriesFor(lists, sw) {
   const mk = (kind, cards) => cards.map((card) => ({ card, kind }));
-  if (sw.tab === "dk") return mk("dontKnow", lists.dontKnow);
+  if (sw.tab === "skip") return mk("dontKnow", lists.dontKnow);
+  if (sw.tab === "dislike") return mk("disliked", lists.disliked);
+  if (sw.tab === "like") return mk("liked", lists.liked);
   if (sw.tab === "all") {
     const rated = new Set(lists.tried.map((c) => c.id));   // a had-it wine that was rated is listed once, as Rated
     const all = [...mk("liked", lists.liked), ...mk("disliked", lists.disliked), ...mk("dontKnow", lists.dontKnow), ...mk("tried", lists.tried), ...mk("had", lists.had.filter((c) => !rated.has(c.id))), ...mk("rec", lists.rec)];
     return sw.status === "all" ? all : all.filter((e) => e.kind === sw.status);
   }
-  return sw.sub === "disliked" ? mk("disliked", lists.disliked) : mk("liked", lists.liked);
+  return [];
 }
-export const tabCounts = (lists) => ({ ld: lists.liked.length + lists.disliked.length, dk: lists.dontKnow.length, all: entriesFor(lists, { tab: "all", status: "all" }).length, liked: lists.liked.length, disliked: lists.disliked.length });
+export const tabCounts = (lists) => ({ like: lists.liked.length, dislike: lists.disliked.length, skip: lists.dontKnow.length, all: entriesFor(lists, { tab: "all", status: "all" }).length });
+// True when the search, type filter or a non-default group is in use, so the closed "more" button can show a dot.
+export const filtersOn = (sw) => !!(sw.q || (sw.style && sw.style !== "all") || (sw.status && sw.status !== "all"));
 
 const grapeOf = (c) => (Array.isArray(c.grapes) && c.grapes[0]) || (Array.isArray(c.ruleGrapes) && c.ruleGrapes[0]) || c.grape || "";
 // The wine types present in these entries, for the Type filter.
@@ -54,7 +58,7 @@ export function sortEntries(entries, by, { order = {}, match = new Map() } = {})
   return [...entries].sort(f);
 }
 // What sort suits a grouping best inside each group.
-export const defaultSortFor = (group) => ({ producer: "vintage", vintage: "name", match: "match" }[group] || "name");
+export const defaultSortFor = (group) => ({ recent: "recent", producer: "vintage", vintage: "name", match: "match" }[group] || "name");
 
 export const fitBand = (score) => (score == null ? null : FIT_BANDS.find((b) => score >= b.min));
 export function groupLabel(e, by, match = new Map()) {

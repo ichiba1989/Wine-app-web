@@ -14,7 +14,7 @@
 // eases back toward familiar; if they recognize everything it moves toward new territory. Inside each deck the wines they are
 // likelier to like come first, with some randomness so it never feels fixed, and the same producer or place does not repeat back to back.
 
-import { SWIPE_WEIGHT, DECK_CONFIG, reactionOf } from "./reactions.js?v=1";
+import { SWIPE_WEIGHT, DECK_CONFIG, reactionOf, skipComesBack } from "./reactions.js?v=2";
 
 export const TIERS = ["high", "medium", "low"];
 export const TIER_LABEL = { high: "Familiar", medium: "Getting warmer", low: "New territory" };
@@ -185,7 +185,9 @@ export function mixFor(model) {
 // ---------------------------------------------------------------- the deck
 // Returns { deck: [card], info: Map(id -> { tier, fam, pref }), mix, model }.
 export function buildDeck({ cards, states = [], journal = [], quiz = null, refs = new Map(), crowd = null }, { rnd = Math.random, size = Infinity } = {}) {
-  const swiped = new Set(states.map((s) => s.wine_vintage_id));
+  // A wine answered before is not shown again, except one skipped only once: it comes back later in the deck (placed below). A second skip takes it out for good.
+  const swiped = new Set(states.filter((s) => !skipComesBack(s)).map((s) => s.wine_vintage_id));
+  const later = new Set(states.filter(skipComesBack).map((s) => s.wine_vintage_id));
   const model = userModel({ cards, states, journal, quiz, refs });
   const info = new Map();
   const queues = { high: [], medium: [], low: [] };
@@ -199,11 +201,13 @@ export function buildDeck({ cards, states = [], journal = [], quiz = null, refs 
   // Wines that look like ones the player did not know go lower in their deck (DECK_CONFIG.demote) and a few of them are held back to be spread thinly through it
   // (see `teach` below): less fun to swipe, but never gone, because meeting them is how a player learns.
   const teach = [];
+  const back = [];   // wines skipped once, waiting to be placed later in the deck
   entries.forEach((e) => {
     const skip = skipOf(e.c, model);
     info.set(e.c.id, { tier: e.tier, fam: e.fam, pref: e.pref, skip });
     const item = { c: e.c, score: e.pref + 0.35 * rnd() - DECK_CONFIG.demote * skip };
-    if (skip >= DECK_CONFIG.teachFrom) teach.push(item); else queues[e.tier].push(item);
+    if (later.has(e.c.id)) back.push(e.c);
+    else if (skip >= DECK_CONFIG.teachFrom) teach.push(item); else queues[e.tier].push(item);
   });
   TIERS.forEach((t) => queues[t].sort((a, b) => b.score - a.score));
   teach.sort((a, b) => b.score - a.score);   // the ones they are likeliest to enjoy anyway come first
@@ -238,6 +242,13 @@ export function buildDeck({ cards, states = [], journal = [], quiz = null, refs 
       if (at >= deck.length) deck.push(c); else deck.splice(at, 0, c);
       at += spacing;
     }
+  }
+  // Skipped once: back in the deck, spread through its second half (never the next card, unless nothing else is left).
+  if (back.length) {
+    const from = Math.min(deck.length, Math.max(6, Math.ceil(deck.length * 0.5)));
+    const gap = Math.max(1, Math.floor((deck.length - from) / (back.length + 1)));
+    let at = from + gap;
+    for (const c of back) { if (at >= deck.length) deck.push(c); else deck.splice(at, 0, c); at += gap + 1; }
   }
   return { deck: Number.isFinite(size) ? deck.slice(0, size) : deck, info, mix, model };
 }

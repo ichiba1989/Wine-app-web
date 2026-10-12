@@ -1,5 +1,5 @@
 import { fold, splitGrapeText, checkGrapeText, grapeProblem } from "./grapes.js?v=1";
-import { reactionOf } from "./reactions.js?v=1";
+import { reactionOf, skipsOf } from "./reactions.js?v=2";
 // Pure logic for the wine app web page. No browser and no network in this file,
 // so every rule here can be tested on its own.
 
@@ -291,6 +291,7 @@ export function swipeLists(cards, states, journal) {
   const is = (k) => (s) => reactionOf(s) === k && notInJournal(s);
   return {
     order, entryOf,
+    skipsOf: Object.fromEntries(states.filter((s) => reactionOf(s) === "dont_know").map((s) => [s.wine_vintage_id, skipsOf(s)])),
     interestOf: Object.fromEntries(states.map((s) => [s.wine_vintage_id, s.interest])),
     liked: cardsWhere(is("like")),
     disliked: cardsWhere(is("dislike")),

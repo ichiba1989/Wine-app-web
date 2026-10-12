@@ -103,3 +103,9 @@ Keep this list current. Tick each item (and date it) only after trying it on a t
 - [ ] Swipes tab: Like and dislike (Liked, Disliked), Don't know and All; Group by each choice; open a group; search, Type and Sort work; "How well it fits you" puts wines in three bands; Dislike instead, Like instead, Put back, Review and Delete still work; rated and had-it wines open their journal entry.
 - [ ] Look at tag suggestions for 20 real questions and note where they miss (the rule only matches words on the screen).
 
+## 13. Thumbs, Skip and the Swipes row (added 2026-10-12)
+- [ ] **Run `docs/skip_count.sql` in Supabase** (after `reactions.sql`; copy it from the repo file). Check `select wine_vintage_id, reaction, skip_count from v_user_wine_state where reaction = 'dont_know' limit 5;`.
+- [ ] Discover: the buttons are thumbs down, Skip, thumbs up (icons, readable by a screen reader); swiping shows the thumb icons on the card; the practice walkthrough says Skip.
+- [ ] Skip a wine once: it is not the next card, but it comes back later in the deck (within the second half). Skip it again: it never comes back. Restart the app between the two skips and check it still behaves (needs the script above).
+- [ ] Swipes tab: one row of thumbs up, thumbs down, skip, All with counts, plus "..."; search, group, sort and type only show after tapping "..."; a dot on it shows a filter is still on; the Skip tab says "Skipped once" or "Skipped twice"; "Put back" on a twice-skipped wine brings it back to the deck.
+

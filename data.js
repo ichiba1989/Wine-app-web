@@ -1,5 +1,5 @@
 // Everything that talks to Supabase. Each function takes the client and throws on an error.
-import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=11";
+import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=12";
 import { BUCKET, newPhotoPath } from "./photos.js?v=5";
 
 const must = ({ data, error }) => { if (error) throw error; return data; };
@@ -47,9 +47,12 @@ export async function loadCards(sb) {
   return must(await sb.from("v_catalog_cards").select("*")).map((r) => { const c = cardFromRow(r); c.photo = photoUrl(sb, c.image); c.imageKind = r.image_kind || null; c.imageNote = r.image_note || null; return { ...c, raw: r }; });   // raw: the full catalog row, used by the structure editor
 }   // raw: the full catalog row, used by the structure rules
 export async function loadStates(sb) {
-  const r = await sb.from("v_user_wine_state").select("wine_vintage_id, familiarity, interest, reaction, last_swiped_at");
+  const r = await sb.from("v_user_wine_state").select("wine_vintage_id, familiarity, interest, reaction, skip_count, last_swiped_at");
   if (!r.error) return r.data;
-  if (!/reaction|column/i.test(String(r.error.message || ""))) throw r.error;
+  if (!/reaction|skip_count|column/i.test(String(r.error.message || ""))) throw r.error;
+  const r2 = await sb.from("v_user_wine_state").select("wine_vintage_id, familiarity, interest, reaction, last_swiped_at");   // before docs/skip_count.sql is run: the app counts skips itself
+  if (!r2.error) return r2.data;
+  if (!/reaction|column/i.test(String(r2.error.message || ""))) throw r2.error;
   return must(await sb.from("v_user_wine_state").select("wine_vintage_id, familiarity, interest, last_swiped_at"));   // before docs/reactions.sql is run
 }
 // The numbers behind likes, dislikes and "I don't know it" (reactions.js setSwipeConfig). Anything missing keeps its default.

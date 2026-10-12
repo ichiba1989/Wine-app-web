@@ -2,10 +2,10 @@
 import {
   FAMILIARITY, FLAGS, VERDICTS, isChoice, GROUPS, GROUP_PAGE, SORTS, YEARS,
   esc, wineName, entryCard, entryName, verdictShort, groupEntries, filterEntries, sortCards,
-  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims } from "./logic.js?v=11";
+  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims } from "./logic.js?v=12";
 import { splitGrapeParts, splitPlace } from "./blends.js?v=1";
-import { REACTIONS } from "./reactions.js?v=1";
-import { SW_TABS, SW_SUBS, SW_KINDS, SW_GROUPS, SW_SORTS, entriesFor, tabCounts, stylesIn, filterEntries as filterSwipes, groupEntries as groupSwipes, fitBand } from "./swipetabs.js?v=2";
+import { REACTIONS, iconHtml, SKIP_LIMIT } from "./reactions.js?v=2";
+import { SW_TABS, SW_KINDS, SW_GROUPS, SW_SORTS, entriesFor, tabCounts, filtersOn, stylesIn, filterEntries as filterSwipes, groupEntries as groupSwipes, fitBand } from "./swipetabs.js?v=4";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
 import { flavorsForCard, placeFor } from "./flavors.js?v=1";
 import { bottleSilhouette, flavorRowHtml, tintFor } from "./visuals.js?v=2";
@@ -67,7 +67,7 @@ export function visualFor(c, stats = null) {
 // The zoom icon on the map: a small magnifier with a plus in the map's corner, so it is clear the map can be tapped to see where the wine is from.
 export const mapZoomIconHtml = (hint = false) => `<span class="badge${hint ? " hint" : ""}" aria-hidden="true"><svg viewBox="0 0 32 32" width="20" height="20"><circle cx="13" cy="13" r="8.5" fill="none" stroke="currentColor" stroke-width="3"/><path d="M19.5 19.5 L27 27" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"/><path d="M13 9 V17 M9 13 H17" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg></span>`;
 export function cardHtml(c, { mapHint = false } = {}) {
-  const labels = ["like", "dislike", "had", "dont_know"].map((k) => `<div class="swipe-label" data-label="${k}" style="background:${REACTIONS[k].color}">${esc(REACTIONS[k].label)}</div>`).join("");
+  const labels = ["like", "dislike", "had", "dont_know"].map((k) => `<div class="swipe-label" data-label="${k}" role="img" aria-label="${esc(REACTIONS[k].label)}" style="background:${REACTIONS[k].color}">${k === "like" || k === "dislike" ? iconHtml(k, 34) : esc(REACTIONS[k].label)}</div>`).join("");
   const v = visualFor(c), href = imageSearchUrl(c), t = tintFor(v.type);
   const map = v.map ? `<${v.zoomable ? "button" : "div"} class="mapbtn${v.zoomable ? "" : " still"}"${v.zoomable ? ` data-zoom="${esc(c.id)}" aria-label="Show where this wine is from"` : ""}>${v.map}${v.zoomable ? mapZoomIconHtml(mapHint) : ""}</${v.zoomable ? "button" : "div"}>` : "";
   const place = c.appellation || c.region || c.country || "";
@@ -84,11 +84,13 @@ export function cardHtml(c, { mapHint = false } = {}) {
       <div class="facts">${facts.map((f) => `<span class="${f.derived ? "derived" : ""}">${esc(f.text)}</span>`).join("")}</div>
     </div></div>`;
 }
-// The answers as buttons: Dislike (swipe left), I don't know it (buttons only) and Like (swipe right), in the order they sit on the screen. "I've had this bottle"
+// The answers as buttons: thumbs down (swipe left), Skip (buttons only) and thumbs up (swipe right), in the order they sit on the screen. "I've had this bottle"
 // (swipe up) is the small button under them. The row can be switched off in Settings when swiping is on.
-export const ANSWER_BUTTONS = [{ kind: "dislike", label: "Dislike" }, { kind: "dont_know", label: "I don't know it" }, { kind: "like", label: "Like" }];
+export const ANSWER_BUTTONS = [{ kind: "dislike" }, { kind: "dont_know" }, { kind: "like" }];
+// The face of an answer button: a thumb for like and dislike, the word Skip with its arrow for skip. The name is always there for screen readers.
+export const answerFace = (kind) => (kind === "dont_know" ? `${esc(REACTIONS[kind].label)} ${iconHtml(kind, 18)}` : iconHtml(kind, 26));
 export const answerButtonsHtml = () => `<div class="answers" role="group" aria-label="Your answer">${ANSWER_BUTTONS.map((a) =>
-  `<button class="ans" data-action="answer:${a.kind}" style="--c:${REACTIONS[a.kind].color}">${esc(a.label)}</button>`).join("")}</div>`;
+  `<button class="ans" data-action="answer:${a.kind}" aria-label="${esc(REACTIONS[a.kind].label)}" style="--c:${REACTIONS[a.kind].color}">${answerFace(a.kind)}</button>`).join("")}</div>`;
 export function discoverHtml({ deck, interest, banner, counts, feedback = false, flaggedId = null, nudge = false, buttons = true, mapHint = false }) {
   const bannerHtml = banner ? `<div class="banner" data-action="dismiss">${esc(banner)} (tap to dismiss)</div>` : "";
   if (!deck.length) {
@@ -116,14 +118,23 @@ function item(card, actions, extra = "", thumb = "") {
 const pill = (action, label, dark) => `<button class="pill${dark ? " dark" : ""}" data-action="${action}">${esc(label)}</button>`;
 const opt = (v, label, cur) => `<option value="${esc(v)}"${v === cur ? " selected" : ""}>${esc(label)}</option>`;
 
-// One wine with the buttons that fit how it was answered. Liked and disliked can be switched to the other; "Put back" returns the wine to the deck.
+// An answer as a small icon button (thumb up, thumb down), named for screen readers.
+const iconPill = (action, kind, label) => `<button class="pill icon" data-action="${action}" aria-label="${esc(label)}" title="${esc(label)}">${iconHtml(kind, 18)}</button>`;
+const SWITCH_UP = (c) => iconPill(`react:${c.id}:like`, "like", "Change to thumbs up");
+const SWITCH_DOWN = (c) => iconPill(`react:${c.id}:dislike`, "dislike", "Change to thumbs down");
+
+// One wine with the buttons that fit how it was answered. A thumb can be switched to the other; "Put back" returns the wine to the deck (a fresh start).
 function swipeItem(e, lists, photoUrls, match) {
   const c = e.card, review = pill(`review:${c.id}`, "Review the wine", true);
   const fit = match && match.has(c.id) ? `<br>${esc((fitBand(match.get(c.id)) || {}).label || "")}` : "";
-  if (e.kind === "liked") return item(c, review + pill(`react:${c.id}:dislike`, "Dislike instead") + pill(`unswipe:${c.id}`, "Put back"), fit, bottleThumbHtml(c));
-  if (e.kind === "disliked") return item(c, review + pill(`react:${c.id}:like`, "Like instead") + pill(`unswipe:${c.id}`, "Put back"), fit, bottleThumbHtml(c));
-  if (e.kind === "dontKnow") return item(c, review + pill(`react:${c.id}:like`, "Like") + pill(`react:${c.id}:dislike`, "Dislike") + pill(`unswipe:${c.id}`, "Put back"), fit, bottleThumbHtml(c));
-  if (e.kind === "rec") return item(c, review + pill(`react:${c.id}:like`, "Like") + pill(`react:${c.id}:dislike`, "Dislike"), fit, bottleThumbHtml(c));
+  if (e.kind === "liked") return item(c, review + SWITCH_DOWN(c) + pill(`unswipe:${c.id}`, "Put back"), fit, bottleThumbHtml(c));
+  if (e.kind === "disliked") return item(c, review + SWITCH_UP(c) + pill(`unswipe:${c.id}`, "Put back"), fit, bottleThumbHtml(c));
+  if (e.kind === "dontKnow") {
+    const n = (lists.skipsOf && lists.skipsOf[c.id]) || 1;
+    const note = `<br>${n >= SKIP_LIMIT ? "Skipped twice: not shown in Discover again" : "Skipped once: it comes back later in Discover"}`;
+    return item(c, review + SWITCH_UP(c) + SWITCH_DOWN(c) + pill(`unswipe:${c.id}`, "Put back"), note + fit, bottleThumbHtml(c));
+  }
+  if (e.kind === "rec") return item(c, review + SWITCH_UP(c) + SWITCH_DOWN(c), fit, bottleThumbHtml(c));
   const entry = e.kind === "tried" ? c.entry : lists.entryOf.get(c.id);
   const note = e.kind === "tried" && entry ? `<br>${esc(verdictShort(entry.verdict) || "")}, ${esc(entry.consumed_on || "")}` : "";
   const act = entry ? pill(`entry:${entry.id}`, entry.verdict ? "View review" : "Rate this bottle", true) : review;
@@ -134,28 +145,30 @@ function swipeItem(e, lists, photoUrls, match) {
 export function swipesListHtml(lists, sw, photoUrls, match = new Map()) {
   const all = entriesFor(lists, sw);
   const shown = filterSwipes(all, sw);
-  if (!all.length) return `<p class="muted small">${sw.tab === "dk" ? "Wines you say you don't know show up here." : sw.tab === "all" ? "Swipe some wines in Discover and they will show up here." : sw.sub === "disliked" ? "No disliked wines yet." : "No liked wines yet."}</p>`;
+  if (!all.length) return `<p class="muted small">${{ skip: "Wines you skip show up here.", all: "Swipe some wines in Discover and they will show up here.", dislike: "No thumbs down yet.", like: "No thumbs up yet." }[sw.tab] || ""}</p>`;
   if (!shown.length) return `<p class="muted small">No wines match.</p>`;
   const groups = groupSwipes(shown, sw.group, { sort: sw.sort, order: lists.order, match });
   if (groups.length === 1 && !groups[0].label) return groups[0].entries.map((e) => swipeItem(e, lists, photoUrls, match)).join("");
   return groups.map((g) => {
-    const key = [sw.tab, sw.sub, sw.status, sw.group, g.id].join("|");
+    const key = [sw.tab, sw.status, sw.group, g.id].join("|");
     const open = sw.open[key] !== undefined ? sw.open[key] : groups.length === 1;
     return `<div class="sect"><button class="sect-head" data-action="swg:${encodeURIComponent(key)}" aria-expanded="${open}"><span>${esc(g.label)} (${g.entries.length})</span><span class="chev">${open ? "▲" : "▼"}</span></button>${open ? `<div class="sect-body">${g.entries.map((e) => swipeItem(e, lists, photoUrls, match)).join("")}</div>` : ""}</div>`;
   }).join("");
 }
 
+// One row: thumbs up, thumbs down, skip, all (each with its count), then a "…" button that opens the search, group, sort and type controls (shut by default so the first look is clean).
 export function swipesHtml(lists, sw, photoUrls, match = new Map()) {
-  const n = tabCounts(lists), all = entriesFor(lists, sw);
-  const tabs = `<div class="swtabs" role="tablist" aria-label="Swipe lists">${SW_TABS.map((t) => `<button class="swtab${sw.tab === t.id ? " on" : ""}" role="tab" aria-selected="${sw.tab === t.id}" data-action="swtab:${t.id}">${esc(t.label)} (${n[t.id]})</button>`).join("")}</div>`;
-  const subs = sw.tab === "ld" ? `<div class="chips left">${SW_SUBS.map((s) => `<button class="chip wide${sw.sub === s.id ? " on" : ""}" data-action="swsub:${s.id}">${esc(s.label)} (${n[s.id]})</button>`).join("")}</div>` : "";
+  const n = tabCounts(lists);
+  const tabs = SW_TABS.map((t) => `<button class="swtab${sw.tab === t.id ? " on" : ""}" role="tab" aria-selected="${sw.tab === t.id}" aria-label="${esc(t.label)}, ${n[t.id]}" data-action="swtab:${t.id}">${iconHtml(t.icon, 22)}<span class="swn">${n[t.id]}</span></button>`).join("");
+  const row = `<div class="swrow1"><div class="swtabs" role="tablist" aria-label="Swipe lists">${tabs}</div>
+    <button class="swmore${sw.more ? " on" : ""}" data-action="swmore" aria-expanded="${!!sw.more}" aria-label="Search, group and sort">${iconHtml("more", 22)}${!sw.more && filtersOn(sw) ? '<span class="swdot" aria-hidden="true"></span>' : ""}</button></div>`;
   const status = sw.tab === "all" ? `<select class="sortsel" data-swsel="status" aria-label="Show">${opt("all", "Show: everything", sw.status)}${SW_KINDS.map((k) => opt(k.id, k.label, sw.status)).join("")}</select>` : "";
   const styles = stylesIn(entriesFor(lists, { ...sw, status: "all" }));
-  const controls = `<input class="field" data-swq placeholder="Search these wines" value="${esc(sw.q)}" autocomplete="off" aria-label="Search these wines">
+  const controls = !sw.more ? "" : `<div class="swpanel"><input class="field" data-swq placeholder="Search these wines" value="${esc(sw.q)}" autocomplete="off" aria-label="Search these wines">
     <div class="swrow">${status}<select class="sortsel" data-swsel="group" aria-label="Group by">${SW_GROUPS.map((g) => opt(g.id, "Group by: " + g.label, sw.group)).join("")}</select>
-    <select class="sortsel" data-swsel="sort" aria-label="Sort by">${SW_SORTS.map((s) => opt(s.id, "Sort by: " + s.label, sw.sort)).join("")}</select>
-    ${styles.length > 1 ? `<select class="sortsel" data-swsel="style" aria-label="Type of wine">${opt("all", "Type: all", sw.style)}${styles.map((t) => opt(t, "Type: " + t, sw.style)).join("")}</select>` : ""}</div>`;
-  return `${tabs}${subs}${controls}<div id="swList" class="stack">${swipesListHtml(lists, sw, photoUrls, match)}</div>`;
+    <select class="sortsel" data-swsel="sort" aria-label="Sort by">${SW_SORTS.map((x) => opt(x.id, "Sort by: " + x.label, sw.sort)).join("")}</select>
+    ${styles.length > 1 ? `<select class="sortsel" data-swsel="style" aria-label="Type of wine">${opt("all", "Type: all", sw.style)}${styles.map((t) => opt(t, "Type: " + t, sw.style)).join("")}</select>` : ""}</div></div>`;
+  return `${row}${controls}<div id="swList" class="stack">${swipesListHtml(lists, sw, photoUrls, match)}</div>`;
 }
 
 // ---------------------------------------------------------------- Journal

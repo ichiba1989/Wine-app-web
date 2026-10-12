@@ -5,43 +5,43 @@ import {
   wineName, esc, clamp01, filterEntries, groupEntries, swipeLists,
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
-  dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=11";
-import * as db from "./data.js?v=24";
-import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=4";
-import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=2";
+  dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=12";
+import * as db from "./data.js?v=25";
+import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=5";
+import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=3";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=30";
-import { createLearn } from "./learn.js?v=4";
-import { SW_START, defaultSortFor } from "./swipetabs.js?v=2";
+  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=31";
+import { createLearn } from "./learn.js?v=5";
+import { SW_START, defaultSortFor } from "./swipetabs.js?v=4";
 import { gapWeights } from "./tags.js?v=1";
 import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=1";
 import { loadPrices, applyPrices, tidyFacts, parsePrice, saveWinePrice } from "./pricing.js?v=1";
-import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=6";
-import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=3";
+import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=7";
+import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=4";
 import { applyVisualTables } from "./visualdata.js?v=1";
-import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=1";
-import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=6";
+import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=2";
+import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=7";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
-import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting } from "./tasting.js?v=2";
-import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=5";
-import { createProfile } from "./profile.js?v=18";
-import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=8";
-import { createFeedback } from "./feedback.js?v=3";
-import { createEditor } from "./editor.js?v=24";
-import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=3";
-import { gamesHtml } from "./games.js?v=10";
-import { setSwipeConfig, reactionOf, LEGACY_OF } from "./reactions.js?v=1";
+import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting } from "./tasting.js?v=3";
+import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=6";
+import { createProfile } from "./profile.js?v=19";
+import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=9";
+import { createFeedback } from "./feedback.js?v=4";
+import { createEditor } from "./editor.js?v=25";
+import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=4";
+import { gamesHtml } from "./games.js?v=11";
+import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=2";
 import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=4";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=2";
-import { recommendMix, recommend } from "./recommend.js?v=3";
+import { recommendMix, recommend } from "./recommend.js?v=4";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=2"));
-const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=3"));
-const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=5"));
-import { createWineInfo } from "./wineinfo.js?v=14";
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=3"));
+const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=4"));
+const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=6"));
+import { createWineInfo } from "./wineinfo.js?v=15";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -636,7 +636,9 @@ async function fly(el, kind, v = { dx: 0, dy: 0, vx: 0, vy: 0 }) {
   } catch (_) { /* the exit animation is only for show: the card is still saved and removed */ }
   // The answer, with a small note of what the deck knew about the wine when it was shown (kept for studying the deck later).
   const [familiarity, interest] = LEGACY_OF[kind];
-  await finishCard(card, () => db.recordReaction(state.sb, card.id, kind, contextFor(card)), { reaction: kind, familiarity, interest }, "Could not save that swipe: ", async () => { state.counts = await loadCounts(); });
+  const before = state.states.find((x) => x.wine_vintage_id === card.id);   // a skipped wine can come round again: the second skip takes it out of the deck
+  const skip_count = kind === "dont_know" ? skipsOf(before) + 1 : (before && before.skip_count) || 0;
+  await finishCard(card, () => db.recordReaction(state.sb, card.id, kind, contextFor(card)), { reaction: kind, familiarity, interest, skip_count }, "Could not save that swipe: ", async () => { state.counts = await loadCounts(); });
 }
 const contextFor = (card) => { const i = state.deckInfo && state.deckInfo.get(card.id); const r2 = (n) => Math.round(n * 100) / 100; return i ? { tier: i.tier, fam: r2(i.fam), pref: r2(i.pref), skip: r2(i.skip || 0) } : null; };
 
@@ -1369,8 +1371,8 @@ document.addEventListener("click", async (ev) => {
       render();
     }
     else if (action === "toggle") { state.sw.open[a] = !state.sw.open[a]; renderBody(); }
-    else if (action === "swtab") { state.sw = { ...state.sw, tab: a, status: "all", style: "all", q: "", group: state.sw.group }; renderBody(); }   // swtab:ld|dk|all
-    else if (action === "swsub") { state.sw = { ...state.sw, sub: a, style: "all" }; renderBody(); }
+    else if (action === "swtab") { state.sw = { ...state.sw, tab: a, status: "all", style: "all", q: "" }; renderBody(); }   // swtab:like|dislike|skip|all
+    else if (action === "swmore") { state.sw.more = !state.sw.more; renderBody(); }
     else if (action === "swg") { const key = decodeURIComponent(a), cur = state.sw.open[key]; state.sw.open[key] = cur === undefined ? false : !cur; renderBody(); }
     else if (action === "delswipe") askDeleteSwipe(a);
     else if (action === "setint") {
