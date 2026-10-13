@@ -17,7 +17,7 @@ import { setMode } from "./words.js?v=1";
 import { journalCsv, exportName } from "./exportcsv.js?v=1";
 import { newBlind, cleanPending, hasGuess, scoreGuess, summarize, resultLine, notesAfterReveal, actualOfCard, actualOfForm } from "./blind.js?v=1";
 import { composeNote, stampOf, noteProblem } from "./notes.js?v=1";
-import { createDictation, dictationSupported } from "./dictation.js?v=1";
+import { createDictation, dictationSupported } from "./dictation.js?v=2";
 import { SW_START, defaultSortFor } from "./swipetabs.js?v=4";
 import { gapWeights } from "./tags.js?v=2";
 import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
@@ -840,6 +840,7 @@ function dictateInto(target) {
   dictationTarget = target;
   dictation = createDictation({
     onText: show,
+    onNote: (m) => { const el = target === "blind" ? $("#blInterim") : target === "qn" ? $("#qnInterim") : $("#micStatus"); if (el) el.textContent = m; },
     onState: (on) => { if (target === "blind" && state.blind) { state.blind.listening = on; const b = document.querySelector('[data-action="blind:mic"]'); if (b) { b.setAttribute("aria-pressed", String(on)); b.lastChild.textContent = on ? " Stop listening" : " Speak"; } } else if (target === "qn" && state.qn) { state.qn.listening = on; const b = document.querySelector('[data-action="qn:mic"]'); if (b) { b.setAttribute("aria-pressed", String(on)); b.lastChild.textContent = on ? " Stop listening" : " Speak"; } } else setMic(on); if (!on) { dictation = null; dictationTarget = null; } },
     onError: (m) => { if (target === "blind") { const e = $("#blErr"); if (e) e.textContent = m; } else if (target === "qn") { const e = $("#qnErr"); if (e) e.textContent = m; if (state.qn) state.qn.error = m; } else setMic(false, m); },
   });

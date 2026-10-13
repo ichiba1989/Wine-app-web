@@ -123,4 +123,5 @@ Keep this list current. Tick each item (and date it) only after trying it on a t
 - [ ] Export my notes: the CSV opens in a spreadsheet app with the right columns, notes with commas or line breaks stay in one cell, and an incomplete wine is marked "yes".
 - [ ] Owner decision: should these tools also need the `pro` tier, or stay open to anyone who picks Enthusiast or Professional? And the exact words for each mode (`words.js`) need the owner's eye.
 - [ ] Learn, in Enthusiast or Professional mode, with `quiz_tags.sql` run and a few questions tagged: a "Focus" pick lists topics with at least 3 questions; choosing one limits the round to those questions (also in Timed). It is not shown in Beginner mode or in Review.
+- [ ] Microphone permission on a real phone: the first tap on Speak shows the browser's "Allow microphone?" question, then listening starts; after Allow, Speak works at once. After "Block", the app explains how to turn the microphone back on for the site, and after you do, Speak works. Try Chrome on Android, Safari on iPhone, and the installed home-screen app; in-app browsers (inside social apps) may not allow it at all, and typing still works.
 
