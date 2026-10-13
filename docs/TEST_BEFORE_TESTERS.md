@@ -127,3 +127,9 @@ Keep this list current. Tick each item (and date it) only after trying it on a t
 - [ ] Microphone, second pass: after allowing, an iPhone may say "The microphone is allowed now. Tap Speak once more" once, then listening works. If it says speech recognition is not allowed, switch on Dictation (Settings, General, Keyboard) and Speech Recognition (Privacy & Security), then try again. The Speak button must always go back to "Speak" after an error and be tappable, and tapping while listening must stop it.
 - [ ] If Speak says the browser will not turn speech into text: the notes box opens with the keyboard, and the keyboard's microphone key dictates into it (this is the way that works on every phone). Note which phones and browsers need this, to decide whether a transcription service is worth adding (owner decision: provider, cost, privacy line).
 
+## 16. Wine words in dictation (added 2026-10-14)
+- [ ] On a real phone, dictate 10 sentences of English with Italian and French wine words (e.g. "Barolo from Cannubi, a bit of Gevrey-Chambertin on the nose, lovely cuv\u00e9e") in Chrome Android and Safari iPhone, with and without the word check. Note how many words were right before and after, and which ones still fail: add those to `winewords.js`.
+- [ ] Check the chips under the notes box: a fixed word can be put back by tapping it, and "Did you mean" suggestions only change the note when tapped. Ordinary English (light, fresh, cherry, reserve) is never changed.
+- [ ] "Speak in": a whole note in Italian or French is heard in that language; the pick is remembered on the phone.
+- [ ] Owner: read `winewords.js` and add the words you use most (producers, places, your own tasting words).
+

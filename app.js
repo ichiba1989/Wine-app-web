@@ -11,16 +11,18 @@ import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=7";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=5";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=33";
+  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=34";
 import { createLearn } from "./learn.js?v=8";
 import { setMode } from "./words.js?v=1";
 import { journalCsv, exportName } from "./exportcsv.js?v=1";
 import { newBlind, cleanPending, hasGuess, scoreGuess, summarize, resultLine, notesAfterReveal, actualOfCard, actualOfForm } from "./blind.js?v=1";
 import { composeNote, stampOf, noteProblem } from "./notes.js?v=1";
-import { createDictation, dictationSupported } from "./dictation.js?v=4";
+import { createDictation, dictationSupported } from "./dictation.js?v=5";
 import { SW_START, defaultSortFor } from "./swipetabs.js?v=4";
 import { gapWeights } from "./tags.js?v=2";
-import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
+import { wireGrapeInputs, checkGrapeInput, setExtraGrapes, GRAPES } from "./grapes.js?v=1";
+import { buildVocab, fixTerms } from "./termfix.js?v=1";
+import { WINE_TERMS, setSpeechLang, speechCodeOf } from "./winewords.js?v=1";
 import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=1";
 import { loadPrices, applyPrices, tidyFacts, parsePrice, saveWinePrice } from "./pricing.js?v=1";
 import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=9";
@@ -31,11 +33,11 @@ import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent }
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
 import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting } from "./tasting.js?v=5";
 import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=7";
-import { createProfile } from "./profile.js?v=21";
+import { createProfile } from "./profile.js?v=22";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=11";
 import { createFeedback } from "./feedback.js?v=6";
-import { createEditor } from "./editor.js?v=27";
-import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=6";
+import { createEditor } from "./editor.js?v=28";
+import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=7";
 import { gamesHtml } from "./games.js?v=13";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
 import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=4";
@@ -45,7 +47,7 @@ import { recommendMix, recommend } from "./recommend.js?v=6";
 let OWN = null, DEMO = null, IMP = null;
 const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=5"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=6"));
-const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=8"));
+const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=9"));
 import { createWineInfo } from "./wineinfo.js?v=17";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
@@ -104,6 +106,7 @@ const state = {
   sheet: null, sheetUi: { saving: false, error: "" },
   form: null,
   blind: null,                                     // the blind tasting sheet (blind.js)
+  wf: null,                                        // wine words fixed in the last dictation (termfix.js), for the undo chips
   qn: null,                                        // the quick-note sheet (voice or typed notes in the journal)
   photoUrls: new Map(),                 // signed links for the photos shown in Journal and Swipes
   quiz: null,                           // quiz results by topic, used to judge what the person knows
@@ -527,6 +530,7 @@ function applySettings() {
   document.documentElement.style.setProperty("--ts", String(textScale(state.settings)));
   document.documentElement.classList.toggle("reduce-motion", state.settings.motion === "reduce");
   setMode(state.settings.mode);   // the words (words.js) follow "Who is this for"
+  setSpeechLang(state.settings.lang);   // the "Speak in" pick (winewords.js)
 }
 // ---------------------------------------------------------------- "How the card works" (demo.js): once for a brand-new player, any time from Settings
 // Brand new = never seen it, no swipes and no journal entries yet (so a returning player on a new phone is not interrupted). Nothing is saved but the "seen" flag.
@@ -821,16 +825,61 @@ function closeOverlay() { stopDictation(); state.sheet = null; state.form = null
 // ------- speaking notes (dictation.js). One microphone at a time: into the rating sheet's notes box, or into a quick note.
 let dictation = null, dictationTarget = null;
 const stopDictation = () => { if (dictation) { dictation.stop(); } dictation = null; dictationTarget = null; };
+// ------- wine words in dictated notes (termfix.js): spellings corrected from the grape list, the catalog's own names and the wine words in winewords.js
+let vocabCache = null;
+function wineVocab() {
+  const n = state.cards.length;
+  if (vocabCache && vocabCache.n === n) return vocabCache.v;
+  const pick = (f) => state.cards.map(f).filter(Boolean);
+  const v = buildVocab(GRAPES, WINE_TERMS, pick((c) => c.producer), pick((c) => c.cuvee), pick((c) => c.appellation), pick((c) => c.region), pick((c) => c.country));
+  vocabCache = { n, v }; return v;
+}
+// Words the browser may favour while listening (where it supports that): the wine on screen first, then the player's journal, then the common wine words.
+function biasPhrases(target) {
+  const out = [], seen = new Set();
+  const add = (t, boost) => { const k = String(t || "").trim(); if (k && k.length > 2 && !seen.has(k.toLowerCase()) && out.length < 200) { seen.add(k.toLowerCase()); out.push({ phrase: k, boost }); } };
+  const fromCard = (c) => { if (!c) return; [c.producer, c.cuvee, c.appellation, c.region, c.country, ...(c.grapes || []), ...(c.ruleGrapes || [])].forEach((t) => add(t, 9)); };
+  const fromEntry = (e) => { if (!e) return; [e.producer, e.wine_name, e.region, e.country, e.grape].forEach((t) => add(t, 9)); };
+  if (target === "sheet" && state.sheet) { const t = state.sheet.target || {}; if (t.wineVintageId) fromCard(cardById(t.wineVintageId)); if (t.form) { const f = t.form; [f.producer, f.wine_name, f.grape, f.region].forEach((x) => add(x, 9)); } }
+  if (target === "qn" && state.qn) add(state.qn.wine, 9);
+  if (target === "blind" && state.blind) { const g = state.blind.guess || {}; [g.grape, g.country, g.region].forEach((x) => add(x, 8)); }
+  state.journal.slice(0, 25).forEach(fromEntry);
+  WINE_TERMS.slice(0, 110).forEach((t) => add(t, 5));
+  GRAPES.slice(0, 40).forEach((t) => add(t, 3));
+  return out;
+}
+const boxFor = (target) => document.querySelector(target === "blind" ? '[data-bl="notes"]' : target === "qn" ? '[data-qn="text"]' : '[data-field="notes"]');
+const syncBox = (target, text) => { if (target === "sheet" && state.sheet) state.sheet.notes = text; else if (target === "qn" && state.qn) state.qn.text = text; else if (target === "blind" && state.blind) state.blind.notes = text; };
+// The line under the notes box: "Wine words fixed: Nebbiolo (tap to undo). Did you mean Barolo? (tap to use)". Tapping swaps the words in the box and keeps the note in step.
+function drawWordFix() {
+  const el = document.querySelector("[data-wordfix]"), wf = state.wf;
+  if (!el) return;
+  const items = (wf ? wf.changes : []).map((c) => c.applied
+    ? `<button class="chip wfix on" data-action="wfix:${c.id}" aria-label="Undo: ${esc(c.out)} back to ${esc(c.raw)}">${esc(c.out)} &#10003;</button>`
+    : `<button class="chip wfix" data-action="wfix:${c.id}" aria-label="Use ${esc(c.out)} instead of ${esc(c.raw)}">${c.kind === "maybe" ? "Did you mean " : "Heard "}${esc(c.out)}?</button>`).join("");
+  el.innerHTML = items ? `<div class="muted small">Wine words checked. Tap one to switch it.</div><div class="chips left">${items}</div>` : "";
+}
+function toggleFix(id) {
+  const wf = state.wf; if (!wf) return;
+  const c = wf.changes.find((x) => x.id === id), box = boxFor(wf.target); if (!c || !box) return;
+  const from = c.applied ? c.out : c.raw, to = c.applied ? c.raw : c.out, i = box.value.indexOf(from);
+  if (i < 0) return;   // the player has already edited those words by hand
+  box.value = box.value.slice(0, i) + to + box.value.slice(i + from.length);
+  syncBox(wf.target, box.value); c.applied = !c.applied; drawWordFix();
+}
 function dictateInto(target) {
   if (dictation && dictationTarget === target) { stopDictation(); showMic(target, false); return; }   // a second tap stops, and clears an old error
   stopDictation();
   const stamp = stampOf(new Date());
   const base = target === "sheet" ? (state.sheet ? state.sheet.notes || "" : "") : target === "blind" ? (state.blind ? state.blind.notes || "" : "") : (state.qn ? state.qn.text || "" : "");
   const show = (finals, interim) => {
-    const text = composeNote(base, finals + (interim ? (finals ? " " : "") + interim : ""), stamp);
+    const fx = fixTerms(finals, wineVocab());   // only the finished words are checked, so nothing flickers while the player is still talking
+    state.wf = { target, changes: fx.changes.map((c) => ({ ...c, applied: c.kind === "fix" })) };
+    const text = composeNote(base, fx.text + (interim ? (fx.text ? " " : "") + interim : ""), stamp);
     if (target === "sheet" && state.sheet) { state.sheet.notes = text; const el = document.querySelector('[data-field="notes"]'); if (el) el.value = text; }
     if (target === "qn" && state.qn) { state.qn.text = text; const el = document.querySelector('[data-qn="text"]'); if (el) el.value = text; }
     if (target === "blind" && state.blind) { state.blind.notes = text; const el = document.querySelector('[data-bl="notes"]'); if (el) el.value = text; }
+    drawWordFix();
   };
   const say = (m) => {   // the line under the notes box for this target
     const el = target === "blind" ? $("#blErr") : target === "qn" ? $("#qnErr") : $("#micStatus");
@@ -840,7 +889,8 @@ function dictateInto(target) {
   dictationTarget = target;
   const mine = createDictation({
     onText: show,
-    onClear: () => say(""),
+    onClear: () => { say(""); state.wf = null; drawWordFix(); },
+    options: () => ({ lang: speechCodeOf(state.settings.lang), phrases: biasPhrases(target) }),
     onNote: (m) => { const el = target === "blind" ? $("#blInterim") : target === "qn" ? $("#qnInterim") : $("#micStatus"); if (el) el.textContent = m; },
     onState: (on) => { showMic(target, on); if (!on && dictation === mine) { dictation = null; dictationTarget = null; } },
     // An error always ends the try: the button goes back to "Speak" so it can be tapped again, and the tap is never taken for "stop".
@@ -1550,6 +1600,7 @@ document.addEventListener("click", async (ev) => {
     else if (action === "closeform") closeOverlay();
     else if (action === "dictate") dictateInto("sheet");                                   // speak into the rating sheet's notes
     else if (action === "qnote") { state.qn = { wine: "", text: "", interim: "", listening: false, error: "", saving: false }; $("#overlay").innerHTML = quickNoteHtml(state.qn, dictationSupported()); }
+    else if (action === "wfix") toggleFix(a);                                             // wfix:ID
     else if (action === "export") exportNotes();                                           // export:notes
     else if (action === "blind") await blindAction(a, b);                                  // blind:open, blind:new, blind:reveal, blind:pick:ID, ...
     else if (action === "qn") await quickNoteAction(a);                                    // qn:mic, qn:save, qn:close
@@ -1601,6 +1652,7 @@ document.addEventListener("input", (ev) => {
   else if (t.dataset.dim) { state.sheet = setDim(state.sheet, t.dataset.dim, Number(t.value)); syncSheet(); }
   else if (t.dataset.field && state.sheet) state.sheet[t.dataset.field] = t.value;
   else if (t.dataset.pscope !== undefined) syncGrapePlace(t.dataset.pscope);
+  else if (t.dataset.speaklang !== undefined) { state.settings = changeSetting(state.settings, "lang", t.value); store.set(SETTINGS_KEY, JSON.stringify(state.settings)); applySettings(); }
   else if (t.dataset.qn && state.qn) state.qn[t.dataset.qn] = t.value;
   else if (t.dataset.bl && state.blind) { if (t.dataset.bl === "q") { state.blind.q = t.value; drawBlind('[data-bl="q"]'); } else if (t.dataset.bl === "notes") state.blind.notes = t.value; else state.blind.guess[t.dataset.bl] = t.value; }
   else if (t.dataset.bt && state.blind) state.blind.form[t.dataset.bt] = t.value;

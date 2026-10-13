@@ -4,6 +4,7 @@
 import { esc } from "./logic.js?v=14";
 import { accountCardHtml } from "./account.js?v=11";
 import { MODES, cleanMode } from "./words.js?v=1";
+import { cleanLang } from "./winewords.js?v=1";
 
 export const SETTINGS_KEY = "wine.settings";
 // How much bigger the words get. The page multiplies every font size by this number (the CSS variable --ts).
@@ -16,7 +17,7 @@ export const MOTION = [
   { id: "device", label: "Follow my phone" },
   { id: "reduce", label: "Always reduce" },
 ];
-export const DEFAULT_SETTINGS = { text: "normal", swipe: true, buttons: true, motion: "device", mode: "beginner" };
+export const DEFAULT_SETTINGS = { text: "normal", swipe: true, buttons: true, motion: "device", mode: "beginner", lang: "auto" };
 
 // Anything missing or odd (an old version, a hand-edited value) falls back to the default. Swiping off means the buttons are the only
 // way to answer, so the buttons are forced on in that case.
@@ -28,6 +29,7 @@ export function cleanSettings(raw) {
     buttons: r.buttons === false ? false : true,
     motion: MOTION.some((m) => m.id === r.motion) ? r.motion : DEFAULT_SETTINGS.motion,
     mode: cleanMode(r.mode),
+    lang: cleanLang(r.lang),
   };
   if (!s.swipe) s.buttons = true;
   return s;
@@ -39,7 +41,7 @@ export function parseSettings(text) {
 // change: "text:large", "swipe:off", "buttons:on", "motion:reduce". Returns the new settings (the old object is not touched).
 export function changeSetting(s, key, value) {
   const next = { ...s };
-  if (key === "text" || key === "motion" || key === "mode") next[key] = value;
+  if (key === "text" || key === "motion" || key === "mode" || key === "lang") next[key] = value;
   else if (key === "swipe" || key === "buttons") next[key] = value === "on";
   return cleanSettings(next);
 }

@@ -6,6 +6,7 @@ import {
 import { splitGrapeParts, splitPlace } from "./blends.js?v=1";
 import { REACTIONS, iconHtml, SKIP_LIMIT } from "./reactions.js?v=3";
 import { say, proToolsOn } from "./words.js?v=1";
+import { SPEECH_LANGS, speechLangNow } from "./winewords.js?v=1";
 import { GUESS_FIELDS, scoreGuess, summarize, RESULT_WORDS } from "./blind.js?v=1";
 import { SW_TABS, SW_KINDS, SW_GROUPS, SW_SORTS, entriesFor, tabCounts, filtersOn, stylesIn, filterEntries as filterSwipes, groupEntries as groupSwipes, fitBand } from "./swipetabs.js?v=4";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
@@ -331,6 +332,7 @@ export function sheetHtml(sheet, { saving = false, error = "", page = 0 } = {}) 
       <div class="two"><input class="field" data-field="food" placeholder="Food" value="${esc(sheet.food)}"><input class="field" data-field="occasion" placeholder="Occasion" value="${esc(sheet.occasion)}"></div>`,
     `<h3 class="serif">Notes and photos</h3><textarea class="field" data-field="notes" rows="4" placeholder="${esc(say("notes_hint"))}">${esc(sheet.notes)}</textarea>
     <div class="microw"><button type="button" class="pill mic" data-action="dictate:sheet" aria-pressed="false">${iconHtml("mic", 16)} <span>Speak your notes</span></button><span class="muted small micstatus" id="micStatus" role="status"></span></div>
+    <div class="microw">${speakLangHtml()}</div>${wordFixHtml()}
       <div id="sheetPhotos" class="photoarea">${photosHtml(sheet)}</div>
       ${sheet.entryId ? `<div class="deleterow"><button class="deletelink" data-sheet="delete">Delete this entry</button></div>` : ""}`,
   ];
@@ -382,6 +384,10 @@ export function addFormHtml(form, error = "") {
     <button class="btn outline" data-action="addnorate">Add without rating</button></div></div>`;
 }
 
+// "Speak in" picker and the line where fixed wine words are listed (app.js fills data-wordfix). Used next to every Speak button.
+export const speakLangHtml = () => `<select class="sortsel speaklang" data-speaklang aria-label="Speak in">${SPEECH_LANGS.map((l) => `<option value="${l.id}"${l.id === speechLangNow() ? " selected" : ""}>Speak in: ${esc(l.label)}</option>`).join("")}</select>`;
+export const wordFixHtml = () => `<div class="wordfix" data-wordfix role="status"></div>`;
+
 // ---------------------------------------------------------------- a quick note (voice or typed), logged in the journal
 // qn: { wine, text, listening, interim, error, saving }. The note is saved as a journal entry; if no wine is named it shows as an untitled, incomplete wine to finish later.
 export function quickNoteHtml(qn, speech) {
@@ -391,7 +397,7 @@ export function quickNoteHtml(qn, speech) {
     <input class="field" data-qn="wine" placeholder="Which wine? (optional)" value="${esc(qn.wine)}" autocomplete="off">
     <textarea class="field" data-qn="text" rows="6" placeholder="What are you tasting or thinking?">${esc(qn.text)}</textarea>
     <div class="muted small micinterim" id="qnInterim" role="status">${esc(qn.interim || "")}</div>
-    ${speech ? `<button type="button" class="btn outline" data-action="qn:mic" aria-pressed="${!!qn.listening}">${iconHtml("mic", 18)} ${qn.listening ? "Stop listening" : "Speak"}</button>` : ""}
+    ${speech ? `<button type="button" class="btn outline" data-action="qn:mic" aria-pressed="${!!qn.listening}">${iconHtml("mic", 18)} ${qn.listening ? "Stop listening" : "Speak"}</button>${speakLangHtml()}` : ""}${wordFixHtml()}
     <div id="qnErr" class="err">${esc(qn.error || "")}</div>
     <button class="btn primary" data-action="qn:save"${qn.saving ? " disabled" : ""}>Save to my Journal</button></div></div>`;
 }
@@ -418,7 +424,7 @@ export function blindHtml(B, cards, speech, styleLabel) {
       <div class="qlabel">Your tasting notes</div>
       <textarea class="field" data-bl="notes" rows="5" placeholder="${esc(say("notes_hint"))}">${esc(B.notes)}</textarea>
       <div class="muted small micinterim" id="blInterim" role="status"></div>
-      ${speech ? `<button type="button" class="btn outline" data-action="blind:mic" aria-pressed="${!!B.listening}">${iconHtml("mic", 18)} ${B.listening ? "Stop listening" : "Speak"}</button>` : ""}
+      ${speech ? `<button type="button" class="btn outline" data-action="blind:mic" aria-pressed="${!!B.listening}">${iconHtml("mic", 18)} ${B.listening ? "Stop listening" : "Speak"}</button>${speakLangHtml()}` : ""}${wordFixHtml()}
       <div id="blErr" class="err">${esc(B.error || "")}</div>
       <button class="btn primary" data-action="blind:reveal">Reveal the wine</button>
       <button class="btn outline" data-action="blind:later">Save and reveal later</button>`;

@@ -46,7 +46,8 @@ const SPEECH_OFF = "The microphone is allowed, but this browser will not let the
 const STANDALONE_OFF = "Speech recognition is not available in the home-screen app. Open the site in Safari or Chrome to speak, or tap the microphone key on your keyboard to dictate here, or just type.";
 const isStandalone = () => { try { return !!(navigator.standalone || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)); } catch (_) { return false; } };
 const TAP_AGAIN = "The microphone is allowed now. Tap Speak once more.";
-export function createDictation({ onText, onState, onError, onNote, onClear }) {
+// options(): { lang, phrases } read each time listening starts: lang is a language code ('' = the phone's), phrases are [{ phrase, boost }] the browser may favour (contextual biasing; only where supported).
+export function createDictation({ onText, onState, onError, onNote, onClear, options }) {
   let rec = null, finals = "", on = false, asking = false, cancelled = false, justAsked = false, lastAsk = 0, retried = false;
   const set = (v) => { if (on === v) return; on = v; if (onState) onState(v); };
   const clear = () => { if (onClear) onClear(); };
@@ -79,7 +80,10 @@ export function createDictation({ onText, onState, onError, onNote, onClear }) {
     finals = "";
     try {
       rec = new Ctor();
-      rec.lang = (navigator.language || "en-US");
+      const opt = (options && options()) || {};
+      rec.lang = opt.lang || navigator.language || "en-US";
+      // Where the browser can take a list of words to listen for (SpeechRecognition.phrases), give it the wine words that matter now. Silently skipped everywhere else.
+      try { if (opt.phrases && opt.phrases.length && "phrases" in rec && typeof window.SpeechRecognitionPhrase === "function") rec.phrases = opt.phrases.map((x) => new window.SpeechRecognitionPhrase(x.phrase, x.boost)); } catch (_) {}
       rec.continuous = !simple; rec.interimResults = !simple;   // "simple" is the gentlest setting, tried once when the first try is refused
       rec.onresult = (ev) => {
         let interim = "";
