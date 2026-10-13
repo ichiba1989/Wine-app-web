@@ -17,7 +17,7 @@ import { setMode } from "./words.js?v=1";
 import { journalCsv, exportName } from "./exportcsv.js?v=1";
 import { newBlind, cleanPending, hasGuess, scoreGuess, summarize, resultLine, notesAfterReveal, actualOfCard, actualOfForm } from "./blind.js?v=1";
 import { composeNote, stampOf, noteProblem } from "./notes.js?v=1";
-import { createDictation, dictationSupported } from "./dictation.js?v=2";
+import { createDictation, dictationSupported } from "./dictation.js?v=3";
 import { SW_START, defaultSortFor } from "./swipetabs.js?v=4";
 import { gapWeights } from "./tags.js?v=2";
 import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
@@ -821,13 +821,8 @@ function closeOverlay() { stopDictation(); state.sheet = null; state.form = null
 // ------- speaking notes (dictation.js). One microphone at a time: into the rating sheet's notes box, or into a quick note.
 let dictation = null, dictationTarget = null;
 const stopDictation = () => { if (dictation) { dictation.stop(); } dictation = null; dictationTarget = null; };
-const setMic = (listening, msg) => {
-  const b = document.querySelector('[data-action="dictate:sheet"]'), st = $("#micStatus");
-  if (b) { b.setAttribute("aria-pressed", String(listening)); const t = b.querySelector("span"); if (t) t.textContent = listening ? "Stop listening" : "Speak your notes"; }
-  if (st) st.textContent = msg || (listening ? "Listening..." : "");
-};
 function dictateInto(target) {
-  if (dictation && dictationTarget === target) { stopDictation(); return; }   // a second tap stops
+  if (dictation && dictationTarget === target) { stopDictation(); showMic(target, false); return; }   // a second tap stops, and clears an old error
   stopDictation();
   const stamp = stampOf(new Date());
   const base = target === "sheet" ? (state.sheet ? state.sheet.notes || "" : "") : target === "blind" ? (state.blind ? state.blind.notes || "" : "") : (state.qn ? state.qn.text || "" : "");
@@ -837,14 +832,33 @@ function dictateInto(target) {
     if (target === "qn" && state.qn) { state.qn.text = text; const el = document.querySelector('[data-qn="text"]'); if (el) el.value = text; }
     if (target === "blind" && state.blind) { state.blind.notes = text; const el = document.querySelector('[data-bl="notes"]'); if (el) el.value = text; }
   };
+  const say = (m) => {   // the line under the notes box for this target
+    const el = target === "blind" ? $("#blErr") : target === "qn" ? $("#qnErr") : $("#micStatus");
+    if (el) el.textContent = m || "";
+    if (target === "qn" && state.qn) state.qn.error = m || "";
+  };
   dictationTarget = target;
-  dictation = createDictation({
+  const mine = createDictation({
     onText: show,
+    onClear: () => say(""),
     onNote: (m) => { const el = target === "blind" ? $("#blInterim") : target === "qn" ? $("#qnInterim") : $("#micStatus"); if (el) el.textContent = m; },
-    onState: (on) => { if (target === "blind" && state.blind) { state.blind.listening = on; const b = document.querySelector('[data-action="blind:mic"]'); if (b) { b.setAttribute("aria-pressed", String(on)); b.lastChild.textContent = on ? " Stop listening" : " Speak"; } } else if (target === "qn" && state.qn) { state.qn.listening = on; const b = document.querySelector('[data-action="qn:mic"]'); if (b) { b.setAttribute("aria-pressed", String(on)); b.lastChild.textContent = on ? " Stop listening" : " Speak"; } } else setMic(on); if (!on) { dictation = null; dictationTarget = null; } },
-    onError: (m) => { if (target === "blind") { const e = $("#blErr"); if (e) e.textContent = m; } else if (target === "qn") { const e = $("#qnErr"); if (e) e.textContent = m; if (state.qn) state.qn.error = m; } else setMic(false, m); },
+    onState: (on) => { showMic(target, on); if (!on && dictation === mine) { dictation = null; dictationTarget = null; } },
+    // An error always ends the try: the button goes back to "Speak" so it can be tapped again, and the tap is never taken for "stop".
+    onError: (m) => { if (dictation === mine) { dictation = null; dictationTarget = null; } showMic(target, false); say(m); },
   });
-  dictation.start();
+  dictation = mine;
+  mine.start();
+}
+// The microphone button of a target as listening (on) or not.
+function showMic(target, on) {
+  const sel = target === "blind" ? '[data-action="blind:mic"]' : target === "qn" ? '[data-action="qn:mic"]' : '[data-action="dictate:sheet"]';
+  const b = document.querySelector(sel);
+  if (target === "blind" && state.blind) state.blind.listening = on;
+  if (target === "qn" && state.qn) state.qn.listening = on;
+  if (!b) return;
+  b.setAttribute("aria-pressed", String(on));
+  if (target === "sheet") { const t = b.querySelector("span"); if (t) t.textContent = on ? "Stop listening" : "Speak your notes"; }
+  else if (b.lastChild) b.lastChild.textContent = on ? " Stop listening" : " Speak";
 }
 // A spreadsheet file of the player's own journal (exportcsv.js), saved through the browser's download.
 function exportNotes() {
