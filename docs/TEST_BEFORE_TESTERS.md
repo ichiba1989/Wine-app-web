@@ -122,4 +122,5 @@ Keep this list current. Tick each item (and date it) only after trying it on a t
 - [ ] Blind tasting on a real phone: guess, speak notes, "Save and reveal later" (the count shows on the Journal link), come back, reveal a catalog wine and a typed-in wine, check the comparison is right against the wine, then "Rate this wine": the notes hold your words and the result line.
 - [ ] Export my notes: the CSV opens in a spreadsheet app with the right columns, notes with commas or line breaks stay in one cell, and an incomplete wine is marked "yes".
 - [ ] Owner decision: should these tools also need the `pro` tier, or stay open to anyone who picks Enthusiast or Professional? And the exact words for each mode (`words.js`) need the owner's eye.
+- [ ] Learn, in Enthusiast or Professional mode, with `quiz_tags.sql` run and a few questions tagged: a "Focus" pick lists topics with at least 3 questions; choosing one limits the round to those questions (also in Timed). It is not shown in Beginner mode or in Review.
 

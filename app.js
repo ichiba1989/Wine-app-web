@@ -12,14 +12,14 @@ import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } fr
 import { shrinkImage } from "./photos.js?v=5";
 import {
   visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=33";
-import { createLearn } from "./learn.js?v=7";
+import { createLearn } from "./learn.js?v=8";
 import { setMode } from "./words.js?v=1";
 import { journalCsv, exportName } from "./exportcsv.js?v=1";
 import { newBlind, cleanPending, hasGuess, scoreGuess, summarize, resultLine, notesAfterReveal, actualOfCard, actualOfForm } from "./blind.js?v=1";
 import { composeNote, stampOf, noteProblem } from "./notes.js?v=1";
 import { createDictation, dictationSupported } from "./dictation.js?v=1";
 import { SW_START, defaultSortFor } from "./swipetabs.js?v=4";
-import { gapWeights } from "./tags.js?v=1";
+import { gapWeights } from "./tags.js?v=2";
 import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=1";
 import { loadPrices, applyPrices, tidyFacts, parsePrice, saveWinePrice } from "./pricing.js?v=1";

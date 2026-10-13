@@ -57,6 +57,17 @@ export function gapWeights(gaps) {
   for (const g of gaps || []) m.set(g.key, g.dontKnow / (g.dontKnow + g.known + 1.5));
   return m;
 }
+// A tag as the quiz refers to it, whatever its kind (themes included): "kind:folded name".
+export const refOf = (t) => (t && t.kind && fold(t.name) ? t.kind + ":" + fold(t.name) : "");
+// The topics a player can focus a round on (Learn, Enthusiast and Professional): every tag at least `min` questions have, the ones the player has met least first
+// (weights: gapWeights), then the biggest topics, then A to Z. [{ ref, kind, name, count, weight }]
+export function focusOptions(tagsByQ, weights, min = 3) {
+  const m = new Map();
+  (tagsByQ || new Map()).forEach((tags) => tags.forEach((t) => { const r = refOf(t); if (!r) return; const e = m.get(r) || { ref: r, kind: t.kind, name: t.name, count: 0, weight: 0 }; e.count++; m.set(r, e); }));
+  const gw = weights || new Map();
+  return [...m.values()].filter((e) => e.count >= min).map((e) => ({ ...e, weight: gw.get(tagKey(e)) || 0 }))
+    .sort((a, b) => b.weight - a.weight || b.count - a.count || a.name.localeCompare(b.name));
+}
 // For each question, how much it is about something the player has not met: the largest weight among its tags (0 when none). tagsByQ: Map(question id -> [{ kind, name }]).
 export function boostFor(tagsByQ, weights) {
   const out = new Map();

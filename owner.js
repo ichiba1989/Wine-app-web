@@ -6,7 +6,7 @@ import { esc } from "./logic.js?v=14";
 import { REACH_CHOICES } from "./wineinfo.js?v=17";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=2";
 import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=6";
-import { TAG_KINDS } from "./tags.js?v=1";
+import { TAG_KINDS } from "./tags.js?v=2";
 import { centsToField } from "./pricing.js?v=1";
 
 export const OWNER_TABS = [{ id: "wines", label: "Wines" }, { id: "lenses", label: "Lenses" }, { id: "bingo", label: "Bingo" }, { id: "checks", label: "Checks" }, { id: "tags", label: "Tags" }, { id: "config", label: "Config" }];

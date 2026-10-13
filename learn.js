@@ -2,7 +2,8 @@
 // The rules at the top are pure (no browser, no network) so they can be tested on their own.
 // The controller at the bottom loads questions from Supabase, saves answers and draws the tab.
 import { esc, shuffle } from "./logic.js?v=14";
-import { weave, boostFor } from "./tags.js?v=1";
+import { weave, boostFor, refOf, focusOptions } from "./tags.js?v=2";
+import { proToolsOn } from "./words.js?v=1";
 
 // ---------------------------------------------------------------- settings
 export const DIFFS = [
@@ -55,8 +56,10 @@ export function removeFromArchive(p, qid) { p.archive.delete(qid); }
 // ---------------------------------------------------------------- building a round
 // Which questions a round uses. Review lists come from the archive:
 // Incorrect = latest answer wrong, I don't know = latest answer skipped, Archive = everything kept.
-export function poolFor(questions, p, { mode, diff = "all", review = "incorrect" }) {
-  const qs = questions.filter((q) => diff === "all" || q.difficulty === diff);
+// focus (optional, Enthusiast and Professional): a tag's ref (tags.js refOf): only questions with that tag. tagsByQ: Map(question id -> [{ kind, name }]).
+export function poolFor(questions, p, { mode, diff = "all", review = "incorrect", focus = null, tagsByQ = null }) {
+  let qs = questions.filter((q) => diff === "all" || q.difficulty === diff);
+  if (focus && tagsByQ && mode !== "review") qs = qs.filter((q) => (tagsByQ.get(q.id) || []).some((t) => refOf(t) === focus));
   if (mode === "review") {
     const kept = qs.filter((q) => p.archive.has(q.id));
     if (review === "archive") return kept.map((q) => q.id);
@@ -85,7 +88,7 @@ export function feedbackOn(row, tier) { return !!row && (row.all_tiers || (Array
 export function newRun(questions, p, sel, rnd = shuffle) {
   const timed = sel.mode === "timed";
   return {
-    mode: sel.mode, review: sel.review, seconds: sel.seconds, timed,
+    mode: sel.mode, review: sel.review, seconds: sel.seconds, timed, focus: sel.focus || null,
     order: orderFor(poolFor(questions, p, sel), p, sel, rnd), i: 0, opts: [],
     answered: false, choice: null, result: null,
     tally: { c: 0, n: 0, u: 0 }, streak: 0, best: 0,
@@ -135,7 +138,11 @@ function controlsHtml(L) {
   let extra = "";
   if (s.mode === "review") extra = `<div class="chips">${REVIEW_FILTERS.map((r) => `<button class="chip${s.review === r.id ? " on" : ""}" data-learn="review:${r.id}">${r.label}</button>`).join("")}</div>`;
   if (s.mode === "timed") extra = `<div class="chips left">${TIMED_SECONDS.map((sec) => `<button class="chip wide${s.seconds === sec ? " on" : ""}" data-learn="secs:${sec}">${sec / 60} min</button>`).join("")}</div>`;
-  return `<div class="modes">${tiles}</div><div class="chips" role="group" aria-label="Difficulty">${diffs}</div>${extra}`;
+  // Enthusiast and Professional can focus a round on one grape, place or producer (the tags editors put on questions).
+  const focusList = proToolsOn() && s.mode !== "review" ? focusOptions(L.tagsByQ, L.weights) : [];
+  const kindWord = { grape: "grape", region: "place", country: "country", producer: "producer", style: "style", theme: "theme" };
+  const focus = focusList.length ? `<select class="sortsel" data-learn-focus aria-label="Focus the round on one topic"><option value="">Focus: anything</option>${focusList.map((o) => `<option value="${esc(o.ref)}"${s.focus === o.ref ? " selected" : ""}>${esc(o.name)} (${kindWord[o.kind] || o.kind}, ${o.count})</option>`).join("")}</select>` : "";
+  return `<div class="modes">${tiles}</div><div class="chips" role="group" aria-label="Difficulty">${diffs}</div>${focus}${extra}`;
 }
 
 function questionHtml(L, run, q) {
@@ -172,7 +179,7 @@ function bodyHtml(L) {
   if (!run.order.length) {
     return `<p class="muted">${run.mode === "review"
       ? "Nothing here yet. Questions you miss or skip are saved to your archive so you can review them again."
-      : "No questions at this level yet."}</p>`;
+      : run.focus ? "No questions for that topic at this level yet." : "No questions at this level yet."}</p>`;
   }
   if (run.timed && !run.started) {
     const mins = run.seconds / 60;
@@ -216,9 +223,10 @@ export function createLearn(ctx) {
   const L = {
     loaded: false, loading: false, error: null, questions: [], byId: new Map(),
     progress: progressFrom([], []), feedback: false,
-    sel: { mode: "random", diff: "all", review: "incorrect", seconds: 60 },
+    sel: { mode: "random", diff: "all", review: "incorrect", seconds: 60, focus: null },
     run: null, flag: null,
   };
+  const selNow = () => ({ ...L.sel, boost: boostNow(), tagsByQ: L.tagsByQ });
   let root = null, clockTimer = null, nextTimer = null;
   const stopTimers = () => { clearInterval(clockTimer); clearTimeout(nextTimer); clockTimer = nextTimer = null; };
   const overlay = () => document.querySelector("#overlay");
@@ -246,7 +254,7 @@ export function createLearn(ctx) {
       L.progress = progressFrom(must(latest), must(arch));
       L.feedback = feedbackOn(must(feat), (ctx.profile() || {}).tier || "default");
       L.loaded = true;
-      L.run = newRun(L.questions, L.progress, { ...L.sel, boost: boostNow() });
+      L.run = newRun(L.questions, L.progress, selNow());
     } catch (e) {
       L.error = "Could not load the quiz: " + (e.message || e);
     }
@@ -256,6 +264,7 @@ export function createLearn(ctx) {
 
   function draw() {
     if (!root) return;
+    try { L.weights = ctx.gapWeights ? ctx.gapWeights() : null; } catch (_) { L.weights = null; }
     const run = L.run;
     if (run && !run.finished && run.order.length && run.started && !run.opts.length) run.opts = optionsFor(L.byId.get(currentId(run)));
     root.innerHTML = learnHtml(L);
@@ -267,7 +276,7 @@ export function createLearn(ctx) {
     if (b) { b.style.width = `${(run.timeLeft / run.seconds) * 100}%`; b.style.background = run.timeLeft <= 15 ? "var(--wine)" : "var(--slate)"; }
   }
 
-  function startRound() { stopTimers(); closeFlag(); L.run = newRun(L.questions, L.progress, { ...L.sel, boost: boostNow() }); draw(); }
+  function startRound() { stopTimers(); closeFlag(); L.run = newRun(L.questions, L.progress, selNow()); draw(); }
 
   function startClock() {
     const run = L.run;
@@ -371,6 +380,7 @@ export function createLearn(ctx) {
     else if (action === "flagsend") sendFlag();
   });
   document.addEventListener("input", (ev) => {
+    if (ev.target.dataset && ev.target.dataset.learnFocus !== undefined && root) { L.sel.focus = ev.target.value || null; startRound(); return; }
     if (ev.target.dataset && ev.target.dataset.learnNote !== undefined && L.flag) L.flag.note = ev.target.value;
   });
 
@@ -379,7 +389,7 @@ export function createLearn(ctx) {
     mount(el) {
       root = el;
       if (!L.loaded && !L.loading && !L.error) load();
-      else { if (L.loaded && !L.run) L.run = newRun(L.questions, L.progress, { ...L.sel, boost: boostNow() }); draw(); }
+      else { if (L.loaded && !L.run) L.run = newRun(L.questions, L.progress, selNow()); draw(); }
     },
     // Leaving the tab stops the clock. A timed round in progress is dropped, not saved.
     leave() {
