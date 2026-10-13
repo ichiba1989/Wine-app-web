@@ -7,7 +7,8 @@
 // expected (a difference of zero), so a player who says Yes a lot and a player who finds things out of the ordinary look different.
 // Professionals keep the sliders and the tasting grid; for them the same questions are a shortcut that moves the sliders.
 // The rules at the top are pure (no browser, no network). loadTaste and saveTaste at the bottom talk to Supabase.
-import { dimsFor, dimMeta, clampDimValue, esc } from "./logic.js?v=13";
+import { dimsFor, dimMeta, clampDimValue, esc } from "./logic.js?v=14";
+import { say } from "./words.js?v=1";
 
 // What can stand out, and how much (level 1, 2 or 3). Each effect is a change from the wine's expected level; sweetness is the step noticed.
 export const NOTES = [
@@ -80,7 +81,7 @@ const chip = (on, data, label) => `<button class="gopt${on ? " on" : ""}" data-t
 // The questions themselves. They are redrawn after each tap, because answering opens more options.
 export function tasteInnerHtml(sheet) {
   const t = sheet.taste || { balanced: null, notes: {}, pairing: null };
-  let h = `<div class="tq"><div class="tqtext">Did the wine taste as expected?</div><div class="gopts">${chip(t.balanced === true, "balanced:yes", "Yes")}${chip(t.balanced === false, "balanced:no", "No")}</div>
+  let h = `<div class="tq"><div class="tqtext">${esc(say("taste_q"))}</div><div class="gopts">${chip(t.balanced === true, "balanced:yes", "Yes")}${chip(t.balanced === false, "balanced:no", "No")}</div>
     <div class="muted small" style="margin-top:6px">${t.balanced === true ? "Nothing stood out: it tasted as expected." : t.balanced === false ? "" : "Yes if nothing stood out."}</div></div>`;
   if (t.balanced === false) {
     h += `<div class="tq"><div class="tqtext">What stood out?</div><div class="muted small" style="margin-bottom:6px">Pick as many as apply.</div>

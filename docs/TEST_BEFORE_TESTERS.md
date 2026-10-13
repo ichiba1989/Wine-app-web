@@ -116,3 +116,10 @@ Keep this list current. Tick each item (and date it) only after trying it on a t
 - [ ] Incomplete wines never reach the editor's candidate list (even with 10 players' entries), and do not fill Bingo squares until completed.
 - [ ] **Owner and lawyers:** the browser may send the audio to its maker's speech service; add a line to `privacy.html` (and bump `CONSENT_VERSION`) before testers use it.
 
+## 15. Modes, blind tasting and export (added 2026-10-13)
+- [ ] Settings, Who is this for: switch between Beginner, Enthusiast and Professional; the Journal wording changes (search box, "No verdict yet" / "Not scored", add-a-wine title, notes box) and the taste question in the rating sheet. Nothing about the player's wines or answers changes.
+- [ ] Enthusiast and Professional show "Blind tasting" and "Export my notes" in the Journal; Beginner does not.
+- [ ] Blind tasting on a real phone: guess, speak notes, "Save and reveal later" (the count shows on the Journal link), come back, reveal a catalog wine and a typed-in wine, check the comparison is right against the wine, then "Rate this wine": the notes hold your words and the result line.
+- [ ] Export my notes: the CSV opens in a spreadsheet app with the right columns, notes with commas or line breaks stay in one cell, and an incomplete wine is marked "yes".
+- [ ] Owner decision: should these tools also need the `pro` tier, or stay open to anyone who picks Enthusiast or Professional? And the exact words for each mode (`words.js`) need the owner's eye.
+

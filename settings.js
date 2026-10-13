@@ -1,8 +1,9 @@
 // Settings: the gear in the header opens one sheet of choices that change how the app looks and how a wine is answered.
 // They are kept on this phone (in the browser), not in the database, so each device can be set up differently.
 // The rules at the top are pure (no browser, no network) so they can be tested on their own. The sheet is drawn by settingsHtml.
-import { esc } from "./logic.js?v=13";
-import { accountCardHtml } from "./account.js?v=10";
+import { esc } from "./logic.js?v=14";
+import { accountCardHtml } from "./account.js?v=11";
+import { MODES, cleanMode } from "./words.js?v=1";
 
 export const SETTINGS_KEY = "wine.settings";
 // How much bigger the words get. The page multiplies every font size by this number (the CSS variable --ts).
@@ -15,7 +16,7 @@ export const MOTION = [
   { id: "device", label: "Follow my phone" },
   { id: "reduce", label: "Always reduce" },
 ];
-export const DEFAULT_SETTINGS = { text: "normal", swipe: true, buttons: true, motion: "device" };
+export const DEFAULT_SETTINGS = { text: "normal", swipe: true, buttons: true, motion: "device", mode: "beginner" };
 
 // Anything missing or odd (an old version, a hand-edited value) falls back to the default. Swiping off means the buttons are the only
 // way to answer, so the buttons are forced on in that case.
@@ -26,6 +27,7 @@ export function cleanSettings(raw) {
     swipe: r.swipe === false ? false : true,
     buttons: r.buttons === false ? false : true,
     motion: MOTION.some((m) => m.id === r.motion) ? r.motion : DEFAULT_SETTINGS.motion,
+    mode: cleanMode(r.mode),
   };
   if (!s.swipe) s.buttons = true;
   return s;
@@ -37,7 +39,7 @@ export function parseSettings(text) {
 // change: "text:large", "swipe:off", "buttons:on", "motion:reduce". Returns the new settings (the old object is not touched).
 export function changeSetting(s, key, value) {
   const next = { ...s };
-  if (key === "text" || key === "motion") next[key] = value;
+  if (key === "text" || key === "motion" || key === "mode") next[key] = value;
   else if (key === "swipe" || key === "buttons") next[key] = value === "on";
   return cleanSettings(next);
 }
@@ -51,6 +53,7 @@ export function settingsHtml(s, user, { owner = false } = {}) {
   return `<div class="overlay"><div class="sheet" id="settingsPanel" role="dialog" aria-label="Settings">
     <div class="sheethead"><div class="sheettitle"><div class="serif big">Settings</div><div class="muted small">Saved on this phone.</div></div>
       <div class="sheetbtns"><button class="xbtn" data-action="setclose" aria-label="Close">&times;</button></div></div>
+    ${row("Who is this for", MODES.map((m) => chip(s.mode === m.id, `mode:${m.id}`, m.label)).join(""), "Changes the words, and Enthusiast and Professional add blind tasting and note export. It does not change your wines or your answers.")}
     ${row("Text size", TEXT_SIZES.map((t) => chip(s.text === t.id, `text:${t.id}`, t.label)).join(""), "Makes the words bigger across the app.")}
     ${row("Answer by swiping", onOff("swipe"), "Swipe the card, or double-tap near its edge. Turn this off if swipes happen by accident; the buttons under the card stay on.")}
     ${row("Buttons under the card", onOff("buttons", !s.swipe), s.swipe ? "Tap a button to answer without swiping." : "Always on while swiping is off.")}

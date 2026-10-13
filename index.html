@@ -94,6 +94,10 @@
   .jsel { display: flex; gap: 8px; margin-top: 8px; }
   .jsel .sortsel { margin-bottom: 0; padding: 9px 10px; font-size: calc(13px * var(--ts)); }
   .jmeta { display: flex; justify-content: space-between; align-items: center; font-size: calc(13px * var(--ts)); color: var(--muted); margin: 2px 0 8px; min-height: 22px; }
+  .btable td, .btable th { font-size: calc(12px * var(--ts)); }
+  .btable .br.match td:last-child { color: #2f6b3c; font-weight: 600; }
+  .btable .br.close td:last-child { color: #8a6a1c; font-weight: 600; }
+  .btable .br.miss td:last-child { color: #7B1E3A; font-weight: 600; }
   .microw { display: flex; align-items: center; gap: 10px; margin: 6px 0 10px; }
   .pill.mic { display: inline-flex; align-items: center; gap: 6px; }
   .pill.mic[aria-pressed="true"], .btn[aria-pressed="true"] { background: #7B1E3A; color: #fff; }
@@ -585,6 +589,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=71" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=72" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>

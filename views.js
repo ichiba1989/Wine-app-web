@@ -2,9 +2,11 @@
 import {
   FAMILIARITY, FLAGS, VERDICTS, isChoice, GROUPS, GROUP_PAGE, SORTS, YEARS,
   esc, wineName, entryCard, entryName, entryIncomplete, entryMissing, verdictShort, groupEntries, filterEntries, sortCards,
-  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims } from "./logic.js?v=13";
+  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims } from "./logic.js?v=14";
 import { splitGrapeParts, splitPlace } from "./blends.js?v=1";
 import { REACTIONS, iconHtml, SKIP_LIMIT } from "./reactions.js?v=3";
+import { say, proToolsOn } from "./words.js?v=1";
+import { GUESS_FIELDS, scoreGuess, summarize, RESULT_WORDS } from "./blind.js?v=1";
 import { SW_TABS, SW_KINDS, SW_GROUPS, SW_SORTS, entriesFor, tabCounts, filtersOn, stylesIn, filterEntries as filterSwipes, groupEntries as groupSwipes, fitBand } from "./swipetabs.js?v=4";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
 import { flavorsForCard, placeFor } from "./flavors.js?v=1";
@@ -172,16 +174,16 @@ export function swipesHtml(lists, sw, photoUrls, match = new Map()) {
 }
 
 // ---------------------------------------------------------------- Journal
-export function journalShellHtml(j) {
+export function journalShellHtml(j, pending = 0) {
   const opt = (v, label, cur) => `<option value="${v}"${v === cur ? " selected" : ""}>${label}</option>`;
   return `<div class="jbar">
-      <div class="jtop"><input class="field" data-jq placeholder="Search your wines" value="${esc(j.q)}" autocomplete="off">
+      <div class="jtop"><input class="field" data-jq placeholder="${esc(say("search_wines"))}" value="${esc(j.q)}" autocomplete="off">
         <button class="pill dark big" data-action="addwine">+ Add a wine</button></div>
       <div class="jsel">
         <select class="sortsel" data-jby aria-label="Group by">${GROUPS.map((g) => opt(g.id, "Group: " + g.label, j.by)).join("")}</select>
         <select class="sortsel" data-jverdict aria-label="Filter by verdict">${opt("all", "All verdicts", j.verdict)}${VERDICTS.map((v) => opt(v.code, v.short, j.verdict)).join("")}${opt("none", "No verdict yet", j.verdict)}</select>
       </div>
-      <div class="jimp"><button class="link small" data-action="qnote">Take a note</button> <button class="link small" data-action="import:open">Import wines from a file</button></div></div>
+      <div class="jimp"><button class="link small" data-action="qnote">${esc(say("note_title"))}</button>${proToolsOn() ? ` <button class="link small" data-action="blind:open">${esc(say("blind_title"))}${pending ? ` (${pending} waiting)` : ""}</button> <button class="link small" data-action="export:notes">Export my notes</button>` : ""} <button class="link small" data-action="import:open">Import wines from a file</button></div></div>
     <div id="jmeta" class="jmeta"></div><div id="jlist"></div>`;
 }
 export function journalMetaHtml(entries, filtered, j, groups) {
@@ -210,7 +212,7 @@ export function journalListHtml(entries, j, photoUrls, cards = []) {
       return `<button class="jrow" data-action="entry:${e.id}">${thumbHtml(photoUrls, e.first_photo_path) || bottleThumbHtml(e.wine_vintage_id ? cardsById.get(e.wine_vintage_id) : null)}<span class="jl">
         <span class="iname"><span class="serif trunc">${esc(entryName(e))}</span><span class="ed edbtn" role="button" tabindex="0" data-action="wineinfo-entry:${e.id}" aria-label="Change wine info">&#9998;</span>${marksHtml(c, 16)}</span>
         ${entryInfoLine(e, e.wine_vintage_id ? cardsById.get(e.wine_vintage_id) : null) ? `<span class="meta grapeline trunc">${esc(entryInfoLine(e, e.wine_vintage_id ? cardsById.get(e.wine_vintage_id) : null))}</span>` : ""}
-        <span class="meta trunc"><b class="${v ? "wine" : ""}">${esc(v || "No verdict yet")}</b>${e.consumed_on ? ", " + esc(e.consumed_on) : ""}${e.food ? ", with " + esc(e.food) : ""}${e.is_outside_wine ? ", not in catalog" : ""}</span>${entryIncomplete(e) ? `<span class="meta incomp">Incomplete: needs ${esc(entryMissing(e).join(", "))}</span>` : ""}</span>
+        <span class="meta trunc"><b class="${v ? "wine" : ""}">${esc(v || say("no_verdict"))}</b>${e.consumed_on ? ", " + esc(e.consumed_on) : ""}${e.food ? ", with " + esc(e.food) : ""}${e.is_outside_wine ? ", not in catalog" : ""}</span>${entryIncomplete(e) ? `<span class="meta incomp">Incomplete: needs ${esc(entryMissing(e).join(", "))}</span>` : ""}</span>
         ${v ? "" : `<span class="pill dark">Rate</span>`}</button>`;
     }).join("");
     const more = g.items.length > limit ? `<button class="link block" data-action="jmore:${encodeURIComponent(g.key)}">Show ${Math.min(GROUP_PAGE, g.items.length - limit)} more (${g.items.length - limit} left)</button>` : "";
@@ -327,7 +329,7 @@ export function sheetHtml(sheet, { saving = false, error = "", page = 0 } = {}) 
     `<h3 class="serif">Details</h3>${sheet.entryId ? wineCardHtml(sheet) : ""}<div class="two"><input class="field" type="date" data-field="date" value="${esc(sheet.date)}" aria-label="Date">
       <input class="field" inputmode="decimal" data-field="price" placeholder="Price you paid ($)" value="${esc(sheet.price)}"></div>
       <div class="two"><input class="field" data-field="food" placeholder="Food" value="${esc(sheet.food)}"><input class="field" data-field="occasion" placeholder="Occasion" value="${esc(sheet.occasion)}"></div>`,
-    `<h3 class="serif">Notes and photos</h3><textarea class="field" data-field="notes" rows="4" placeholder="Notes">${esc(sheet.notes)}</textarea>
+    `<h3 class="serif">Notes and photos</h3><textarea class="field" data-field="notes" rows="4" placeholder="${esc(say("notes_hint"))}">${esc(sheet.notes)}</textarea>
     <div class="microw"><button type="button" class="pill mic" data-action="dictate:sheet" aria-pressed="false">${iconHtml("mic", 16)} <span>Speak your notes</span></button><span class="muted small micstatus" id="micStatus" role="status"></span></div>
       <div id="sheetPhotos" class="photoarea">${photosHtml(sheet)}</div>
       ${sheet.entryId ? `<div class="deleterow"><button class="deletelink" data-sheet="delete">Delete this entry</button></div>` : ""}`,
@@ -367,7 +369,7 @@ const yearOptions = (form) => `<option value="">Vintage (optional)</option><opti
 export function addFormHtml(form, error = "") {
   const styles = [...WINE_STYLES.map((st) => [st.id, st.label]), ["unknown", "Other"]].map(([k, l]) => `<button class="vbtn tog${form.style === k ? " on" : ""}" data-action="formstyle:${k}">${l}</button>`).join("");
   return `<div class="overlay"><div class="sheet" id="sheetPanel">
-    <div class="sheethead"><div class="sheettitle"><div class="serif big">Add a wine you drank</div><div class="muted small">Enter what is on the bottle. Missing something? Save it anyway and finish it later.</div></div>
+    <div class="sheethead"><div class="sheettitle"><div class="serif big">${esc(say("add_title"))}</div><div class="muted small">Enter what is on the bottle. Missing something? Save it anyway and finish it later.</div></div>
       <div class="sheetbtns"><button class="xbtn" data-action="closeform" aria-label="Close">&times;</button></div></div>
     <div id="formPhotos" class="photoarea top">${formPhotosHtml(form)}</div>
     <input class="field" data-form="producer" placeholder="Producer" value="${esc(form.producer)}">
@@ -384,7 +386,7 @@ export function addFormHtml(form, error = "") {
 // qn: { wine, text, listening, interim, error, saving }. The note is saved as a journal entry; if no wine is named it shows as an untitled, incomplete wine to finish later.
 export function quickNoteHtml(qn, speech) {
   return `<div class="overlay"><div class="sheet" id="qnPanel">
-    <div class="sheethead"><div class="sheettitle"><div class="serif big">Take a note</div><div class="muted small">${speech ? "Tap the microphone and talk, or type." : "Type your note, or use the microphone key on your keyboard."} It is saved in your Journal in your own words.</div></div>
+    <div class="sheethead"><div class="sheettitle"><div class="serif big">${esc(say("note_title"))}</div><div class="muted small">${speech ? "Tap the microphone and talk, or type." : "Type your note, or use the microphone key on your keyboard."} It is saved in your Journal in your own words.</div></div>
       <div class="sheetbtns"><button class="xbtn" data-action="qn:close" aria-label="Close">&times;</button></div></div>
     <input class="field" data-qn="wine" placeholder="Which wine? (optional)" value="${esc(qn.wine)}" autocomplete="off">
     <textarea class="field" data-qn="text" rows="6" placeholder="What are you tasting or thinking?">${esc(qn.text)}</textarea>
@@ -392,6 +394,56 @@ export function quickNoteHtml(qn, speech) {
     ${speech ? `<button type="button" class="btn outline" data-action="qn:mic" aria-pressed="${!!qn.listening}">${iconHtml("mic", 18)} ${qn.listening ? "Stop listening" : "Speak"}</button>` : ""}
     <div id="qnErr" class="err">${esc(qn.error || "")}</div>
     <button class="btn primary" data-action="qn:save"${qn.saving ? " disabled" : ""}>Save to my Journal</button></div></div>`;
+}
+
+// ---------------------------------------------------------------- blind tasting
+// B: { step: home | guess | pick | result, guess, notes, q, typed, form, rows, error, listening, pending: [..], pickName }.
+const RESULT_MARK = { match: "&#10003;", close: "~", miss: "&#10007;", skipped: "", unknown: "" };
+export function blindHtml(B, cards, speech, styleLabel) {
+  const head = (sub) => `<div class="sheethead"><div class="sheettitle"><div class="serif big">${esc(say("blind_title"))}</div><div class="muted small">${esc(sub)}</div></div>
+      <div class="sheetbtns"><button class="xbtn" data-action="blind:close" aria-label="Close">&times;</button></div></div>`;
+  const styles = [...WINE_STYLES.map((st) => [st.id, st.label])].map(([k, l]) => `<button class="vbtn tog${B.guess.style === k ? " on" : ""}" data-action="blind:style:${k}">${esc(l)}</button>`).join("");
+  let body = "";
+  if (B.step === "home") {
+    const list = B.pending.map((b) => `<div class="pcard"><div class="small muted">Started ${esc(String(b.started).slice(0, 10))}</div><div class="ptext">${esc(GUESS_FIELDS.map((f) => b.guess[f.id]).filter(Boolean).join(", ") || "No guess written yet")}</div>
+      <div class="acts"><button class="pill dark" data-action="blind:resume:${esc(b.id)}">Reveal this one</button><button class="pill" data-action="blind:drop:${esc(b.id)}">Remove</button></div></div>`).join("");
+    body = `${head("Taste first. Name the wine, then find out what it was.")}<button class="btn primary" data-action="blind:new">Start a new blind tasting</button>${list ? `<h3 class="serif" style="margin-top:18px">Waiting to be revealed</h3>${list}` : ""}`;
+  } else if (B.step === "guess") {
+    body = `${head("Write what you think it is. Skip anything you cannot tell.")}
+      <div class="qlabel">Type of wine</div><div class="three">${styles}</div>
+      <input class="field" data-bl="grape" placeholder="Grape (or grapes, separated by commas)" value="${esc(B.guess.grape)}" autocomplete="off">
+      <input class="field" data-bl="country" placeholder="Country" value="${esc(B.guess.country)}" autocomplete="off">
+      <input class="field" data-bl="region" placeholder="Region or appellation" value="${esc(B.guess.region)}" autocomplete="off">
+      <input class="field" data-bl="vintage" placeholder="Vintage (a year, or NV)" value="${esc(B.guess.vintage)}" inputmode="numeric" autocomplete="off">
+      <div class="qlabel">Your tasting notes</div>
+      <textarea class="field" data-bl="notes" rows="5" placeholder="${esc(say("notes_hint"))}">${esc(B.notes)}</textarea>
+      <div class="muted small micinterim" id="blInterim" role="status"></div>
+      ${speech ? `<button type="button" class="btn outline" data-action="blind:mic" aria-pressed="${!!B.listening}">${iconHtml("mic", 18)} ${B.listening ? "Stop listening" : "Speak"}</button>` : ""}
+      <div id="blErr" class="err">${esc(B.error || "")}</div>
+      <button class="btn primary" data-action="blind:reveal">Reveal the wine</button>
+      <button class="btn outline" data-action="blind:later">Save and reveal later</button>`;
+  } else if (B.step === "pick") {
+    const term = String(B.q || "").trim().toLowerCase();
+    const hits = term ? cards.filter((c) => !c.archived && wineName(c).toLowerCase().includes(term)).slice(0, 8) : [];
+    const results = hits.map((c) => `<button class="jrow" data-action="blind:pick:${esc(c.id)}"><span class="jl"><span class="serif trunc">${esc(wineName(c))}</span><span class="meta trunc">${esc([c.appellation || c.region, c.country].filter(Boolean).join(", "))}</span></span></button>`).join("");
+    const tf = B.form, ts = [...WINE_STYLES.map((st) => [st.id, st.label])].map(([k, l]) => `<button class="vbtn tog${tf.style === k ? " on" : ""}" data-action="blind:tstyle:${k}">${esc(l)}</button>`).join("");
+    body = `${head("Which wine was it?")}<input class="field" data-bl="q" placeholder="Search the catalog by producer or wine" value="${esc(B.q || "")}" autocomplete="off">
+      ${term ? results || `<p class="muted small">Nothing matches.</p>` : ""}
+      <button class="link block" data-action="blind:typed">${B.typed ? "Hide the form" : "It is not in the catalog: type it in"}</button>
+      ${B.typed ? `<input class="field" data-bt="producer" placeholder="Producer" value="${esc(tf.producer)}"><input class="field" data-bt="wine_name" placeholder="Wine or cuv\u00e9e" value="${esc(tf.wine_name)}">
+        <input class="field" data-bt="vintage" placeholder="Vintage (a year, or NV)" value="${esc(tf.vintage)}"><div class="three">${ts}</div>
+        <input class="field" data-bt="grape" placeholder="Grape (optional)" value="${esc(tf.grape)}"><input class="field" data-bt="country" placeholder="Country (optional)" value="${esc(tf.country)}"><input class="field" data-bt="region" placeholder="Region (optional)" value="${esc(tf.region)}">
+        <button class="btn primary" data-action="blind:revealtyped">Reveal</button>` : ""}
+      <div id="blErr" class="err">${esc(B.error || "")}</div><button class="btn outline" data-action="blind:backguess">Back to my guess</button>`;
+  } else {
+    const rows = B.rows, sum = summarize(rows);
+    const table = rows.map((r) => `<tr class="br ${r.result}"><td>${esc(r.label)}</td><td>${esc(r.guess || "-")}</td><td>${esc(r.actual || "-")}</td><td><span class="bmark" aria-hidden="true">${RESULT_MARK[r.result]}</span> ${esc(RESULT_WORDS[r.result])}</td></tr>`).join("");
+    body = `${head(B.pickName || "The reveal")}<div class="serif" style="font-size:20px;margin:6px 0">${esc(B.pickName || "")}</div>
+      <div class="otablewrap"><table class="otable btable"><thead><tr><th>Field</th><th>Your guess</th><th>The wine</th><th></th></tr></thead><tbody>${table}</tbody></table></div>
+      <p class="ptext">${sum.of ? `You scored <b>${sum.points} of ${sum.of}</b>.` : "You did not guess anything the app can compare."} Only facts already on record for the wine are used.</p>
+      <button class="btn primary" data-action="blind:rate">Rate this wine</button><button class="btn outline" data-action="blind:backpick">Choose another wine</button>`;
+  }
+  return `<div class="overlay"><div class="sheet" id="blindPanel">${body}</div></div>`;
 }
 
 // ---------------------------------------------------------------- report a problem with a wine card

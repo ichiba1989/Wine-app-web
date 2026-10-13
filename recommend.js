@@ -14,7 +14,7 @@ import { prefOf, famOf, cardKeys, isLive, reachOf, VERDICT_WEIGHT, UNRATED_WEIGH
 import { flavorsForCard } from "./flavors.js?v=1";
 import { splitGrapeText } from "./grapes.js?v=1";
 import { splitPlace } from "./blends.js?v=1";
-import { wineName } from "./logic.js?v=13";
+import { wineName } from "./logic.js?v=14";
 
 const fold = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const keyOf = (kind, v) => (v ? kind + ":" + fold(v) : "");   // the same key shape deck.js uses

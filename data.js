@@ -1,5 +1,5 @@
 // Everything that talks to Supabase. Each function takes the client and throws on an error.
-import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=13";
+import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=14";
 import { BUCKET, newPhotoPath } from "./photos.js?v=5";
 
 const must = ({ data, error }) => { if (error) throw error; return data; };
