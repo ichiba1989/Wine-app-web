@@ -25,6 +25,7 @@ export const ICONS = {
   dislike: (px) => `<svg class="ico" viewBox="0 0 24 24" width="${px}" height="${px}" fill="currentColor" aria-hidden="true" focusable="false"><path transform="rotate(180 12 12)" d="${THUMB}"/></svg>`,
   dont_know: SVG("M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"),
   all: SVG("M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h6v6h-6v-6z"),
+  mic: SVG("M12 14a3 3 0 003-3V6a3 3 0 00-6 0v5a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 006 6.92V21h2v-3.08A7 7 0 0019 11h-2z"),
   more: SVG("M5 10a2 2 0 100 4 2 2 0 000-4zm7 0a2 2 0 100 4 2 2 0 000-4zm7 0a2 2 0 100 4 2 2 0 000-4z"),
 };
 export const iconHtml = (kind, px = 22) => (ICONS[kind] ? ICONS[kind](px) : "");

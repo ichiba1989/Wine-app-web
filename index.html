@@ -94,6 +94,12 @@
   .jsel { display: flex; gap: 8px; margin-top: 8px; }
   .jsel .sortsel { margin-bottom: 0; padding: 9px 10px; font-size: calc(13px * var(--ts)); }
   .jmeta { display: flex; justify-content: space-between; align-items: center; font-size: calc(13px * var(--ts)); color: var(--muted); margin: 2px 0 8px; min-height: 22px; }
+  .microw { display: flex; align-items: center; gap: 10px; margin: 6px 0 10px; }
+  .pill.mic { display: inline-flex; align-items: center; gap: 6px; }
+  .pill.mic[aria-pressed="true"], .btn[aria-pressed="true"] { background: #7B1E3A; color: #fff; }
+  .micinterim { min-height: 18px; font-style: italic; }
+  .jmeta .chip { flex: none; margin: 0 8px; }
+  .incomp { color: #7B1E3A; font-weight: 600; }
   .jmeta .links { display: flex; gap: 14px; }
   .jrow { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 10px; border: 0; border-top: 1px solid var(--line); background: transparent; padding: 10px 0; text-align: left; }
   .jl { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -579,6 +585,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=70" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=71" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>

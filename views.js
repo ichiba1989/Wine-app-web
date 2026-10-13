@@ -1,10 +1,10 @@
 // Screens. Every function here takes data and returns an HTML string; nothing touches the network.
 import {
   FAMILIARITY, FLAGS, VERDICTS, isChoice, GROUPS, GROUP_PAGE, SORTS, YEARS,
-  esc, wineName, entryCard, entryName, verdictShort, groupEntries, filterEntries, sortCards,
-  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims } from "./logic.js?v=12";
+  esc, wineName, entryCard, entryName, entryIncomplete, entryMissing, verdictShort, groupEntries, filterEntries, sortCards,
+  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims } from "./logic.js?v=13";
 import { splitGrapeParts, splitPlace } from "./blends.js?v=1";
-import { REACTIONS, iconHtml, SKIP_LIMIT } from "./reactions.js?v=2";
+import { REACTIONS, iconHtml, SKIP_LIMIT } from "./reactions.js?v=3";
 import { SW_TABS, SW_KINDS, SW_GROUPS, SW_SORTS, entriesFor, tabCounts, filtersOn, stylesIn, filterEntries as filterSwipes, groupEntries as groupSwipes, fitBand } from "./swipetabs.js?v=4";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
 import { flavorsForCard, placeFor } from "./flavors.js?v=1";
@@ -181,7 +181,7 @@ export function journalShellHtml(j) {
         <select class="sortsel" data-jby aria-label="Group by">${GROUPS.map((g) => opt(g.id, "Group: " + g.label, j.by)).join("")}</select>
         <select class="sortsel" data-jverdict aria-label="Filter by verdict">${opt("all", "All verdicts", j.verdict)}${VERDICTS.map((v) => opt(v.code, v.short, j.verdict)).join("")}${opt("none", "No verdict yet", j.verdict)}</select>
       </div>
-      <div class="jimp"><button class="link small" data-action="import:open">Import wines from a file</button></div></div>
+      <div class="jimp"><button class="link small" data-action="qnote">Take a note</button> <button class="link small" data-action="import:open">Import wines from a file</button></div></div>
     <div id="jmeta" class="jmeta"></div><div id="jlist"></div>`;
 }
 export function journalMetaHtml(entries, filtered, j, groups) {
@@ -189,14 +189,16 @@ export function journalMetaHtml(entries, filtered, j, groups) {
   const n = filtered.length;
   const links = (j.by !== "flat" && groups.length > 1 && !searching)
     ? `<span class="links"><button class="link" data-action="jexpand">Expand all</button><button class="link" data-action="jcollapse">Collapse all</button></span>` : "";
-  return `<span>${n} ${n === 1 ? "wine" : "wines"}${n !== entries.length ? ` of ${entries.length}` : ""}</span>${links}`;
+  const inc = entries.filter(entryIncomplete).length;   // wines still missing details: a chip filters to them (shown only when there are some, or while the filter is on)
+  const chip = inc || j.incomplete ? `<button class="chip wide${j.incomplete ? " on" : ""}" data-action="jincomplete" aria-pressed="${!!j.incomplete}">Incomplete (${inc})</button>` : "";
+  return `<span>${n} ${n === 1 ? "wine" : "wines"}${n !== entries.length ? ` of ${entries.length}` : ""}</span>${chip}${links}`;
 }
 // Small journals open up by default; big ones start collapsed.
 export const groupIsOpen = (j, key, total, searching, by) => searching || by === "flat" || (key in j.open ? j.open[key] : total <= 10);
 
 export function journalListHtml(entries, j, photoUrls, cards = []) {
   const cardsById = new Map(cards.map((c) => [c.id, c]));
-  const filtered = filterEntries(entries, { q: j.q, verdict: j.verdict });
+  const filtered = filterEntries(entries, { q: j.q, verdict: j.verdict, incomplete: !!j.incomplete });
   const groups = groupEntries(filtered, j.by);
   const searching = j.q.trim() !== "";
   if (!entries.length) return `<p class="muted">No wines logged yet. Swipe up on a bottle you've had, tap "+ Add a wine", or import a list you already keep.</p>`;
@@ -208,7 +210,7 @@ export function journalListHtml(entries, j, photoUrls, cards = []) {
       return `<button class="jrow" data-action="entry:${e.id}">${thumbHtml(photoUrls, e.first_photo_path) || bottleThumbHtml(e.wine_vintage_id ? cardsById.get(e.wine_vintage_id) : null)}<span class="jl">
         <span class="iname"><span class="serif trunc">${esc(entryName(e))}</span><span class="ed edbtn" role="button" tabindex="0" data-action="wineinfo-entry:${e.id}" aria-label="Change wine info">&#9998;</span>${marksHtml(c, 16)}</span>
         ${entryInfoLine(e, e.wine_vintage_id ? cardsById.get(e.wine_vintage_id) : null) ? `<span class="meta grapeline trunc">${esc(entryInfoLine(e, e.wine_vintage_id ? cardsById.get(e.wine_vintage_id) : null))}</span>` : ""}
-        <span class="meta trunc"><b class="${v ? "wine" : ""}">${esc(v || "No verdict yet")}</b>${e.consumed_on ? ", " + esc(e.consumed_on) : ""}${e.food ? ", with " + esc(e.food) : ""}${e.is_outside_wine ? ", not in catalog" : ""}</span></span>
+        <span class="meta trunc"><b class="${v ? "wine" : ""}">${esc(v || "No verdict yet")}</b>${e.consumed_on ? ", " + esc(e.consumed_on) : ""}${e.food ? ", with " + esc(e.food) : ""}${e.is_outside_wine ? ", not in catalog" : ""}</span>${entryIncomplete(e) ? `<span class="meta incomp">Incomplete: needs ${esc(entryMissing(e).join(", "))}</span>` : ""}</span>
         ${v ? "" : `<span class="pill dark">Rate</span>`}</button>`;
     }).join("");
     const more = g.items.length > limit ? `<button class="link block" data-action="jmore:${encodeURIComponent(g.key)}">Show ${Math.min(GROUP_PAGE, g.items.length - limit)} more (${g.items.length - limit} left)</button>` : "";
@@ -326,6 +328,7 @@ export function sheetHtml(sheet, { saving = false, error = "", page = 0 } = {}) 
       <input class="field" inputmode="decimal" data-field="price" placeholder="Price you paid ($)" value="${esc(sheet.price)}"></div>
       <div class="two"><input class="field" data-field="food" placeholder="Food" value="${esc(sheet.food)}"><input class="field" data-field="occasion" placeholder="Occasion" value="${esc(sheet.occasion)}"></div>`,
     `<h3 class="serif">Notes and photos</h3><textarea class="field" data-field="notes" rows="4" placeholder="Notes">${esc(sheet.notes)}</textarea>
+    <div class="microw"><button type="button" class="pill mic" data-action="dictate:sheet" aria-pressed="false">${iconHtml("mic", 16)} <span>Speak your notes</span></button><span class="muted small micstatus" id="micStatus" role="status"></span></div>
       <div id="sheetPhotos" class="photoarea">${photosHtml(sheet)}</div>
       ${sheet.entryId ? `<div class="deleterow"><button class="deletelink" data-sheet="delete">Delete this entry</button></div>` : ""}`,
   ];
@@ -364,10 +367,10 @@ const yearOptions = (form) => `<option value="">Vintage (optional)</option><opti
 export function addFormHtml(form, error = "") {
   const styles = [...WINE_STYLES.map((st) => [st.id, st.label]), ["unknown", "Other"]].map(([k, l]) => `<button class="vbtn tog${form.style === k ? " on" : ""}" data-action="formstyle:${k}">${l}</button>`).join("");
   return `<div class="overlay"><div class="sheet" id="sheetPanel">
-    <div class="sheethead"><div class="sheettitle"><div class="serif big">Add a wine you drank</div><div class="muted small">Enter what is on the bottle.</div></div>
+    <div class="sheethead"><div class="sheettitle"><div class="serif big">Add a wine you drank</div><div class="muted small">Enter what is on the bottle. Missing something? Save it anyway and finish it later.</div></div>
       <div class="sheetbtns"><button class="xbtn" data-action="closeform" aria-label="Close">&times;</button></div></div>
     <div id="formPhotos" class="photoarea top">${formPhotosHtml(form)}</div>
-    <input class="field" data-form="producer" placeholder="Producer (required)" value="${esc(form.producer)}">
+    <input class="field" data-form="producer" placeholder="Producer" value="${esc(form.producer)}">
     <input class="field" data-form="wine_name" placeholder="Wine or cuvée" value="${esc(form.wine_name)}">
     <select class="field" data-form="vintage" aria-label="Vintage">${yearOptions(form)}</select>
     ${grapeAndPlaceInputs(form, "form")}
@@ -375,6 +378,20 @@ export function addFormHtml(form, error = "") {
     <div id="formErr" class="err">${esc(error)}</div>
     <button class="btn primary" data-action="addrate">Rate it now</button>
     <button class="btn outline" data-action="addnorate">Add without rating</button></div></div>`;
+}
+
+// ---------------------------------------------------------------- a quick note (voice or typed), logged in the journal
+// qn: { wine, text, listening, interim, error, saving }. The note is saved as a journal entry; if no wine is named it shows as an untitled, incomplete wine to finish later.
+export function quickNoteHtml(qn, speech) {
+  return `<div class="overlay"><div class="sheet" id="qnPanel">
+    <div class="sheethead"><div class="sheettitle"><div class="serif big">Take a note</div><div class="muted small">${speech ? "Tap the microphone and talk, or type." : "Type your note, or use the microphone key on your keyboard."} It is saved in your Journal in your own words.</div></div>
+      <div class="sheetbtns"><button class="xbtn" data-action="qn:close" aria-label="Close">&times;</button></div></div>
+    <input class="field" data-qn="wine" placeholder="Which wine? (optional)" value="${esc(qn.wine)}" autocomplete="off">
+    <textarea class="field" data-qn="text" rows="6" placeholder="What are you tasting or thinking?">${esc(qn.text)}</textarea>
+    <div class="muted small micinterim" id="qnInterim" role="status">${esc(qn.interim || "")}</div>
+    ${speech ? `<button type="button" class="btn outline" data-action="qn:mic" aria-pressed="${!!qn.listening}">${iconHtml("mic", 18)} ${qn.listening ? "Stop listening" : "Speak"}</button>` : ""}
+    <div id="qnErr" class="err">${esc(qn.error || "")}</div>
+    <button class="btn primary" data-action="qn:save"${qn.saving ? " disabled" : ""}>Save to my Journal</button></div></div>`;
 }
 
 // ---------------------------------------------------------------- report a problem with a wine card

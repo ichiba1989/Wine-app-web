@@ -109,3 +109,10 @@ Keep this list current. Tick each item (and date it) only after trying it on a t
 - [ ] Skip a wine once: it is not the next card, but it comes back later in the deck (within the second half). Skip it again: it never comes back. Restart the app between the two skips and check it still behaves (needs the script above).
 - [ ] Swipes tab: one row of thumbs up, thumbs down, skip, All with counts, plus "..."; search, group, sort and type only show after tapping "..."; a dot on it shows a filter is still on; the Skip tab says "Skipped once" or "Skipped twice"; "Put back" on a twice-skipped wine brings it back to the deck.
 
+## 14. Voice notes and incomplete wines (added 2026-10-13)
+- [ ] **Run `docs/incomplete_wines.sql` in Supabase**, then add a wine with only a name: it saves, shows "Incomplete: needs producer, vintage, type of wine" in the Journal, and the Incomplete (n) chip lists it. Add the producer, a year and a type through the pencil: the badge goes.
+- [ ] Journal, Take a note: on a real phone (Chrome on Android, Safari on iPhone) tap Speak, allow the microphone, talk: the words appear with a time stamp and save as a Journal entry. Check a desktop browser without speech support (Firefox) still lets you type.
+- [ ] The rating sheet's "Speak your notes" adds a time-stamped line under what is already written.
+- [ ] Incomplete wines never reach the editor's candidate list (even with 10 players' entries), and do not fill Bingo squares until completed.
+- [ ] **Owner and lawyers:** the browser may send the audio to its maker's speech service; add a line to `privacy.html` (and bump `CONSENT_VERSION`) before testers use it.
+

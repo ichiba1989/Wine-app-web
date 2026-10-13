@@ -3,45 +3,47 @@
 // The two Supabase values come from config.js. If that file is missing or still has placeholders, the page asks for them and remembers them in this browser.
 import {
   wineName, esc, clamp01, filterEntries, groupEntries, swipeLists,
-  sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS,
+  sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
-  dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=12";
-import * as db from "./data.js?v=25";
-import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=5";
-import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=3";
+  dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=13";
+import * as db from "./data.js?v=26";
+import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=6";
+import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=4";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=31";
-import { createLearn } from "./learn.js?v=5";
+  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=32";
+import { createLearn } from "./learn.js?v=6";
+import { composeNote, stampOf, noteProblem } from "./notes.js?v=1";
+import { createDictation, dictationSupported } from "./dictation.js?v=1";
 import { SW_START, defaultSortFor } from "./swipetabs.js?v=4";
 import { gapWeights } from "./tags.js?v=1";
 import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=1";
 import { loadPrices, applyPrices, tidyFacts, parsePrice, saveWinePrice } from "./pricing.js?v=1";
-import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=7";
-import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=4";
+import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=8";
+import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=5";
 import { applyVisualTables } from "./visualdata.js?v=1";
-import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=2";
-import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=7";
+import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=3";
+import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=8";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
-import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting } from "./tasting.js?v=3";
-import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=6";
-import { createProfile } from "./profile.js?v=19";
-import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=9";
-import { createFeedback } from "./feedback.js?v=4";
-import { createEditor } from "./editor.js?v=25";
-import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=4";
-import { gamesHtml } from "./games.js?v=11";
-import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=2";
+import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting } from "./tasting.js?v=4";
+import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=7";
+import { createProfile } from "./profile.js?v=20";
+import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=10";
+import { createFeedback } from "./feedback.js?v=5";
+import { createEditor } from "./editor.js?v=26";
+import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=5";
+import { gamesHtml } from "./games.js?v=12";
+import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
 import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=4";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=2";
-import { recommendMix, recommend } from "./recommend.js?v=4";
+import { recommendMix, recommend } from "./recommend.js?v=5";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=3"));
-const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=4"));
-const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=6"));
-import { createWineInfo } from "./wineinfo.js?v=15";
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=4"));
+const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=5"));
+const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=7"));
+import { createWineInfo } from "./wineinfo.js?v=16";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -98,6 +100,7 @@ const state = {
   j: { q: "", by: "verdict", verdict: "all", open: {}, limits: {} },
   sheet: null, sheetUi: { saving: false, error: "" },
   form: null,
+  qn: null,                                        // the quick-note sheet (voice or typed notes in the journal)
   photoUrls: new Map(),                 // signed links for the photos shown in Journal and Swipes
   quiz: null,                           // quiz results by topic, used to judge what the person knows
   crowd: new Map(),                     // how many players recognized each wine
@@ -423,7 +426,7 @@ function ensureTotTaste() {
 }
 function gamesView() {
   const cardsById = new Map(state.cards.map((c) => [c.id, c]));
-  const progress = allProgress(ratedWines(state.journal, cardsById, new Date(), state.photoUrls));
+  const progress = allProgress(ratedWines(state.journal.filter((e) => !entryIncomplete(e)), cardsById, new Date(), state.photoUrls));
   const { memory, news } = mergeMemory(state.gamesMemory, progress);
   if (memory !== state.gamesMemory) { state.gamesMemory = memory; store.set(GAMES_KEY, JSON.stringify(memory)); }
   let help = null;
@@ -437,7 +440,7 @@ function gamesView() {
 // Help for an empty square: a wine already in the journal that only needs rating, or else a few wines that would fill it, each from a different angle
 // (recommend.js lenses: a safe bet, something different, a stretch). Other games can call recommendMix() or recommend() with their own accept() and lenses.
 function squareHelp(square, cardsById) {
-  const unrated = unratedMatches(square.test, state.journal, cardsById);
+  const unrated = unratedMatches(square.test, state.journal.filter((e) => !entryIncomplete(e)), cardsById);
   if (unrated.length) return { unrated, recs: [] };
   const refs = structureMap(state.cards, state.refs);
   const model = userModel({ cards: state.cards, states: state.states, journal: state.journal, quiz: state.quiz, refs });
@@ -481,7 +484,7 @@ function drawTab(body) {
 }
 // Typing in the search box only redraws the list, so the box keeps focus.
 function renderJournalList() {
-  const filtered = filterEntries(state.journal, { q: state.j.q, verdict: state.j.verdict });
+  const filtered = filterEntries(state.journal, { q: state.j.q, verdict: state.j.verdict, incomplete: !!state.j.incomplete });
   const groups = groupEntries(filtered, state.j.by);
   const meta = $("#jmeta"), list = $("#jlist");
   if (meta) meta.innerHTML = journalMetaHtml(state.journal, filtered, state.j, groups);
@@ -808,7 +811,52 @@ function mapHintFor(card) {
 }
 
 // ---------------------------------------------------------------- the rating sheet
-function closeOverlay() { state.sheet = null; state.form = null; $("#overlay").innerHTML = ""; }
+function closeOverlay() { stopDictation(); state.sheet = null; state.form = null; state.qn = null; $("#overlay").innerHTML = ""; }
+
+// ------- speaking notes (dictation.js). One microphone at a time: into the rating sheet's notes box, or into a quick note.
+let dictation = null, dictationTarget = null;
+const stopDictation = () => { if (dictation) { dictation.stop(); } dictation = null; dictationTarget = null; };
+const setMic = (listening, msg) => {
+  const b = document.querySelector('[data-action="dictate:sheet"]'), st = $("#micStatus");
+  if (b) { b.setAttribute("aria-pressed", String(listening)); const t = b.querySelector("span"); if (t) t.textContent = listening ? "Stop listening" : "Speak your notes"; }
+  if (st) st.textContent = msg || (listening ? "Listening..." : "");
+};
+function dictateInto(target) {
+  if (dictation && dictationTarget === target) { stopDictation(); return; }   // a second tap stops
+  stopDictation();
+  const stamp = stampOf(new Date());
+  const base = target === "sheet" ? (state.sheet ? state.sheet.notes || "" : "") : (state.qn ? state.qn.text || "" : "");
+  const show = (finals, interim) => {
+    const text = composeNote(base, finals + (interim ? (finals ? " " : "") + interim : ""), stamp);
+    if (target === "sheet" && state.sheet) { state.sheet.notes = text; const el = document.querySelector('[data-field="notes"]'); if (el) el.value = text; }
+    if (target === "qn" && state.qn) { state.qn.text = text; const el = document.querySelector('[data-qn="text"]'); if (el) el.value = text; }
+  };
+  dictationTarget = target;
+  dictation = createDictation({
+    onText: show,
+    onState: (on) => { if (target === "qn" && state.qn) { state.qn.listening = on; const b = document.querySelector('[data-action="qn:mic"]'); if (b) { b.setAttribute("aria-pressed", String(on)); b.lastChild.textContent = on ? " Stop listening" : " Speak"; } } else setMic(on); if (!on) { dictation = null; dictationTarget = null; } },
+    onError: (m) => { if (target === "qn") { const e = $("#qnErr"); if (e) e.textContent = m; if (state.qn) state.qn.error = m; } else setMic(false, m); },
+  });
+  dictation.start();
+}
+async function quickNoteAction(a) {
+  const q = state.qn; if (!q) return;
+  if (a === "close") { closeOverlay(); return; }
+  if (a === "mic") { dictateInto("qn"); return; }
+  if (a === "save") {
+    if (q.saving) return;
+    stopDictation();
+    const problem = noteProblem(q.text);
+    if (problem) { q.error = problem; const e = $("#qnErr"); if (e) e.textContent = problem; return; }
+    q.saving = true; q.error = "";
+    const btn = document.querySelector('[data-action="qn:save"]'); if (btn) btn.disabled = true;
+    try {
+      const text = /^\[[A-Z][a-z]{2} \d{1,2}, \d\d:\d\d\]/.test(q.text.trim()) ? q.text.trim() : composeNote("", q.text, stampOf(new Date()));   // typed notes get their time too
+      await db.addQuickNote(state.sb, state.user.id, { wine: q.wine.trim(), notes: text }, today());
+      await refreshData(); closeOverlay(); state.tab = "journal"; render();
+    } catch (e) { q.saving = false; q.error = "Could not save: " + (e.message || e); const er = $("#qnErr"); if (er) er.textContent = q.error; if (btn) btn.disabled = false; }
+  }
+}
 // Updates the parts of the open sheet that change, without redrawing it (so typing and scrolling are not disturbed).
 function syncSheet() {
   const s = state.sheet;
@@ -1008,7 +1056,7 @@ async function saveWineEdit() {
   const w = state.wedit;
   if (!w || w.saving) return;
   checkGrapeInputs("wef"); syncGrapePlace("wef"); w.form.grape = expandBlends(w.form.grape);   // GSM -> its three grapes
-  const problem = validateWineEdit(w.form);
+  const problem = validateWineEdit(w.form, w.entry);
   if (problem) { w.error = problem; const e = document.getElementById("winfoErr"); if (e) e.textContent = problem; return; }
   if (w.mode === "mine") return saveMyWineEdit();
   const plan = planWineEdit(w.entry, w.before, w.form, state.cards);
@@ -1372,6 +1420,7 @@ document.addEventListener("click", async (ev) => {
     }
     else if (action === "toggle") { state.sw.open[a] = !state.sw.open[a]; renderBody(); }
     else if (action === "swtab") { state.sw = { ...state.sw, tab: a, status: "all", style: "all", q: "" }; renderBody(); }   // swtab:like|dislike|skip|all
+    else if (action === "jincomplete") { state.j.incomplete = !state.j.incomplete; renderJournalList(); }
     else if (action === "swmore") { state.sw.more = !state.sw.more; renderBody(); }
     else if (action === "swg") { const key = decodeURIComponent(a), cur = state.sw.open[key]; state.sw.open[key] = cur === undefined ? false : !cur; renderBody(); }
     else if (action === "delswipe") askDeleteSwipe(a);
@@ -1402,6 +1451,9 @@ document.addEventListener("click", async (ev) => {
       $("#overlay").innerHTML = addFormHtml(state.form);
     }
     else if (action === "closeform") closeOverlay();
+    else if (action === "dictate") dictateInto("sheet");                                   // speak into the rating sheet's notes
+    else if (action === "qnote") { state.qn = { wine: "", text: "", interim: "", listening: false, error: "", saving: false }; $("#overlay").innerHTML = quickNoteHtml(state.qn, dictationSupported()); }
+    else if (action === "qn") await quickNoteAction(a);                                    // qn:mic, qn:save, qn:close
     else if (action === "wineflag") { state.wf = { wineId: state.deck[0].id, reason: null, note: "", sending: false, error: "" }; $("#overlay").innerHTML = wineFlagHtml(state.wf); }
     else if (action === "wfclose") { state.wf = null; $("#overlay").innerHTML = ""; }
     else if (action === "wfreason") { state.wf.reason = WINE_FLAG_REASONS[Number(a)]; $("#overlay").innerHTML = wineFlagHtml(state.wf); }
@@ -1450,6 +1502,7 @@ document.addEventListener("input", (ev) => {
   else if (t.dataset.dim) { state.sheet = setDim(state.sheet, t.dataset.dim, Number(t.value)); syncSheet(); }
   else if (t.dataset.field && state.sheet) state.sheet[t.dataset.field] = t.value;
   else if (t.dataset.pscope !== undefined) syncGrapePlace(t.dataset.pscope);
+  else if (t.dataset.qn && state.qn) state.qn[t.dataset.qn] = t.value;
   else if (t.dataset.form && state.form) state.form[t.dataset.form] = t.value;
   else if (t.dataset.wef && state.wedit) state.wedit.form[t.dataset.wef] = t.value;
   else if (t.dataset.jq !== undefined) { state.j.q = t.value; renderJournalList(); }

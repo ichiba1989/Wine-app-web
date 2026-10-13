@@ -1,5 +1,5 @@
 // Everything that talks to Supabase. Each function takes the client and throws on an error.
-import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=12";
+import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=13";
 import { BUCKET, newPhotoPath } from "./photos.js?v=5";
 
 const must = ({ data, error }) => { if (error) throw error; return data; };
@@ -100,7 +100,7 @@ export async function saveReview(sb, userId, sheet, today) {
   const { consumption, perceptions } = buildReview(sheet, today);
   let userWineId = sheet.target.userWineId;
   if (sheet.target.kind === "outside" && !userWineId && !sheet.entryId) {
-    userWineId = must(await sb.from("user_wines").insert(outsideRow({ ...sheet.target.form, style: sheet.style }, userId)).select("id").single()).id;
+    userWineId = (await insertUserWine(sb, outsideRow({ ...sheet.target.form, style: sheet.style }, userId))).id;
   } else if (sheet.target.kind === "outside" && userWineId && sheet.style !== sheet.catalogStyle) {
     must(await sb.from("user_wines").update({ style: sheet.style }).eq("id", userWineId));   // the person owns this wine, so its type is theirs to change
   }
@@ -116,9 +116,21 @@ export async function saveReview(sb, userId, sheet, today) {
   return id;
 }
 // A hand-typed wine added to the journal with no verdict yet.
+// Saves a wine the player typed in. A wine with no producer (an incomplete one) needs docs/incomplete_wines.sql to have been run; say so plainly if it has not.
+async function insertUserWine(sb, row) {
+  const r = await sb.from("user_wines").insert(row).select("id").single();
+  if (r.error && !row.producer && /null value|not-null|producer/i.test(String(r.error.message || ""))) throw new Error("A wine without a producer needs one more database update (docs/incomplete_wines.sql). Add the producer for now.");
+  return must(r);
+}
 export async function addWithoutRating(sb, userId, form, today) {
-  const uw = must(await sb.from("user_wines").insert(outsideRow(form, userId)).select("id").single());
+  const uw = await insertUserWine(sb, outsideRow(form, userId));
   return must(await sb.from("consumptions").insert({ user_id: userId, user_wine_id: uw.id, origin: "manual", consumed_on: today }).select("id").single()).id;
+}
+
+// A note with no complete wine behind it: a journal entry holding the player's words, on a wine with only a name (or nothing yet). It is incomplete until they finish it.
+export async function addQuickNote(sb, userId, { wine, notes }, today) {
+  const uw = await insertUserWine(sb, outsideRow({ producer: "", wine_name: wine || "", vintage: "", style: "unknown", grape: "", region: "" }, userId));
+  return must(await sb.from("consumptions").insert({ user_id: userId, user_wine_id: uw.id, origin: "manual", consumed_on: today, notes }).select("id").single()).id;
 }
 
 // ---------------------------------------------------------------- photos

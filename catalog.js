@@ -14,6 +14,21 @@ export function rulesFrom(rows) {
   return { minEntries: get("catalog_candidate_min_entries") ?? DEFAULT_RULES.minEntries, minPeople: get("catalog_candidate_min_people") ?? DEFAULT_RULES.minPeople };
 }
 
+// ---------------------------------------------------------------- when is a player's wine complete?
+// A player may save a wine with only some details (a name and a note, say). It stays in their own journal and is used for nothing shared (catalog candidates,
+// Bingo, community numbers) until it is COMPLETE: a producer, a vintage (a year, or NV) and a type of wine. This is the one place that says what complete means.
+// w: { producer, vintage (a year, "NV", or empty), style }  (vintage may instead come as vintage_year / is_non_vintage, as journal rows have it)
+export function missingFields(w) {
+  const x = w || {};
+  const out = [];
+  if (!String(x.producer || "").trim()) out.push("producer");
+  const v = x.is_non_vintage ? "NV" : x.vintage_year != null ? String(x.vintage_year) : String(x.vintage || "");
+  if (v !== "NV" && !/^\d{4}$/.test(v)) out.push("vintage");
+  if (!x.style || x.style === "unknown") out.push("type of wine");
+  return out;
+}
+export const isComplete = (w) => missingFields(w).length === 0;
+
 // ---------------------------------------------------------------- "the same wine, minus the vintage"
 // Producers and wine names: no capitals, accents, punctuation or spaces ("Château d'Or" and "chateau d or" are the same name).
 export const nameKey = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/ß/g, "ss").replace(/[^a-z0-9]+/g, "");
@@ -37,7 +52,7 @@ const live = (c) => !c.archived && (!c.wineStatus || c.wineStatus === "verified"
 export function groupSubmissions(rows, { rules = DEFAULT_RULES, cards = [], decisions = [] } = {}) {
   const groups = new Map();
   (rows || []).forEach((r) => {
-    if (!r.producer || !(r.entries > 0)) return;
+    if (!(r.entries > 0) || !isComplete(r)) return;   // incomplete wines never become candidates
     const key = looseKey({ producer: r.producer, wine_name: r.wine_name, style: r.style, grapeKey: grapeKeyOfText(r.grape_text) });
     if (!groups.has(key)) groups.set(key, { key, rows: [] });
     groups.get(key).rows.push(r);

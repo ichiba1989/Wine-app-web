@@ -14,7 +14,7 @@
 // eases back toward familiar; if they recognize everything it moves toward new territory. Inside each deck the wines they are
 // likelier to like come first, with some randomness so it never feels fixed, and the same producer or place does not repeat back to back.
 
-import { SWIPE_WEIGHT, DECK_CONFIG, reactionOf, skipComesBack } from "./reactions.js?v=2";
+import { SWIPE_WEIGHT, DECK_CONFIG, reactionOf, skipComesBack } from "./reactions.js?v=3";
 
 export const TIERS = ["high", "medium", "low"];
 export const TIER_LABEL = { high: "Familiar", medium: "Getting warmer", low: "New territory" };

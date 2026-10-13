@@ -1,5 +1,6 @@
 import { fold, splitGrapeText, checkGrapeText, grapeProblem } from "./grapes.js?v=1";
-import { reactionOf, skipsOf } from "./reactions.js?v=2";
+import { reactionOf, skipsOf } from "./reactions.js?v=3";
+import { isComplete, missingFields } from "./catalog.js?v=3";
 // Pure logic for the wine app web page. No browser and no network in this file,
 // so every rule here can be tested on its own.
 
@@ -177,14 +178,17 @@ export function entryGrape(e, cardsById) {
   return names.length === 1 ? names[0] : "";
 }
 // A wine's name always starts with its vintage.
-export const wineName = (c) => `${c.vintage ? c.vintage + " " : ""}${c.producer}${c.cuvee ? " " + c.cuvee : ""}`;
+export const wineName = (c) => `${c.vintage ? c.vintage + " " : ""}${c.producer || ""}${c.cuvee ? (c.producer ? " " : "") + c.cuvee : ""}`.trim();
 
 // A journal row (from the v_journal_entries view) shaped like a card.
 export function entryCard(e) {
   const vintage = e.is_non_vintage ? "NV" : e.vintage_year ? String(e.vintage_year) : "";
   return { vintage, producer: e.producer, cuvee: e.wine_name || "", style: e.style, country: e.country };
 }
-export const entryName = (e) => wineName(entryCard(e));
+export const entryName = (e) => wineName(entryCard(e)) || "Untitled wine";
+// A wine the player typed in with details still missing (see isComplete in catalog.js). Catalog wines are always complete.
+export const entryIncomplete = (e) => !!e && !!e.is_outside_wine && !isComplete(e);
+export const entryMissing = (e) => (entryIncomplete(e) ? missingFields(e) : []);
 
 export function styleLabel(style) {
   return style === "red" ? "Red" : style === "white" ? "White" : style === "sparkling" ? "Sparkling" : style === "rose" ? "Ros\u00e9" : style === "fortified" ? "Fortified" : "Other or unknown";
@@ -203,9 +207,10 @@ export const GROUPS = [
 ];
 export const GROUP_PAGE = 20;   // rows shown per group before "Show more"
 
-export function filterEntries(entries, { q = "", verdict = "all" } = {}) {
+export function filterEntries(entries, { q = "", verdict = "all", incomplete = false } = {}) {
   const term = q.trim().toLowerCase();
   return entries.filter((e) => {
+    if (incomplete && !entryIncomplete(e)) return false;
     if (verdict === "none") { if (e.verdict) return false; }
     else if (verdict !== "all" && e.verdict !== verdict) return false;
     if (!term) return true;
@@ -350,7 +355,7 @@ export function sheetForEntry(e, perceptionRows, today, defaults = {}, photoRows
 // A rating sheet for a wine typed in by hand. The wine row is only created when the review is saved.
 export function outsideName(form) {
   const vintage = form.vintage === "NV" ? "NV" : /^\d{4}$/.test(form.vintage || "") ? form.vintage : "";
-  return `${vintage ? vintage + " " : ""}${(form.producer || "").trim()}${form.wine_name && form.wine_name.trim() ? " " + form.wine_name.trim() : ""}`;
+  return (`${vintage ? vintage + " " : ""}${(form.producer || "").trim()}${form.wine_name && form.wine_name.trim() ? ((form.producer || "").trim() ? " " : "") + form.wine_name.trim() : ""}`.trim()) || "Untitled wine";
 }
 export function sheetForOutside(form, today) {
   return {
@@ -459,7 +464,8 @@ export function referenceWrites(values, existingRows, wineId, userId, nowIso) {
 
 // ---------------------------------------------------------------- wines typed in by hand
 export function validateOutside(form) {
-  if (!form || !(form.producer || "").trim()) return "Enter the producer.";
+  // Incomplete wines are allowed: only something to call the wine by is needed. The rest can be added later (isComplete in catalog.js says when it is complete).
+  if (!form || !((form.producer || "").trim() || (form.wine_name || "").trim())) return "Enter the producer or the wine's name.";
   const g = checkGrapeText(form.grape || "");
   if (!g.ok) return grapeProblem(g.bad);
   return null;
@@ -468,7 +474,7 @@ export function validateOutside(form) {
 export function grapeTextOf(text) { const r = checkGrapeText(text || ""); return r.names.length ? r.names.join(", ") : null; }
 export function outsideRow(form, userId) {
   return {
-    user_id: userId, producer: form.producer.trim(), wine_name: clean(form.wine_name),
+    user_id: userId, producer: clean(form.producer), wine_name: clean(form.wine_name),   // producer may be empty for an incomplete wine (docs/incomplete_wines.sql)
     vintage_year: /^\d{4}$/.test(form.vintage || "") ? Number(form.vintage) : null,
     is_non_vintage: form.vintage === "NV",
     grape_text: grapeTextOf(form.grape), region_text: clean(form.region),
@@ -499,8 +505,10 @@ export function wineEditForm(entry, card, userWine) {
   const c = card || { producer: entry.producer, cuvee: entry.wine_name || "", vintage: entry.is_non_vintage ? "NV" : entry.vintage_year ? String(entry.vintage_year) : "", appellation: "", region: entry.region || "", country: entry.country || "", grapes: entry.grape ? [entry.grape] : [], ruleGrapes: [] };
   return { producer: c.producer || "", wine_name: c.cuvee || "", vintage: c.vintage || "", style: entry.style || c.style || "unknown", grape: grapeTextOfCard(c), region: placeTextOf(c) };
 }
-export function validateWineEdit(form) {
-  if (!(form.producer || "").trim()) return "Enter the producer.";
+export function validateWineEdit(form, entry = null) {
+  // A wine the player typed in may stay incomplete (a producer or a name is enough); catalog wines keep their producer.
+  const own = entry && entry.is_outside_wine;
+  if (own ? !((form.producer || "").trim() || (form.wine_name || "").trim()) : !(form.producer || "").trim()) return own ? "Enter the producer or the wine's name." : "Enter the producer.";
   const g = checkGrapeText(form.grape || "");
   if (!g.ok) return grapeProblem(g.bad);
   return "";
@@ -510,7 +518,7 @@ export function findCatalogMatch(cards, form) {
   return (cards || []).find((c) => same(c.producer, form.producer) && same(c.cuvee || "", form.wine_name || "") && String(c.vintage || "") === v) || null;
 }
 const wineFields = (form) => ({
-  producer: form.producer.trim(), wine_name: clean(form.wine_name),
+  producer: clean(form.producer), wine_name: clean(form.wine_name),
   vintage_year: /^\d{4}$/.test(vintageText(form)) ? Number(vintageText(form)) : null, is_non_vintage: vintageText(form) === "NV",
   grape_text: grapeTextOf(form.grape), region_text: clean(form.region),
   style: styleInfo(form.style) ? form.style : "unknown",
