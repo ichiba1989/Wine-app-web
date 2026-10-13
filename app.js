@@ -17,7 +17,7 @@ import { setMode } from "./words.js?v=1";
 import { journalCsv, exportName } from "./exportcsv.js?v=1";
 import { newBlind, cleanPending, hasGuess, scoreGuess, summarize, resultLine, notesAfterReveal, actualOfCard, actualOfForm } from "./blind.js?v=1";
 import { composeNote, stampOf, noteProblem } from "./notes.js?v=1";
-import { createDictation, dictationSupported } from "./dictation.js?v=3";
+import { createDictation, dictationSupported } from "./dictation.js?v=4";
 import { SW_START, defaultSortFor } from "./swipetabs.js?v=4";
 import { gapWeights } from "./tags.js?v=2";
 import { wireGrapeInputs, checkGrapeInput, setExtraGrapes } from "./grapes.js?v=1";
@@ -844,7 +844,11 @@ function dictateInto(target) {
     onNote: (m) => { const el = target === "blind" ? $("#blInterim") : target === "qn" ? $("#qnInterim") : $("#micStatus"); if (el) el.textContent = m; },
     onState: (on) => { showMic(target, on); if (!on && dictation === mine) { dictation = null; dictationTarget = null; } },
     // An error always ends the try: the button goes back to "Speak" so it can be tapped again, and the tap is never taken for "stop".
-    onError: (m) => { if (dictation === mine) { dictation = null; dictationTarget = null; } showMic(target, false); say(m); },
+    onError: (m, reason) => {
+      if (dictation === mine) { dictation = null; dictationTarget = null; }
+      showMic(target, false); say(m);
+      if (reason === "speech") { const box = document.querySelector(target === "blind" ? '[data-bl="notes"]' : target === "qn" ? '[data-qn="text"]' : '[data-field="notes"]'); if (box) box.focus(); }   // opens the keyboard, which has its own microphone key
+    },
   });
   dictation = mine;
   mine.start();

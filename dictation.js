@@ -41,19 +41,23 @@ const WORDS = {
 // onNote(message): a short status ("Asking for the microphone...") shown while the browser's question is on screen.
 // The microphone being allowed and the browser's SPEECH RECOGNITION being allowed are two different things (Safari and Chrome on iPhone ask for both and have a Dictation switch;
 // some browsers refuse speech recognition even when the microphone works). So an error from the recognition after the microphone was allowed is explained as a speech problem, not a blocked microphone.
-const SPEECH_OFF = "The microphone is allowed, but this browser will not let the page use speech recognition. On an iPhone, turn on Settings > General > Keyboard > Enable Dictation (and Privacy & Security > Speech Recognition). Or type your note, or tap the microphone key on your keyboard.";
+const SPEECH_OFF = "The microphone is allowed, but this browser will not let the page turn speech into text. You can still dictate: tap the microphone key on your keyboard while the notes box is open. On an iPhone, also check Settings > General > Keyboard > Enable Dictation and Privacy & Security > Speech Recognition.";
+// The iPhone home-screen app (and some in-app browsers) have no speech recognition at all, whatever the permissions say.
+const STANDALONE_OFF = "Speech recognition is not available in the home-screen app. Open the site in Safari or Chrome to speak, or tap the microphone key on your keyboard to dictate here, or just type.";
+const isStandalone = () => { try { return !!(navigator.standalone || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)); } catch (_) { return false; } };
 const TAP_AGAIN = "The microphone is allowed now. Tap Speak once more.";
 export function createDictation({ onText, onState, onError, onNote, onClear }) {
-  let rec = null, finals = "", on = false, asking = false, cancelled = false, justAsked = false, lastAsk = 0;
+  let rec = null, finals = "", on = false, asking = false, cancelled = false, justAsked = false, lastAsk = 0, retried = false;
   const set = (v) => { if (on === v) return; on = v; if (onState) onState(v); };
   const clear = () => { if (onClear) onClear(); };
   // Whatever happened, listening is over: let go of the recognition and show the button as off, so it can be tapped again (the browser does not always send "end" after an error).
   function reset() { const r = rec; rec = null; if (r) { r.onresult = r.onerror = r.onend = null; try { r.abort ? r.abort() : r.stop(); } catch (_) {} } set(false); }
-  const fail = (message) => { reset(); if (onError) onError(message); };
+  // reason "speech": the microphone is fine but the browser will not do speech to text. The page can still offer the keyboard's own dictation (the app focuses the notes box).
+  const fail = (message, reason) => { reset(); if (onError) onError(message, reason); };
   // Once the browser has said yes, later taps start straight away (Safari wants listening to start right after the tap). The first tap asks first.
   async function start() {
     if (on || asking) return;
-    cancelled = false; justAsked = false; clear();
+    cancelled = false; justAsked = false; retried = false; clear();
     if (microphoneKnown !== "granted") {
       asking = true;
       if (onNote) onNote("Asking for the microphone...");
@@ -69,14 +73,14 @@ export function createDictation({ onText, onState, onError, onNote, onClear }) {
     }
     begin();
   }
-  function begin() {
+  function begin(simple = false) {
     const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!Ctor) { fail("This browser cannot listen. Type your note, or use the microphone key on your keyboard."); return; }
     finals = "";
     try {
       rec = new Ctor();
       rec.lang = (navigator.language || "en-US");
-      rec.continuous = true; rec.interimResults = true;
+      rec.continuous = !simple; rec.interimResults = !simple;   // "simple" is the gentlest setting, tried once when the first try is refused
       rec.onresult = (ev) => {
         let interim = "";
         for (let i = ev.resultIndex; i < ev.results.length; i++) {
@@ -90,7 +94,13 @@ export function createDictation({ onText, onState, onError, onNote, onClear }) {
         if (e === "no-speech" || e === "aborted") return;   // quiet is not a failure; "end" follows
         if (e === "not-allowed" || e === "service-not-allowed") {
           // Right after the first "Allow", some browsers refuse because the tap that started this is already used up: the next tap works.
-          fail(microphoneKnown === "granted" ? (justAsked && Date.now() - lastAsk < 5000 ? TAP_AGAIN : SPEECH_OFF) : HOW_TO_ALLOW);
+          if (microphoneKnown !== "granted") { fail(HOW_TO_ALLOW); return; }
+          if (!simple && !retried) {   // some browsers refuse the continuous kind, or the first try right after the question: try once more, plainly
+            retried = true; const r = rec; rec = null; if (r) { r.onresult = r.onerror = r.onend = null; try { r.abort ? r.abort() : r.stop(); } catch (_) {} }
+            set(false); begin(true); return;
+          }
+          if (isStandalone()) fail(STANDALONE_OFF, "speech");
+          else fail(justAsked && Date.now() - lastAsk < 5000 ? TAP_AGAIN : SPEECH_OFF, "speech");
           return;
         }
         fail(WORDS[e] || "Could not listen (" + e + "). You can type your note instead.");
