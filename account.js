@@ -144,6 +144,7 @@ export function createAccount(ctx) {
     try {
       await ctx.deleteAccount();
       try { await ctx.sb().auth.signOut({ scope: "local" }); } catch (_) { /* the account is already gone */ }
+      try { if (ctx.clearOffline) await ctx.clearOffline(); } catch (_) { /* the copy kept for working offline goes with the account */ }
       clearPendingMerge(localStorage);
       A.busy = false; A.step = "deleted"; draw();
     } catch (e) { A.busy = false; A.error = "Could not delete: " + (e.message || e) + " Nothing else was removed, so you can try again."; draw(); }
@@ -207,7 +208,11 @@ export function createAccount(ctx) {
     else if (action === "change") { stopTimer(); A.step = "email"; A.error = ""; draw(); }
     else if (action === "verify") verify();
     else if (action === "link") checkLink();
-    else if (action === "signout") { try { await ctx.sb().auth.signOut(); } finally { ctx.reload(); } }
+    else if (action === "signout") {
+      const waiting = ctx.waiting ? ctx.waiting() : 0;
+      if (waiting) { A.error = `${waiting} ${waiting === 1 ? "change is" : "changes are"} still waiting to upload. Connect to the internet and wait for them to be sent before signing out.`; draw(); return; }
+      try { await ctx.sb().auth.signOut(); } catch (_) { /* offline: this phone is still signed out below */ } finally { try { if (ctx.clearOffline) await ctx.clearOffline(); } catch (_) {} ctx.reload(); }
+    }
   });
   document.addEventListener("input", (ev) => {
     const t = ev.target;

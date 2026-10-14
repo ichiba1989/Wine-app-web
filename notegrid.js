@@ -6,7 +6,7 @@
 // Nothing here knows anything about a wine: it only moves what the player said into the player's own grid, and when the words are unclear it leaves the answer empty.
 // The player's taps always win (mergeFromNotes never overwrites an answer), and every value is checked against the wine's type with cleanGrid.
 import { fold } from "./grapes.js?v=1";
-import { FIELDS, TAG_LIST, parentOf, cleanGrid, fieldsFor } from "./tasting.js?v=7";
+import { FIELDS, TAG_LIST, parentOf, cleanGrid, fieldsFor } from "./tasting.js?v=8";
 import { SEED_LEGEND } from "./notelegend.js?v=1";
 
 // ---------------------------------------------------------------- reading the words

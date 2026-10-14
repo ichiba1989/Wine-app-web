@@ -142,3 +142,15 @@ Keep this list current. Tick each item (and date it) only after trying it on a t
 - [ ] Owner decision: add a line to `privacy.html` (and bump `CONSENT_VERSION`) about words shared for review; decide how many players make a word "ready" (`legend_share_threshold`, default 3) and whether editors (not only the owner) should review suggestions in the Editor tab.
 - [ ] Add the words your players actually use to `notelegend.js`.
 
+## 18. Working offline (added 2026-10-14)
+Needs no database script. On a real phone, in **Safari (tab and home-screen app)** and **Chrome (Android)**:
+- [ ] Open the app online once, swipe a few wines, then switch on airplane mode and close and reopen the app (tab and installed): it opens, Discover shows cards, the header chip says "Offline".
+- [ ] Offline: swipe 30 wines (thumbs, Skip, "I've had this bottle"), take two typed notes (Journal, Take a note), add a wine and rate it, change and delete an entry. The chip counts "N changes waiting", the Journal shows "Waiting to upload" on new entries, the Swipes tab already lists the new swipes.
+- [ ] Offline: Learn (random, Timed, Review, Focus), Bingo, This or That and the practice card all play. Photo buttons are dimmed and say "Photos need a connection". Speak (dictation), sign-in, Editor, Owner and Import say they need a connection (typing and the keyboard's microphone key still work).
+- [ ] Turn airplane mode off: the chip says "Syncing...", then clears. Check in Supabase that every swipe, note and entry arrived **once** (no duplicates) and in order. Settings, "Waiting to upload", shows nothing left.
+- [ ] Make a change the database refuses (for example go over the import limit): it appears under "Could not upload" with the reason, and Try again / Drop it work.
+- [ ] Sign out (online) clears the copy and the queue; with changes waiting, sign-out asks you to connect first. Deleting an account clears them too.
+- [ ] iPhone Safari **tab** (not installed): leave changes waiting offline, see the one-time "add to your home screen" tip. Unsent changes in a tab can be erased by iOS after about a week unused; the installed app is safest.
+- [ ] Release check: bump `app.js?v=` and reload online: the new files are picked up (no mix of old and new). Nothing secret is in the cache (only the public key, as before).
+- [ ] Swipes made offline are dated when they upload (their order is kept). Exact dates would need a database change that is not built.
+- [ ] Owner decision: add a line to `privacy.html` (and bump `CONSENT_VERSION`) that the app keeps a copy of the player's data on the device so it works offline, cleared at sign-out or deletion.

@@ -1,8 +1,12 @@
 // Everything that talks to Supabase. Each function takes the client and throws on an error.
 import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=14";
 import { BUCKET, newPhotoPath } from "./photos.js?v=5";
+import { LEGACY_OF } from "./reactions.js?v=3";
+import { overlayStates, overlayJournal, overlayCounts, overlayPerceptions, entryRowOf, isOffline } from "./overlay.js?v=1";
 
 const must = ({ data, error }) => { if (error) throw error; return data; };
+// Marks a write as one that may wait in the outbox when there is no connection (offline.js), with a description of what it did (overlay.js). Without the offline layer it changes nothing.
+const tag = (q, effect) => (q && typeof q.queue === "function" ? q.queue(effect) : q);
 // Deleting in the app only hides things from the player (docs/soft_delete.sql): a row gets deleted_at filled in and stays in the database.
 // Reads of those tables skip hidden rows. Until that script has been run the column does not exist, so a read that fails for that reason is repeated without the filter.
 const active = async (build) => {
@@ -21,11 +25,15 @@ async function allRows(makeQuery) {
 }
 
 // ---------------------------------------------------------------- sign-in and age gate
-export async function ensureUser(sb) {
-  let { data: { session } } = await sb.auth.getSession();
+// saved: the signed-in person remembered on this phone (offline.js saveSession), used when there is no connection to check with. A brand-new visitor does need one.
+export async function ensureUser(sb, saved = null) {
+  let session = null;
+  try { const r = await sb.auth.getSession(); session = r && r.data && r.data.session; } catch (e) { if (!saved) throw e; }
+  if (!session && saved && isOffline()) return saved;
   if (!session) {
-    const res = await sb.auth.signInAnonymously();
-    if (res.error) throw res.error;
+    let res;
+    try { res = await sb.auth.signInAnonymously(); } catch (e) { if (saved) return saved; throw e; }
+    if (res.error) { if (saved && /fetch|network|offline/i.test(String(res.error.message || ""))) return saved; throw res.error; }
     session = res.data.session;
   }
   return session.user;
@@ -48,12 +56,12 @@ export async function loadCards(sb) {
 }   // raw: the full catalog row, used by the structure rules
 export async function loadStates(sb) {
   const r = await sb.from("v_user_wine_state").select("wine_vintage_id, familiarity, interest, reaction, skip_count, last_swiped_at");
-  if (!r.error) return r.data;
+  if (!r.error) return overlayStates(r.data);   // plus what this phone has done that the server has not heard yet (offline.js)
   if (!/reaction|skip_count|column/i.test(String(r.error.message || ""))) throw r.error;
   const r2 = await sb.from("v_user_wine_state").select("wine_vintage_id, familiarity, interest, reaction, last_swiped_at");   // before docs/skip_count.sql is run: the app counts skips itself
-  if (!r2.error) return r2.data;
+  if (!r2.error) return overlayStates(r2.data);
   if (!/reaction|column/i.test(String(r2.error.message || ""))) throw r2.error;
-  return must(await sb.from("v_user_wine_state").select("wine_vintage_id, familiarity, interest, last_swiped_at"));   // before docs/reactions.sql is run
+  return overlayStates(must(await sb.from("v_user_wine_state").select("wine_vintage_id, familiarity, interest, last_swiped_at")));   // before docs/reactions.sql is run
 }
 // The numbers behind likes, dislikes and "I don't know it" (reactions.js setSwipeConfig). Anything missing keeps its default.
 export async function loadSwipeConfig(sb) {
@@ -61,10 +69,11 @@ export async function loadSwipeConfig(sb) {
   return r.error ? [] : r.data;
 }
 export async function loadJournal(sb) {
-  return must(await sb.from("v_journal_entries").select("*").order("consumed_on", { ascending: false }));
+  return overlayJournal(must(await sb.from("v_journal_entries").select("*").order("consumed_on", { ascending: false })));
 }
 export async function loadPerceptions(sb, consumptionId) {
-  return must(await sb.from("perceptions").select("dimension_key, value, default_value, adjusted").eq("consumption_id", consumptionId));
+  if (String(consumptionId).startsWith("tmp_")) return overlayPerceptions(consumptionId, []);   // an entry made offline and not uploaded yet
+  return overlayPerceptions(consumptionId, must(await sb.from("perceptions").select("dimension_key, value, default_value, adjusted").eq("consumption_id", consumptionId)));
 }
 export async function countRows(sb) {
   const [s, j] = await Promise.all([
@@ -77,8 +86,12 @@ export async function countRows(sb) {
 // ---------------------------------------------------------------- swiping
 // One answer to a wine card: "like", "dislike", "dont_know" or "had" (docs/reactions.sql). "had" also adds the wine to the journal, done together on the server.
 // context is a small note of what the deck knew when the wine was shown ({ tier, fam, pref, skip }); it is stored with the answer so the deck can be studied later.
-export async function recordReaction(sb, wineVintageId, reaction, context = null) {
-  const { error } = await sb.rpc("record_reaction", { p_wine_vintage_id: wineVintageId, p_reaction: reaction, p_context: context });
+// local (optional, for working offline): { card } the catalog card, and { userId }, used to show a "had it" entry in the Journal until the server has made the real one.
+export async function recordReaction(sb, wineVintageId, reaction, context = null, local = {}) {
+  const [familiarity, interest] = LEGACY_OF[reaction] || [null, null], at = new Date().toISOString();
+  const effects = [{ t: "state", wvid: wineVintageId, row: { reaction, familiarity, interest, last_swiped_at: at } }];
+  if (reaction === "had") effects.push({ t: "entry", row: entryRowOf({ id: "tmp_had_" + wineVintageId, userId: local.userId || null, wineVintageId, consumption: { consumed_on: at.slice(0, 10) }, origin: "swipe_up", now: at }) });
+  const { error } = await tag(sb.rpc("record_reaction", { p_wine_vintage_id: wineVintageId, p_reaction: reaction, p_context: context }), effects);
   if (error) {
     if (error.code === "PGRST202" || /record_reaction/.test(String(error.message || ""))) throw new Error("The database needs one more update (docs/reactions.sql) before swipes can be saved.");
     throw error;
@@ -96,41 +109,50 @@ export async function changeInterest(sb, userId, wineVintageId, interest) {
 // ---------------------------------------------------------------- the journal
 // Saves a rating. A new entry is inserted; an existing one is updated. All five structure ratings
 // are saved every time. A wine typed in by hand is created first (only now, when the review is saved).
+// The journal-row fields of a wine the player typed in (what v_journal_entries would show), for the entry shown while it waits to upload.
+const outsideFields = (r) => ({ producer: r.producer || null, wine_name: r.wine_name || null, vintage_year: r.vintage_year ?? null, is_non_vintage: !!r.is_non_vintage, style: r.style || null, country: null, region: r.region_text || null, grape: r.grape_text || null, catalog_style: r.style || null });
+// What the rating changed on an existing entry (for the Journal while the change waits to upload).
+const patchOf = (c) => ({ consumed_on: c.consumed_on, verdict: c.verdict, purchase_price_cents: c.purchase_price_cents, food: c.food, occasion: c.occasion, notes: c.notes, ...(c.style_override ? { style: c.style_override } : {}) });
 export async function saveReview(sb, userId, sheet, today) {
   const { consumption, perceptions } = buildReview(sheet, today);
-  let userWineId = sheet.target.userWineId;
+  let userWineId = sheet.target.userWineId, wineRow = null;
   if (sheet.target.kind === "outside" && !userWineId && !sheet.entryId) {
-    userWineId = (await insertUserWine(sb, outsideRow({ ...sheet.target.form, style: sheet.style }, userId))).id;
+    wineRow = outsideRow({ ...sheet.target.form, style: sheet.style }, userId);
+    userWineId = (await insertUserWine(sb, wineRow)).id;
   } else if (sheet.target.kind === "outside" && userWineId && sheet.style !== sheet.catalogStyle) {
-    must(await sb.from("user_wines").update({ style: sheet.style }).eq("id", userWineId));   // the person owns this wine, so its type is theirs to change
+    must(await tag(sb.from("user_wines").update({ style: sheet.style }).eq("id", userWineId)));   // the person owns this wine, so its type is theirs to change
   }
   let id = sheet.entryId;
   if (id) {
-    must(await sb.from("consumptions").update(consumption).eq("id", id));
+    must(await tag(sb.from("consumptions").update(consumption).eq("id", id), { t: "entryPatch", id, patch: patchOf(consumption), perceptions }));
   } else {
     const link = sheet.target.kind === "outside" ? { user_wine_id: userWineId } : { wine_vintage_id: sheet.target.wineVintageId };
-    const row = { ...consumption, ...link, user_id: userId, origin: sheet.target.kind === "outside" ? "manual" : "review" };
-    id = must(await sb.from("consumptions").insert(row).select("id").single()).id;
+    const origin = sheet.target.kind === "outside" ? "manual" : "review";
+    const row = { ...consumption, ...link, user_id: userId, origin };
+    const effect = { t: "entry", perceptions, row: entryRowOf({ id: "$new", userId, consumption, wineVintageId: link.wine_vintage_id || null, userWineId: link.user_wine_id || null, fields: wineRow ? outsideFields(wineRow) : null, origin }) };
+    id = must(await tag(sb.from("consumptions").insert(row).select("id").single(), effect)).id;
   }
-  must(await sb.from("perceptions").upsert(perceptions.map((p) => ({ ...p, consumption_id: id })), { onConflict: "consumption_id,dimension_key" }));
+  must(await tag(sb.from("perceptions").upsert(perceptions.map((p) => ({ ...p, consumption_id: id })), { onConflict: "consumption_id,dimension_key" })));
   return id;
 }
 // A hand-typed wine added to the journal with no verdict yet.
 // Saves a wine the player typed in. A wine with no producer (an incomplete one) needs docs/incomplete_wines.sql to have been run; say so plainly if it has not.
 async function insertUserWine(sb, row) {
-  const r = await sb.from("user_wines").insert(row).select("id").single();
+  const r = await tag(sb.from("user_wines").insert(row).select("id").single());
   if (r.error && !row.producer && /null value|not-null|producer/i.test(String(r.error.message || ""))) throw new Error("A wine without a producer needs one more database update (docs/incomplete_wines.sql). Add the producer for now.");
   return must(r);
 }
 export async function addWithoutRating(sb, userId, form, today) {
-  const uw = await insertUserWine(sb, outsideRow(form, userId));
-  return must(await sb.from("consumptions").insert({ user_id: userId, user_wine_id: uw.id, origin: "manual", consumed_on: today }).select("id").single()).id;
+  const wineRow = outsideRow(form, userId), uw = await insertUserWine(sb, wineRow), consumption = { consumed_on: today };
+  const effect = { t: "entry", row: entryRowOf({ id: "$new", userId, userWineId: uw.id, fields: outsideFields(wineRow), consumption, origin: "manual" }) };
+  return must(await tag(sb.from("consumptions").insert({ user_id: userId, user_wine_id: uw.id, origin: "manual", consumed_on: today }).select("id").single(), effect)).id;
 }
 
 // A note with no complete wine behind it: a journal entry holding the player's words, on a wine with only a name (or nothing yet). It is incomplete until they finish it.
 export async function addQuickNote(sb, userId, { wine, notes }, today) {
-  const uw = await insertUserWine(sb, outsideRow({ producer: "", wine_name: wine || "", vintage: "", style: "unknown", grape: "", region: "" }, userId));
-  return must(await sb.from("consumptions").insert({ user_id: userId, user_wine_id: uw.id, origin: "manual", consumed_on: today, notes }).select("id").single()).id;
+  const wineRow = outsideRow({ producer: "", wine_name: wine || "", vintage: "", style: "unknown", grape: "", region: "" }, userId), uw = await insertUserWine(sb, wineRow), consumption = { consumed_on: today, notes };
+  const effect = { t: "entry", row: entryRowOf({ id: "$new", userId, userWineId: uw.id, fields: outsideFields(wineRow), consumption, origin: "manual" }) };
+  return must(await tag(sb.from("consumptions").insert({ user_id: userId, user_wine_id: uw.id, origin: "manual", consumed_on: today, notes }).select("id").single(), effect)).id;
 }
 
 // ---------------------------------------------------------------- photos
@@ -268,12 +290,14 @@ export async function saveReferences(sb, userId, wineId, values, existingRows) {
 // Deleting only hides the entry from the player: the database functions mark it deleted and keep everything, photos and their files included
 // (docs/soft_delete.sql). Photos the player had shared for the catalog are taken back first; if that fails nothing else changes.
 export async function deleteJournalEntry(sb, consumptionId) {
-  const rows = must(await active((on) => onlyActive(sb.from("journal_photos").select("id, storage_path, share_status").eq("consumption_id", consumptionId), on)));
-  await withdrawShared(sb, rows);
-  must(await sb.rpc("delete_my_journal_entry", { p_consumption_id: consumptionId }));
+  if (!isOffline()) {   // shared photos are taken back first; with no connection the entry is only hidden (the database hides its photos too)
+    const rows = must(await active((on) => onlyActive(sb.from("journal_photos").select("id, storage_path, share_status").eq("consumption_id", consumptionId), on)));
+    await withdrawShared(sb, rows);
+  }
+  must(await tag(sb.rpc("delete_my_journal_entry", { p_consumption_id: consumptionId }), { t: "entryDelete", id: consumptionId }));
 }
 export async function deleteSwipe(sb, wineVintageId) {
-  must(await sb.rpc("delete_my_swipe", { p_wine_vintage_id: wineVintageId }));
+  must(await tag(sb.rpc("delete_my_swipe", { p_wine_vintage_id: wineVintageId }), { t: "stateDelete", wvid: wineVintageId }));
 }
 
 // ---------------------------------------------------------------- carrying a guest's progress into an account
@@ -565,7 +589,7 @@ export async function countSwipesAndJournal(sb) {
   ]);
   if (s.error) throw s.error;
   if (j.error) throw j.error;
-  return { swipes: s.count || 0, journal: j.count || 0 };
+  return overlayCounts({ swipes: s.count || 0, journal: j.count || 0 });
 }
 
 // Import (importer.js): adds many journal entries at once. Items are { kind: "catalog" | "outside", wine_vintage_id | wine (a user_wines row), consumed_on, verdict, purchase_price_cents, notes }.
@@ -620,7 +644,7 @@ export async function importJournal(sb, userId, items, today) {
 
 // This or That (thisorthat.js): one row per player and pair. Needs the table from docs/this_or_that.sql; until it exists the save fails and the game still works.
 export async function saveThisOrThat(sb, row) {
-  must(await sb.from("this_or_that_answers").upsert(row, { onConflict: "user_id,pair_id" }));
+  must(await tag(sb.from("this_or_that_answers").upsert(row, { onConflict: "user_id,pair_id" })));
 }
 
 // ---------------------------------------------------------------- quiz tags (docs/quiz_tags.sql)
@@ -657,7 +681,7 @@ export async function loadMyLegend(sb) {
 }
 // One line of the player's own legend: a word they taught (rejected false) or an answer they pushed back on (rejected true). share offers the word to editors, never a note.
 export async function saveMyLegend(sb, userId, e) {
-  const r = await sb.from("note_legend_mine").upsert({ user_id: userId, phrase: e.phrase, field: e.field, value: e.value, rejected: !!e.rejected, share: !!e.share && !e.rejected }, { onConflict: "user_id,phrase,field,value" });
+  const r = await tag(sb.from("note_legend_mine").upsert({ user_id: userId, phrase: e.phrase, field: e.field, value: e.value, rejected: !!e.rejected, share: !!e.share && !e.rejected }, { onConflict: "user_id,phrase,field,value" }));
   if (r.error) throw r.error;
 }
 // Editors and the owner: suggestions (how many different players shared each word and answer), and the decisions.

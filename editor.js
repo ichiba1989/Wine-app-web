@@ -9,8 +9,8 @@
 //   Feedback:  read what testers sent from the app and mark it handled.
 // Every change is logged by the database.
 import { dimsFor, dimMeta, defaultFor, esc, wineName, placeLine, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel, barDims, choiceDims, styleInfo } from "./logic.js?v=14";
-import * as db from "./data.js?v=28";
-import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=34";
+import * as db from "./data.js?v=29";
+import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=35";
 import { createReview } from "./review.js?v=11";
 import { createWineInfo, publishSummary } from "./wineinfo.js?v=18";
 import { groupSubmissions, planPromotion, duplicateGroups, rulesFrom } from "./catalog.js?v=3";

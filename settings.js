@@ -2,7 +2,7 @@
 // They are kept on this phone (in the browser), not in the database, so each device can be set up differently.
 // The rules at the top are pure (no browser, no network) so they can be tested on their own. The sheet is drawn by settingsHtml.
 import { esc } from "./logic.js?v=14";
-import { accountCardHtml } from "./account.js?v=11";
+import { accountCardHtml } from "./account.js?v=12";
 import { MODES, cleanMode } from "./words.js?v=1";
 import { cleanLang } from "./winewords.js?v=1";
 
@@ -50,7 +50,17 @@ export function changeSetting(s, key, value) {
 const chip = (on, data, label, disabled = false) => `<button class="gopt${on ? " on" : ""}" data-action="set:${data}" aria-pressed="${on}"${disabled ? " disabled" : ""}>${esc(label)}</button>`;
 const row = (title, chips, note) => `<div class="srow"><div class="stitle">${esc(title)}</div><div class="gopts">${chips}</div>${note ? `<div class="muted small snote">${note}</div>` : ""}</div>`;
 
-export function settingsHtml(s, user, { owner = false } = {}) {
+// The "Waiting to upload" part: how many changes wait, a Sync now button, and the changes the database refused (each can be tried again or dropped).
+export function syncHtml(y) {
+  if (!y) return "";
+  const failed = (y.failed || []).map((f) => `<div class="fitem"><div class="small">${esc(f.what)}</div><div class="small err">${esc(f.error || "")}</div>
+      <button class="link small" data-action="sync:retry:${esc(f.id)}">Try again</button> <button class="link small" data-action="sync:discard:${esc(f.id)}">Drop it</button></div>`).join("");
+  const line = !y.pending ? "Nothing is waiting to upload." : `${y.pending} ${y.pending === 1 ? "change is" : "changes are"} waiting to upload.`;
+  const net = y.online ? (y.syncing ? "Uploading now." : "You are online.") : "You are offline. Your changes are kept on this phone and sent when you are back online.";
+  return `<div class="srow"><div class="stitle">Waiting to upload</div><div class="small">${esc(line)} ${esc(net)}</div>
+    <button class="btn outline slim" data-action="sync:now"${y.online ? "" : " disabled"}>Sync now</button>${failed ? `<div class="stitle" style="margin-top:10px">Could not upload</div>${failed}` : ""}</div>`;
+}
+export function settingsHtml(s, user, { owner = false, sync = null } = {}) {
   const onOff = (key, disabled = false) => chip(s[key], `${key}:on`, "On", disabled) + chip(!s[key], `${key}:off`, "Off", disabled);
   return `<div class="overlay"><div class="sheet" id="settingsPanel" role="dialog" aria-label="Settings">
     <div class="sheethead"><div class="sheettitle"><div class="serif big">Settings</div><div class="muted small">Saved on this phone.</div></div>
@@ -62,6 +72,7 @@ export function settingsHtml(s, user, { owner = false } = {}) {
     <div class="srow"><div class="stitle">How the card works</div><button class="btn outline slim" data-action="demo:open">Practice with a sample card</button><div class="muted small snote">A short walkthrough of swiping, the buttons and zoom. Nothing is saved.</div></div>
     ${row("Zoom", "", "Pinch the card with two fingers, double-tap the middle of it, or tap Zoom under the card. While it is zoomed, swiping is paused. Tap Reset zoom to go back.")}
     ${row("Motion", MOTION.map((m) => chip(s.motion === m.id, `motion:${m.id}`, m.label)).join(""), "Reduces the card's movement and the fades.")}
+    ${syncHtml(sync)}
     ${owner ? `<div class="srow"><div class="stitle">Owner</div><button class="btn outline slim" data-action="owner:open">Open the owner page</button><div class="muted small snote">Tables of wines, lenses, bingo cards, checks and settings.</div></div>` : ""}
     <div class="srow"><div class="stitle">Account</div>${accountCardHtml(user)}</div>
   </div></div>`;

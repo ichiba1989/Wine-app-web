@@ -5,6 +5,9 @@
 // five structure sliders, so the palate and the Discover deck keep working from the same lines for everyone.
 // The rules at the top are pure (no browser, no network). The functions at the bottom talk to Supabase.
 import { esc, dimsFor } from "./logic.js?v=14";
+import { overlayTasting } from "./overlay.js?v=1";
+// Marks a write as one that may wait in the outbox when there is no connection (offline.js), with what it did (overlay.js).
+const tag = (q, effect) => (q && typeof q.queue === "function" ? q.queue(effect) : q);
 
 export const METHOD = "grid1";
 export const FEATURE = "proTasting";
@@ -210,19 +213,20 @@ export function syncGridDom(values, open, style, root = document) {
 
 // ---------------------------------------------------------------- the database
 export async function loadTasting(sb, consumptionId) {
+  if (String(consumptionId).startsWith("tmp_")) return overlayTasting(consumptionId, {});   // an entry made offline and not uploaded yet
   const { data, error } = await sb.from("tasting_notes").select("data").eq("consumption_id", consumptionId).maybeSingle();
   if (error) throw error;
-  return (data && data.data) || {};
+  return overlayTasting(consumptionId, (data && data.data) || {});
 }
 // An empty grid removes the note. Needs database update 21 and the professional tier.
 export async function saveTasting(sb, consumptionId, grid, style) {
   const clean = cleanGrid(grid, style);
   if (!Object.keys(clean).length) {
-    const { error } = await sb.from("tasting_notes").delete().eq("consumption_id", consumptionId);
+    const { error } = await tag(sb.from("tasting_notes").delete().eq("consumption_id", consumptionId), { t: "tasting", id: consumptionId, data: {} });
     if (error) throw error;
     return;
   }
-  const { error } = await sb.from("tasting_notes").upsert({ consumption_id: consumptionId, method: METHOD, data: clean, updated_at: new Date().toISOString() }, { onConflict: "consumption_id" });
+  const { error } = await tag(sb.from("tasting_notes").upsert({ consumption_id: consumptionId, method: METHOD, data: clean, updated_at: new Date().toISOString() }, { onConflict: "consumption_id" }), { t: "tasting", id: consumptionId, data: clean });
   if (error) throw error;
 }
 

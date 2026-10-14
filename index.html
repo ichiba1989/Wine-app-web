@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#7B1E3A">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <!-- Nothing here uses plug-ins, a <base> tag or forms, so these are switched off for good: even a page that was somehow altered could not use them. -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>Wine app (phone test)</title>
@@ -420,6 +424,11 @@
   /* ---- settings, answer buttons, card zoom */
   button, a, .gopt, .ans { touch-action: manipulation; }   /* no double-tap-to-zoom delay on controls; the card handles its own touches */
   .topright { display: flex; align-items: center; gap: 10px; }
+  .netchip { border: 0; border-radius: 999px; background: var(--slate); color: #fff; font-size: calc(11px * var(--ts)); font-weight: 600; padding: 3px 10px; margin-right: 6px; }
+  .netchip[hidden] { display: none; } .netchip.bad { background: var(--wine); }
+  .meta.waiting { color: var(--slate); font-weight: 600; }
+  body.offline label.pill:has(input[data-photo]) { opacity: .45; }   /* photos need a connection */
+  .fitem { border-top: 1px solid var(--line); padding: 6px 0; }
   .gear { border: 0; background: transparent; font-size: calc(22px * var(--ts)); line-height: 1; padding: 6px 8px; min-width: 44px; min-height: 44px; color: var(--ink); }
   body[data-tab="discover"] .gear { min-height: 36px; padding: 2px 8px; }
   .answers { display: grid; grid-template-columns: 1fr 1.25fr 1fr; gap: 8px; margin-top: 10px; }
@@ -596,6 +605,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=80" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=81" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>

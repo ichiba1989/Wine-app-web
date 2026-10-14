@@ -6,13 +6,13 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete, styleLabel,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=14";
-import * as db from "./data.js?v=28";
+import * as db from "./data.js?v=29";
 import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=8";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=5";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=34";
-import { createLearn } from "./learn.js?v=8";
+  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=35";
+import { createLearn } from "./learn.js?v=9";
 import { setMode } from "./words.js?v=1";
 import { journalCsv, exportName } from "./exportcsv.js?v=1";
 import { newBlind, cleanPending, hasGuess, scoreGuess, summarize, resultLine, notesAfterReveal, actualOfCard, actualOfForm } from "./blind.js?v=1";
@@ -25,25 +25,27 @@ import { buildVocab, fixTerms } from "./termfix.js?v=1";
 import { WINE_TERMS, setSpeechLang, speechCodeOf } from "./winewords.js?v=1";
 import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=1";
 import { loadPrices, applyPrices, tidyFacts, parsePrice, saveWinePrice } from "./pricing.js?v=1";
-import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=9";
+import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=10";
 import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=6";
 import { applyVisualTables } from "./visualdata.js?v=1";
 import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=4";
 import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=9";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
-import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, paintNoteMarks, teachHtml, autoCount } from "./tasting.js?v=7";
+import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, paintNoteMarks, teachHtml, autoCount } from "./tasting.js?v=8";
 import { gridFromNotes, mergeFromNotes, touched, legendEntry, compileWith } from "./notegrid.js?v=1";
 import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=7";
 import { createProfile } from "./profile.js?v=22";
-import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=11";
+import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=12";
 import { createFeedback } from "./feedback.js?v=6";
 import { createEditor } from "./editor.js?v=29";
-import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=7";
+import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=8";
 import { gamesHtml } from "./games.js?v=13";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
 import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=4";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=2";
 import { recommendMix, recommend } from "./recommend.js?v=6";
+import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=1";
+import { setOffline, setCardLookup } from "./overlay.js?v=1";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null;
 const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=7"));
@@ -53,9 +55,10 @@ import { createWineInfo } from "./wineinfo.js?v=18";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
-const APP_VERSION = "33";   // shown to editors with each piece of feedback
+const APP_VERSION = "34";   // shown to editors with each piece of feedback
 const SUPABASE_JS_VERSION = "2.109.0";
 const LIBRARY_URLS = [
+  "./vendor/supabase.js?v=1",   // the copy kept in this repository: the only one that works with no signal; the internet sources are the fallback
   `https://esm.sh/@supabase/supabase-js@${SUPABASE_JS_VERSION}`,
   `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@${SUPABASE_JS_VERSION}/+esm`,
   "https://esm.sh/@supabase/supabase-js@2",
@@ -86,6 +89,9 @@ const store = {
 };
 if (SUPABASE_URL.startsWith("PASTE")) SUPABASE_URL = cleanProjectUrl(store.get("wine_url")) || SUPABASE_URL;
 if (SUPABASE_KEY.startsWith("PASTE")) SUPABASE_KEY = store.get("wine_key") || SUPABASE_KEY;
+// Working offline (offline.js): a copy of what was read, a queue of changes made without a connection, and the sync that uploads them.
+const offline = createOffline({ store: createIdbStore() });
+setOffline(offline);
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
 const OWNER_START = { tab: "wines", q: "", issue: "all", sort: { wines: { key: "producer", dir: 1 }, bingo: { key: "tier", dir: 1 } }, lens: "confident", player: "me", seed: "", weights: {}, open: {}, msg: "", wineIds: null, config: null, configError: "", tags: null, tagsError: "", legend: null, legendError: "" };
@@ -154,6 +160,8 @@ const account = createAccount({
   prepareMerge: () => db.prepareGuestMerge(state.sb),
   deleteAccount: () => db.deleteMyAccount(state.sb),
   reload: () => location.replace(location.pathname + location.search),
+  clearOffline: () => offline.clearAll(),   // sign-out and deleting the account also remove the copy kept for working offline
+  waiting: () => offline.status().pending,
   onClose: () => { if (state.status === "main") render(); },
 });
 // Feedback from testers lives in feedback.js. Editors read it in the Editor tab.
@@ -208,6 +216,15 @@ async function loadAllCards() {
 const loadCounts = () => db.countSwipesAndJournal(state.sb);
 
 // ---------------------------------------------------------------- start up
+// Offline, the profile comes from the copy kept on the phone (the person was signed in and had accepted the terms there).
+async function loadProfileOrSaved() {
+  try { return await db.loadProfile(state.sb, state.user.id); }
+  catch (e) {
+    const saved = await offline.savedSession();
+    if (saved && saved.profile && saved.profile.id === state.user.id) return saved.profile;
+    throw e;
+  }
+}
 async function init() {
   setExtraGrapes(BLEND_NAMES);   // GSM is accepted as a varietal (it becomes Grenache, Syrah and Mourvèdre when saved)
   wireGrapeInputs();   // suggestions under every grape field
@@ -223,14 +240,20 @@ async function init() {
     const back = new URLSearchParams(location.hash.replace(/^#/, ""));
     const linkError = back.get("error_description");
     const createClient = await loadSupabaseLibrary();
-    state.sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+    const rawClient = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+    await offline.load();
+    state.sb = offline.wrap(rawClient);
+    setCardLookup(cardById);
     startEarlyLoads();   // the catalog and other public reads run while sign-in and the profile load
-    state.user = await db.ensureUser(state.sb);
+    const savedUser = await offline.savedSession();
+    state.user = await db.ensureUser(state.sb, savedUser && savedUser.user);
+    if (await offline.rememberUser(state.user.id)) { /* the copy on this phone belonged to someone else: it has been cleared */ }
     if (location.hash) history.replaceState(null, "", location.pathname + location.search);
     if (linkError) state.banner = "That email link did not work: " + linkError.replace(/\+/g, " ") + " Ask for a new code.";
     const carried = await carryOverGuest();
-    state.profile = await db.loadProfile(state.sb, state.user.id);
+    state.profile = await loadProfileOrSaved();
     state.access = await db.loadAccess(state.sb, state.profile.role);
+    await offline.saveSession({ user: { id: state.user.id, is_anonymous: state.user.is_anonymous, email: state.user.email || null }, profile: state.profile });
     if (!needsConsent(state.profile, store.get("wine.consent"))) await enterMain(); else { state.status = "age"; render(); }   // the one consent page: first time, or when its version changes
     if (carried && carried.error) setBanner(carried.error);
     else if (carried) setBanner(carried, true);
@@ -263,6 +286,7 @@ async function refreshData(afterMine = null) {
   if (state.mine.size) journal.forEach((e, i) => { if (e.wine_vintage_id && state.mine.has(e.wine_vintage_id)) journal[i] = patchEntry(e, state.mine.get(e.wine_vintage_id)); }); state.journal = journal; state.counts = counts;
   // A photo link that cannot be made only means that picture is not shown; it never blocks the app.
   try { state.photoUrls = await db.signedUrls(state.sb, journal.map((j) => j.first_photo_path)); } catch (_) { state.photoUrls = new Map(); }
+  await usePhotoFallbacks();   // offline, the few thumbnails kept on the phone stand in for the signed links
   lastRefreshAt = Date.now();
 }
 // Opening Swipes, Journal, Profile or Games shows the tab at once from what is already loaded and fetches fresh data behind it (at most every 30 seconds, or sooner
@@ -297,7 +321,59 @@ async function enterMain() {
   state.cards = cards; state.feedback = feedback; state.pro = pro; state.quiz = quiz; state.crowd = crowd;
   rebuildDeck();
   state.status = "main"; render();
+  startOffline();
   maybeShowDemo();
+}
+// ---------------------------------------------------------------- working offline: the status chip, syncing, thumbnails, the service worker
+let offlineStarted = false;
+const PHOTO_MSG = "Photos need a connection. Try again when you are online.";
+const THUMB_ENTRIES = 30;   // only the photos on this many of the newest journal entries are kept (as tiny pictures) for offline viewing
+function paintNetChip() {
+  const st = offline.status(), el = $("#netchip");
+  document.body.classList.toggle("offline", !st.online);
+  if (!el) return;
+  const text = st.failed ? `${st.failed} could not upload` : st.syncing ? "Syncing..." : st.pending ? `${st.pending} ${st.pending === 1 ? "change" : "changes"} waiting` : !st.online ? "Offline" : "";
+  el.textContent = text; el.hidden = !text; el.classList.toggle("bad", !!st.failed);
+  if (st.pending && !st.online) maybeHomeTip();
+}
+// In a browser tab (not the installed app) an iPhone can erase what is kept after about a week unused, so while changes wait, a one-time tip suggests adding the app to the home screen.
+function maybeHomeTip() {
+  const installed = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+  if (installed || store.get("wine.homeTip") || state.status !== "main") return;
+  store.set("wine.homeTip", "1");
+  setBanner("Your changes are kept on this phone until you are online. For the safest keeping, add this app to your home screen (Share, then Add to Home Screen).");
+}
+// A small set of photo thumbnails (about 100 px) for the newest journal entries, kept for viewing offline. Only while online; never blocks anything.
+async function keepThumbs() {
+  if (!navigator.onLine) return;
+  try {
+    const have = await offline.thumbs(), fresh = state.journal.filter((j) => j.first_photo_path && !String(j.id).startsWith("tmp_")).slice(0, THUMB_ENTRIES);
+    for (const j of fresh) {
+      const url = state.photoUrls.get(j.first_photo_path);
+      if (!url || have.has(j.first_photo_path)) continue;
+      try { await offline.thumbPut(j.first_photo_path, await makeThumb(url)); } catch (_) { /* this one picture is simply not kept */ }
+    }
+  } catch (_) { /* thumbnails are a nicety */ }
+}
+async function usePhotoFallbacks() {
+  try { const th = await offline.thumbs(); state.journal.forEach((j) => { if (j.first_photo_path && !state.photoUrls.get(j.first_photo_path) && th.get(j.first_photo_path)) state.photoUrls.set(j.first_photo_path, th.get(j.first_photo_path)); }); } catch (_) {}
+}
+function startOffline() {
+  if (offlineStarted) return; offlineStarted = true;
+  offline.subscribe(paintNetChip); paintNetChip();
+  offline.start({ client: () => state.sb, synced: async () => { lastRefreshAt = 0; await refreshData(); state.counts = await loadCounts(); if (state.status === "main") { if (state.tab !== "discover") renderBody(); } if ($("#settingsPanel")) openSettings(); } });
+  // The browser may be asked to keep this site's data, which protects the waiting changes from being cleared when space runs low.
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (_) {}
+  // Photo buttons are online-only: offline they say so instead of opening the camera or the library.
+  document.addEventListener("click", (ev) => { const t = ev.target; if (t && t.matches && t.matches("input[data-photo]") && !navigator.onLine) { ev.preventDefault(); ev.stopPropagation(); setBanner(PHOTO_MSG); } }, true);
+  usePhotoFallbacks().then(keepThumbs);
+  // The service worker lets the app open with no signal. It is tied to this build's version number.
+  try { if ("serviceWorker" in navigator) { const v = (new URL(import.meta.url).searchParams.get("v")) || "0"; navigator.serviceWorker.register(`./sw.js?v=${v}`).then(() => navigator.serviceWorker.ready).then((reg) => {
+    // The worker is told which of the app's own files this page has loaded, so it can keep every one of them.
+    const urls = performance.getEntriesByType("resource").map((r) => r.name).filter((n) => n.startsWith(location.origin));
+    if (reg.active) reg.active.postMessage({ type: "cache", urls: [...urls, new URL("./manifest.webmanifest", location.href).href] });
+  }).catch(() => {}); } } catch (_) {}
+  loadDemoModule().catch(() => {});   // the practice walkthrough is loaded ahead of time so it opens offline too
 }
 // The Discover deck: three decks (familiar, getting warmer, new territory) mixed by what the person knows and likes. See deck.js.
 // ---------------------------------------------------------------- bottle photos on the cards
@@ -325,6 +401,7 @@ function setBanner(msg, good = false) {
 async function carryOverGuest() {
   const pending = readPendingMerge(localStorage);
   if (!pending || state.user.is_anonymous) return null;   // still a guest: keep the code until sign-in finishes or it expires
+  if (offline.status().pending) return null;   // the guest's own changes must reach the server first, so the carry-over waits (the code is kept)
   clearPendingMerge(localStorage);                          // a code is only ever tried once
   try { return mergeMessage(await db.claimGuestMerge(state.sb, pending.token)); }
   catch (e) { return { error: "Could not carry over what you did as a guest: " + (e.message || e) }; }
@@ -332,7 +409,7 @@ async function carryOverGuest() {
 function shellHtml() {
   const tab = (id, label) => `<button data-action="tab:${id}">${label}</button>`;
   const editorLink = isEditor() ? tab("editor", "Editor") : "";
-  return `<div class="top"><h1 class="serif" id="title"></h1><div class="topright"><span class="muted small">Early build</span><button class="gear" data-action="settings" aria-label="Settings">&#9881;</button></div></div>
+  return `<div class="top"><h1 class="serif" id="title"></h1><div class="topright"><button class="netchip" id="netchip" data-action="syncinfo" hidden></button><span class="muted small">Early build</span><button class="gear" data-action="settings" aria-label="Settings">&#9881;</button></div></div>
     <div id="gbanner" class="banner gb" data-action="dismiss" hidden></div>
     <div class="content" id="content"><div id="tabbody"></div></div>
     <nav class="tabs">${tab("discover", "Discover")}${tab("swipes", "Swipes")}${tab("journal", "Journal")}${tab("profile", "Profile")}${tab("learn", "Learn")}${tab("games", "Games")}${editorLink}</nav>`;
@@ -634,7 +711,8 @@ document.addEventListener("change", async (ev) => {
   else if (t.dataset.importScale !== undefined) { I.scale = Number(t.value); drawImport(); }
 });
 document.addEventListener("input", (ev) => { const t = ev.target; if (state.imp && t && t.dataset && t.dataset.importText !== undefined) state.imp.text = t.value; });
-function openSettings() { $("#overlay").innerHTML = settingsHtml(state.settings, state.user, { owner: isOwner() }); }
+const syncInfo = () => { const st = offline.status(); return { pending: st.pending, online: st.online, syncing: st.syncing, failed: offline.failedItems() }; };
+function openSettings() { $("#overlay").innerHTML = settingsHtml(state.settings, state.user, { owner: isOwner(), sync: syncInfo() }); }
 function closeSettings() { $("#overlay").innerHTML = ""; }
 const behindOf = (el) => (el && el.parentElement ? el.parentElement.querySelector(".behind") : null);
 // The card underneath rises toward the front as the top card is pulled away.
@@ -688,7 +766,7 @@ async function fly(el, kind, v = { dx: 0, dy: 0, vx: 0, vy: 0 }) {
   const [familiarity, interest] = LEGACY_OF[kind];
   const before = state.states.find((x) => x.wine_vintage_id === card.id);   // a skipped wine can come round again: the second skip takes it out of the deck
   const skip_count = kind === "dont_know" ? skipsOf(before) + 1 : (before && before.skip_count) || 0;
-  await finishCard(card, () => db.recordReaction(state.sb, card.id, kind, contextFor(card)), { reaction: kind, familiarity, interest, skip_count }, "Could not save that swipe: ", async () => { state.counts = await loadCounts(); });
+  await finishCard(card, () => db.recordReaction(state.sb, card.id, kind, contextFor(card), { userId: state.user.id }), { reaction: kind, familiarity, interest, skip_count }, "Could not save that swipe: ", async () => { state.counts = await loadCounts(); });
 }
 const contextFor = (card) => { const i = state.deckInfo && state.deckInfo.get(card.id); const r2 = (n) => Math.round(n * 100) / 100; return i ? { tier: i.tier, fam: r2(i.fam), pref: r2(i.pref), skip: r2(i.skip || 0) } : null; };
 
@@ -1619,7 +1697,7 @@ document.addEventListener("click", async (ev) => {
     }
     else if (action === "react") {   // change one answer from the Swipes tab: react:WINE:like|dislike
       if (b === "like" || b === "dislike") {
-        await db.recordReaction(state.sb, a, b, null);
+        await db.recordReaction(state.sb, a, b, null, { userId: state.user.id });
         const [familiarity, interest] = LEGACY_OF[b];
         state.states = state.states.map((x) => (x.wine_vintage_id === a ? { ...x, reaction: b, familiarity, interest } : x));
         lastRefreshAt = 0; renderBody();
@@ -1671,8 +1749,12 @@ document.addEventListener("click", async (ev) => {
       else if (a === "addtag") await ownerAddTag();
       else if (a.startsWith("legend")) await ownerLegend(a, b);
     }
-    else if (action === "settings") openSettings();
+    else if (action === "settings" || action === "syncinfo") openSettings();
     else if (action === "setclose") closeSettings();
+    else if (action === "sync") {   // sync:now, sync:retry:ID, sync:discard:ID
+      if (a === "now") await offline.flush(); else if (a === "retry") await offline.retry(b); else if (a === "discard") await offline.discard(b);
+      if ($("#settingsPanel")) openSettings();
+    }
     else if (action === "import") {   // import:open, import:paste, import:back, import:ratings:on|off, import:go, import:done, import:close
       if (a === "open") await openImport();
       else if (a === "close") { state.imp = null; $("#overlay").innerHTML = ""; }

@@ -119,7 +119,8 @@ export function changeFrom(data) {
 // palate can count "balanced" as an answer. The ratings themselves are saved with the rating as usual.
 export async function saveTaste(sb, consumptionId, taste) {
   const value = taste ? { v: TASTE_VERSION, balanced: taste.balanced, notes: taste.notes || {}, pairing: taste.pairing || null } : null;
-  const { error } = await sb.from("consumptions").update({ taste: value }).eq("id", consumptionId);
+  const q = sb.from("consumptions").update({ taste: value }).eq("id", consumptionId);
+  const { error } = await (typeof q.queue === "function" ? q.queue(null) : q);   // may wait in the outbox when offline (offline.js)
   if (error) throw error;
 }
 // Rebuilds the screen state for a saved entry. The snapshot is "every line at its starting value", because nothing else could have moved them.

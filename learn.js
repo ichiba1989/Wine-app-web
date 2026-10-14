@@ -4,6 +4,9 @@
 import { esc, shuffle } from "./logic.js?v=14";
 import { weave, boostFor, refOf, focusOptions } from "./tags.js?v=2";
 import { proToolsOn } from "./words.js?v=1";
+import { overlayQuiz } from "./overlay.js?v=1";
+// Marks a write as one that may wait in the outbox when there is no connection (offline.js), with what it did (overlay.js).
+const tag = (q, effect) => (q && typeof q.queue === "function" ? q.queue(effect) : q);
 
 // ---------------------------------------------------------------- settings
 export const DIFFS = [
@@ -251,7 +254,8 @@ export function createLearn(ctx) {
         if (!tg.error && !lk.error) { const byId = new Map(tg.data.map((t) => [t.id, t])); lk.data.forEach((l) => { const t = byId.get(l.tag_id); if (t) { if (!L.tagsByQ.has(l.question_id)) L.tagsByQ.set(l.question_id, []); L.tagsByQ.get(l.question_id).push(t); } }); }
       } catch (_) { L.tagsByQ = new Map(); }
       L.byId = new Map(L.questions.map((q) => [q.id, q]));
-      L.progress = progressFrom(must(latest), must(arch));
+      const mine = overlayQuiz(must(latest), must(arch));   // plus the answers given offline that have not been uploaded yet
+      L.progress = progressFrom(mine.latest, mine.archive);
       L.feedback = feedbackOn(must(feat), (ctx.profile() || {}).tier || "default");
       L.loaded = true;
       L.run = newRun(L.questions, L.progress, selNow());
@@ -297,9 +301,9 @@ export function createLearn(ctx) {
     if (!run.saved) {
       run.saved = true;
       const u = ctx.user();
-      saveQuietly(ctx.sb().from("timed_runs").insert({
+      saveQuietly(tag(ctx.sb().from("timed_runs").insert({
         user_id: u.id, seconds: run.seconds, answered: run.tally.n, correct: run.tally.c, skipped: run.tally.u, best_streak: run.best,
-      }), "the timed round");
+      }), null), "the timed round");
     }
     draw();
   }
@@ -311,7 +315,7 @@ export function createLearn(ctx) {
     if (!result) return;
     recordAnswer(L.progress, q.id, result);
     const u = ctx.user();
-    saveQuietly(ctx.sb().from("quiz_answers").insert({ user_id: u.id, question_id: q.id, result, mode: run.mode }), "your answer");
+    saveQuietly(tag(ctx.sb().from("quiz_answers").insert({ user_id: u.id, question_id: q.id, result, mode: run.mode }), { t: "answer", qid: q.id, result }), "your answer");
     draw();
     if (run.timed) {
       nextTimer = setTimeout(() => {
@@ -340,9 +344,9 @@ export function createLearn(ctx) {
     if (!f || !f.reason || f.sending) return;
     f.sending = true; f.error = ""; syncFlag();
     try {
-      must(await ctx.sb().from("content_flags").insert({
+      must(await tag(ctx.sb().from("content_flags").insert({
         user_id: ctx.user().id, target_type: "quiz_question", quiz_question_id: f.qid, reason: f.reason, note: f.note.trim() || null,
-      }));
+      }), null));
       if (L.run && currentId(L.run) === f.qid) L.run.flagged = true;
       closeFlag();
       draw();
@@ -371,7 +375,7 @@ export function createLearn(ctx) {
       const qid = currentId(run);
       removeFromArchive(L.progress, qid);
       run.removed = true;
-      saveQuietly(ctx.sb().from("quiz_archive_removals").insert({ user_id: ctx.user().id, question_id: qid }), "the archive change");
+      saveQuietly(tag(ctx.sb().from("quiz_archive_removals").insert({ user_id: ctx.user().id, question_id: qid }), { t: "archiveRemove", qid }), "the archive change");
       draw();
     }
     else if (action === "flag") openFlag();
