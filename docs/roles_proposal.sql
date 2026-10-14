@@ -50,9 +50,9 @@ update public.profiles set tier = 'pro' where tier = 'professional';
 
 -- 4. Audit trail and the Roles functions. Only a person with settings_edit (the owner) can use them; they are also the only way the app writes roles.
 create table if not exists public.staff_audit (
-  id uuid primary key default gen_random_uuid(),
+  "id" uuid primary key default gen_random_uuid(),
   created_at timestamptz not null default now(),
-  changed_by uuid references auth.users(id) on delete set null,
+  changed_by uuid references auth.users("id") on delete set null,
   target_user_id uuid,
   target_email text,
   old_role text,
@@ -85,13 +85,13 @@ begin
   if p_role is null or p_role not in ('editor', 'quiz_reviewer') then
     raise exception 'Only Editor or Quiz reviewer can be given here. The Owner role cannot be given from the app.';
   end if;
-  select id into v_uid from auth.users where lower(email) = lower(trim(p_email)) limit 1;
-  if v_uid is null or not exists (select 1 from profiles where id = v_uid) then
+  select "id" into v_uid from auth.users where lower(email) = lower(trim(p_email)) limit 1;
+  if v_uid is null or not exists (select 1 from profiles where "id" = v_uid) then
     raise exception 'No account with that email. They need to save their progress with that email first.';
   end if;
-  select coalesce(case when role = 'admin' then 'owner' end, staff_role, case when role = 'editor' then 'editor' end) into v_old from profiles where id = v_uid;
+  select coalesce(case when role = 'admin' then 'owner' end, staff_role, case when role = 'editor' then 'editor' end) into v_old from profiles where "id" = v_uid;
   if v_old = 'owner' then raise exception 'The Owner role cannot be changed from the app.'; end if;
-  update profiles set staff_role = p_role where id = v_uid;
+  update profiles set staff_role = p_role where "id" = v_uid;
   insert into staff_audit (changed_by, target_user_id, target_email, old_role, new_role) values (auth.uid(), v_uid, lower(trim(p_email)), v_old, p_role);
   return jsonb_build_object('user_id', v_uid, 'role', p_role);
 end $$;
@@ -102,11 +102,11 @@ language plpgsql security definer set search_path to 'public' as $$
 declare v_old text; v_email text;
 begin
   if not has_permission('settings_edit'::text) then raise exception 'Only the owner can change roles.' using errcode = '42501'; end if;
-  select coalesce(case when role = 'admin' then 'owner' end, staff_role, case when role = 'editor' then 'editor' end) into v_old from profiles where id = p_user_id;
+  select coalesce(case when role = 'admin' then 'owner' end, staff_role, case when role = 'editor' then 'editor' end) into v_old from profiles where "id" = p_user_id;
   if v_old is null then return; end if;
   if v_old = 'owner' then raise exception 'The Owner role cannot be removed from the app.'; end if;
-  select email into v_email from auth.users where id = p_user_id;
-  update profiles set staff_role = null, role = case when role = 'editor' then 'player'::user_role else role end where id = p_user_id;
+  select email into v_email from auth.users where "id" = p_user_id;
+  update profiles set staff_role = null, role = case when role = 'editor' then 'player'::user_role else role end where "id" = p_user_id;
   insert into staff_audit (changed_by, target_user_id, target_email, old_role, new_role) values (auth.uid(), p_user_id, lower(v_email), v_old, null);
 end $$;
 
@@ -125,7 +125,7 @@ begin
   if auth.uid() is null then raise exception 'Sign in first.'; end if;
   if p_plan is null or p_plan not in ('default', 'pro') then raise exception 'Choose Standard or Pro.'; end if;
   if cfg_number('plan_switch_open', 0) <> 1 then raise exception 'The plan switch is closed.'; end if;
-  update profiles set tier = p_plan where id = auth.uid();
+  update profiles set tier = p_plan where "id" = auth.uid();
   return p_plan;
 end $$;
 revoke all on function public.set_my_plan(text) from public;
