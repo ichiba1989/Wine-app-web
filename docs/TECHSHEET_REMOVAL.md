@@ -5,7 +5,7 @@ The Tech sheet (researched, sourced wine facts and a full-page sheet per wine) w
 **Restore point:** the branch `backup/before-tech-sheet` is the whole app exactly as it was before the Tech sheet was started (see `docs/VERSIONS.md`).
 
 ## Level 1: switch it off (instant, nothing lost)
-Owner page, **Config** tab: set `techsheet_enabled` to **0**. The Tech sheet button, the Editor "Facts" section and the Owner "Facts" tab disappear for everyone, and the database refuses the Tech sheet functions and hides its tables from players. The facts, sources and finds stay stored; set it back to 1 (Editors and Owner only) or 2 (everyone) to bring everything back.
+Owner page, **Facts** tab: press **Off** (the same setting as `techsheet_enabled` on the Config tab). The Owner always sees this tab, so it can be turned back on. The Tech sheet button and the Editor "Facts" section disappear for everyone (the Owner's Facts tab stays, holding the switch), and the database refuses the Tech sheet functions and hides its tables from players. The facts, sources and finds stay stored; press Staff only or Everyone to bring everything back.
 
 ## Level 2: remove it from the app (code), keep the data
 1. Easiest: undo the work with git. The Tech sheet was committed as one labelled series ("Tech sheet ..."). `git log --oneline --grep="Tech sheet"` lists it; `git revert <newest>^..<oldest>` (or revert each) removes it from the app. The earlier steps of the app are untouched.

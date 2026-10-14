@@ -56,7 +56,7 @@ let TECH = null, TECHMOD = null, FACTS = null;
 const loadTechModule = async () => {
   if (TECH) return TECH;
   try {
-    TECHMOD = await import("./techsheetui.js?v=1");
+    TECHMOD = await import("./techsheetui.js?v=2");
     const tctx = { sb: () => state.sb, userId: () => state.user.id, cardById: (id) => cardById(id), cards: () => state.cards, cardName: (id) => { const c = cardById(id); return c ? wineName(c) : ""; } };
     TECH = TECHMOD.createTechSheet(tctx); FACTS = TECHMOD.createFactsStaff(tctx);
   } catch (e) { setBanner("The tech sheet could not be loaded: " + (e.message || e)); throw e; }
@@ -441,7 +441,7 @@ function ownerData() {
   const O = state.owner;
   if (state._ownerFor !== state.cards) { state._ownerFor = state.cards; state._ownerCache = { rows: OWN.wineRows(state.cards), bingo: OWN.bingoCoverage(state.cards) }; }
   const { rows, bingo } = state._ownerCache;
-  return { rows, bingo, checks: OWN.checkCounts(rows), config: O.config, configError: O.configError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, staff: O.staff, staffError: O.staffError, staffAudit: O.staffAudit, techOn: access().techsheetOwner, factsHtml: TECHMOD && O.facts ? TECHMOD.ownerFactsHtml({ level: state.techLevel, counts: O.facts.counts, error: O.facts.error }) : "", seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
+  return { rows, bingo, checks: OWN.checkCounts(rows), config: O.config, configError: O.configError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, staff: O.staff, staffError: O.staffError, staffAudit: O.staffAudit, techOn: isOwner(), factsHtml: TECHMOD && O.facts ? TECHMOD.ownerFactsHtml({ level: state.techLevel, counts: O.facts.counts, error: O.facts.error }) : "", seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
 }
 // The lens preview: the top picks of one lens for the owner's own profile, or for a brand-new player, using the weights typed on the page.
 function ownerLens() {
@@ -515,6 +515,16 @@ async function ownerLegend(a, b) {
     } else if (a === "legendremove") { await db.removeSharedLegend(state.sb, b); ownerSay("Removed."); }
     await legendChanged();
   } catch (e) { ownerSay("Could not save: " + (e.message || e)); }
+}
+// TECHSHEET: the Owner page's Facts tab (who sees it, what is confirmed and waiting). The switch is app_config techsheet_enabled; a save the database refuses is shown, never as done.
+async function ownerTechLevel(n) {
+  if (![0, 1, 2].includes(n) || n === state.techLevel) return;
+  try {
+    await db.saveAppConfig(state.sb, "techsheet_enabled", n);
+    state.techLevel = n; state.owner.config = null;
+    ownerSay(["The Tech sheet is off.", "The Tech sheet is on for Editors and the Owner only.", "The Tech sheet is on for everyone."][n]);
+  } catch (e) { ownerSay("Not changed: " + (/not saved/i.test(String(e.message || "")) ? "the Tech sheet update (docs/tech_sheet.sql) has not been run, or your access does not allow it." : (e.message || e))); }
+  ownerRedraw();
 }
 // TECHSHEET: the Owner page's Facts tab (state, what is confirmed and waiting).
 async function loadOwnerFacts() {
@@ -632,7 +642,7 @@ function drawTab(body) {
     else body.innerHTML = OWN.ownerHtml(state.owner, ownerData());
     if (isOwner() && state.owner.tab === "legend" && !state.owner.legend && !state.owner.legendError) loadOwnerLegend();
     if (isOwner() && state.owner.tab === "tags" && !state.owner.tags && !state.owner.tagsError) loadOwnerTags();
-    if (isOwner() && state.owner.tab === "facts" && access().techsheetOwner && !state.owner.facts) loadOwnerFacts();   // TECHSHEET
+    if (isOwner() && state.owner.tab === "facts" && !state.owner.facts) loadOwnerFacts();   // TECHSHEET
     if (isOwner() && state.owner.tab === "roles" && !state.owner.staff && !state.owner.staffError) loadOwnerStaff();
     if (isOwner() && state.owner.tab === "config" && !state.owner.config && !state.owner.configError) loadOwnerConfig();
   } else if (state.tab === "games") {
@@ -1808,6 +1818,7 @@ document.addEventListener("click", async (ev) => {
       else if (a === "addtag") await ownerAddTag();
       else if (a.startsWith("legend")) await ownerLegend(a, b);
       else if (a.startsWith("staff")) await ownerStaff(a, b, c);
+      else if (a === "techlevel") await ownerTechLevel(Number(b));   // TECHSHEET: Off / Staff only / Everyone
     }
     else if (action === "tech" && access().techsheet) {   // TECHSHEET: tech:open, tech:toggle:ID, tech:group:ID, tech:make, tech:back, tech:print, tech:copy, tech:close, tech:fs:...
       await loadTechModule();

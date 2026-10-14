@@ -165,9 +165,9 @@ Needs no database script. On a real phone, in **Safari (tab and home-screen app)
 
 ## 20. Tech sheet (added 2026-10-14; remove with docs/TECHSHEET_REMOVAL.md)
 - [ ] Run `docs/tech_sheet.sql` in Supabase (safe to repeat). The feature starts **off** (`techsheet_enabled` = 0).
-- [ ] Set `techsheet_enabled` to **1** (Owner page, Config). As Owner/Editor: Editor tab, Facts: add a producer's official site and one approved source; type in a fact for a real wine with the page address and the exact quote; check a normal player account still sees nothing.
-- [ ] Set it to **2**. As a player: a journal entry, rating sheet, Details, **Tech sheet**: tick fields, confirmed facts show with their source site(s); missing ones say "Not confirmed yet"; Make the full page, Print or save as PDF on a real phone (the app screens must not print), Copy as text.
+- [ ] On the Owner page, Facts tab, press **Staff only** (the switch, `techsheet_enabled` = 1). As Owner/Editor: Editor tab, Facts: add a producer's official site and one approved source; type in a fact for a real wine with the page address and the exact quote; check a normal player account still sees nothing.
+- [ ] Press **Everyone**. As a player: a journal entry, rating sheet, Details, **Tech sheet**: tick fields, confirmed facts show with their source site(s); missing ones say "Not confirmed yet"; Make the full page, Print or save as PDF on a real phone (the app screens must not print), Copy as text.
 - [ ] A wine you typed in: blocked until it has a producer, vintage and type; then add ABV from the bottle ("Entered by you"); the entry is private to you.
 - [ ] Offline: facts already seen are still shown; nothing breaks.
-- [ ] Switch back to **0**: the button, the Facts section and the Owner Facts tab disappear for everyone; set to 1 and 2 again and the data is still there.
+- [ ] Press **Off**: the button and the Editor Facts section disappear for everyone (the Owner's Facts tab stays); press Staff only and Everyone again and the data is still there.
 - [ ] Owner decisions: research function provider/key/cost (Phase B), line in `privacy.html`, whether the Tech sheet should be a Pro-plan feature, and a legal look at quoting third-party pages.

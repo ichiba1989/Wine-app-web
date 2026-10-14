@@ -184,9 +184,12 @@ export function createFactsStaff(ctx) {
 }
 
 // ---------------------------------------------------------------- the Owner page's Facts tab
+const LEVELS = [["0", "Off", "Hidden from everyone"], ["1", "Staff only", "Editors and the Owner"], ["2", "Everyone", "All players"]];
 export function ownerFactsHtml(info) {
-  const lv = ["Off for everyone", "Only Editors and the Owner", "Everyone"][info.level] || "Off for everyone";
-  return `<div class="muted small onote">The Tech sheet shows researched, sourced facts for each wine. It is <b>${esc(lv)}</b> right now. Change it with <code>techsheet_enabled</code> on the Config tab (0 off, 1 staff only, 2 everyone); turning it to 0 hides it at once and keeps all the data. To remove it completely see <code>docs/TECHSHEET_REMOVAL.md</code>.</div>
+  const lv = (LEVELS[info.level] || LEVELS[0])[2];
+  const btn = ([n, label]) => `<button class="gopt${Number(n) === info.level ? " on" : ""}" data-action="owner:techlevel:${n}" aria-pressed="${Number(n) === info.level}">${esc(label)}</button>`;
+  return `<div class="muted small onote">The Tech sheet shows researched, sourced facts for each wine. <b>Who sees it:</b> ${esc(lv)}. Off hides it at once and keeps all the data. To remove it completely see <code>docs/TECHSHEET_REMOVAL.md</code>.</div>
+    <div class="gopts" role="group" aria-label="Who sees the Tech sheet">${LEVELS.map(btn).join("")}</div>
     ${info.error ? `<p class="err">${esc(info.error)}</p>` : info.counts ? `<p>${info.counts.facts} confirmed ${info.counts.facts === 1 ? "fact" : "facts"}, ${info.counts.waiting} waiting for an Editor.</p>` : `<p class="muted">Loading…</p>`}
     <p class="muted small">Researching wines automatically (a batch for the catalog, and "Look it up" for players) needs the research function, a search/AI service and its key. It is not switched on yet. Until then Editors enter facts by hand in the Editor tab, Facts.</p>`;
 }
