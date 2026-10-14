@@ -68,11 +68,11 @@ language plpgsql stable security definer set search_path to 'public' as $$
 begin
   if not has_permission('settings_edit'::text) then raise exception 'Only the owner can see the roles.' using errcode = '42501'; end if;
   return query
-    select pr.id, pr.display_name::text, u.email::text, r.code::text, r.label::text, r.permissions::text[],
-           coalesce((select max(a.created_at) from staff_audit a where a.target_user_id = pr.id and a.new_role is not null), pr.created_at)
+    select pr."id", pr.display_name::text, u.email::text, r.code::text, r.label::text, r.permissions::text[],
+           coalesce((select max(a.created_at) from staff_audit a where a.target_user_id = pr."id" and a.new_role is not null), pr.created_at)
       from profiles pr
       join staff_roles r on r.code = coalesce(case when pr.role = 'admin' then 'owner' end, pr.staff_role, case when pr.role = 'editor' then 'editor' end)
-      left join auth.users u on u.id = pr.id
+      left join auth.users u on u."id" = pr."id"
      order by r.sort_order, pr.display_name;
 end $$;
 
