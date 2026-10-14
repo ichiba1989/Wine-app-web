@@ -6,8 +6,8 @@
 // Nothing here knows anything about a wine: it only moves what the player said into the player's own grid, and when the words are unclear it leaves the answer empty.
 // The player's taps always win (mergeFromNotes never overwrites an answer), and every value is checked against the wine's type with cleanGrid.
 import { fold } from "./grapes.js?v=1";
-import { FIELDS, TAG_LIST, parentOf, cleanGrid, fieldsFor } from "./tasting.js?v=8";
-import { SEED_LEGEND } from "./notelegend.js?v=1";
+import { FIELDS, TAG_LIST, parentOf, cleanGrid, fieldsFor } from "./tasting.js?v=9";
+import { SEED_LEGEND } from "./notelegend.js?v=2";
 
 // ---------------------------------------------------------------- reading the words
 // "medium plus", "med +", "medium-" become single words so the level survives folding; hyphens and punctuation then become spaces.
@@ -23,7 +23,7 @@ const FILLER = new Set(("a about after all also always an and any are as at back
   "wine wines glass bottle taste tasted tasting tastes nose palate finish note notes hint touch bit slightly fairly nice lovely beautiful lovely pleasant interesting really quite pretty overall definitely probably maybe seems seem feel feels felt think thought find found sort kind type style one first second then also with without and but however although though more less than very").split(/\s+/));
 const NEGATORS = new Set(["no", "not", "without", "never", "hardly", "barely", "non", "lacking", "lacks", "nor", "less"]);
 // The grid's own words, never "unplaced".
-const GRIDWORDS = new Set(["acidity", "acid", "tannin", "alcohol", "body", "bodied", "sweetness", "oak", "oaked", "finish", "length", "colour", "color", "aroma", "bouquet", "flavour", "flavor", "intensity", "mousse", "bubble", "nose", "palate", "mediumplus", "mediumminus"]);
+const GRIDWORDS = new Set(["acidity", "acid", "tannin", "alcohol", "body", "bodied", "sweetness", "oak", "oaked", "finish", "length", "colour", "color", "aroma", "bouquet", "flavour", "flavor", "intensity", "mousse", "bubble", "nose", "palate", "mediumplus", "mediumminus", "ripeness"]);
 
 // ---------------------------------------------------------------- level patterns ("high acidity", "acidity is medium plus", "long finish")
 const LEVEL = { low: "low", mediumminus: "medium -", medium: "medium", moderate: "medium", mediumplus: "medium +", high: "high" };

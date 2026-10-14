@@ -65,6 +65,10 @@ export const FIELDS = [
   { id: "oak", section: "Palate", label: "Oak", type: "one", scale: true, options: () => ["none", "subtle", "pronounced"] },
   { id: "flavourIntensity", section: "Palate", label: "Flavour intensity", type: "one", scale: true, options: () => STRENGTH },
   { id: "flavours", section: "Palate", label: "Flavours", type: "tags" },
+  // How ripe the fruit tastes: a strong clue to where the grapes grew (tart and zippy from cool places, jammy and cooked from hot, sunny ones).
+  // Not a structure line, so it does not move the sliders. The same idea is used in Guess the Glass (blindgame.js RIPENESS).
+  { id: "fruitRipeness", section: "Palate", label: "Fruit ripeness", type: "one", scale: true, options: () => ["under-ripe", "just ripe", "ripe", "over-ripe"],
+    hint: "Tart and zippy fruit often means a cool place; ripe and juicy, a warm one; jammy and cooked, a hot, sunny one." },
   { id: "finish", section: "Palate", label: "Finish", type: "one", scale: true, options: () => ["short", "medium", "long"] },
   { id: "quality", section: "Conclusions", label: "Quality", type: "one", options: () => ["faulty", "poor", "acceptable", "good", "very good", "outstanding"] },
   { id: "readiness", section: "Conclusions", label: "Readiness", type: "one", options: () => ["too young", "drink now, may improve", "drink now, will not improve", "too old"] },
@@ -173,7 +177,7 @@ export function gridHtml(values, open, style, wineName, info = "") {
   const body = SECTIONS.map((sec) => {
     const rows = fieldsFor(style).filter((f) => f.section === sec).map((f) => {
       if (f.type === "one") {
-        if (f.scale) return `<div class="glabel">${esc(f.label)}</div>${scaleHtml(g, f, style)}`;
+        if (f.scale) return `<div class="glabel">${esc(f.label)}</div>${f.hint ? `<div class="muted small ghint">${esc(f.hint)}</div>` : ""}${scaleHtml(g, f, style)}`;
         const opts = optionsOf(f, style).map((o, i) => `<button class="gopt${g[f.id] === o ? " on" : ""}" data-grid="pick:${f.id}:${i}" aria-pressed="${g[f.id] === o}">${esc(o)}</button>`).join("");
         return `<div class="glabel">${esc(f.label)}</div><div class="gopts">${opts}</div>`;
       }

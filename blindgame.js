@@ -5,7 +5,7 @@
 // age rule below (AGE_CUES). Nothing is guessed about a wine. The profile is "typical for this grape, place and age", never a fact about one bottle.
 // The game's answers never touch the palate profile, the Discover deck or the taste model; the best scores are kept on the phone (wine.guess).
 // Pure: no browser, no network.
-import { flavorsForCard, varKeyFor, placeKeysFor, tables, ruleScores, LABEL } from "./flavors.js?v=1";
+import { flavorsForCard, varKeyFor, placeKeysFor, tables, ruleScores, LABEL, CATS } from "./flavors.js?v=1";
 import { climateOf, factsOf, suggestStructure, dimsForStyle, grapeFor, norm } from "./rules.js?v=4";
 import { startingValues } from "./structure.js?v=5";
 
@@ -199,20 +199,41 @@ export function profileText(item, mode = "full", { band = null, mode: words = "b
     return seg;
   }
   const type = TYPE_WORDS[item.type].toLowerCase().replace(/^rosé$/, "rosé wine");
-  say(an(type));
-  if (mode === "full" || mode === "place") say(` ${CLIMATE_WORDS[item.climate].hint}`);
-  say(". ");
+  say(an(type)); say(". ");
   if (mode === "full" || mode === "grape" || mode === "place") {
-    say("It smells and tastes of "); list(item.clues.slice(0, mode === "place" ? 5 : 4).map((f) => LABEL[f].toLowerCase())); say(". ");
+    const shown = item.clues.slice(0, mode === "place" ? 5 : 4);
+    // Where the grapes grew is told through the fruit, as a taster finds it: tart and zippy in a cool place, jammy and cooked in a hot one
+    // (Full blind and Where from? only; Which grape? keeps to the grape's own notes).
+    const ripe = mode === "full" || mode === "place" ? RIPENESS[item.climate] : null;
+    const fruit = shown.filter((f) => FRUIT.has(f)), other = shown.filter((f) => !FRUIT.has(f));
+    const names = (a) => a.map((f) => LABEL[f].toLowerCase());
+    if (ripe && fruit.length) {
+      say("It smells and tastes of "); say(ripe.words, true); say(" fruit ("); list(names(fruit)); say(")");
+      if (other.length) { say(", with "); list(names(other)); }
+      say(". ");
+    } else {
+      say("It smells and tastes of "); list(names(shown)); say(". ");
+      if (ripe) { say("The fruit feels "); say(ripe.words, true); say(". "); }
+    }
     say(feelSentence(item.values, item.type, words));
   }
   return seg;
 }
+// The fruit groups of the flavor list (flavordata.js CATS): only these carry the ripeness words.
+const FRUIT = new Set([...CATS.darkfruit, ...CATS.redfruit, ...CATS.citrus, ...CATS.orchard, ...CATS.tropical]);
+// How ripe the fruit tastes, from the climate rule (rules.js climateOf). This is the usual teaching: slow ripening in a cool place keeps fruit tart and
+// zippy; sun and heat give juicy, then jammy, cooked fruit. The same line is in the professional tasting grid ("Fruit ripeness", tasting.js).
+export const RIPENESS = {
+  cool: { words: "tart, zippy, just-ripe", grid: "under-ripe" },
+  moderate: { words: "fresh, ripe", grid: "just ripe" },
+  warm: { words: "ripe, juicy", grid: "ripe" },
+  hot: { words: "jammy, cooked", grid: "over-ripe" },
+};
 const CLIMATE_WORDS = {
-  cool: { hint: "from a cool place", why: "Cool places keep acidity bright and the body lighter." },
-  moderate: { hint: "from a mild place", why: "A mild climate gives a middle path: ripe fruit with fresh acidity." },
-  warm: { hint: "from a warm, sunny place", why: "Warm, sunny places give riper fruit, a fuller body and softer tannins." },
-  hot: { hint: "from a hot place", why: "Hot places give very ripe fruit, a full body and gentle acidity." },
+  cool: { hint: "from a cool place", feel: "Cool places keep acidity bright and the body lighter.", why: "Tart, zippy fruit points to a cool place: the grapes ripen slowly and keep their acidity, and the body stays lighter." },
+  moderate: { hint: "from a mild place", feel: "A mild climate gives a middle path: ripe fruit with fresh acidity.", why: "Fresh, ripe fruit points to a mild place: ripe fruit that still keeps fresh acidity." },
+  warm: { hint: "from a warm, sunny place", feel: "Warm, sunny places give a fuller body and softer tannins.", why: "Ripe, juicy fruit points to a warm, sunny place: the grapes ripen fully, giving a fuller body and softer tannins." },
+  hot: { hint: "from a hot place", feel: "Hot places give a full body and gentle acidity.", why: "Jammy, cooked fruit points to a hot place: very ripe grapes give a full body and gentle acidity." },
 };
 export const TYPE_WORDS = { red: "Red wine", white: "White wine", sparkling: "Sparkling wine", rose: "Rosé", fortified: "Fortified wine" };
 
@@ -313,9 +334,9 @@ export const similarity = (a, b) => 0.7 * cosine(vec(a), vec(b)) + 0.3 * (1 - Ma
 
 // ---------------------------------------------------------------- the games
 export const MODES = [
-  { id: "full", label: "Full blind", blurb: "The whole profile: look, feel, flavors and climate. Name the grape and the place." },
+  { id: "full", label: "Full blind", blurb: "The whole profile: flavors, how ripe the fruit is, and how it feels. Name the grape and the place." },
   { id: "grape", label: "Which grape?", blurb: "Only the flavors and the feel. Which grape is it?" },
-  { id: "place", label: "Where from?", blurb: "You know the grape. Find the place from its climate, feel and flavors." },
+  { id: "place", label: "Where from?", blurb: "You know the grape. Find the place from how ripe the fruit is, the feel and the flavors." },
   { id: "age", label: "How old?", blurb: "Colour, smell and feel that come with age. How old is it?" },
   { id: "feel", label: "How does it feel?", blurb: "You know the wine. Pick how it feels in the mouth." },
 ];
@@ -350,7 +371,7 @@ export function profileOf(item, mode = "full", { band = null, mode: words = "beg
   if (mode !== "age") groups.push({ id: "type", title: "In the glass", lines: [TYPE_WORDS[item.type]], source: "type" });
   if (mode === "full" || mode === "grape" || mode === "place") groups.push({ id: "feel", title: "How it feels", lines: feelLine(item.values, item.type, words), source: item.edited ? "editor" : "rules" });
   if (mode === "full" || mode === "grape" || mode === "place") groups.push({ id: "flavors", title: "Smells and tastes like", lines: flavorList.map((f) => LABEL[f]), keys: flavorList, source: "flavors" });
-  if (mode === "full" || mode === "place") groups.push({ id: "climate", title: "Where it grows", lines: [CLIMATE_WORDS[item.climate].hint], source: "climate" });
+  if (mode === "full" || mode === "place") groups.push({ id: "climate", title: "How ripe the fruit is", lines: [RIPENESS[item.climate].words], source: "climate" });
   if (mode === "age" && band) {
     const cues = AGE_CUES[item.type][band];
     if (level !== "hard") groups.push({ id: "look", title: "In the glass", lines: cues.look, source: "age" });
@@ -449,7 +470,8 @@ export function whyLines(item, mode, band = null, words = "beginner") {
     if (item.edited) out.push("Our editors scored how this wine feels.");
     if (item.values.oak === 2 && mode !== "feel") out.push("Vanilla and toast come from new oak barrels, not from the grape: any oaked wine can show them, so they do not point to one grape.");
   }
-  if (mode === "full" || mode === "place" || mode === "feel") out.push(CLIMATE_WORDS[item.climate].why);
+  if (mode === "full" || mode === "place") out.push(CLIMATE_WORDS[item.climate].why);
+  if (mode === "feel") out.push(CLIMATE_WORDS[item.climate].feel);
   if (mode === "age" && band) {
     const b = bandById(band), cues = AGE_CUES[item.type][band];
     out.push(`${b.label} (${b.years}): ${cues.look[0]}; ${cues.smell[0]}; ${cues.feel[0]}.`);

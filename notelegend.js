@@ -25,6 +25,11 @@ add("sweetness", "off-dry", ["off dry", "semi dry", "demi sec", "halbtrocken", "
 add("sweetness", "medium", ["medium sweet", "semi sweet", "amabile", "demi doux", "feinherb"]);
 add("sweetness", "sweet", ["sweet", "dolce", "doux", "moelleux", "dulce", "suss", "lieblich"]);
 add("sweetness", "luscious", ["luscious", "syrupy", "unctuous", "very sweet", "liquoroso"]);
+// fruit ripeness (a clue to the climate). "jammy", "cooked fruit" and "stewed" are also aroma tags: a phrase may mean both.
+add("fruitRipeness", "under-ripe", ["under ripe", "underripe", "unripe", "unripe fruit", "tart fruit", "sour fruit", "zippy fruit", "crunchy fruit"]);
+add("fruitRipeness", "just ripe", ["just ripe", "barely ripe", "fresh fruit", "crisp fruit", "bright fruit"]);
+add("fruitRipeness", "ripe", ["ripe fruit", "juicy fruit", "succulent fruit", "sun ripened"]);
+add("fruitRipeness", "over-ripe", ["over ripe", "overripe", "jammy", "jam like", "cooked fruit", "baked fruit", "stewed", "stewed fruit", "raisined", "pruney", "sun baked"]);
 // alcohol
 add("alcohol", "high", ["boozy", "warming", "alcoholic", "high abv", "high alcohol", "hot finish"]);
 add("alcohol", "low", ["low abv", "low alcohol", "light alcohol"]);

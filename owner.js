@@ -7,7 +7,7 @@ import { REACH_CHOICES } from "./wineinfo.js?v=18";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=2";
 import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=6";
 import { TAG_KINDS } from "./tags.js?v=2";
-import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=8";
+import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=9";
 import { centsToField } from "./pricing.js?v=1";
 import { ASSIGNABLE_ROLES, ROLES, PERMISSIONS, staffRows, filterStaff, rowActions } from "./access.js?v=4";
 

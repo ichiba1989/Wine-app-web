@@ -4,7 +4,7 @@ import { esc, wineName, entryName } from "./logic.js?v=14";
 import { infoLine } from "./wineline.js?v=1";
 import { PAIRS, AXES, AXIS_ORDER, AXIS_VIEW, nextPair, answeredCount, pickedCount, isDone, leanings, axisValues, compareAxes, isClear } from "./thisorthat.js?v=4";
 import { TIERS, CARDS, CLEARS_TO_UNLOCK, cardById, cardsOfTier, tierOpen, clearedIn } from "./bingo.js?v=2";
-import { MODES as GUESS_MODES, LEVELS, ROUND, modeById, bestOf, isRight, scoreOf } from "./blindgame.js?v=2";
+import { MODES as GUESS_MODES, LEVELS, ROUND, modeById, bestOf, isRight, scoreOf } from "./blindgame.js?v=3";
 
 // g: { screen: "hub" | "bingo" | "card", cardId, sq }
 // data: { progress: Map(cardId -> progress), memory, news: [{ id, kind }], help }
