@@ -61,9 +61,6 @@ export function permissionsOf(staff, planId = "default") {
   return own;
 }
 
-// TECHSHEET: who sees the Tech sheet at each level of the kill switch.
-export const techsheetShown = (level, perms) => Number(level) >= 2 || (Number(level) === 1 && !!perms && (perms.has("catalog_edit") || perms.has("settings_edit")));
-
 // ---------------------------------------------------------------- the one answer sheet
 // input: { user, profile, staff, features: { proTasting, importLarge, contentFeedback } (already worked out as true/false), settings }
 export function accessOf({ user = null, profile = null, staff = null, features = {}, settings = null } = {}) {
@@ -89,10 +86,6 @@ export function accessOf({ user = null, profile = null, staff = null, features =
     isOwner: can("owner_page"),
     isEditor: can("catalog_edit") || can("quiz_verify"),
     isStaff: perms.size > 0,
-    // TECHSHEET: 0 off for everyone, 1 staff only, 2 everyone (app_config techsheet_enabled). The one flag every Tech sheet screen asks.
-    techsheet: techsheetShown(features.techsheetLevel, perms),
-    techsheetStaff: techsheetShown(features.techsheetLevel, perms) && perms.has("catalog_edit"),
-    techsheetOwner: techsheetShown(features.techsheetLevel, perms) && perms.has("settings_edit"),
     permissions: [...perms],
   };
 }

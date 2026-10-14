@@ -9,9 +9,9 @@ import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?
 import { TAG_KINDS } from "./tags.js?v=2";
 import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=8";
 import { centsToField } from "./pricing.js?v=1";
-import { ASSIGNABLE_ROLES, ROLES, PERMISSIONS, staffRows, filterStaff, rowActions } from "./access.js?v=3";
+import { ASSIGNABLE_ROLES, ROLES, PERMISSIONS, staffRows, filterStaff, rowActions } from "./access.js?v=4";
 
-export const OWNER_TABS = [{ id: "wines", label: "Wines" }, { id: "lenses", label: "Lenses" }, { id: "bingo", label: "Bingo" }, { id: "checks", label: "Checks" }, { id: "tags", label: "Tags" }, { id: "legend", label: "Legend" }, { id: "roles", label: "Roles" }, { id: "facts", label: "Facts" }, { id: "config", label: "Config" }]   // TECHSHEET: Facts shows only while the Tech sheet is on;
+export const OWNER_TABS = [{ id: "wines", label: "Wines" }, { id: "lenses", label: "Lenses" }, { id: "bingo", label: "Bingo" }, { id: "checks", label: "Checks" }, { id: "tags", label: "Tags" }, { id: "legend", label: "Legend" }, { id: "roles", label: "Roles" }, { id: "config", label: "Config" }];
 
 const fold = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const isLive = (c) => !c.archived && (!c.wineStatus || c.wineStatus === "verified");
@@ -193,7 +193,6 @@ function rolesTable(O, d) {
     ${table("<th>When</th><th>Person</th><th>Change</th>", audit, "No changes recorded yet.")}`;
 }
 export function ownerTableHtml(O, d) {
-  if (O.tab === "facts") return d.factsHtml || `<p class="muted">Loading\u2026</p>`;   // TECHSHEET
   if (O.tab === "roles") return rolesTable(O, d);
   if (O.tab === "legend") return legendTable(O, d);
   if (O.tab === "tags") return tagsTable(O, d);
@@ -205,7 +204,7 @@ export function ownerTableHtml(O, d) {
 }
 // The page: tabs, the controls for the tab, a message line, and the table (which app.js can redraw alone while someone types).
 export function ownerHtml(O, d) {
-  const tabs = OWNER_TABS.filter((t) => t.id !== "facts" || d.techOn).map((t) => `<button class="otab${O.tab === t.id ? " on" : ""}" data-action="owner:tab:${t.id}" aria-pressed="${O.tab === t.id}">${esc(t.label)}</button>`).join("");
+  const tabs = OWNER_TABS.map((t) => `<button class="otab${O.tab === t.id ? " on" : ""}" data-action="owner:tab:${t.id}" aria-pressed="${O.tab === t.id}">${esc(t.label)}</button>`).join("");
   let controls = "";
   if (O.tab === "wines") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search wines" value="${esc(O.q)}" aria-label="Search wines">
     <select class="ofield" data-owner-issue aria-label="Show"><option value="all">All wines</option>${ISSUES.map((i) => `<option value="${i.id}"${O.issue === i.id ? " selected" : ""}>${esc(i.label)}</option>`).join("")}</select>`;

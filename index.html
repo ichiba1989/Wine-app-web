@@ -429,27 +429,6 @@
   .meta.waiting { color: var(--slate); font-weight: 600; }
   body.offline label.pill:has(input[data-photo]) { opacity: .45; }   /* photos need a connection */
   .fitem { border-top: 1px solid var(--line); padding: 6px 0; }
-  /* TECHSHEET */
-  .overlay.techov { z-index: 40; }
-  .techsheet { padding-bottom: 28px; }
-  .tsgroup { margin: 12px 0; } .tshead { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
-  .tsrow { display: flex; gap: 12px; padding: 9px 0; align-items: flex-start; border-bottom: 1px solid var(--line); font-size: calc(15px * var(--ts)); }
-  .tscheck { flex: 0 0 auto; width: 28px; height: 28px; border-radius: 8px; border: 1.5px solid var(--moss); background: #fff; color: #fff; font-size: calc(16px * var(--ts)); line-height: 1; padding: 0; }
-  .tscheck.on { background: var(--moss); } .tsmain { flex: 1 1 auto; min-width: 0; } .tsval { margin-top: 2px; } .tssrc { font-size: calc(12px * var(--ts)); } .tsmine { margin-top: 6px; }
-  .tspending { margin: 10px 0; font-size: calc(13px * var(--ts)); }
-  .techpage { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin: 12px 0; }
-  .techpage h1 { margin: 0 0 2px; font-size: calc(24px * var(--ts)); font-weight: 400; } .techpage h2 { margin: 18px 0 6px; font-size: calc(17px * var(--ts)); font-weight: 400; border-bottom: 1px solid var(--line); }
-  .tsid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; margin: 12px 0; font-size: calc(14px * var(--ts)); } .tsid dt { color: var(--muted); font-size: calc(12px * var(--ts)); } .tsid dd { margin: 0; }
-  .tstable { width: 100%; border-collapse: collapse; font-size: calc(14px * var(--ts)); } .tstable th { text-align: left; font-weight: 500; width: 45%; padding: 5px 8px 5px 0; vertical-align: top; } .tstable td { padding: 5px 0; }
-  .tssources { margin: 4px 0; padding-left: 20px; font-size: calc(12px * var(--ts)); word-break: break-all; } .tsfoot { margin-top: 14px; }
-  .tsbtns { display: grid; gap: 8px; }
-  @media print {
-    body > *:not(#techOverlay) { display: none !important; }
-    #techOverlay .overlay { position: static; background: none; display: block; }
-    #techOverlay .sheet { max-height: none; overflow: visible; box-shadow: none; padding: 0; max-width: none; }
-    .noprint { display: none !important; } .techpage { border: 0; padding: 0; margin: 0; }
-  }
-  /* END TECHSHEET */
   .gear { border: 0; background: transparent; font-size: calc(22px * var(--ts)); line-height: 1; padding: 6px 8px; min-width: 44px; min-height: 44px; color: var(--ink); }
   body[data-tab="discover"] .gear { min-height: 36px; padding: 2px 8px; }
   .answers { display: grid; grid-template-columns: 1fr 1.25fr 1fr; gap: 8px; margin-top: 10px; }
@@ -601,7 +580,6 @@
 <body>
 <div id="app"></div>
 <div id="overlay"></div>
-<div id="techOverlay"></div>   <!-- TECHSHEET -->
 <div id="confirm"></div>
 <div id="zoom"></div>
 <div id="bootError" hidden></div>
@@ -627,6 +605,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=87" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=88" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>

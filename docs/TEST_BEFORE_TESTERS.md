@@ -163,13 +163,5 @@ Needs no database script. On a real phone, in **Safari (tab and home-screen app)
 - [ ] Settings, Plan: switching to Pro turns on the tasting grid, 500-row import and feedback at once; switching back reverses it; with `plan_switch_open` = 0 the row disappears. Offline it says it needs a connection.
 - [ ] Mode check: Professional mode alone does not show the grid or raise the import limit.
 
-## 20. Tech sheet (added 2026-10-14; remove with docs/TECHSHEET_REMOVAL.md)
-- [ ] Run `docs/tech_sheet.sql`, then `docs/tech_sheet_research.sql`, in Supabase (both safe to repeat). The feature starts **off** (`techsheet_enabled` = 0).
-- [ ] On the Owner page, Facts tab, press **Staff only** (the switch, `techsheet_enabled` = 1). As Owner/Editor: Editor tab, Facts: add a producer's official site and one approved source; type in a fact for a real wine with the page address and the exact quote; check a normal player account still sees nothing.
-- [ ] Press **Everyone**. As a player: a journal entry, rating sheet, Details, **Tech sheet**: tick fields, confirmed facts show with their source site(s); missing ones say "Not confirmed yet"; Make the full page, Print or save as PDF on a real phone (the app screens must not print), Copy as text.
-- [ ] A wine you typed in: blocked until it has a producer, vintage and type; then add ABV from the bottle ("Entered by you"); the entry is private to you.
-- [ ] Offline: facts already seen are still shown; nothing breaks.
-- [ ] Press **Off**: the button and the Editor Facts section disappear for everyone (the Owner's Facts tab stays); press Staff only and Everyone again and the data is still there.
-- [ ] Owner decisions: when to add an automatic research runner (needs API billing and a budget cap), a legal look at quoting third-party pages, and whether the Tech sheet should be a Pro-plan feature. No `privacy.html` line is needed for the manual research pack (no player data is sent).
-- [ ] Research pack, live, on 3 wines: Editor tab, Facts, Research: download a work list (set 3 wines); give it to Claude with the steps in `docs/TECHSHEET_RESEARCH.md`; run `node tools/verify-research.mjs ... --worklist ...`; import the `.verified.json`: the preview matches, finds appear under Waiting, suggested producer sites under Suggested sites. Approve one producer site: facts from it confirm at once; a fact from only one unapproved site stays waiting; two approved sites agreeing confirm; two disagreeing go to Waiting for an Editor. Check the printed Tech sheet shows the source addresses.
-- [ ] An Editor (not the Owner) can do all of Research; a player sees none of it and nothing player-triggered exists. No player data is in the work list.
+## 20. Tech sheet: PARKED (2026-10-14)
+Taken out of the app; nothing to test. The code is on `backup/tech-sheet-parked`; the database tables (if the scripts were run) are kept and unused. If `techsheet_enabled` exists in `app_config`, leaving it at any value has no effect now.

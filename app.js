@@ -6,12 +6,12 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete, styleLabel,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=14";
-import * as db from "./data.js?v=32";
+import * as db from "./data.js?v=33";
 import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=8";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=5";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=36";
+  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=37";
 import { createLearn } from "./learn.js?v=9";
 import { setMode } from "./words.js?v=1";
 import { journalCsv, exportName } from "./exportcsv.js?v=1";
@@ -37,7 +37,7 @@ import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=7";
 import { createProfile } from "./profile.js?v=22";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=12";
 import { createFeedback } from "./feedback.js?v=6";
-import { createEditor } from "./editor.js?v=30";
+import { createEditor } from "./editor.js?v=31";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=9";
 import { gamesHtml } from "./games.js?v=13";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
@@ -45,23 +45,12 @@ import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } fr
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=2";
 import { recommendMix, recommend } from "./recommend.js?v=6";
 import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=1";
-import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=3";
+import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
 import { setOffline, setCardLookup } from "./overlay.js?v=1";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=10"));
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=11"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=6"));
-// TECHSHEET: the Tech sheet screens are loaded on first use, and only when the feature is on. A missing file never breaks the app.
-let TECH = null, TECHMOD = null, FACTS = null;
-const loadTechModule = async () => {
-  if (TECH) return TECH;
-  try {
-    TECHMOD = await import("./techsheetui.js?v=4");
-    const tctx = { sb: () => state.sb, userId: () => state.user.id, cardById: (id) => cardById(id), cards: () => state.cards, cardName: (id) => { const c = cardById(id); return c ? wineName(c) : ""; } };
-    TECH = TECHMOD.createTechSheet(tctx); FACTS = TECHMOD.createFactsStaff(tctx);
-  } catch (e) { setBanner("The tech sheet could not be loaded: " + (e.message || e)); throw e; }
-  return TECH;
-};
 const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=9"));
 import { createWineInfo } from "./wineinfo.js?v=18";
 
@@ -137,7 +126,6 @@ const state = {
   access: { role: null, label: null, permissions: [] },   // what this person may do as staff: from the database
   zoom: null,                           // the open map overlay: { plan, step, at }
   mine: new Map(),                      // wine_vintage_id -> this player's private changes to the wine's details (mywine.js)
-  techLevel: 0,                         // TECHSHEET: app_config techsheet_enabled (0 off, 1 staff, 2 everyone)
   consent: {}, consentBusy: false, consentError: "",   // the consent page: what is ticked
   pro: false,                           // this person has the professional tier: they get the tasting grid (feature switch proTasting)
   grid: null,                           // the tasting grid that is open: { values }
@@ -149,7 +137,7 @@ const state = {
 };
 // What this person may do in the Editor tab comes from the database (staff roles, update 13).
 // All of "who may do what" is worked out in access.js (docs/ROLES_AND_ACCESS.md); the database still decides what anyone may actually change.
-const access = () => accessOf({ user: state.user, profile: state.profile, staff: state.access, features: { proTasting: state.pro, contentFeedback: state.feedback, techsheetLevel: state.techLevel }, settings: state.settings });
+const access = () => accessOf({ user: state.user, profile: state.profile, staff: state.access, features: { proTasting: state.pro, contentFeedback: state.feedback }, settings: state.settings });
 const can = (permission) => access().can(permission);
 const isEditor = () => access().isEditor;
 const isOwner = () => access().isOwner;   // the Owner page (the gear in Settings offers it)
@@ -183,7 +171,7 @@ const feedback = createFeedback({ sb: () => state.sb, user: () => state.user, sc
 // A gentle reminder for guests who have started building a journal, shown on Discover until they save it or say "not now".
 const showNudge = () => access().isGuest && !store.get("wine.nudgeOff") && (state.journal.length >= 1 || state.states.length >= 5);
 // The Editor tab (editors only) lives in editor.js.
-const editorTab = createEditor({ flags: () => ({ techsheet: access().techsheetStaff }), mountFacts: (el) => { loadTechModule().then(() => FACTS.mount(el), () => {}); }, sb: () => state.sb, userId: () => state.user.id, cards: () => state.cards, can, roleLabel: () => (state.access && state.access.label) || "", onSaved: () => loadReferences(), onWineChanged: async () => { state.cards = await loadAllCards(); rebuildDeck(); } });   // a deleted, archived, published or edited wine changes the Discover deck too
+const editorTab = createEditor({ sb: () => state.sb, userId: () => state.user.id, cards: () => state.cards, can, roleLabel: () => (state.access && state.access.label) || "", onSaved: () => loadReferences(), onWineChanged: async () => { state.cards = await loadAllCards(); rebuildDeck(); } });   // a deleted, archived, published or edited wine changes the Discover deck too
 
 // The catalog cards, each with its price (an editor's price blended with players' prices, see pricing.js) and no repeated lines.
 // Before database update 20 there are no prices; the cards still load.
@@ -331,7 +319,6 @@ async function enterMain() {
     db.loadQuizKnowledge(state.sb).catch(() => null),   // what the person knows and what other players know both help decide the deck
     db.loadCrowd(state.sb).catch(() => new Map()),
     db.loadSwipeConfig(state.sb).then(setSwipeConfig, () => {}),
-    db.loadTechsheetLevel(state.sb).then((n) => { state.techLevel = n; }, () => { state.techLevel = 0; }),   // TECHSHEET: 0 off, 1 staff, 2 everyone
     db.loadPlanSwitchOpen(state.sb).then((on) => { state.planSwitch = on; }, () => { state.planSwitch = false; }),   // whether Settings shows the Plan row   // the owner's numbers for likes, dislikes and "I don't know it"
   ]);
   state.cards = cards; state.feedback = feedback; state.pro = pro; state.quiz = quiz; state.crowd = crowd;
@@ -441,7 +428,7 @@ function ownerData() {
   const O = state.owner;
   if (state._ownerFor !== state.cards) { state._ownerFor = state.cards; state._ownerCache = { rows: OWN.wineRows(state.cards), bingo: OWN.bingoCoverage(state.cards) }; }
   const { rows, bingo } = state._ownerCache;
-  return { rows, bingo, checks: OWN.checkCounts(rows), config: O.config, configError: O.configError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, staff: O.staff, staffError: O.staffError, staffAudit: O.staffAudit, techOn: isOwner(), factsHtml: TECHMOD && O.facts ? TECHMOD.ownerFactsHtml({ level: state.techLevel, counts: O.facts.counts, error: O.facts.error }) : "", seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
+  return { rows, bingo, checks: OWN.checkCounts(rows), config: O.config, configError: O.configError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, staff: O.staff, staffError: O.staffError, staffAudit: O.staffAudit, seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
 }
 // The lens preview: the top picks of one lens for the owner's own profile, or for a brand-new player, using the weights typed on the page.
 function ownerLens() {
@@ -515,22 +502,6 @@ async function ownerLegend(a, b) {
     } else if (a === "legendremove") { await db.removeSharedLegend(state.sb, b); ownerSay("Removed."); }
     await legendChanged();
   } catch (e) { ownerSay("Could not save: " + (e.message || e)); }
-}
-// TECHSHEET: the Owner page's Facts tab (who sees it, what is confirmed and waiting). The switch is app_config techsheet_enabled; a save the database refuses is shown, never as done.
-async function ownerTechLevel(n) {
-  if (![0, 1, 2].includes(n) || n === state.techLevel) return;
-  try {
-    await db.saveAppConfig(state.sb, "techsheet_enabled", n);
-    state.techLevel = n; state.owner.config = null;
-    ownerSay(["The Tech sheet is off.", "The Tech sheet is on for Editors and the Owner only.", "The Tech sheet is on for everyone."][n]);
-  } catch (e) { ownerSay("Not changed: " + (/not saved/i.test(String(e.message || "")) ? "the Tech sheet update (docs/tech_sheet.sql) has not been run, or your access does not allow it." : (e.message || e))); }
-  ownerRedraw();
-}
-// TECHSHEET: the Owner page's Facts tab (state, what is confirmed and waiting).
-async function loadOwnerFacts() {
-  state.owner.facts = { counts: null, error: "" };
-  try { await loadTechModule(); state.owner.facts.counts = await db.loadFactCounts(state.sb); } catch (e) { state.owner.facts.error = String(e.message || e); }
-  if (state.tab === "owner" && state.owner.tab === "facts") ownerRedraw();
 }
 // ---- Roles tab: who has a staff role. Owner is never given or taken away here (access.js, and the database refuses it too).
 async function loadOwnerStaff() {
@@ -642,7 +613,6 @@ function drawTab(body) {
     else body.innerHTML = OWN.ownerHtml(state.owner, ownerData());
     if (isOwner() && state.owner.tab === "legend" && !state.owner.legend && !state.owner.legendError) loadOwnerLegend();
     if (isOwner() && state.owner.tab === "tags" && !state.owner.tags && !state.owner.tagsError) loadOwnerTags();
-    if (isOwner() && state.owner.tab === "facts" && !state.owner.facts) loadOwnerFacts();   // TECHSHEET
     if (isOwner() && state.owner.tab === "roles" && !state.owner.staff && !state.owner.staffError) loadOwnerStaff();
     if (isOwner() && state.owner.tab === "config" && !state.owner.config && !state.owner.configError) loadOwnerConfig();
   } else if (state.tab === "games") {
@@ -1219,7 +1189,7 @@ function syncFoot() {
 }
 function openSheet() {
   state.sheetUi = { ...state.sheetUi, saving: false, error: "", page: 0 };
-  $("#overlay").innerHTML = sheetHtml(state.sheet, { ...state.sheetUi, tech: access().techsheet });
+  $("#overlay").innerHTML = sheetHtml(state.sheet, state.sheetUi);
   showPhotos();   // the photos block (sharing.js)
   showExtras(); showWineLine();
 }
@@ -1818,13 +1788,6 @@ document.addEventListener("click", async (ev) => {
       else if (a === "addtag") await ownerAddTag();
       else if (a.startsWith("legend")) await ownerLegend(a, b);
       else if (a.startsWith("staff")) await ownerStaff(a, b, c);
-      else if (a === "techlevel") await ownerTechLevel(Number(b));   // TECHSHEET: Off / Staff only / Everyone
-    }
-    else if (action === "tech" && access().techsheet) {   // TECHSHEET: tech:open, tech:toggle:ID, tech:group:ID, tech:make, tech:back, tech:print, tech:copy, tech:close, tech:fs:...
-      await loadTechModule();
-      if (a === "fs") { if (access().techsheetStaff) await FACTS.act(t.dataset.action.split(":")); }
-      else if (a === "open") { const tg = state.sheet && state.sheet.target; if (tg) await TECH.open(tg.kind === "catalog" ? { wineVintageId: tg.wineVintageId } : { userWineId: tg.userWineId }); }
-      else await TECH.act(t.dataset.action.split(":"));
     }
     else if (action === "settings" || action === "syncinfo") openSettings();
     else if (action === "setclose") closeSettings();

@@ -1,5 +1,7 @@
 # Tech sheet research: how Claude researches, and how the results get in
 
+> **PARKED 2026-10-14:** the Tech sheet was taken out of the app. This page describes the parked design (code on `backup/tech-sheet-parked`); `tools/verify-research.mjs` and the app screens it mentions are not on the working branch.
+
 Research is **pushed by Editors and the Owner**. Players never trigger it, and **no player data is sent anywhere**: only catalog wine names (producer, wine, vintage, place). There is no scheduled job and no API key in this version; you run it by hand, whenever you like. (An automatic scheduled runner can be added later; it would produce the same files and use the same import. Not built.)
 
 ## The steps

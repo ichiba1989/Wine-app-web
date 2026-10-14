@@ -227,11 +227,6 @@ export function journalListHtml(entries, j, photoUrls, cards = []) {
   return `<div class="stack">${html}</div>`;
 }
 
-// TECHSHEET: the button on the rating sheet's Details page. A wine the player typed in must be saved first, because the sheet belongs to the saved wine.
-export const techButtonHtml = (sheet) => (sheet.target.kind === "catalog" || sheet.target.userWineId
-  ? `<button type="button" class="btn outline slim" data-action="tech:open">Tech sheet</button>`
-  : `<div class="muted small">The tech sheet is available once this wine is saved.</div>`);
-
 // ---------------------------------------------------------------- rating sheet
 export function photosHtml(sheet) {
   const existing = sheet.photos.existing.map((p) => `<div class="ph${p.removed ? " gone" : ""}">${p.url ? `<img src="${esc(p.url)}" alt="Your photo">` : ""}<button class="phx" data-sheet="togglephoto:${p.id}" aria-label="${p.removed ? "Keep this photo" : "Remove this photo"}">${p.removed ? "↺" : "×"}</button></div>`).join("");
@@ -323,7 +318,7 @@ export function footState(page, verdict, saving) {
   if (page < last) return { action: "next", label: "Next", disabled: page === 0 && !verdict };
   return { action: "save", label: "Save to journal", disabled: !verdict || !!saving };
 }
-export function sheetHtml(sheet, { saving = false, error = "", page = 0, tech = false } = {}) {
+export function sheetHtml(sheet, { saving = false, error = "", page = 0 } = {}) {
   const verdicts = VERDICTS.map((v) => `<button class="vbtn${sheet.verdict === v.code ? " on" : ""}" data-sheet="verdict:${v.code}">${esc(v.label)}</button>`).join("");
   const canSave = !!sheet.verdict && !saving;
   const n = SHEET_PAGES.length;
@@ -332,7 +327,7 @@ export function sheetHtml(sheet, { saving = false, error = "", page = 0, tech = 
     `<h3 class="serif">How was it?</h3><div class="verdicts">${verdicts}</div><div class="muted small">Pick one to go to the next step.</div>`,
     structurePageHtml(sheet),
     characterPageHtml(sheet),
-    `<h3 class="serif">Details</h3>${sheet.entryId ? wineCardHtml(sheet) : ""}${tech ? techButtonHtml(sheet) : ""}<div class="two"><input class="field" type="date" data-field="date" value="${esc(sheet.date)}" aria-label="Date">
+    `<h3 class="serif">Details</h3>${sheet.entryId ? wineCardHtml(sheet) : ""}<div class="two"><input class="field" type="date" data-field="date" value="${esc(sheet.date)}" aria-label="Date">
       <input class="field" inputmode="decimal" data-field="price" placeholder="Price you paid ($)" value="${esc(sheet.price)}"></div>
       <div class="two"><input class="field" data-field="food" placeholder="Food" value="${esc(sheet.food)}"><input class="field" data-field="occasion" placeholder="Occasion" value="${esc(sheet.occasion)}"></div>`,
     `<h3 class="serif">Notes and photos</h3><textarea class="field" data-field="notes" rows="4" placeholder="${esc(say("notes_hint"))}">${esc(sheet.notes)}</textarea>

@@ -9,8 +9,8 @@
 //   Feedback:  read what testers sent from the app and mark it handled.
 // Every change is logged by the database.
 import { dimsFor, dimMeta, defaultFor, esc, wineName, placeLine, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel, barDims, choiceDims, styleInfo } from "./logic.js?v=14";
-import * as db from "./data.js?v=32";
-import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=36";
+import * as db from "./data.js?v=33";
+import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=37";
 import { createReview } from "./review.js?v=11";
 import { createWineInfo, publishSummary } from "./wineinfo.js?v=18";
 import { groupSubmissions, planPromotion, duplicateGroups, rulesFrom } from "./catalog.js?v=3";
@@ -20,12 +20,12 @@ import { infoLine } from "./wineline.js?v=1";
 import { sortWines, sortSelectHtml, STRUCTURE_SORTS, PHOTO_SORTS } from "./sorting.js?v=4";
 import { suggestStructure, values as ruleValues, goldInfo, GOLD, GROUPS, evaluateRules, reportText, TARGETS, RULES_VERSION } from "./rules.js?v=4";
 
-const SECTIONS = [{ id: "structure", label: "Structure" }, { id: "catalog", label: "Catalog" }, { id: "photos", label: "Photos" }, { id: "flags", label: "Flags" }, { id: "quiz", label: "Quiz" }, { id: "feedback", label: "Feedback" }, { id: "facts", label: "Facts", flag: "techsheet" }];   // TECHSHEET: Facts shows only while the Tech sheet is on
+const SECTIONS = [{ id: "structure", label: "Structure" }, { id: "catalog", label: "Catalog" }, { id: "photos", label: "Photos" }, { id: "flags", label: "Flags" }, { id: "quiz", label: "Quiz" }, { id: "feedback", label: "Feedback" }];
 // Which sections each permission opens. A quiz reviewer sees Flags too, but the database only returns the flags on quiz questions.
-export const SECTION_PERMISSIONS = { structure: ["catalog_edit"], catalog: ["catalog_edit"], photos: ["catalog_edit"], flags: ["catalog_edit", "quiz_verify"], quiz: ["quiz_verify"], feedback: ["feedback_read"], facts: ["catalog_edit"] };
+export const SECTION_PERMISSIONS = { structure: ["catalog_edit"], catalog: ["catalog_edit"], photos: ["catalog_edit"], flags: ["catalog_edit", "quiz_verify"], quiz: ["quiz_verify"], feedback: ["feedback_read"] };
 // A quiz reviewer has no catalog work, so Quiz comes first for them and is where they land.
-export function sectionsFor(can, flags = {}) {
-  const list = SECTIONS.filter((x) => SECTION_PERMISSIONS[x.id].some((p) => can(p)) && (!x.flag || flags[x.flag]));
+export function sectionsFor(can) {
+  const list = SECTIONS.filter((x) => SECTION_PERMISSIONS[x.id].some((p) => can(p)));
   return can("catalog_edit") ? list : [...list.filter((x) => x.id === "quiz"), ...list.filter((x) => x.id !== "quiz")];
 }
 
@@ -210,7 +210,6 @@ function testHtml(E) {
 // ctx: { sb(), userId(), cards(), can(permission), roleLabel(), onSaved(), onWineChanged() }
 export function createEditor(ctx) {
   const can = (p) => !!(ctx.can && ctx.can(p));
-  const flags = () => (ctx.flags ? ctx.flags() : {});   // TECHSHEET: which optional sections are switched on
   const E = { can, sort: "producer", sub: { loaded: false, loading: false, error: "", items: [], busy: null, msg: "" }, section: (sectionsFor(can)[0] || { id: "structure" }).id, loaded: false, loadError: null, cards: [], refs: new Map(), rows: [], vintageToWine: new Map(), q: "", filter: "needs", sheet: null, saving: false, error: "",
     ph: { sort: "default", filter: "needs", q: "", kind: "own_photography", show: PHOTO_PAGE, busy: null, confirm: null, msg: "", error: "" },
     cat: { loaded: false, loading: false, error: "", rows: [], config: [], decisions: [], busy: false, msg: "", view: null } };
@@ -245,7 +244,7 @@ export function createEditor(ctx) {
 
   const showError = (msg) => { E.openError = msg; const el = document.getElementById("editorOpenErr"); if (el) el.textContent = msg; };
   const openInfo = (card) => { showError(""); return wineinfo.open(card, wineName(card)).catch((e) => { showError("Could not open wine info: " + (e.message || e)); const o = overlay(); if (o) o.innerHTML = ""; }); };
-  const chips = () => `${ctx.roleLabel && ctx.roleLabel() ? `<div class="muted small" style="margin:2px 0 6px">Your access: <b>${esc(ctx.roleLabel())}</b></div>` : ""}<div id="editorOpenErr" class="err">${esc(E.openError || "")}</div><div class="chips left edtabs">${sectionsFor(can, flags()).map((x) => `<button class="chip wide ed${E.section === x.id ? " on" : ""}" data-editor="sec:${x.id}">${x.id === "flags" ? flagsLabel() : x.id === "feedback" ? feedbackLabel() : x.label}</button>`).join("")}</div>`;
+  const chips = () => `${ctx.roleLabel && ctx.roleLabel() ? `<div class="muted small" style="margin:2px 0 6px">Your access: <b>${esc(ctx.roleLabel())}</b></div>` : ""}<div id="editorOpenErr" class="err">${esc(E.openError || "")}</div><div class="chips left edtabs">${sectionsFor(can).map((x) => `<button class="chip wide ed${E.section === x.id ? " on" : ""}" data-editor="sec:${x.id}">${x.id === "flags" ? flagsLabel() : x.id === "feedback" ? feedbackLabel() : x.label}</button>`).join("")}</div>`;
   const structureShell = () => `<div class="jbar"><input class="field" data-editor-q placeholder="Search wines" value="${esc(E.q)}" autocomplete="off">
       ${sortSelectHtml("data-editor-sort", STRUCTURE_SORTS, E.sort, "structure")}
       <div class="chips left"><button class="chip wide${E.filter === "needs" ? " on" : ""}" data-editor="filter:needs">Needs a profile</button><button class="chip wide${E.filter === "all" ? " on" : ""}" data-editor="filter:all">All wines</button><button class="chip wide${E.filter === "gold" ? " on" : ""}" data-editor="filter:gold">Gold set</button></div></div>
@@ -258,7 +257,6 @@ export function createEditor(ctx) {
     if (E.section === "structure") { sec.innerHTML = structureShell(); if (!E.loaded) load(); else { E.cards = ctx.cards(); drawList(); } }
     else if (E.section === "photos") { E.cards = ctx.cards(); if (!visibleKinds(can).some((k) => k.id === E.ph.kind)) E.ph.kind = "own_photography"; if (E.ph.filter === "found" && !can(FOUND_ONLINE_PERMISSION)) E.ph.filter = "needs"; if (!E.sub.loaded && !E.sub.loading) loadSubs(); sec.innerHTML = `<div id="photosBody">${photosHtml(E)}</div>`; }
     else if (E.section === "catalog") { E.cards = ctx.cards(); sec.innerHTML = `<div id="catalogBody">${catalogHtml(E)}</div>`; if (!E.cat.loaded && !E.cat.loading) loadCatalog(); }
-    else if (E.section === "facts") { if (ctx.mountFacts) ctx.mountFacts(sec); }   // TECHSHEET
     else review.mount(sec, E.section);
   }
 
@@ -486,7 +484,7 @@ export function createEditor(ctx) {
 
   return {
     state: E, review,
-    mount(el) { root = el; const ok = sectionsFor(can, flags()); if (ok.length && !ok.some((x) => x.id === E.section)) E.section = ok[0].id; draw(); },
+    mount(el) { root = el; const ok = sectionsFor(can); if (ok.length && !ok.some((x) => x.id === E.section)) E.section = ok[0].id; draw(); },
     leave() { root = null; review.leave(); E.sheet = null; const o = overlay(); if (o) o.innerHTML = ""; },
   };
 }

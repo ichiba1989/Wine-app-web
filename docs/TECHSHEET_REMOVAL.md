@@ -1,5 +1,7 @@
 # Tech sheet: how to switch it off, hide it, or remove it completely
 
+> **Status 2026-10-14: the code has been removed from the app (Level 2 done) at the owner's request. The database objects are KEPT on purpose (Level 3 not done).** The full feature is on the branch `backup/tech-sheet-parked` (commit `524c505`) to bring it back. Only run Level 3 if the owner decides to drop the data for good.
+
 The Tech sheet (researched, sourced wine facts and a full-page sheet per wine) was built to be retractable. Pick the level you need.
 
 **Restore point:** the branch `backup/before-tech-sheet` is the whole app exactly as it was before the Tech sheet was started (see `docs/VERSIONS.md`).
