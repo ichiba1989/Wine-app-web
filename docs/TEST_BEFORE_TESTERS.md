@@ -165,3 +165,12 @@ Needs no database script. On a real phone, in **Safari (tab and home-screen app)
 
 ## 20. Tech sheet: PARKED (2026-10-14)
 Taken out of the app; nothing to test. The code is on `backup/tech-sheet-parked`; the database tables (if the scripts were run) are kept and unused. If `techsheet_enabled` exists in `app_config`, leaving it at any value has no effect now.
+
+## 21. Guess the Glass (added 2026-10-14)
+No database script. Check on a phone:
+- [ ] An editor or the owner reads the age cues once (`AGE_CUES`, `GRAPE_AGE`, `AGE_POTENTIAL` in `blindgame.js`) and the classic grape-and-place list (`CLASSICS`); fix any wording before testers rely on it.
+- [ ] Games, Guess the Glass: each of the five modes plays a round of 5 at Easy and Hard; the answer, Why and the score show; the best score is still there after reopening the app.
+- [ ] Learn it: with quiz questions loaded, a question about the answer's grape, place or wine ageing shows under the answer; answering it adds one row to `quiz_answers`; "More about ... in Learn" opens Learn on that topic with a "Topic: ... / Show all" chip (a Beginner too).
+- [ ] Try a wine like it: the wines shown share the grape (or place) and are never ones the player has rated or turned down.
+- [ ] Playing writes nothing else to the database and does not change Discover or the Profile.
+- [ ] Editors: tag a few quiz questions with the theme "Wine ageing" so "How old?" has Learn questions to point to.

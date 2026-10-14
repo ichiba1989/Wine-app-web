@@ -548,6 +548,30 @@
   .brwhy { color: var(--wine); font-size: calc(13px * var(--ts)); }
   .brlens { font-size: calc(11px * min(var(--ts), 1.2)); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--slate); }
   .bview { margin-top: 8px; }
+  /* ---- Guess the Glass */
+  .glevel { margin: 6px 0 2px; }
+  .gq { font-size: calc(19px * var(--ts)); font-weight: 400; margin: 12px 0 8px; }
+  .gprof { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+  .gplabel { font-size: calc(11px * min(var(--ts), 1.2)); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--slate); margin-bottom: 3px; }
+  .gptext { font-size: calc(15px * var(--ts)); line-height: 1.4; }
+  .gpchips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .gpchip { background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; font-size: calc(13.5px * var(--ts)); }
+  .greveal { margin-top: 4px; }
+  .gwhy { margin-top: 10px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  .gwhy ul { margin: 0; padding-left: 18px; font-size: calc(14px * var(--ts)); line-height: 1.4; }
+  .gfollow { margin-top: 6px; display: flex; flex-direction: column; gap: 10px; }
+  .glq { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .gqq { font-size: calc(15px * var(--ts)); }
+  .opt.small { padding: 9px 12px; font-size: calc(14px * var(--ts)); }
+  .gmore { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .gmore .btn, .lacts .btn { white-space: normal; }
+  .greveal .brec, .games > .brec { margin-top: 8px; }
+  .gscore { text-align: center; margin: 10px 0; }
+  .gbig { font-size: calc(36px * var(--ts)); }
+  .glist { padding-left: 4px; list-style: none; font-size: calc(14px * var(--ts)); line-height: 1.6; margin: 8px 0; }
+  .gtopics { display: flex; flex-direction: column; gap: 6px; }
+  .gtopic { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; font-size: calc(15px * var(--ts)); }
+  .lonly { margin-top: 8px; } .lonly .chip { flex: 0 0 auto; padding: 6px 12px; font-size: calc(12px * var(--ts)); }
 
   /* ---- owner page */
   body[data-tab="owner"] #app { max-width: 1100px; }
@@ -605,6 +629,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=88" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=89" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>

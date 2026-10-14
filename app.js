@@ -12,7 +12,7 @@ import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } fr
 import { shrinkImage } from "./photos.js?v=5";
 import {
   visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=37";
-import { createLearn } from "./learn.js?v=9";
+import { createLearn } from "./learn.js?v=10";
 import { setMode } from "./words.js?v=1";
 import { journalCsv, exportName } from "./exportcsv.js?v=1";
 import { newBlind, cleanPending, hasGuess, scoreGuess, summarize, resultLine, notesAfterReveal, actualOfCard, actualOfForm } from "./blind.js?v=1";
@@ -39,10 +39,11 @@ import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from
 import { createFeedback } from "./feedback.js?v=6";
 import { createEditor } from "./editor.js?v=31";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=9";
-import { gamesHtml } from "./games.js?v=13";
+import { gamesHtml } from "./games.js?v=14";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
 import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=4";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=2";
+import * as GG from "./blindgame.js?v=1";
 import { recommendMix, recommend } from "./recommend.js?v=6";
 import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=1";
 import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
@@ -98,11 +99,14 @@ const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(
 const OWNER_START = { tab: "wines", q: "", issue: "all", sort: { wines: { key: "producer", dir: 1 }, bingo: { key: "tier", dir: 1 } }, lens: "confident", player: "me", seed: "", weights: {}, open: {}, msg: "", wineIds: null, config: null, configError: "", tags: null, tagsError: "", legend: null, legendError: "" };
 const TOT_KEY = "wine.thisorthat";   // the This or That picks (thisorthat.js): only on this phone
 const GAMES_KEY = "wine.games";   // which bingo cards this phone has cleared (bingo.js)
+const GUESS_KEY = "wine.guess";   // Guess the Glass: the best score of each mode (blindgame.js), only on this phone
 const state = {
   owner: { ...OWNER_START },                       // the Owner page (owner.js)
   g: { screen: "hub", cardId: null, sq: null },   // the Games tab: which screen is open
   gamesMemory: parseMemory(store.get(GAMES_KEY)),
   totAnswers: parseAnswers(store.get(TOT_KEY)), totTaste: null,
+  // Guess the Glass: the round being played, and what its follow-ups showed (kept so they do not change while the player reads them)
+  guess: { memory: GG.parseMemory(store.get(GUESS_KEY)), level: "easy", play: null, message: "", lq: {}, lqChoices: {}, lqFor: {}, winesFor: {}, topicList: [] },
   settings: parseSettings(store.get(SETTINGS_KEY)),   // this phone's choices from the gear in the header (settings.js)
   status: "loading",            // loading | setup | error | age | main
   error: null, banner: null, tab: "discover", underage: false,
@@ -579,7 +583,63 @@ function gamesView() {
   // The wines for the This or That results are only worked out on that screen.
   const tot = { answers: state.totAnswers, matches: [], taste: state.totTaste };
   if (state.g.screen === "tot" && (state.g.totResults || !nextPair(state.totAnswers))) tot.matches = matchWines({ answers: state.totAnswers, cards: state.cards, structure: structureMap(state.cards, state.refs) });
-  return gamesHtml(state.g, { progress, memory, news, help, tot });
+  const guess = { ...state.guess, follow: state.g.screen === "guess" ? guessFollow() : null };
+  return gamesHtml(state.g, { progress, memory, news, help, tot, guess });
+}
+// ---------------------------------------------------------------- Guess the Glass (blindgame.js)
+// A round is built from the classics and the catalog (with the editors' structure). Nothing here is saved to the database except the quiz answers given
+// in "Learn it" (ordinary quiz answers); the game itself never touches the taste model.
+function startGuess(mode) {
+  const G = state.guess;
+  if (!GG.modeById(mode)) return;
+  const items = GG.buildItems(state.cards, state.refs, new Date());
+  const round = GG.makeRound(mode, items, { level: G.level, words: state.settings.mode });
+  Object.assign(G, { lq: {}, lqChoices: {}, lqFor: {}, winesFor: {}, topicList: [], message: "" });
+  if (!round.length) { G.play = null; G.message = "There are not enough wines for this mode yet."; return; }
+  G.play = { mode, level: G.level, round, i: 0, picks: [] };
+}
+// After a pick (and on the result screen): quiz questions about the answer (learn.js), the topics Learn can open, and catalog wines to try (recommend.js).
+function guessFollow() {
+  const G = state.guess, play = G.play;
+  if (!play) return null;
+  const done = play.i >= play.round.length;
+  if (!done && play.picks[play.i] === undefined) return null;
+  const key = done ? "done" : play.i;
+  const topics = done ? GG.missedTopics(play.round, play.picks) : play.round[play.i].topics;
+  G.topicList = topics;
+  const ready = learn.ready();
+  const out = { topics: topics.map((t, k) => ({ name: GG.topicName(t), k, can: ready && learn.about([t], 1).length > 0 })), questions: [], wines: [] };
+  if (!done && ready) {
+    if (!G.lqFor[key]) G.lqFor[key] = learn.about(topics, 2);
+    out.questions = G.lqFor[key].map((id) => {
+      const q = learn.question(id); if (!q) return null;
+      if (!G.lqChoices[id]) G.lqChoices[id] = learn.choicesOf(id);
+      return { id, question: q.question, correct: q.correct_answer, choices: G.lqChoices[id], answered: G.lq[id] || null };
+    }).filter(Boolean);
+  }
+  if (!G.winesFor[key]) G.winesFor[key] = guessWines(topics, done);
+  out.wines = G.winesFor[key];
+  return out;
+}
+// Catalog wines for the topics, picked by the player's taste model (recommend.js "Safe bet"), never one they have rated or turned down.
+// During a question: up to 2 that share the grape (and the place, when there is one); after the round: one per missed topic, up to 3.
+function guessWines(topics, done) {
+  try {
+    const refs = structureMap(state.cards, state.refs);
+    const model = userModel({ cards: state.cards, states: state.states, journal: state.journal, quiz: state.quiz, refs });
+    const leaveOut = new Set([...state.journal.filter((e) => e.verdict && e.wine_vintage_id).map((e) => e.wine_vintage_id), ...state.states.filter((x) => reactionOf(x) === "dislike").map((x) => x.wine_vintage_id)]);
+    const base = { cards: state.cards, model, refs, crowd: state.crowd, journal: state.journal, states: state.states, lens: "confident" };
+    const useful = topics.filter((t) => t.kind !== "theme");
+    if (done) {
+      const out = [];
+      useful.slice(0, 3).forEach((t) => { const [p] = recommend({ ...base, exclude: new Set([...leaveOut, ...out.map((r) => r.card.id)]), accept: (c) => GG.cardFitsTopic(c, t), limit: 1 }); if (p) out.push(p); });
+      return out;
+    }
+    const grape = useful.find((t) => t.kind === "grape"), place = useful.find((t) => t.kind === "region");
+    let picks = grape && place ? recommend({ ...base, exclude: leaveOut, accept: (c) => GG.cardFitsTopic(c, grape) && GG.cardFitsTopic(c, place), limit: 2 }) : [];
+    if (picks.length < 2 && (grape || place)) picks = picks.concat(recommend({ ...base, exclude: new Set([...leaveOut, ...picks.map((r) => r.card.id)]), accept: (c) => GG.cardFitsTopic(c, grape || place), limit: 2 - picks.length }));
+    return picks;
+  } catch (e) { console.warn("Guess the Glass: no wines to suggest", e && e.message); return []; }
 }
 // Help for an empty square: a wine already in the journal that only needs rating, or else a few wines that would fill it, each from a different angle
 // (recommend.js lenses: a safe bet, something different, a stretch). Other games can call recommendMix() or recommend() with their own accept() and lenses.
@@ -1748,7 +1808,7 @@ document.addEventListener("click", async (ev) => {
       fly(el, a);
     }
     else if (action === "zoomcard") { const el = $("#card"); if (el && el.__toggleZoom) el.__toggleZoom(); }
-    else if (action === "game") {     // game:hub, game:bingo, game:card:ID, game:sq:N, game:tot, game:pick:a|b, game:skip, game:totresults, game:totagain
+    else if (action === "game") {     // game:hub, game:bingo, game:card:ID, game:sq:N, game:tot, game:pick:a|b, game:skip, game:totresults, game:totagain, and Guess the Glass: game:guess, game:ghub, game:glevel:L, game:gplay:MODE, game:gpick:N, game:gnext, game:gagain, game:glq:QID:N, game:glearn:N
       if (a === "hub") state.g = { screen: "hub", cardId: null, sq: null };
       else if (a === "bingo") state.g = { screen: "bingo", cardId: null, sq: null };
       else if (a === "card") state.g = { screen: "card", cardId: b, sq: null };
@@ -1765,13 +1825,36 @@ document.addEventListener("click", async (ev) => {
         }
       }
       else if (a === "totresults") state.g = { ...state.g, totResults: true };
+      else if (a === "guess" || a === "ghub") {   // the quiz questions are loaded behind it, so "Learn it" can show them
+        state.g = { screen: "guess", cardId: null, sq: null }; state.guess.play = null; state.guess.message = "";
+        learn.ensureLoaded().then(() => { if (state.tab === "games" && state.g.screen === "guess") renderBody(); });
+      }
+      else if (a === "glevel") state.guess.level = b === "hard" ? "hard" : "easy";
+      else if (a === "gplay") startGuess(b);
+      else if (a === "gagain") startGuess(state.guess.play ? state.guess.play.mode : "full");
+      else if (a === "gpick") { const p = state.guess.play; if (p && p.round[p.i] && p.picks[p.i] === undefined) p.picks[p.i] = p.round[p.i].choices[Number(b)]; }
+      else if (a === "gnext") {
+        const p = state.guess.play;
+        if (p && p.picks[p.i] !== undefined) {
+          p.i += 1;
+          if (p.i >= p.round.length) { state.guess.memory = GG.recordRound(state.guess.memory, p.mode, p.level, GG.scoreOf(p.round, p.picks)); store.set(GUESS_KEY, JSON.stringify(state.guess.memory)); }
+        }
+      }
+      else if (a === "glq") {   // a quiz question answered inside the game: saved as an ordinary quiz answer
+        const G = state.guess, choice = (G.lqChoices[b] || [])[Number(c)];
+        if (!G.lq[b] && choice !== undefined) { const result = learn.answerOne(b, choice); if (result) G.lq[b] = { choice, result }; }
+      }
+      else if (a === "glearn") {   // opens Learn on the questions about that topic, until the player taps "Show all"
+        const t = state.guess.topicList[Number(b)];
+        if (t) { learn.focusOn(learn.about([t], 500), GG.topicName(t)); state.tab = "learn"; render(); return; }
+      }
       else if (a === "totagain") { state.totAnswers = {}; store.set(TOT_KEY, "{}"); state.g = { screen: "tot", cardId: null, sq: null, totResults: false }; state.totTaste = null; }
       renderBody();
       if (state.g.screen === "tot" && (state.g.totResults || !nextPair(state.totAnswers))) ensureTotTaste();   // the results need the player's own taste to compare with
-      if (a === "sq") {                 // the details sit under the grid: bring them into view
-        const d = document.querySelector(".bdetail");
+      if (a === "sq" || a === "gpick") {   // the details (bingo) or the answer and its Why (Guess the Glass) sit underneath: bring them into view
+        const d = document.querySelector(a === "sq" ? ".bdetail" : ".greveal");
         if (d && d.scrollIntoView) d.scrollIntoView({ block: "nearest", behavior: reduceMotion() ? "auto" : "smooth" });
-      } else { const c = $("#content"); if (c) c.scrollTop = 0; }
+      } else if (a !== "glq" && a !== "glevel") { const el = $("#content"); if (el) el.scrollTop = 0; }
     }
     else if (action === "owner" && isOwner()) {   // owner:open, owner:tab:ID, owner:sort:KEY, owner:toggle:ID, owner:filter:ISSUE, owner:resetw, owner:edit:ID, owner:saveprice:ID, owner:savecfg:KEY
       await loadOwnerModule();

@@ -1,9 +1,10 @@
-// The Games tab: a list of games (Wine Bingo is the first), then the bingo tiers, then one card. Every function here takes data and returns an HTML
+// The Games tab: a list of games (Wine Bingo, This or That, Guess the Glass), then each game's screens. Every function here takes data and returns an HTML
 // string; nothing touches the network. The rules (what fills a square, what unlocks a tier) are in bingo.js; app.js holds the screen state and clicks.
 import { esc, wineName, entryName } from "./logic.js?v=14";
 import { infoLine } from "./wineline.js?v=1";
 import { PAIRS, AXES, AXIS_ORDER, AXIS_VIEW, nextPair, answeredCount, pickedCount, isDone, leanings, axisValues, compareAxes, isClear } from "./thisorthat.js?v=4";
 import { TIERS, CARDS, CLEARS_TO_UNLOCK, cardById, cardsOfTier, tierOpen, clearedIn } from "./bingo.js?v=2";
+import { MODES as GUESS_MODES, LEVELS, ROUND, modeById, bestOf, isRight, scoreOf } from "./blindgame.js?v=1";
 
 // g: { screen: "hub" | "bingo" | "card", cardId, sq }
 // data: { progress: Map(cardId -> progress), memory, news: [{ id, kind }], help }
@@ -12,10 +13,11 @@ export function gamesHtml(g, data) {
   if (g.screen === "card" && cardById(g.cardId)) return cardScreen(cardById(g.cardId), g, data);
   if (g.screen === "bingo") return bingoScreen(data);
   if (g.screen === "tot") return totScreen(g, data);
+  if (g.screen === "guess") return guessScreen(g, data);
   return hubScreen(data);
 }
 
-function hubScreen({ memory, tot }) {
+function hubScreen({ memory, tot, guess }) {
   const cleared = CARDS.filter((c) => memory.cleared[c.id]).length;
   return `<div class="games"><h2 class="serif gh">Games</h2>
     <button class="gtile" data-action="game:bingo"><div class="serif gt-title">Wine Bingo</div>
@@ -24,7 +26,9 @@ function hubScreen({ memory, tot }) {
     <button class="gtile" data-action="game:tot"><div class="serif gt-title">This or That</div>
       <div class="muted small">Pick between two foods. We will tell you what your picks say about the wines you may enjoy.</div>
       <div class="gt-meta">${tot && isDone(tot.answers) ? "Finished: see your results" : tot && answeredCount(tot.answers) ? `${answeredCount(tot.answers)} of ${PAIRS.length} answered` : `${PAIRS.length} quick choices`}</div></button>
-    <div class="gtile soon" aria-disabled="true"><div class="serif gt-title">More games</div><div class="muted small">Coming later.</div></div></div>`;
+    <button class="gtile" data-action="game:guess"><div class="serif gt-title">Guess the Glass</div>
+      <div class="muted small">A blind tasting game. Read a wine's profile and pick the wine, or play one part at a time: the grape, the place, the age, the feel.</div>
+      <div class="gt-meta">${guess && guess.memory && guess.memory.rounds ? `${guess.memory.rounds} ${guess.memory.rounds === 1 ? "round" : "rounds"} played` : "Five modes"}</div></button></div>`;
 }
 
 const newsHtml = (news) => news.length
@@ -150,4 +154,86 @@ function totResults(tot) {
     ${compareHtml(tot)}${wines}
     <div class="tskip"><button class="btn outline slim" data-action="game:totagain">Play again</button></div>
     <div class="muted small bnote">Just for fun: the picks come from a simple list of pairs, not from a test of your taste.</div>`;
+}
+
+// ---------------------------------------------------------------- Guess the Glass (blindgame.js): the modes, one question at a time, then the round's result
+// data.guess: { memory, level, play: { mode, level, round: [question], i, picks: [choice] } | null, follow, message }
+//   follow (after a pick, and on the result screen): { questions: [{ id, question, choices, answered: { choice, result } | null }], wines: [{ card, reason, label }],
+//   topics: [{ name, can }] } where can: the quiz has questions about it (the Learn button shows only then).
+function guessScreen(g, { guess }) {
+  const head = (back) => `<button class="link back" data-action="${back ? "game:ghub" : "game:hub"}">\u2039 ${back ? "Guess the Glass" : "Games"}</button><h2 class="serif gh">Guess the Glass</h2>`;
+  const play = guess.play;
+  if (!play) return `<div class="games">${head(false)}${guessHub(guess)}</div>`;
+  if (play.i >= play.round.length) return `<div class="games">${head(true)}${guessDone(play, guess)}</div>`;
+  return `<div class="games">${head(true)}${guessQuestion(play, guess)}</div>`;
+}
+function guessHub({ memory, level, message }) {
+  const levels = LEVELS.map((l) => `<button class="chip wide${level === l.id ? " on" : ""}" data-action="game:glevel:${l.id}" aria-pressed="${level === l.id}">${esc(l.label)}</button>`).join("");
+  const tiles = GUESS_MODES.map((m) => {
+    const best = bestOf(memory, m.id, level);
+    return `<button class="gtile gmode" data-action="game:gplay:${m.id}"><div class="serif gt-title">${esc(m.label)}</div><div class="muted small">${esc(m.blurb)}</div>
+      <div class="gt-meta">${best === null ? `${ROUND} questions` : `Best: ${best} of ${ROUND}`}</div></button>`;
+  }).join("");
+  return `<p class="ptext">Each profile is what is <b>typical</b> for a grape, a place and an age, built from our wine rules and the catalog. Read it and pick the wine.</p>
+    ${message ? `<div class="okbox">${esc(message)}</div>` : ""}
+    <div class="chips left" role="group" aria-label="How hard">${levels}</div>
+    <div class="muted small glevel">${level === "hard" ? "Hard: the wrong answers are close to the right one." : "Easy: the wrong answers are clearly different."}</div>${tiles}`;
+}
+function profileHtml(q) {
+  return `<div class="gprof">${q.profile.map((grp) => `<div class="gpgroup"><div class="gplabel">${esc(grp.title)}</div>
+    ${grp.id === "flavors" ? `<div class="gpchips">${grp.lines.map((t) => `<span class="gpchip">${esc(t)}</span>`).join("")}</div>` : `<div class="gptext">${grp.lines.map(esc).join(grp.id === "feel" || grp.id === "type" || grp.id === "climate" ? ", " : "<br>")}</div>`}</div>`).join("")}</div>`;
+}
+function guessQuestion(play, guess) {
+  const q = play.round[play.i], picked = play.picks[play.i], answered = picked !== undefined;
+  const m = modeById(play.mode) || { label: "" };
+  const opts = q.choices.map((c, k) => {
+    const right = answered && c === q.answer, wrong = answered && picked === c && c !== q.answer;
+    return `<button class="opt${right ? " right" : ""}${wrong ? " wrong" : ""}" data-action="game:gpick:${k}"${answered ? " disabled" : ""}><span>${esc(c)}</span>${right ? "<b>\u2713</b>" : ""}</button>`;
+  }).join("");
+  let after = "";
+  if (answered) {
+    const last = play.i + 1 >= play.round.length, r = q.reveal;
+    after = `<div class="greveal"><p class="fb"><b>${isRight(q, picked) ? "Right!" : "Not this time."}</b> ${q.mode === "age" ? `It is ${esc(r.age)}.` : `It is ${esc(q.answer)}.`}</p>
+      ${r.wine ? `<div class="muted small">This profile was built from a wine in our catalog: <b>${esc(r.wine)}</b>.</div>` : r.typical && q.mode !== "age" ? `<div class="muted small">A typical profile for this grape and place, not one bottle.</div>` : ""}
+      ${q.why.length ? `<div class="gwhy"><div class="gplabel">Why</div><ul>${q.why.map((w) => `<li>${esc(w)}</li>`).join("")}</ul></div>` : ""}
+      ${followHtml(guess.follow, true)}
+      <div class="lacts"><button class="btn primary slim" data-action="game:gnext">${last ? "See my score" : "Next wine"}</button></div></div>`;
+  }
+  return `<div class="muted small">${esc(m.label)} \u00b7 Wine ${play.i + 1} of ${play.round.length}${play.level === "hard" ? " \u00b7 Hard" : ""}</div>
+    <div class="tprog" aria-hidden="true"><i style="width:${Math.round((play.i / play.round.length) * 100)}%"></i></div>
+    <h3 class="serif gq">${esc(q.prompt)}</h3>${profileHtml(q)}<div class="opts gopts" role="group" aria-label="Choices">${opts}</div>${after}`;
+}
+// Learn it (quiz questions about the answer, answered right here, and a way into Learn) and Try a wine (catalog wines picked for the player).
+function followHtml(f, inQuestion) {
+  if (!f) return "";
+  let out = "";
+  if (f.questions && f.questions.length) {
+    out += `<div class="gfollow"><h3 class="serif gh2">Learn it</h3>${f.questions.map((x) => {
+      const a = x.answered;
+      const opts = x.choices.map((c, k) => {
+        const right = a && c === x.correct, wrong = a && a.choice === c && c !== x.correct;
+        return `<button class="opt small${right ? " right" : ""}${wrong ? " wrong" : ""}" data-action="game:glq:${esc(x.id)}:${k}"${a ? " disabled" : ""}><span>${esc(c)}</span>${right ? "<b>\u2713</b>" : ""}</button>`;
+      }).join("");
+      return `<div class="glq"><div class="gqq">${esc(x.question)}</div><div class="opts">${opts}</div>${a ? `<div class="muted small">${a.result === "correct" ? "Correct. Saved with your quiz answers." : `The answer is ${esc(x.correct)}. Saved to your quiz review.`}</div>` : ""}</div>`;
+    }).join("")}</div>`;
+  }
+  const topics = (f.topics || []).filter((t) => t.can);
+  if (inQuestion && topics.length) out += `<div class="gmore">${topics.slice(0, 2).map((t) => `<button class="btn outline slim" data-action="game:glearn:${t.k}">More about ${esc(t.name)} in Learn</button>`).join("")}</div>`;
+  if (f.wines && f.wines.length) {
+    out += `<h3 class="serif gh2">${inQuestion ? "Try a wine like it" : "Wines to try"}</h3>` + f.wines.map((w) => `<div class="brec">${w.label ? `<div class="brlens">${esc(w.label)}</div>` : ""}<div class="serif">${esc(wineName(w.card))}</div><div class="muted small">${esc(infoLine(w.card))}</div>${w.reason ? `<div class="small brwhy">${esc(w.reason)}</div>` : ""}
+      <button class="pill" data-action="review:${esc(w.card.id)}">I've had it: rate it</button></div>`).join("");
+  }
+  return out;
+}
+function guessDone(play, guess) {
+  const n = scoreOf(play.round, play.picks), best = bestOf(guess.memory, play.mode, play.level), m = modeById(play.mode) || { label: "" };
+  const f = guess.follow || {};
+  const topics = (f.topics || []);
+  const practise = topics.length
+    ? `<h3 class="serif gh2">Topics to practise</h3><div class="gtopics">${topics.map((t) => `<div class="gtopic"><span>${esc(t.name)}</span>${t.can ? `<button class="pill dark" data-action="game:glearn:${t.k}">Learn</button>` : `<span class="muted small">No quiz questions yet</span>`}</div>`).join("")}</div>` : "";
+  const list = play.round.map((q, i) => `<li>${isRight(q, play.picks[i]) ? "\u2713" : "\u2717"} ${esc(q.mode === "age" ? `${q.prompt.replace(/ How old is it\?$/, "")} ${q.answer}` : q.answer)}</li>`).join("");
+  return `<div class="gscore"><div class="serif gbig">${n} of ${play.round.length}</div><div class="muted small">${esc(m.label)}${play.level === "hard" ? " \u00b7 Hard" : ""}${best !== null ? ` \u00b7 Best: ${best} of ${ROUND}` : ""}</div></div>
+    <ul class="glist">${list}</ul>${practise}${followHtml({ wines: f.wines }, false)}
+    <div class="lacts"><button class="btn primary slim" data-action="game:gagain">Play again</button><button class="btn outline slim" data-action="game:ghub">Other modes</button></div>
+    <div class="muted small bnote">Just for practice: your guesses never change your taste profile or the wines we show you.</div>`;
 }
