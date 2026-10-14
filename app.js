@@ -45,11 +45,11 @@ import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } fr
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=2";
 import { recommendMix, recommend } from "./recommend.js?v=6";
 import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=1";
-import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=1";
+import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=2";
 import { setOffline, setCardLookup } from "./overlay.js?v=1";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=8"));
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=9"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=6"));
 const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=9"));
 import { createWineInfo } from "./wineinfo.js?v=18";

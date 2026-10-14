@@ -41,7 +41,7 @@ A role is only a named bundle of permissions; **code asks about permissions, nev
 | Role | Who | Permissions |
 |---|---|---|
 | **Player** | everyone | none |
-| **Quiz reviewer** | trusted players the owner picks | `quiz_verify`, `feedback_read`. *Tie to the Pro plan: undecided* (`QUIZ_REVIEWER_NEEDS_PRO` in `access.js` is the one switch) |
+| **Quiz reviewer** | trusted players the owner picks | `quiz_verify` only (as in the database). *Tie to the Pro plan: undecided* (`QUIZ_REVIEWER_NEEDS_PRO` in `access.js` is the one switch) |
 | **Editor** | as before | `catalog_edit`, `quiz_verify`, `feedback_read`, `import_extended` |
 | **Owner** | the owner only | all of them, including `found_online_photos`, `remove_content`, `settings_edit`, `owner_page` |
 
@@ -73,7 +73,7 @@ The Owner sees everyone with a role other than Player: name, email, role, what i
 | Plan switch in Settings | while open | while open | while open | while open | while open |
 
 ## Where the database part lives
-Not in the app's repository: the staff tables, `my_staff_access`, `has_permission`, and the security rules were created by hand (database update 13). `docs/roles_discovery.sql` reads them out (read-only); `docs/roles_proposal.sql` is the draft update that adds the Quiz reviewer role, `owner_page`, `import_extended`, the Roles functions, `staff_audit` and the Plan switch. **Until it is run the app works as before**: Owner and Editor are recognised the old way, the Roles tab and Plan row say the update has not been run.
+Not in the app's repository (created by hand, database update 13), read out on 2026-10-14: `staff_roles` holds the role definitions (code, label, permissions); a person's role is `profiles.staff_role` (older accounts: `profiles.role` admin = owner, editor = editor), found by `my_staff_role_code()`; `has_permission()` checks it. `docs/roles_proposal.sql` is the update (run once; safe to repeat): adds `owner_page` and `import_extended` to the role rows, makes the import limit follow `import_extended`, renames the plan `professional` to `pro`, and adds `staff_audit`, the Roles functions and the Plan switch. **Until it is run the app works as before**: Owner and Editor are recognised the old way, the Roles tab and Plan row say the update has not been run.
 
 ## How to change this
 - **New permission:** add it to `PERMISSIONS` and the roles that hold it in `access.js`, to this file, and to the database.

@@ -21,7 +21,7 @@ export const PERMISSION_IDS = PERMISSIONS.map((p) => p.id);
 // The four roles. Owner is last and is never handed out from the app (see ASSIGNABLE_ROLES).
 export const ROLES = [
   { id: "player", label: "Player", permissions: [] },
-  { id: "quiz_reviewer", label: "Quiz reviewer", permissions: ["quiz_verify", "feedback_read"] },
+  { id: "quiz_reviewer", label: "Quiz reviewer", permissions: ["quiz_verify"] },
   { id: "editor", label: "Editor", permissions: ["catalog_edit", "quiz_verify", "feedback_read", "import_extended"] },
   { id: "owner", label: "Owner", permissions: PERMISSION_IDS.slice() },
 ];
@@ -36,7 +36,8 @@ export const QUIZ_REVIEWER_NEEDS_PRO = false;
 // ---------------------------------------------------------------- plans
 export const PLANS = [{ id: "default", label: "Standard" }, { id: "pro", label: "Pro" }];
 export const planLabel = (id) => (PLANS.find((p) => p.id === id) || PLANS[0]).label;
-export const planIdOf = (profile) => (profile && profile.tier === "pro" ? "pro" : "default");
+// "professional" was an older name for the same plan; the roles update (docs/roles_proposal.sql) renames it to "pro".
+export const planIdOf = (profile) => (profile && (profile.tier === "pro" || profile.tier === "professional") ? "pro" : "default");
 
 // ---------------------------------------------------------------- the role a staff record stands for
 // staff is what the app loaded from the database: { role, label, permissions: [], legacy }. Before the roles update has been run, the database
