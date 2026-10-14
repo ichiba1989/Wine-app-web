@@ -6,8 +6,8 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete, styleLabel,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=14";
-import * as db from "./data.js?v=34";
-import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=9";
+import * as db from "./data.js?v=35";
+import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=10";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=5";
 import { shrinkImage } from "./photos.js?v=5";
 import {
@@ -37,24 +37,25 @@ import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=8";
 import { createProfile } from "./profile.js?v=23";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=12";
 import { createFeedback } from "./feedback.js?v=6";
-import { createEditor } from "./editor.js?v=32";
+import { createEditor } from "./editor.js?v=33";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=9";
 import { gamesHtml } from "./games.js?v=17";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
 import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=4";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=2";
 import * as GG from "./blindgame.js?v=4";
-import { VENUE, venueCardsOf, readList, recheck as venueRecheck, listIds } from "./venue.js?v=1";
+import { createVenueReview } from "./venuereview.js?v=1";
+import { VENUE, venueCardsOf, readList, recheck as venueRecheck, listIds } from "./venue.js?v=2";
 import { recommendMix, recommend } from "./recommend.js?v=7";
 import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=1";
 import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
 import { setOffline, setCardLookup } from "./overlay.js?v=1";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=13"));
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=14"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=6"));
 const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=10"));
-import { createWineInfo } from "./wineinfo.js?v=19";
+import { createWineInfo } from "./wineinfo.js?v=20";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -178,7 +179,12 @@ const feedback = createFeedback({ sb: () => state.sb, user: () => state.user, sc
 // A gentle reminder for guests who have started building a journal, shown on Discover until they save it or say "not now".
 const showNudge = () => access().isGuest && !store.get("wine.nudgeOff") && (state.journal.length >= 1 || state.states.length >= 5);
 // The Editor tab (editors only) lives in editor.js.
-const editorTab = createEditor({ sb: () => state.sb, userId: () => state.user.id, cards: () => state.cards, can, roleLabel: () => (state.access && state.access.label) || "", onSaved: () => loadReferences(), onWineChanged: async () => { state.cards = await loadAllCards(); rebuildDeck(); } });   // a deleted, archived, published or edited wine changes the Discover deck too
+// The Editor tab's venue section (venuereview.js): the venue's wines that are not in our catalog yet, reviewed and added one at a time.
+const venueReview = createVenueReview({
+  sb: () => state.sb, userId: () => state.user.id, list: () => state.venue.list, listError: () => state.venue.error, owner: () => isOwner(),
+  onChanged: async () => { state.cards = await loadAllCards(); await loadVenue(); rebuildDeck(); },
+});
+const editorTab = createEditor({ venue: venueReview, sb: () => state.sb, userId: () => state.user.id, cards: () => state.cards, can, roleLabel: () => (state.access && state.access.label) || "", onSaved: () => loadReferences(), onWineChanged: async () => { state.cards = await loadAllCards(); rebuildDeck(); } });   // a deleted, archived, published or edited wine changes the Discover deck too
 
 // The catalog cards, each with its price (an editor's price blended with players' prices, see pricing.js) and no repeated lines.
 // Before database update 20 there are no prices; the cards still load.

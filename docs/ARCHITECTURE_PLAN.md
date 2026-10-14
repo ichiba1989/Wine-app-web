@@ -481,7 +481,7 @@ Phases 3–5 ordering is a recommendation; reorder based on what Phase 2 learns.
 - Questions to settle: whether an editor should own the age cue list like the flavor tables (a database table, editable on the Owner page), whether more classics should be added (and who checks them), and whether game results should ever feed Learn's "topics you have not met" (today they do not; the game never touches the taste model).
 
 ## Open item: venue versions (2026-10-14; branch `vwm`)
-- Vintage Wine Merchants' export has about 1,400 wines and almost none are in the catalog yet. Adding them one by one in the Editor is not realistic: a reviewed bulk-add path (an editor confirms producer, wine name, type and place per row before a wine is created, pending review) is the likely next step, and it must keep to the rule that only bottle facts or stored rules become catalog data.
+- Vintage Wine Merchants' export has about 1,400 wines and almost none were in the catalog. Built (2026-10-14): a reviewed add, one row at a time, in the Editor tab (the app suggests the producer split, type, place and label grapes from the title; an editor confirms every field). Still open: the editors' time this takes; whether the shop can send a richer export (separate producer, wine, type and region columns) to cut it down; and the older-vintage question (the shop sells several vintages of a wine, while the main deck keeps only the newest).
 - Whether venues should become a database setting (one app, many venues by link) instead of a branch per venue; per-venue logo and colours; whether a venue's price or stock belongs in a separate market-observation layer (not built; price and stock in the shop's file are not read).
 
 ## Parked: Tech sheet (2026-10-14)

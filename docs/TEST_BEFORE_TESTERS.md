@@ -179,6 +179,7 @@ No database script. Check on a phone:
 - [ ] Run `docs/venue_decks.sql` once in Supabase; the check at its end lists the venues.
 - [ ] Owner page, Vintage Wine Merchants list: upload the shop's export; the preview leaves out spirits, glasses and books; save; the counts show how many wines are in the deck and how many are not in our catalog yet.
 - [ ] Discover (as a guest) shows only listed wines; Bingo help, This or That and Guess the Glass suggest only listed wines; a journal entry for an unlisted wine still shows normally.
-- [ ] After editors add some missing wines to the catalog, Re-check links them and they appear in the deck.
+- [ ] Editor tab, section Vintage Wine Merchants (as an Editor): the suggestions for a few titles look right (producer split, type, place, grapes); fix one, Add and publish it, and it appears in the deck; Add another "waiting for review" and it shows in Catalog, Waiting to be published; Skip moves on; an Editor sees no Remove button.
+- [ ] Re-check on the Owner page links rows for wines that were added to the catalog another way.
 - [ ] Nothing on screen says "VWM".
 

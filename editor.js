@@ -9,20 +9,22 @@
 //   Feedback:  read what testers sent from the app and mark it handled.
 // Every change is logged by the database.
 import { dimsFor, dimMeta, defaultFor, esc, wineName, placeLine, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel, barDims, choiceDims, styleInfo } from "./logic.js?v=14";
-import * as db from "./data.js?v=34";
+import * as db from "./data.js?v=35";
 import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=38";
-import { createReview } from "./review.js?v=12";
-import { createWineInfo, publishSummary } from "./wineinfo.js?v=19";
+import { createReview } from "./review.js?v=13";
+import { createWineInfo, publishSummary } from "./wineinfo.js?v=20";
 import { groupSubmissions, planPromotion, duplicateGroups, rulesFrom } from "./catalog.js?v=3";
-import { visibleKinds, FOUND_ONLINE_PERMISSION, photoSummary, photoList, photoTag, pullSource, shareWinePhoto, shareNote, uploadWinePhoto, removeWinePhoto, reuseWinePhoto } from "./winephotos.js?v=9";
-import { communityHtml, loadSubmissionState, approvalPlan } from "./sharing.js?v=9";
+import { visibleKinds, FOUND_ONLINE_PERMISSION, photoSummary, photoList, photoTag, pullSource, shareWinePhoto, shareNote, uploadWinePhoto, removeWinePhoto, reuseWinePhoto } from "./winephotos.js?v=10";
+import { communityHtml, loadSubmissionState, approvalPlan } from "./sharing.js?v=10";
 import { infoLine } from "./wineline.js?v=1";
 import { sortWines, sortSelectHtml, STRUCTURE_SORTS, PHOTO_SORTS } from "./sorting.js?v=4";
 import { suggestStructure, values as ruleValues, goldInfo, GOLD, GROUPS, evaluateRules, reportText, TARGETS, RULES_VERSION } from "./rules.js?v=4";
+import { VENUE } from "./venue.js?v=2";
 
-const SECTIONS = [{ id: "structure", label: "Structure" }, { id: "catalog", label: "Catalog" }, { id: "photos", label: "Photos" }, { id: "flags", label: "Flags" }, { id: "quiz", label: "Quiz" }, { id: "feedback", label: "Feedback" }];
+// "venue" (this venue branch only): the venue's wines that are not in our catalog yet, reviewed one at a time (venuereview.js).
+const SECTIONS = [{ id: "venue", label: VENUE.name }, { id: "structure", label: "Structure" }, { id: "catalog", label: "Catalog" }, { id: "photos", label: "Photos" }, { id: "flags", label: "Flags" }, { id: "quiz", label: "Quiz" }, { id: "feedback", label: "Feedback" }];
 // Which sections each permission opens. A quiz reviewer sees Flags too, but the database only returns the flags on quiz questions.
-export const SECTION_PERMISSIONS = { structure: ["catalog_edit"], catalog: ["catalog_edit"], photos: ["catalog_edit"], flags: ["catalog_edit", "quiz_verify"], quiz: ["quiz_verify"], feedback: ["feedback_read"] };
+export const SECTION_PERMISSIONS = { venue: ["catalog_edit"], structure: ["catalog_edit"], catalog: ["catalog_edit"], photos: ["catalog_edit"], flags: ["catalog_edit", "quiz_verify"], quiz: ["quiz_verify"], feedback: ["feedback_read"] };
 // A quiz reviewer has no catalog work, so Quiz comes first for them and is where they land.
 export function sectionsFor(can) {
   const list = SECTIONS.filter((x) => SECTION_PERMISSIONS[x.id].some((p) => can(p)));
@@ -257,6 +259,7 @@ export function createEditor(ctx) {
     if (E.section === "structure") { sec.innerHTML = structureShell(); if (!E.loaded) load(); else { E.cards = ctx.cards(); drawList(); } }
     else if (E.section === "photos") { E.cards = ctx.cards(); if (!visibleKinds(can).some((k) => k.id === E.ph.kind)) E.ph.kind = "own_photography"; if (E.ph.filter === "found" && !can(FOUND_ONLINE_PERMISSION)) E.ph.filter = "needs"; if (!E.sub.loaded && !E.sub.loading) loadSubs(); sec.innerHTML = `<div id="photosBody">${photosHtml(E)}</div>`; }
     else if (E.section === "catalog") { E.cards = ctx.cards(); sec.innerHTML = `<div id="catalogBody">${catalogHtml(E)}</div>`; if (!E.cat.loaded && !E.cat.loading) loadCatalog(); }
+    else if (E.section === "venue") { if (ctx.venue) ctx.venue.mount(sec); }
     else review.mount(sec, E.section);
   }
 
@@ -413,7 +416,7 @@ export function createEditor(ctx) {
     const t = ev.target.closest("[data-editor]");
     if (!t || (!root && !E.sheet && !document.getElementById("testPanel"))) return;
     const [action, a, b] = t.dataset.editor.split(":");
-    if (action === "sec") { if (E.section !== a) { E.openError = ""; review.leave(); E.sheet = null; overlay().innerHTML = ""; E.section = a; draw(); } }
+    if (action === "sec") { if (E.section !== a) { E.openError = ""; review.leave(); if (ctx.venue) ctx.venue.leave(); E.sheet = null; overlay().innerHTML = ""; E.section = a; draw(); } }
     else if (action === "filter") { E.filter = a; draw(); }
     else if (action === "phfilter") { E.ph.filter = a; E.ph.show = PHOTO_PAGE; E.ph.confirm = null; drawPhotos(); }
     else if (action === "phkind") { E.ph.kind = a; drawPhotos(); }

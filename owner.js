@@ -3,14 +3,14 @@
 // still decides what anyone may change. The rules at the top (rows, search, sort, checks, coverage) are pure: no page, no network.
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
 import { esc } from "./logic.js?v=14";
-import { REACH_CHOICES } from "./wineinfo.js?v=19";
+import { REACH_CHOICES } from "./wineinfo.js?v=20";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=2";
 import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=7";
 import { TAG_KINDS } from "./tags.js?v=2";
 import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=9";
 import { centsToField } from "./pricing.js?v=1";
 import { ASSIGNABLE_ROLES, ROLES, PERMISSIONS, staffRows, filterStaff, rowActions } from "./access.js?v=4";
-import { VENUE, listRows, addable, summary } from "./venue.js?v=1";
+import { VENUE, listRows, addable, summary } from "./venue.js?v=2";
 
 export const OWNER_TABS = [{ id: "wines", label: "Wines" }, { id: "lenses", label: "Lenses" }, { id: "bingo", label: "Bingo" }, { id: "checks", label: "Checks" }, { id: "tags", label: "Tags" }, { id: "legend", label: "Legend" }, { id: "roles", label: "Roles" }, { id: "config", label: "Config" }, { id: "venue", label: `${VENUE.name} list` }];
 
@@ -216,6 +216,7 @@ function venueTable(O, d) {
     <input class="ofield osearch" type="search" data-owner-venueq placeholder="Search our catalog" value="${esc(v.q || "")}" aria-label="Search the catalog to add a wine">
     ${v.q && v.q.trim().length >= 2 ? table("<th>Wine</th><th>Place</th><th></th>", finds, "No catalog wine matches (or it is already on the list).") : ""}
     <h3 class="serif osub">On the list: ${sum.matched} in the deck, ${sum.missing} not in our catalog yet</h3>
+    ${sum.missing ? `<div class="muted small onote">Editors add the ones not in our catalog yet in the Editor tab, section “${esc(VENUE.name)}”, one at a time; each joins the deck when it is published.</div>` : ""}
     <div class="ocontrols"><button class="opill" data-action="owner:venuerecheck"${sum.missing ? "" : " disabled"}>Re-check the ones not in our catalog</button></div>
     ${table("<th>Wine</th><th>Status</th><th>Added</th><th></th>", body, all.length ? "Nothing matches." : "The list is empty: the deck shows nothing until wines are added.")}`;
 }

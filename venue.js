@@ -4,7 +4,8 @@
 // journal and swipes) still uses the whole catalog, and wines a player adds by hand are never touched.
 // "VWM" is only the internal short name (the branch, venue_id "vwm", code and docs); every screen says the full name.
 // The list is kept in the database (venue_wines, docs/venue_decks.sql): the owner uploads the venue's file and adds or removes wines by hand on the Owner page.
-// Pure: no browser, no network. It imports nothing, so the start of the app stays light (the file reading itself is done by importer.js, loaded on the Owner page).
+// Pure: no browser, no network. The file reading itself is done by importer.js, loaded on the Owner page.
+import { grapeFor } from "./rules.js?v=4";
 
 // ---------------------------------------------------------------- the venue (the one line a new venue branch changes)
 export const VENUE = { id: "vwm", name: "Vintage Wine Merchants" };
@@ -87,7 +88,7 @@ export function readList(table, mapping, cards) {
       if (!String(title).trim()) return;
       if (!isWine(title, typeCol >= 0 ? r[typeCol] : "")) { skipped++; return; }
       const p = parseTitle(title);
-      m = matchRow({ producer: "", wine_name: p.text, vintage: p.vintage }, index, tindex);
+      m = { ...matchRow({ producer: "", wine_name: p.text, vintage: p.vintage }, index, tindex), shop_type: typeCol >= 0 ? String(r[typeCol] || "").trim().slice(0, 60) : "" };
     } else m = matchRow({ producer: get(r, "producer"), wine_name: get(r, "wine_name"), vintage: get(r, "vintage") }, index);
     if (m.status === "blank") return;
     const k = m.wine_vintage_id || `${keyOf(m.producer, m.wine_name)}|${m.vintage}`;
@@ -129,3 +130,65 @@ export function listRows(list, cardsById, q = "") {
     return { id: r.id, name, linked: !!c, unpublished: !!r.wine_vintage_id && !c, source: r.source || "file" };
   }).filter((x) => !t || norm(x.name).includes(t)).sort((a, b) => (b.linked - a.linked) || a.name.localeCompare(b.name));
 }
+
+// ---------------------------------------------------------------- reviewing the shop's wines that are not in the catalog yet (Editor tab)
+// Each row is reviewed by an editor, one at a time. The app only SUGGESTS, from the words of the title and lists the app already holds; the editor confirms
+// or changes every field before a wine is created (convention: AI or rules assist, a person decides). Nothing is looked up anywhere else.
+//   producer: the longest producer already in the catalog that the title starts with (else no suggestion: the editor taps where the producer's name ends)
+//   type:     words that name a type on the label (Champagne, Crémant, Rosé, Port ...), else the shop's own category, else the colour of a grape named in the title
+//   place:    the longest place in the place list (geo_areas) named as whole words in the title
+//   grapes:   grape names that appear in the title (they are printed on the label)
+const STYLE_WORDS = [
+  { style: "sparkling", words: ["champagne", "cremant", "cava", "prosecco", "spumante", "sekt", "petillant", "pet nat", "franciacorta", "alta langa", "blanc de blancs", "blanc de noirs", "sparkling", "brut nature", "extra brut", "brut"] },
+  { style: "fortified", words: ["port", "porto", "madeira", "marsala", "sherry", "tawny", "vintage port"] },
+  { style: "rose", words: ["rose", "rosato", "rosado"] },
+];
+const has = (text, phrase) => ` ${norm(text)} `.includes(` ${norm(phrase)} `);
+// How many title words make up a name at the start of the title (0 when the title does not start with it).
+function prefixWords(words, name) {
+  const want = norm(name); if (!want) return 0;
+  for (let k = 1; k <= words.length; k++) { const got = norm(words.slice(0, k).join(" ")); if (got === want) return k; if (!want.startsWith(got)) return 0; }
+  return 0;
+}
+export function suggestRow(title, { producers = [], areas = [], shopType = "" } = {}) {
+  const text = String(title || "").trim(), words = text.split(/\s+/).filter(Boolean);
+  // producer
+  let split = 0, producer = null;
+  for (const p of producers) { const k = prefixWords(words, p.name); if (k > split) { split = k; producer = p; } }
+  // grapes named in the title (one to three words at a time, longest first)
+  const grapes = [];
+  for (let i = 0; i < words.length; i++) {
+    for (let n = 3; n >= 1; n--) {
+      if (i + n > words.length) continue;
+      const g = grapeFor(words.slice(i, i + n).join(" "));
+      if (g && !grapes.some((x) => x.name === g.name)) { grapes.push(g); i += n - 1; break; }
+    }
+  }
+  // type
+  let style = "", styleWhy = "";
+  for (const s of STYLE_WORDS) { const w = s.words.find((x) => has(text, x)); if (w) { style = s.style; styleWhy = `"${w}" in the title`; break; } }
+  if (!style && /sparkling/.test(norm(shopType))) { style = "sparkling"; styleWhy = "the shop's category"; }
+  if (!style && grapes.length && grapes.every((g) => g.color === grapes[0].color)) { style = grapes[0].color; styleWhy = `${grapes[0].name} is a ${grapes[0].color} grape`; }
+  // place
+  let area = null;
+  for (const a of areas) { if (norm(a.name).length >= 3 && has(text, a.name) && (!area || norm(a.name).length > norm(area.name).length)) area = a; }
+  return { split, producerId: producer ? producer.id : null, style, styleWhy, grapes: grapes.map((g) => g.name), areaId: area ? area.id : null, areaWhy: area ? `"${area.name}" in the title` : "" };
+}
+// The producer and wine name for a split point (how many title words belong to the producer).
+export function splitTitle(title, k) {
+  const words = String(title || "").trim().split(/\s+/).filter(Boolean), n = Math.max(0, Math.min(words.length, k));
+  return { producer: words.slice(0, n).join(" "), wine: words.slice(n).join(" ") };
+}
+// The rows still waiting: on the list, not linked to a catalog wine, in A-to-Z order; skipped ones (this session) go last.
+export function reviewQueue(list, skipped = new Set()) {
+  const rows = (list || []).filter((r) => !r.wine_vintage_id).sort((a, b) => String(a.wine_name).localeCompare(String(b.wine_name)) || String(a.vintage).localeCompare(String(b.vintage)));
+  return [...rows.filter((r) => !skipped.has(r.id)), ...rows.filter((r) => skipped.has(r.id))];
+}
+// Checks the editor's form before anything is saved. Returns { ok, why }.
+export function checkReview(f) {
+  if (!String(f.producer || "").trim()) return { ok: false, why: "Write the producer (tap the word where the producer's name ends)." };
+  if (!["red", "white", "rose", "sparkling", "fortified"].includes(f.style)) return { ok: false, why: "Choose the type of wine." };
+  if (f.vintage && !/^(\d{4}|NV)$/.test(f.vintage)) return { ok: false, why: "The vintage must be a year or NV." };
+  return { ok: true, why: "" };
+}
+

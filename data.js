@@ -569,14 +569,14 @@ export async function reuseWinePhoto(sb, fromVintageId, toVintageId, note, { rep
 // Every player reads it (their deck is built from it); only the owner changes it. Changes are online only (owner writes are never queued offline).
 const venueMissing = (error) => (error && (error.code === "42P01" || /venue_wines/.test(String(error.message || ""))) ? Object.assign(new Error("The venue list needs a database update (docs/venue_decks.sql)."), { missing: true }) : error);
 export async function loadVenueList(sb, venueId) {
-  const { data, error } = await sb.from("venue_wines").select("id, wine_vintage_id, producer, wine_name, vintage, source, added_at").eq("venue_id", venueId);
+  const { data, error } = await sb.from("venue_wines").select("id, wine_vintage_id, producer, wine_name, vintage, shop_type, source, added_at").eq("venue_id", venueId);
   if (error) throw venueMissing(error);
   return data || [];
 }
 // Saves rows read from the venue's file. Wines already on the list are skipped by the app before this is called. rows: [{ producer, wine_name, vintage, wine_vintage_id }]
 export async function addVenueRows(sb, venueId, rows, source = "file") {
   if (!rows.length) return 0;
-  const body = rows.map((r) => ({ venue_id: venueId, wine_vintage_id: r.wine_vintage_id || null, producer: r.producer || "", wine_name: r.wine_name || "", vintage: r.vintage || "", source }));
+  const body = rows.map((r) => ({ venue_id: venueId, wine_vintage_id: r.wine_vintage_id || null, producer: r.producer || "", wine_name: r.wine_name || "", vintage: r.vintage || "", shop_type: r.shop_type || "", source }));
   let saved = 0;
   for (let i = 0; i < body.length; i += 200) {
     const { data, error } = await sb.from("venue_wines").insert(body.slice(i, i + 200)).select("id");
@@ -595,6 +595,56 @@ export async function linkVenueRows(sb, links) {
   let n = 0;
   for (const l of links) { const rows = must(await sb.from("venue_wines").update({ wine_vintage_id: l.wine_vintage_id }).eq("id", l.id).select("id")); n += (rows || []).length; }
   return n;
+}
+
+// Adds one wine from the venue's list to the catalog, after an editor reviewed every field (venuereview.js), and links the list row to it.
+// The same wine in another vintage is reused (only the vintage is added); a vintage that already exists is simply linked. The wine is created
+// "waiting for review" unless the editor chose to publish it at once. Its source is recorded as the venue's list, with the title as the shop wrote it.
+// plan: { producerName, wineName, style, areaId, vintage ("2019" | "NV"), grapes: [{ id } | { name }], publish, rowId, listedAs, sourceName }
+// Returns the vintage id. Online only (editor writes are never queued offline).
+export async function addVenueCatalogWine(sb, userId, plan) {
+  const step = async (label, fn) => { try { return await fn(); } catch (e) { throw new Error(`${label}: ${e.message || e}`); } };
+  const year = plan.vintage === "NV" || !plan.vintage ? null : Number(plan.vintage), nv = !year;
+  const pname = plan.producerName.trim(), wname = (plan.wineName || "").trim();
+  const like = (t) => t.replace(/[\\%_]/g, (c) => "\\" + c);   // a name is matched as written, not as a pattern
+  const producerId = await step("Producer", async () => {
+    const found = must(await sb.from("producers").select("id, name").ilike("name", like(pname)).limit(1));
+    return found.length ? found[0].id : must(await sb.from("producers").insert({ name: pname }).select("id").single()).id;
+  });
+  const wineId = await step("Wine", async () => {
+    let q = sb.from("wines").select("id").eq("producer_id", producerId);
+    q = wname ? q.ilike("name", like(wname)) : q.is("name", null);
+    const found = must(await q.limit(1));
+    if (found.length) return found[0].id;
+    return must(await sb.from("wines").insert({ producer_id: producerId, name: wname || null, style: plan.style, style_basis: "editor", appellation_id: plan.areaId || null, status: plan.publish ? "verified" : "pending_review" }).select("id").single()).id;
+  });
+  const vintageId = await step("Vintage", async () => {
+    let q = sb.from("wine_vintages").select("id").eq("wine_id", wineId);
+    q = nv ? q.eq("is_non_vintage", true) : q.eq("vintage_year", year);
+    const found = must(await q.limit(1));
+    return found.length ? found[0].id : must(await sb.from("wine_vintages").insert({ wine_id: wineId, vintage_year: year, is_non_vintage: nv }).select("id").single()).id;
+  });
+  await step("Grapes", async () => {
+    const have = must(await sb.from("wine_grapes").select("grape_id").eq("wine_id", wineId));
+    if (have.length) return;   // a wine that already has grapes keeps them
+    const rows = [];
+    for (const [i, g] of (plan.grapes || []).entries()) {
+      const id = g.id || must(await sb.from("grapes").insert({ name: g.name }).select("id").single()).id;
+      rows.push({ wine_id: wineId, grape_id: id, basis: "label", position: i + 1 });
+    }
+    if (rows.length) must(await sb.from("wine_grapes").insert(rows));
+  });
+  await step("Source", async () => {
+    const name = plan.sourceName;
+    let src = must(await sb.from("sources").select("id").eq("name", name).limit(1));
+    const sourceId = src.length ? src[0].id : must(await sb.from("sources").insert({ kind: "other", name, license_note: "The shop's own stock list. Producer, wine, type and place were split out of the shop's titles and checked by an editor." }).select("id").single()).id;
+    must(await sb.from("wine_source_records").insert({ wine_vintage_id: vintageId, source_id: sourceId, source_ref: String(plan.rowId || "").slice(0, 120), listed_as: String(plan.listedAs || "").slice(0, 300) }));
+  });
+  await step("List", async () => {
+    const rows = must(await sb.from("venue_wines").update({ wine_vintage_id: vintageId }).eq("id", plan.rowId).select("id"));
+    if (!rows || !rows.length) throw new Error("the wine was added to the catalog, but the list row could not be linked (Re-check on the Owner page will link it).");
+  });
+  return vintageId;
 }
 
 // ---------------------------------------------------------------- the Owner page

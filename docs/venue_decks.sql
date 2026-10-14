@@ -16,6 +16,8 @@ create table if not exists public.venue_wines (
   added_by        uuid references auth.users(id) on delete set null default auth.uid(),
   added_at        timestamptz not null default now()
 );
+-- the shop's own category from its file (e.g. "Sparkling Wine"), only used to suggest a type when an editor reviews the wine
+alter table public.venue_wines add column if not exists shop_type text not null default '';
 -- a catalog wine is on a venue's list at most once
 create unique index if not exists venue_wines_once on public.venue_wines (venue_id, wine_vintage_id) where wine_vintage_id is not null;
 create index if not exists venue_wines_venue on public.venue_wines (venue_id);
@@ -29,6 +31,9 @@ drop policy if exists venue_wines_add on public.venue_wines;
 create policy venue_wines_add on public.venue_wines for insert to authenticated with check (has_permission('settings_edit'::text));
 drop policy if exists venue_wines_change on public.venue_wines;
 create policy venue_wines_change on public.venue_wines for update to authenticated using (has_permission('settings_edit'::text)) with check (has_permission('settings_edit'::text));
+-- Editors (catalog_edit) link a row to the catalog wine they just added (Editor tab, the venue's list). They can change rows, not add or remove them.
+drop policy if exists venue_wines_link on public.venue_wines;
+create policy venue_wines_link on public.venue_wines for update to authenticated using (has_permission('catalog_edit'::text)) with check (has_permission('catalog_edit'::text));
 drop policy if exists venue_wines_remove on public.venue_wines;
 create policy venue_wines_remove on public.venue_wines for delete to authenticated using (has_permission('settings_edit'::text));
 grant select on public.venue_wines to anon, authenticated;
