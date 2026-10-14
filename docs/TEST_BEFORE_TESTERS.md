@@ -154,3 +154,11 @@ Needs no database script. On a real phone, in **Safari (tab and home-screen app)
 - [ ] Release check: bump `app.js?v=` and reload online: the new files are picked up (no mix of old and new). Nothing secret is in the cache (only the public key, as before).
 - [ ] Swipes made offline are dated when they upload (their order is kept). Exact dates would need a database change that is not built.
 - [ ] Owner decision: add a line to `privacy.html` (and bump `CONSENT_VERSION`) that the app keeps a copy of the player's data on the device so it works offline, cleared at sign-out or deletion.
+
+## 19. Roles, plans and the Roles tab (added 2026-10-14)
+- [ ] **Open items first:** (a) hide the Plan switch before the real launch (set `plan_switch_open` to 0, Owner page, Config tab); (b) decide whether Quiz reviewer is tied to the Pro plan (`QUIZ_REVIEWER_NEEDS_PRO` in `access.js`); (c) `privacy.html` may need a line about staff records and the plan (owner and lawyers).
+- [ ] Run `docs/roles_discovery.sql` in Supabase and send the results; the roles script `docs/roles_proposal.sql` is adapted to them (do not run it before). Section 4 of it (Plan switch) can be run alone.
+- [ ] After the script: one account per role (Player, Quiz reviewer, Editor, Owner) against the real rules: each sees only its tabs; a Quiz reviewer has Quiz/Flags/Feedback but not Structure/Catalog/Photos; an Editor can import 500, a Quiz reviewer 100.
+- [ ] Owner page, Roles tab: list shows each staff member; add a role by email (a guest or unknown email gives "No account with that email"); change Editor to Quiz reviewer and back; remove a role; Recent changes lists each. The Owner row is locked, and calling `staff_set_role(..., 'owner')` or `staff_remove` on an Owner in the SQL editor is refused.
+- [ ] Settings, Plan: switching to Pro turns on the tasting grid, 500-row import and feedback at once; switching back reverses it; with `plan_switch_open` = 0 the row disappears. Offline it says it needs a connection.
+- [ ] Mode check: Professional mode alone does not show the grid or raise the import limit.

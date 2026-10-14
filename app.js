@@ -6,7 +6,7 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete, styleLabel,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=14";
-import * as db from "./data.js?v=29";
+import * as db from "./data.js?v=30";
 import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=8";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=5";
 import { shrinkImage } from "./photos.js?v=5";
@@ -38,17 +38,18 @@ import { createProfile } from "./profile.js?v=22";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=12";
 import { createFeedback } from "./feedback.js?v=6";
 import { createEditor } from "./editor.js?v=29";
-import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=8";
+import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=9";
 import { gamesHtml } from "./games.js?v=13";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
 import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=4";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=2";
 import { recommendMix, recommend } from "./recommend.js?v=6";
 import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=1";
+import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=1";
 import { setOffline, setCardLookup } from "./overlay.js?v=1";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=7"));
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=8"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=6"));
 const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=9"));
 import { createWineInfo } from "./wineinfo.js?v=18";
@@ -135,10 +136,11 @@ const state = {
   wedit: null,                          // the "change wine info" form that is open, if any
 };
 // What this person may do in the Editor tab comes from the database (staff roles, update 13).
-const can = (permission) => !!state.access && state.access.permissions.includes(permission);
-const isEditor = () => can("catalog_edit") || can("quiz_verify");
-// The owner page is for the owner only (the gear in Settings offers it). The database still decides what anyone may change.
-const isOwner = () => !!state.access && (state.access.label === "Owner" || state.access.role === "owner" || state.access.role === "admin");
+// All of "who may do what" is worked out in access.js (docs/ROLES_AND_ACCESS.md); the database still decides what anyone may actually change.
+const access = () => accessOf({ user: state.user, profile: state.profile, staff: state.access, features: { proTasting: state.pro, contentFeedback: state.feedback }, settings: state.settings });
+const can = (permission) => access().can(permission);
+const isEditor = () => access().isEditor;
+const isOwner = () => access().isOwner;   // the Owner page (the gear in Settings offers it)
 // Where a wine's starting structure comes from: an editor's score first, then the structure rules. See structure.js.
 const cardById = (id) => state.cards.find((c) => c.id === id) || null;
 const startFor = (card) => startingValues(card, card && state.refs.get(card.id));
@@ -167,7 +169,7 @@ const account = createAccount({
 // Feedback from testers lives in feedback.js. Editors read it in the Editor tab.
 const feedback = createFeedback({ sb: () => state.sb, user: () => state.user, screen: () => state.tab, version: () => APP_VERSION });
 // A gentle reminder for guests who have started building a journal, shown on Discover until they save it or say "not now".
-const showNudge = () => !!state.user && state.user.is_anonymous === true && !store.get("wine.nudgeOff") && (state.journal.length >= 1 || state.states.length >= 5);
+const showNudge = () => access().isGuest && !store.get("wine.nudgeOff") && (state.journal.length >= 1 || state.states.length >= 5);
 // The Editor tab (editors only) lives in editor.js.
 const editorTab = createEditor({ sb: () => state.sb, userId: () => state.user.id, cards: () => state.cards, can, roleLabel: () => (state.access && state.access.label) || "", onSaved: () => loadReferences(), onWineChanged: async () => { state.cards = await loadAllCards(); rebuildDeck(); } });   // a deleted, archived, published or edited wine changes the Discover deck too
 
@@ -316,7 +318,8 @@ async function enterMain() {
     db.loadFeature(state.sb, PRO_FEATURE).then((r) => feedbackOn(r, tier), () => false),   // off until database update 21 is run
     db.loadQuizKnowledge(state.sb).catch(() => null),   // what the person knows and what other players know both help decide the deck
     db.loadCrowd(state.sb).catch(() => new Map()),
-    db.loadSwipeConfig(state.sb).then(setSwipeConfig, () => {}),   // the owner's numbers for likes, dislikes and "I don't know it"
+    db.loadSwipeConfig(state.sb).then(setSwipeConfig, () => {}),
+    db.loadPlanSwitchOpen(state.sb).then((on) => { state.planSwitch = on; }, () => { state.planSwitch = false; }),   // whether Settings shows the Plan row   // the owner's numbers for likes, dislikes and "I don't know it"
   ]);
   state.cards = cards; state.feedback = feedback; state.pro = pro; state.quiz = quiz; state.crowd = crowd;
   rebuildDeck();
@@ -425,7 +428,7 @@ function ownerData() {
   const O = state.owner;
   if (state._ownerFor !== state.cards) { state._ownerFor = state.cards; state._ownerCache = { rows: OWN.wineRows(state.cards), bingo: OWN.bingoCoverage(state.cards) }; }
   const { rows, bingo } = state._ownerCache;
-  return { rows, bingo, checks: OWN.checkCounts(rows), config: O.config, configError: O.configError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
+  return { rows, bingo, checks: OWN.checkCounts(rows), config: O.config, configError: O.configError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, staff: O.staff, staffError: O.staffError, staffAudit: O.staffAudit, seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
 }
 // The lens preview: the top picks of one lens for the owner's own profile, or for a brand-new player, using the weights typed on the page.
 function ownerLens() {
@@ -499,6 +502,26 @@ async function ownerLegend(a, b) {
     } else if (a === "legendremove") { await db.removeSharedLegend(state.sb, b); ownerSay("Removed."); }
     await legendChanged();
   } catch (e) { ownerSay("Could not save: " + (e.message || e)); }
+}
+// ---- Roles tab: who has a staff role. Owner is never given or taken away here (access.js, and the database refuses it too).
+async function loadOwnerStaff() {
+  try { const [staff, audit] = await Promise.all([db.loadStaff(state.sb), db.loadStaffAudit(state.sb)]); state.owner.staff = staff; state.owner.staffAudit = audit; state.owner.staffError = ""; }
+  catch (e) { state.owner.staffError = "Could not load the roles: " + (e.message || e); state.owner.staff = null; }
+  if (state.tab === "owner" && state.owner.tab === "roles") ownerRedraw();
+}
+async function ownerStaff(a, b, c) {
+  try {
+    if (a === "staffadd") {
+      const chk = checkAssignment((document.querySelector("[data-owner-staffemail]") || {}).value, (document.querySelector("[data-owner-staffrole]") || {}).value);
+      if (!chk.ok) { ownerSay(chk.why); return; }
+      await db.setStaffRole(state.sb, chk.email, chk.role); ownerSay(`Done: ${chk.email} is now ${chk.role === "editor" ? "an Editor" : "a Quiz reviewer"}.`);
+    } else if (a === "staffset") {
+      const row = (state.owner.staff || []).find((r) => String(r.user_id) === b); if (!row || !row.email) { ownerSay("That person has no email on record."); return; }
+      const chk = checkAssignment(row.email, c); if (!chk.ok) { ownerSay(chk.why); return; }
+      await db.setStaffRole(state.sb, chk.email, chk.role); ownerSay("Role changed.");
+    } else if (a === "staffremove") { await db.removeStaff(state.sb, b); ownerSay("Role removed. They are a player again."); }
+    state.owner.staff = null; await loadOwnerStaff();
+  } catch (e) { ownerSay("Not changed: " + (e.message || e)); }
 }
 async function ownerAddTag() {
   const kind = document.querySelector("[data-owner-tagkind]"), name = document.querySelector("[data-owner-tagname]");
@@ -590,6 +613,7 @@ function drawTab(body) {
     else body.innerHTML = OWN.ownerHtml(state.owner, ownerData());
     if (isOwner() && state.owner.tab === "legend" && !state.owner.legend && !state.owner.legendError) loadOwnerLegend();
     if (isOwner() && state.owner.tab === "tags" && !state.owner.tags && !state.owner.tagsError) loadOwnerTags();
+    if (isOwner() && state.owner.tab === "roles" && !state.owner.staff && !state.owner.staffError) loadOwnerStaff();
     if (isOwner() && state.owner.tab === "config" && !state.owner.config && !state.owner.configError) loadOwnerConfig();
   } else if (state.tab === "games") {
     body.innerHTML = gamesView();
@@ -671,7 +695,7 @@ async function openImport() {
   let allowance = null;
   try { allowance = await db.importAllowance(state.sb); } catch (_) { allowance = null; }
   const tier = (state.profile || {}).tier || "default";
-  const large = (!!state.access && (isOwner() || state.access.permissions.length > 0)) || (allowance ? false : await db.loadFeature(state.sb, IMP.FEATURE).then((r) => feedbackOn(r, tier), () => false));
+  const large = can("import_extended") || (allowance ? false : await db.loadFeature(state.sb, IMP.FEATURE).then((r) => feedbackOn(r, tier), () => false));
   state.imp = { step: "pick", headers: [], rows: [], mapping: {}, useRatings: false, scale: 5, error: "", busy: false, result: null, text: "", allowance, limit: allowance ? Math.max(allowance.remaining, 0) : (large ? IMP.LIMIT_EXTENDED : IMP.LIMIT_REGULAR) };
   drawImport();
 }
@@ -712,7 +736,22 @@ document.addEventListener("change", async (ev) => {
 });
 document.addEventListener("input", (ev) => { const t = ev.target; if (state.imp && t && t.dataset && t.dataset.importText !== undefined) state.imp.text = t.value; });
 const syncInfo = () => { const st = offline.status(); return { pending: st.pending, online: st.online, syncing: st.syncing, failed: offline.failedItems() }; };
-function openSettings() { $("#overlay").innerHTML = settingsHtml(state.settings, state.user, { owner: isOwner(), sync: syncInfo() }); }
+// The Plan row (Standard / Pro) is a testing aid: it shows only while the owner keeps app_config plan_switch_open on (Owner page, Config tab). See docs/ROLES_AND_ACCESS.md.
+const planInfo = () => (state.planSwitch ? { current: planIdOf(state.profile), plans: PLANS, busy: !!state.planBusy, error: state.planError || "" } : null);
+function openSettings() { $("#overlay").innerHTML = settingsHtml(state.settings, state.user, { owner: isOwner(), sync: syncInfo(), plan: planInfo() }); }
+async function choosePlan(plan) {
+  if (state.planBusy || plan === planIdOf(state.profile)) return;
+  state.planBusy = true; state.planError = ""; if ($("#settingsPanel")) openSettings();
+  try {
+    await db.setMyPlan(state.sb, plan);
+    state.profile = await db.loadProfile(state.sb, state.user.id);   // the database says what the plan is now
+    const tier = state.profile.tier || "default";
+    const [pro, feedback] = await Promise.all([db.loadFeature(state.sb, PRO_FEATURE).then((r) => feedbackOn(r, tier), () => false), db.loadFeature(state.sb, "contentFeedback").then((r) => feedbackOn(r, tier), () => false)]);
+    state.pro = pro; state.feedback = feedback;
+    offline.saveSession({ user: { id: state.user.id, is_anonymous: state.user.is_anonymous, email: state.user.email || null }, profile: state.profile });
+  } catch (e) { state.planError = "Could not change the plan: " + (e.message || e); }
+  state.planBusy = false; if ($("#settingsPanel")) openSettings();
+}
 function closeSettings() { $("#overlay").innerHTML = ""; }
 const behindOf = (el) => (el && el.parentElement ? el.parentElement.querySelector(".behind") : null);
 // The card underneath rises toward the front as the top card is pulled away.
@@ -1682,7 +1721,7 @@ document.addEventListener("click", async (ev) => {
   }
   const t = ev.target.closest("[data-action]");
   if (!t) return;
-  const [action, a, b] = t.dataset.action.split(":");
+  const [action, a, b, c] = t.dataset.action.split(":");
   try {
     if (action === "attest") { state.profile = await db.attestAge(state.sb, state.user.id); await enterMain(); }
     else if (action === "under") { state.underage = true; render(); }
@@ -1748,9 +1787,11 @@ document.addEventListener("click", async (ev) => {
       else if (a === "savecfg") await ownerSaveConfig(b);
       else if (a === "addtag") await ownerAddTag();
       else if (a.startsWith("legend")) await ownerLegend(a, b);
+      else if (a.startsWith("staff")) await ownerStaff(a, b, c);
     }
     else if (action === "settings" || action === "syncinfo") openSettings();
     else if (action === "setclose") closeSettings();
+    else if (action === "plan") await choosePlan(a);   // plan:default, plan:pro
     else if (action === "sync") {   // sync:now, sync:retry:ID, sync:discard:ID
       if (a === "now") await offline.flush(); else if (a === "retry") await offline.retry(b); else if (a === "discard") await offline.discard(b);
       if ($("#settingsPanel")) openSettings();
@@ -1933,6 +1974,7 @@ document.addEventListener("change", async (ev) => {
   if (!t || !t.dataset || state.tab !== "owner" || !isOwner()) return;
   const O = state.owner;
   if ("ownerIssue" in t.dataset) { O.issue = t.value; ownerRedraw(); }
+  else if ("ownerRolefilter" in t.dataset) { O.roleFilter = t.value; ownerRedraw(); }
   else if ("ownerLens" in t.dataset) { O.lens = t.value; renderBody(); }
   else if ("ownerPlayer" in t.dataset) { O.player = t.value; ownerRedraw(); }
   else if ("ownerW" in t.dataset) { const [lens, key] = t.dataset.ownerW.split(":"); O.weights = { ...O.weights, [lens]: { ...(O.weights[lens] || {}), [key]: t.value } }; ownerRedraw(); }

@@ -9,8 +9,9 @@ import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?
 import { TAG_KINDS } from "./tags.js?v=2";
 import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=8";
 import { centsToField } from "./pricing.js?v=1";
+import { ASSIGNABLE_ROLES, ROLES, PERMISSIONS, staffRows, filterStaff, rowActions } from "./access.js?v=1";
 
-export const OWNER_TABS = [{ id: "wines", label: "Wines" }, { id: "lenses", label: "Lenses" }, { id: "bingo", label: "Bingo" }, { id: "checks", label: "Checks" }, { id: "tags", label: "Tags" }, { id: "legend", label: "Legend" }, { id: "config", label: "Config" }];
+export const OWNER_TABS = [{ id: "wines", label: "Wines" }, { id: "lenses", label: "Lenses" }, { id: "bingo", label: "Bingo" }, { id: "checks", label: "Checks" }, { id: "tags", label: "Tags" }, { id: "legend", label: "Legend" }, { id: "roles", label: "Roles" }, { id: "config", label: "Config" }];
 
 const fold = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const isLive = (c) => !c.archived && (!c.wineStatus || c.wineStatus === "verified");
@@ -173,7 +174,26 @@ function legendTable(O, d) {
     <h3 class="serif osub">Approved words (${rows.length} of ${shared.length})</h3>
     ${table("<th>Word</th><th>Means</th><th>From</th><th></th>", have, "None yet: the app uses its starting list.")}`;
 }
+// Roles: everyone who is not a plain player. The Owner row is locked: it has a lock and no buttons here, and the database refuses to change it too.
+const PERM_LABEL = Object.fromEntries(PERMISSIONS.map((p) => [p.id, p.what]));
+function rolesTable(O, d) {
+  if (!d.staff) return `<p class="muted">${d.staffError ? esc(d.staffError) : "Loading…"}</p>`;
+  const all = staffRows(d.staff), rows = filterStaff(all, O.q, O.roleFilter || "all");
+  const body = rows.map((r) => {
+    const who = `<b>${esc(r.name || r.email || "(no name)")}</b>${r.name && r.email ? `<br><span class="muted small">${esc(r.email)}</span>` : ""}`;
+    const acts = r.locked ? `<span class="gbadge" title="The Owner role cannot be changed from this page">&#128274; Locked</span>`
+      : rowActions(r).map((a) => a.kind === "remove" ? `<button class="opill" data-action="owner:staffremove:${esc(r.userId)}">${esc(a.label)}</button>` : `<button class="opill" data-action="owner:staffset:${esc(r.userId)}:${a.role}">${esc(a.label)}</button>`).join(" ");
+    return `<tr><td>${who}</td><td>${esc(r.roleLabel)}</td><td class="small">${esc(r.permissions.map((p) => PERM_LABEL[p] || p).join("; "))}</td><td>${esc(String(r.since || "").slice(0, 10))}</td><td>${acts}</td></tr>`;
+  }).join("");
+  const audit = (d.staffAudit || []).map((a) => `<tr><td>${esc(String(a.created_at || "").slice(0, 16).replace("T", " "))}</td><td>${esc(a.target_email || a.target_user_id || "")}</td><td>${esc(a.old_role || "player")} &rarr; ${esc(a.new_role || "player")}</td></tr>`).join("");
+  return `<div class="muted small onote">Everyone who has a role other than Player. Add a role by typing the email a player signed in with (a guest has no email yet). The Owner role is locked: it cannot be given or taken away here.</div>
+    <h3 class="serif osub">Staff (${rows.length} of ${all.length})</h3>
+    ${table("<th>Person</th><th>Role</th><th>Can do</th><th>Since</th><th></th>", body, "Nobody has a role yet.")}
+    <h3 class="serif osub">Recent changes</h3>
+    ${table("<th>When</th><th>Person</th><th>Change</th>", audit, "No changes recorded yet.")}`;
+}
 export function ownerTableHtml(O, d) {
+  if (O.tab === "roles") return rolesTable(O, d);
   if (O.tab === "legend") return legendTable(O, d);
   if (O.tab === "tags") return tagsTable(O, d);
   if (O.tab === "lenses") return lensesTable(O, d);
@@ -193,6 +213,10 @@ export function ownerHtml(O, d) {
     <select class="ofield" data-owner-tagkind aria-label="Kind of new tag">${TAG_KINDS.map((k) => `<option value="${k.id}">${esc(k.label)}</option>`).join("")}</select>
     <input class="ofield osearch" data-owner-tagname placeholder="New tag name" aria-label="New tag name" autocomplete="off"><button class="opill" data-action="owner:addtag">Add tag</button>`;
   else if (O.tab === "legend") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search approved words" value="${esc(O.q)}" aria-label="Search approved words">`;
+  else if (O.tab === "roles") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search name or email" value="${esc(O.q)}" aria-label="Search staff">
+    <select class="ofield" data-owner-rolefilter aria-label="Show role"><option value="all">All roles</option>${ROLES.filter((r) => r.id !== "player").map((r) => `<option value="${r.id}"${O.roleFilter === r.id ? " selected" : ""}>${esc(r.label)}</option>`).join("")}</select>
+    <input class="ofield osearch" type="email" data-owner-staffemail placeholder="Player's email" aria-label="Email of the player to add" autocomplete="off">
+    <select class="ofield" data-owner-staffrole aria-label="Role to give">${ASSIGNABLE_ROLES.map((r) => `<option value="${r.id}">${esc(r.label)}</option>`).join("")}</select><button class="opill" data-action="owner:staffadd">Add role</button>`;
   else if (O.tab === "config") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search settings" value="${esc(O.q)}" aria-label="Search settings">`;
   else if (O.tab === "lenses") controls = `<select class="ofield" data-owner-lens aria-label="Lens">${LENS_IDS.map((id) => `<option value="${id}"${O.lens === id ? " selected" : ""}>${esc(LENSES[id].label)}</option>`).join("")}</select>
     <select class="ofield" data-owner-player aria-label="Player"><option value="me"${O.player === "me" ? " selected" : ""}>For me</option><option value="new"${O.player === "new" ? " selected" : ""}>For a new player</option></select>

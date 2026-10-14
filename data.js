@@ -575,6 +575,48 @@ export async function saveAppConfig(sb, key, value) {
   const rows = must(await sb.from("app_config").update({ value }).eq("key", key).select("key"));
   if (!rows || !rows.length) throw new Error("The setting was not saved. Your access may not allow changing it.");
 }
+// ---------------------------------------------------------------- plans and staff roles (docs/ROLES_AND_ACCESS.md; the functions are in docs/roles_proposal.sql, run by hand)
+// Whether the Plan switch is shown in Settings: the app_config number plan_switch_open (1 = shown). Missing or unreadable means hidden.
+export async function loadPlanSwitchOpen(sb) {
+  try {
+    const { data, error } = await sb.from("app_config").select("value").eq("key", "plan_switch_open").maybeSingle();
+    if (error || !data) return false;
+    const v = data.value !== null && typeof data.value === "object" ? data.value.value : data.value;
+    return v === true || Number(v) === 1;
+  } catch (_) { return false; }
+}
+// Changes the signed-in player's own plan ("default" or "pro"). The database refuses while the switch is closed.
+export async function setMyPlan(sb, plan) {
+  if (plan !== "default" && plan !== "pro") throw new Error("Choose Standard or Pro.");
+  const { error } = await sb.rpc("set_my_plan", { p_plan: plan });
+  if (error) throw (error.code === "PGRST202" ? new Error("The plan switch needs a database update (docs/roles_proposal.sql).") : error);
+  return plan;
+}
+const staffMissing = (error) => (error && (error.code === "PGRST202" || /staff_(list|set_role|remove)/.test(String(error.message || ""))) ? new Error("The roles list needs a database update (docs/roles_proposal.sql).") : error);
+// Everyone who has a staff role (Owner included, locked in the page), with their email. Owner only.
+export async function loadStaff(sb) {
+  const { data, error } = await sb.rpc("staff_list");
+  if (error) throw staffMissing(error);
+  return data || [];
+}
+// Gives an existing player (found by email) the role "editor" or "quiz_reviewer", or changes it. The database refuses "owner" and refuses changing an Owner.
+export async function setStaffRole(sb, email, role) {
+  const { data, error } = await sb.rpc("staff_set_role", { p_email: email, p_role: role });
+  if (error) throw staffMissing(error);
+  return data;
+}
+// Takes a staff role away (the person is a player again). The database refuses to remove an Owner.
+export async function removeStaff(sb, userId) {
+  const { error } = await sb.rpc("staff_remove", { p_user_id: userId });
+  if (error) throw staffMissing(error);
+}
+// The latest changes to staff roles (who changed whom). An empty list until the script has been run.
+export async function loadStaffAudit(sb) {
+  try {
+    const { data, error } = await sb.from("staff_audit").select("*").order("created_at", { ascending: false }).limit(30);
+    return error ? [] : (data || []);
+  } catch (_) { return []; }
+}
 // "How easy to find" for a wine (1 to 5), the same field the full editor sets. Needs database update 15.
 export async function saveWineReach(sb, wineId, reach) {
   const rows = must(await sb.from("wines").update({ reach: reach === null ? null : Number(reach) }).eq("id", wineId).select("id"));

@@ -60,7 +60,14 @@ export function syncHtml(y) {
   return `<div class="srow"><div class="stitle">Waiting to upload</div><div class="small">${esc(line)} ${esc(net)}</div>
     <button class="btn outline slim" data-action="sync:now"${y.online ? "" : " disabled"}>Sync now</button>${failed ? `<div class="stitle" style="margin-top:10px">Could not upload</div>${failed}` : ""}</div>`;
 }
-export function settingsHtml(s, user, { owner = false, sync = null } = {}) {
+// The Plan row: Standard or Pro. Shown only while the owner leaves the switch open; it exists so testers can try the Pro features. Mode (Who is this for) never changes the plan.
+export function planHtml(p) {
+  if (!p) return "";
+  const btn = (pl) => `<button class="gopt${p.current === pl.id ? " on" : ""}" data-action="plan:${esc(pl.id)}" aria-pressed="${p.current === pl.id}"${p.busy ? " disabled" : ""}>${esc(pl.label)}</button>`;
+  return `<div class="srow"><div class="stitle">Plan</div><div class="gopts">${p.plans.map(btn).join("")}</div>
+    <div class="muted small snote">Testing only: Pro switches on the tasting grid, bigger imports and feedback. This choice will be removed after testing. It is separate from "Who is this for", which only changes the words.</div>${p.error ? `<div class="err">${esc(p.error)}</div>` : ""}</div>`;
+}
+export function settingsHtml(s, user, { owner = false, sync = null, plan = null } = {}) {
   const onOff = (key, disabled = false) => chip(s[key], `${key}:on`, "On", disabled) + chip(!s[key], `${key}:off`, "Off", disabled);
   return `<div class="overlay"><div class="sheet" id="settingsPanel" role="dialog" aria-label="Settings">
     <div class="sheethead"><div class="sheettitle"><div class="serif big">Settings</div><div class="muted small">Saved on this phone.</div></div>
@@ -72,6 +79,7 @@ export function settingsHtml(s, user, { owner = false, sync = null } = {}) {
     <div class="srow"><div class="stitle">How the card works</div><button class="btn outline slim" data-action="demo:open">Practice with a sample card</button><div class="muted small snote">A short walkthrough of swiping, the buttons and zoom. Nothing is saved.</div></div>
     ${row("Zoom", "", "Pinch the card with two fingers, double-tap the middle of it, or tap Zoom under the card. While it is zoomed, swiping is paused. Tap Reset zoom to go back.")}
     ${row("Motion", MOTION.map((m) => chip(s.motion === m.id, `motion:${m.id}`, m.label)).join(""), "Reduces the card's movement and the fades.")}
+    ${planHtml(plan)}
     ${syncHtml(sync)}
     ${owner ? `<div class="srow"><div class="stitle">Owner</div><button class="btn outline slim" data-action="owner:open">Open the owner page</button><div class="muted small snote">Tables of wines, lenses, bingo cards, checks and settings.</div></div>` : ""}
     <div class="srow"><div class="stitle">Account</div>${accountCardHtml(user)}</div>
