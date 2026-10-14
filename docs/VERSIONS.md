@@ -33,5 +33,8 @@ The app exactly as it was before the Tech sheet (researched, sourced wine facts 
 ## Tech sheet, parked (branch `backup/tech-sheet-parked`, commit `524c505`) — saved 2026-10-14
 The app with the whole Tech sheet in it (sourced wine facts, the full-page sheet, Off / Staff only / Everyone switch, Editors' Facts tools, the research pack with `tools/verify-research.mjs`), saved just before it was taken out at the owner's request. **Why it exists:** to revisit the feature later without rebuilding it. Its database scripts (`docs/tech_sheet.sql`, `docs/tech_sheet_research.sql`) only add separate tables and are still in `docs/`. To compare: `git diff origin/backup/tech-sheet-parked claude/wine-discovery-architecture-3pithw --stat`.
 
+## Venue test branches (live, not frozen)
+- **`vwm`**: the Vintage Wine Merchants version (started 2026-10-14; "VWM" is internal only). It lives only on its own branch; this main branch does not carry its code. Same database and accounts; it adds the table `venue_wines` (script on that branch). See that branch's `CLAUDE.md`, convention 26.
+
 ## How to save a new version
 `git push origin HEAD:refs/heads/backup/NAME` (a new name each time, never an existing one), and add a section here with the commit. Use clear names (for example `deck-v2-...`).
