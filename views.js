@@ -94,8 +94,13 @@ export const ANSWER_BUTTONS = [{ kind: "dislike" }, { kind: "dont_know" }, { kin
 export const answerFace = (kind) => (kind === "dont_know" ? `${esc(REACTIONS[kind].label)} ${iconHtml(kind, 18)}` : iconHtml(kind, 26));
 export const answerButtonsHtml = () => `<div class="answers" role="group" aria-label="Your answer">${ANSWER_BUTTONS.map((a) =>
   `<button class="ans" data-action="answer:${a.kind}" aria-label="${esc(REACTIONS[a.kind].label)}" style="--c:${REACTIONS[a.kind].color}">${answerFace(a.kind)}</button>`).join("")}</div>`;
-export function discoverHtml({ deck, interest, banner, counts, feedback = false, flaggedId = null, nudge = false, buttons = true, mapHint = false }) {
+// venueEmpty (the venue version, venue.js): { name, owner } when the venue's list has no wines yet. The deck never falls back to the whole catalog.
+export function discoverHtml({ deck, interest, banner, counts, feedback = false, flaggedId = null, nudge = false, buttons = true, mapHint = false, venueEmpty = null }) {
   const bannerHtml = banner ? `<div class="banner" data-action="dismiss">${esc(banner)} (tap to dismiss)</div>` : "";
+  if (venueEmpty) {
+    return `${bannerHtml}<div class="center"><div class="serif" style="font-size:22px">${esc(venueEmpty.name)}${/s$/.test(venueEmpty.name) ? "’" : "’s"} selection is being prepared.</div>
+      <div class="muted">Check back soon.</div>${venueEmpty.owner ? `<button class="btn outline slim" data-action="owner:open">Open the Owner page</button>` : ""}</div>`;
+  }
   if (!deck.length) {
     return `${bannerHtml}<div class="center"><div class="serif" style="font-size:22px">No more wines to show.</div>
       <div class="muted">If you expected some, check that the sample wines were published for testing.</div></div>`;

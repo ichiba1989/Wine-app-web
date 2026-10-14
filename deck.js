@@ -184,7 +184,9 @@ export function mixFor(model) {
 
 // ---------------------------------------------------------------- the deck
 // Returns { deck: [card], info: Map(id -> { tier, fam, pref }), mix, model }.
-export function buildDeck({ cards, states = [], journal = [], quiz = null, refs = new Map(), crowd = null }, { rnd = Math.random, size = Infinity } = {}) {
+// pool (optional): the wines the deck may show, when that is fewer than the cards the taste model reads (a venue version shows only the venue's wines,
+// while the player's whole journal still teaches the model). Defaults to all the cards.
+export function buildDeck({ cards, pool = null, states = [], journal = [], quiz = null, refs = new Map(), crowd = null }, { rnd = Math.random, size = Infinity } = {}) {
   // A wine answered before is not shown again, except one skipped only once: it comes back later in the deck (placed below). A second skip takes it out for good.
   const swiped = new Set(states.filter((s) => !skipComesBack(s)).map((s) => s.wine_vintage_id));
   const later = new Set(states.filter(skipComesBack).map((s) => s.wine_vintage_id));
@@ -192,7 +194,7 @@ export function buildDeck({ cards, states = [], journal = [], quiz = null, refs 
   const info = new Map();
   const queues = { high: [], medium: [], low: [] };
   const entries = [];
-  cards.forEach((c) => {
+  (pool || cards).forEach((c) => {
     if (swiped.has(c.id) || !isLive(c)) return;
     const fam = famOf(c, model, crowd), pref = prefOf(c, model, refs);
     entries.push({ c, fam, pref, tier: tierOf(fam), tie: rnd() });

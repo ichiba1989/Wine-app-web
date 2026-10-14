@@ -480,6 +480,10 @@ Phases 3–5 ordering is a recommendation; reorder based on what Phase 2 learns.
 - The blind tasting game's profiles come from the flavor, structure and climate rules plus an age rule (`AGE_CUES` in `blindgame.js`, typical changes with age, not good or poor vintages). The owner chose age characteristics over vintage quality; a vintage chart (good/hard years by region) is not planned.
 - Questions to settle: whether an editor should own the age cue list like the flavor tables (a database table, editable on the Owner page), whether more classics should be added (and who checks them), and whether game results should ever feed Learn's "topics you have not met" (today they do not; the game never touches the taste model).
 
+## Open item: venue versions (2026-10-14; branch `vwm`)
+- Vintage Wine Merchants' export has about 1,400 wines and almost none are in the catalog yet. Adding them one by one in the Editor is not realistic: a reviewed bulk-add path (an editor confirms producer, wine name, type and place per row before a wine is created, pending review) is the likely next step, and it must keep to the rule that only bottle facts or stored rules become catalog data.
+- Whether venues should become a database setting (one app, many venues by link) instead of a branch per venue; per-venue logo and colours; whether a venue's price or stock belongs in a separate market-observation layer (not built; price and stock in the shop's file are not read).
+
 ## Parked: Tech sheet (2026-10-14)
 Taken out of the app at the owner's request: maintaining researched wine facts for the whole catalog is not realistic yet. Code saved on `backup/tech-sheet-parked`; database objects kept (unused). Revisit when the other improvement ideas are done. Ideas recorded for then:
 - **Players enter tech data themselves** for their own wines (ABV, bottle size and so on from the bottle), instead of the team maintaining it. The parked version already had this for a player's own wines (`my_wine_facts`, "entered by you").

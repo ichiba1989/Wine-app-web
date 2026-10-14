@@ -174,3 +174,11 @@ No database script. Check on a phone:
 - [ ] Try a wine like it: the wines shown share the grape (or place) and are never ones the player has rated or turned down.
 - [ ] Playing writes nothing else to the database and does not change Discover or the Profile.
 - [ ] Editors: tag a few quiz questions with the theme "Wine ageing" so "How old?" has Learn questions to point to.
+
+## 22. Vintage Wine Merchants version (branch `vwm` only)
+- [ ] Run `docs/venue_decks.sql` once in Supabase; the check at its end lists the venues.
+- [ ] Owner page, Vintage Wine Merchants list: upload the shop's export; the preview leaves out spirits, glasses and books; save; the counts show how many wines are in the deck and how many are not in our catalog yet.
+- [ ] Discover (as a guest) shows only listed wines; Bingo help, This or That and Guess the Glass suggest only listed wines; a journal entry for an unlisted wine still shows normally.
+- [ ] After editors add some missing wines to the catalog, Re-check links them and they appear in the deck.
+- [ ] Nothing on screen says "VWM".
+

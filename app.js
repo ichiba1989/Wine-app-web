@@ -6,12 +6,12 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete, styleLabel,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=14";
-import * as db from "./data.js?v=33";
-import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=8";
+import * as db from "./data.js?v=34";
+import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=9";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=5";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=37";
+  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=38";
 import { createLearn } from "./learn.js?v=10";
 import { setMode } from "./words.js?v=1";
 import { journalCsv, exportName } from "./exportcsv.js?v=1";
@@ -33,27 +33,28 @@ import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent }
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
 import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, paintNoteMarks, teachHtml, autoCount } from "./tasting.js?v=9";
 import { gridFromNotes, mergeFromNotes, touched, legendEntry, compileWith } from "./notegrid.js?v=2";
-import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=7";
-import { createProfile } from "./profile.js?v=22";
+import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=8";
+import { createProfile } from "./profile.js?v=23";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=12";
 import { createFeedback } from "./feedback.js?v=6";
-import { createEditor } from "./editor.js?v=31";
+import { createEditor } from "./editor.js?v=32";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=9";
-import { gamesHtml } from "./games.js?v=16";
+import { gamesHtml } from "./games.js?v=17";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
 import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=4";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=2";
-import * as GG from "./blindgame.js?v=3";
-import { recommendMix, recommend } from "./recommend.js?v=6";
+import * as GG from "./blindgame.js?v=4";
+import { VENUE, venueCardsOf, readList, recheck as venueRecheck, listIds } from "./venue.js?v=1";
+import { recommendMix, recommend } from "./recommend.js?v=7";
 import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=1";
 import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
 import { setOffline, setCardLookup } from "./overlay.js?v=1";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=12"));
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=13"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=6"));
-const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=9"));
-import { createWineInfo } from "./wineinfo.js?v=18";
+const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=10"));
+import { createWineInfo } from "./wineinfo.js?v=19";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -102,6 +103,7 @@ const GAMES_KEY = "wine.games";   // which bingo cards this phone has cleared (b
 const GUESS_KEY = "wine.guess";   // Guess the Glass: the best score of each mode (blindgame.js), only on this phone
 const state = {
   owner: { ...OWNER_START },                       // the Owner page (owner.js)
+  venue: { list: null, error: "", missing: false, preview: null, paste: "", q: "" },   // the venue's list (venue.js); null until it has loaded
   g: { screen: "hub", cardId: null, sq: null },   // the Games tab: which screen is open
   gamesMemory: parseMemory(store.get(GAMES_KEY)),
   totAnswers: parseAnswers(store.get(TOT_KEY)), totTaste: null,
@@ -151,7 +153,8 @@ const startFor = (card) => startingValues(card, card && state.refs.get(card.id))
 const startForEntry = (entry) => (entry.wine_vintage_id ? startFor(cardById(entry.wine_vintage_id)) : startingValues(entryAsCard(entry), null));
 // What the palate uses as a baseline from the rules alone (the editor's own scores are added in profile.js).
 const ruleBase = (wineVintageId, entry) => rulesFor(wineVintageId ? cardById(wineVintageId) : entryAsCard(entry));
-const TITLES = { discover: "Discover", swipes: "Swipes", journal: "Journal", profile: "Profile", learn: "Learn", games: "Games", editor: "Editor", owner: "Owner" };
+// The venue version (venue.js): Discover carries the venue's full name; the other tabs keep their names.
+const TITLES = { discover: VENUE.name, swipes: "Swipes", journal: "Journal", profile: "Profile", learn: "Learn", games: "Games", editor: "Editor", owner: "Owner" };
 
 // The Learn tab lives in learn.js. It saves quiz answers itself and reports save problems through the banner.
 const learn = createLearn({ gapWeights: () => gapWeights(gapsOf(userModel({ cards: state.cards, states: state.states, journal: state.journal, quiz: state.quiz, refs: structureMap(state.cards, state.refs) }))), sb: () => state.sb, user: () => state.user, profile: () => state.profile, onError: (m) => setBanner(m) });
@@ -323,7 +326,8 @@ async function enterMain() {
     db.loadQuizKnowledge(state.sb).catch(() => null),   // what the person knows and what other players know both help decide the deck
     db.loadCrowd(state.sb).catch(() => new Map()),
     db.loadSwipeConfig(state.sb).then(setSwipeConfig, () => {}),
-    db.loadPlanSwitchOpen(state.sb).then((on) => { state.planSwitch = on; }, () => { state.planSwitch = false; }),   // whether Settings shows the Plan row   // the owner's numbers for likes, dislikes and "I don't know it"
+    db.loadPlanSwitchOpen(state.sb).then((on) => { state.planSwitch = on; }, () => { state.planSwitch = false; }),
+    loadVenue(),   // the venue's list: the deck is built from it   // whether Settings shows the Plan row   // the owner's numbers for likes, dislikes and "I don't know it"
   ]);
   state.cards = cards; state.feedback = feedback; state.pro = pro; state.quiz = quiz; state.crowd = crowd;
   rebuildDeck();
@@ -392,8 +396,17 @@ function settlePhotos() {   // a photo that was already loaded before the page w
 }
 // Discover cards do not show bottle photos, so nothing is fetched ahead of time. (photoCache is kept only because window.__wine exposes it.)
 const photoCache = new Map();
+// ---------------------------------------------------------------- the venue's wines (venue.js)
+// Every place that picks catalog wines to show or suggest uses only these: the deck, Bingo help, This or That wines, Guess the Glass.
+// Until the list has loaded (or when it is empty) it is empty: the app never falls back to the whole catalog. The player's own record (journal, swipes,
+// adding a wine they drank, import, blind tasting) still reads the whole catalog through state.cards.
+const venueCards = () => (state.venue.list ? venueCardsOf(state.cards, state.venue.list) : []);
+async function loadVenue() {
+  try { state.venue.list = await db.loadVenueList(state.sb, VENUE.id); state.venue.error = ""; state.venue.missing = false; }
+  catch (e) { state.venue.list = null; state.venue.missing = !!(e && e.missing); state.venue.error = (e && e.missing) ? e.message : "Could not load the list: " + ((e && e.message) || e); }
+}
 function rebuildDeck() {
-  const r = buildDeck({ cards: state.cards, states: state.states, journal: state.journal, quiz: state.quiz, refs: structureMap(state.cards, state.refs), crowd: state.crowd });
+  const r = buildDeck({ cards: state.cards, pool: venueCards(), states: state.states, journal: state.journal, quiz: state.quiz, refs: structureMap(state.cards, state.refs), crowd: state.crowd });
   state.deck = r.deck; state.deckInfo = r.info; state.deckMix = r.mix; state.sinceDeck = 0;
 }
 
@@ -432,7 +445,7 @@ function ownerData() {
   const O = state.owner;
   if (state._ownerFor !== state.cards) { state._ownerFor = state.cards; state._ownerCache = { rows: OWN.wineRows(state.cards), bingo: OWN.bingoCoverage(state.cards) }; }
   const { rows, bingo } = state._ownerCache;
-  return { rows, bingo, checks: OWN.checkCounts(rows), config: O.config, configError: O.configError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, staff: O.staff, staffError: O.staffError, staffAudit: O.staffAudit, seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
+  return { rows, bingo, checks: OWN.checkCounts(rows), config: O.config, configError: O.configError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, staff: O.staff, staffError: O.staffError, staffAudit: O.staffAudit, venue: state.venue, cards: state.cards, cardsById: new Map(state.cards.map((c) => [c.id, c])), seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
 }
 // The lens preview: the top picks of one lens for the owner's own profile, or for a brand-new player, using the weights typed on the page.
 function ownerLens() {
@@ -506,6 +519,30 @@ async function ownerLegend(a, b) {
     } else if (a === "legendremove") { await db.removeSharedLegend(state.sb, b); ownerSay("Removed."); }
     await legendChanged();
   } catch (e) { ownerSay("Could not save: " + (e.message || e)); }
+}
+// ---- the venue's list (venue.js): the file is read by importer.js (loaded on first use), matched to the catalog, previewed, then saved.
+function venueFile(text) {
+  const V = state.venue, parsed = IMP.parseCsv(text || ""), table = [parsed.headers, ...parsed.rows];
+  const r = readList(table, IMP.detectMapping(parsed.headers), state.cards);
+  if (r.error) { V.preview = null; ownerSay(r.error); ownerRedraw(); return; }
+  const have = listIds(V.list), haveText = new Set((V.list || []).filter((x) => !x.wine_vintage_id).map((x) => `${x.producer}|${x.wine_name}|${x.vintage}`.toLowerCase()));
+  const rows = r.rows.map((x) => ({ ...x, onList: x.wine_vintage_id ? have.has(x.wine_vintage_id) : haveText.has(`${x.producer}|${x.wine_name}|${x.vintage}`.toLowerCase()) }));
+  V.preview = { rows, fresh: rows.filter((x) => !x.onList), skipped: r.skipped || 0 };
+  ownerSay(""); ownerRedraw();
+}
+async function venueChanged(msg) {
+  await loadVenue(); rebuildDeck(); ownerSay(msg); ownerRedraw();
+}
+async function ownerVenue(a, b) {
+  const V = state.venue;
+  try {
+    if (a === "venueread") { await loadImportModule(); const box = document.querySelector("[data-owner-venuepaste]"); V.paste = box ? box.value : ""; venueFile(V.paste); }
+    else if (a === "venuecancel") { V.preview = null; ownerRedraw(); }
+    else if (a === "venuesave" && V.preview) { const n = await db.addVenueRows(state.sb, VENUE.id, V.preview.fresh, "file"); V.preview = null; V.paste = ""; await venueChanged(`Added ${n} ${n === 1 ? "wine" : "wines"} to the list.`); }
+    else if (a === "venueadd") { const c = cardById(b); if (!c) return; await db.addVenueRows(state.sb, VENUE.id, [{ producer: c.producer, wine_name: c.cuvee, vintage: c.vintage || "", wine_vintage_id: c.id }], "hand"); await venueChanged(`Added: ${wineName(c)}.`); }
+    else if (a === "venueremove") { await db.removeVenueRow(state.sb, b); await venueChanged("Removed from the list."); }
+    else if (a === "venuerecheck") { const links = venueRecheck(V.list, state.cards); const n = links.length ? await db.linkVenueRows(state.sb, links) : 0; await venueChanged(n ? `${n} ${n === 1 ? "wine is" : "wines are"} now in the deck.` : "None of them is in our catalog yet."); }
+  } catch (e) { ownerSay("Not changed: " + (e.message || e)); }
 }
 // ---- Roles tab: who has a staff role. Owner is never given or taken away here (access.js, and the database refuses it too).
 async function loadOwnerStaff() {
@@ -582,7 +619,7 @@ function gamesView() {
   if (c && Number.isInteger(state.g.sq) && !progress.get(c.id).done[state.g.sq]) help = squareHelp(c.squares[state.g.sq], cardsById);
   // The wines for the This or That results are only worked out on that screen.
   const tot = { answers: state.totAnswers, matches: [], taste: state.totTaste };
-  if (state.g.screen === "tot" && (state.g.totResults || !nextPair(state.totAnswers))) tot.matches = matchWines({ answers: state.totAnswers, cards: state.cards, structure: structureMap(state.cards, state.refs) });
+  if (state.g.screen === "tot" && (state.g.totResults || !nextPair(state.totAnswers))) tot.matches = matchWines({ answers: state.totAnswers, cards: venueCards(), structure: structureMap(state.cards, state.refs) });
   const guess = { ...state.guess, follow: state.g.screen === "guess" ? guessFollow() : null };
   return gamesHtml(state.g, { progress, memory, news, help, tot, guess });
 }
@@ -592,7 +629,7 @@ function gamesView() {
 function startGuess(mode) {
   const G = state.guess;
   if (!GG.modeById(mode)) return;
-  const items = GG.buildItems(state.cards, state.refs, new Date());
+  const items = GG.buildItems(venueCards(), state.refs, new Date(), { classics: false });   // the venue's own wines only (owner, 2026-10-14)
   const round = GG.makeRound(mode, items, { level: G.level, words: state.settings.mode });
   Object.assign(G, { lq: {}, lqChoices: {}, lqFor: {}, winesFor: {}, topicList: [], message: "" });
   if (!round.length) { G.play = null; G.message = "There are not enough wines for this mode yet."; return; }
@@ -628,7 +665,7 @@ function guessWines(topics, done) {
     const refs = structureMap(state.cards, state.refs);
     const model = userModel({ cards: state.cards, states: state.states, journal: state.journal, quiz: state.quiz, refs });
     const leaveOut = new Set([...state.journal.filter((e) => e.verdict && e.wine_vintage_id).map((e) => e.wine_vintage_id), ...state.states.filter((x) => reactionOf(x) === "dislike").map((x) => x.wine_vintage_id)]);
-    const base = { cards: state.cards, model, refs, crowd: state.crowd, journal: state.journal, states: state.states, lens: "confident" };
+    const base = { cards: venueCards(), model, refs, crowd: state.crowd, journal: state.journal, states: state.states, lens: "confident" };
     const useful = topics.filter((t) => t.kind !== "theme");
     if (done) {
       const out = [];
@@ -650,7 +687,7 @@ function squareHelp(square, cardsById) {
   const model = userModel({ cards: state.cards, states: state.states, journal: state.journal, quiz: state.quiz, refs });
   const leaveOut = new Set([...state.journal.filter((e) => e.verdict && e.wine_vintage_id).map((e) => e.wine_vintage_id), ...state.states.filter((x) => reactionOf(x) === "dislike").map((x) => x.wine_vintage_id)]);
   const cold = model.swipeCount + model.journalCount < 5;   // too little history to say "your taste"
-  return { unrated: [], cold, recs: recommendMix({ cards: state.cards, model, refs, crowd: state.crowd, journal: state.journal, states: state.states, exclude: leaveOut, accept: (c) => bingoMatches(square.test, cardFacts(c)), lenses: ["confident", "unique", "challenge"] }) };
+  return { unrated: [], cold, recs: recommendMix({ cards: venueCards(), model, refs, crowd: state.crowd, journal: state.journal, states: state.states, exclude: leaveOut, accept: (c) => bingoMatches(square.test, cardFacts(c)), lenses: ["confident", "unique", "challenge"] }) };
 }
 // How well each wine fits the player (0 to 1, the deck's taste model), worked out only when the Swipes tab groups or sorts by it.
 function swipeMatch() {
@@ -661,7 +698,7 @@ function swipeMatch() {
 }
 function drawTab(body) {
   if (state.tab === "discover") {
-    body.innerHTML = discoverHtml({ deck: state.deck, banner: null, counts: state.counts, feedback: state.feedback, flaggedId: state.wfDone, nudge: showNudge(), buttons: state.settings.buttons, mapHint: mapHintFor(state.deck[0]) });
+    body.innerHTML = discoverHtml({ venueEmpty: venueCards().length ? null : { name: VENUE.name, owner: isOwner() }, deck: state.deck, banner: null, counts: state.counts, feedback: state.feedback, flaggedId: state.wfDone, nudge: showNudge(), buttons: state.settings.buttons, mapHint: mapHintFor(state.deck[0]) });
     const card = $("#card");
     if (card) attachCard(card);
     settlePhotos();
@@ -1871,6 +1908,7 @@ document.addEventListener("click", async (ev) => {
       else if (a === "addtag") await ownerAddTag();
       else if (a.startsWith("legend")) await ownerLegend(a, b);
       else if (a.startsWith("staff")) await ownerStaff(a, b, c);
+      else if (a.startsWith("venue")) await ownerVenue(a, b);
     }
     else if (action === "settings" || action === "syncinfo") openSettings();
     else if (action === "setclose") closeSettings();
@@ -2051,6 +2089,11 @@ document.addEventListener("input", (ev) => {
   if (!t || !t.dataset || state.tab !== "owner") return;
   if ("ownerQ" in t.dataset) { state.owner.q = t.value; ownerRedraw(); }
   else if ("ownerSeed" in t.dataset) { state.owner.seed = t.value; ownerRedraw(); }
+  else if ("ownerVenuepaste" in t.dataset) state.venue.paste = t.value;
+  else if ("ownerVenueq" in t.dataset) {   // the table is redrawn, so the search box gets its focus back
+    state.venue.q = t.value; ownerRedraw();
+    const box = document.querySelector("[data-owner-venueq]"); if (box) { box.focus(); try { box.setSelectionRange(box.value.length, box.value.length); } catch (_) {} }
+  }
 });
 document.addEventListener("change", async (ev) => {
   const t = ev.target;
@@ -2062,6 +2105,9 @@ document.addEventListener("change", async (ev) => {
   else if ("ownerPlayer" in t.dataset) { O.player = t.value; ownerRedraw(); }
   else if ("ownerW" in t.dataset) { const [lens, key] = t.dataset.ownerW.split(":"); O.weights = { ...O.weights, [lens]: { ...(O.weights[lens] || {}), [key]: t.value } }; ownerRedraw(); }
   else if ("ownerReach" in t.dataset) await ownerSaveReach(t.dataset.ownerReach, t.value);
+  else if ("ownerVenuefile" in t.dataset && t.files && t.files[0]) {   // the venue's file, read here in the browser
+    try { await loadImportModule(); venueFile(await t.files[0].text()); } catch (e) { ownerSay("Could not read the file: " + (e.message || e)); }
+  }
 });
 applySettings();
 window.__wine = { state, fly, render, init, learn, rebuildDeck, photoCache, profile: profileTab, editor: editorTab, account, feedback };

@@ -1,6 +1,6 @@
 {
-  "name": "Wine app",
-  "short_name": "Wine",
+  "name": "Vintage Wine Merchants",
+  "short_name": "Vintage Wine Merchants",
   "description": "A game that learns your palate while teaching you about wine.",
   "start_url": "./",
   "scope": "./",

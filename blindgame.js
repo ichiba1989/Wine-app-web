@@ -303,9 +303,10 @@ function makeItem(card, { classic = null, ref = null, now = new Date() } = {}) {
 }
 // All the items: the classics, then the catalog wines that have one known grape, a country and a type the game plays (no fortified, no archived).
 // refs: Map(card id -> editor structure); an editor's score wins over the rules.
-export function buildItems(cards = [], refs = new Map(), now = new Date()) {
+// classics: false leaves the teaching profiles out (a venue version plays with the venue's own wines only).
+export function buildItems(cards = [], refs = new Map(), now = new Date(), { classics = true } = {}) {
   const out = [];
-  CLASSICS.forEach((k) => { const it = makeItem(classicCard(k), { classic: k, now }); if (it) out.push(it); });
+  if (classics) CLASSICS.forEach((k) => { const it = makeItem(classicCard(k), { classic: k, now }); if (it) out.push(it); });
   (cards || []).forEach((c) => {
     if (!c || c.archived || c.style === "fortified" || c.style === "unknown") return;
     const it = makeItem(c, { ref: refs && refs.get ? refs.get(c.id) : null, now });

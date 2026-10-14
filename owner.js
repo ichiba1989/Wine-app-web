@@ -1,17 +1,18 @@
-// The Owner page: plain tables for the person who runs the app, one tab per kind of thing: Wines, Lenses, Bingo, Checks and Config.
+// The Owner page: plain tables for the person who runs the app, one tab per kind of thing: Wines, Lenses, Bingo, Checks, Tags, Legend, Roles, Config and the venue's list.
 // Every table can be searched and sorted (tap a heading). It is reached from the gear (Settings) and only offered to the owner; the database
 // still decides what anyone may change. The rules at the top (rows, search, sort, checks, coverage) are pure: no page, no network.
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
 import { esc } from "./logic.js?v=14";
-import { REACH_CHOICES } from "./wineinfo.js?v=18";
+import { REACH_CHOICES } from "./wineinfo.js?v=19";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=2";
-import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=6";
+import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=7";
 import { TAG_KINDS } from "./tags.js?v=2";
 import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=9";
 import { centsToField } from "./pricing.js?v=1";
 import { ASSIGNABLE_ROLES, ROLES, PERMISSIONS, staffRows, filterStaff, rowActions } from "./access.js?v=4";
+import { VENUE, listRows, addable, summary } from "./venue.js?v=1";
 
-export const OWNER_TABS = [{ id: "wines", label: "Wines" }, { id: "lenses", label: "Lenses" }, { id: "bingo", label: "Bingo" }, { id: "checks", label: "Checks" }, { id: "tags", label: "Tags" }, { id: "legend", label: "Legend" }, { id: "roles", label: "Roles" }, { id: "config", label: "Config" }];
+export const OWNER_TABS = [{ id: "wines", label: "Wines" }, { id: "lenses", label: "Lenses" }, { id: "bingo", label: "Bingo" }, { id: "checks", label: "Checks" }, { id: "tags", label: "Tags" }, { id: "legend", label: "Legend" }, { id: "roles", label: "Roles" }, { id: "config", label: "Config" }, { id: "venue", label: `${VENUE.name} list` }];
 
 const fold = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const isLive = (c) => !c.archived && (!c.wineStatus || c.wineStatus === "verified");
@@ -192,7 +193,34 @@ function rolesTable(O, d) {
     <h3 class="serif osub">Recent changes</h3>
     ${table("<th>When</th><th>Person</th><th>Change</th>", audit, "No changes recorded yet.")}`;
 }
+// The venue's list (venue.js): upload or paste the venue's file, check what matched, save; add or remove wines by hand; re-check rows that were not in the catalog.
+// Only wines on this list appear in the venue version's deck, games and suggestions. Rows not in the catalog wait for an editor to add the wine.
+function venueTable(O, d) {
+  const v = d.venue || {};
+  if (v.error) return `<p class="muted">${esc(v.error)}</p>`;
+  if (!v.list) return `<p class="muted">Loading…</p>`;
+  const all = listRows(v.list, d.cardsById), rows = listRows(v.list, d.cardsById, O.q), sum = summary(v.list);
+  const pv = v.preview;
+  const preview = pv ? `<h3 class="serif osub">From the file: ${pv.rows.length} ${pv.rows.length === 1 ? "wine" : "wines"}</h3>
+    <div class="muted small onote">${pv.fresh.length} new to the list (${pv.fresh.filter((r) => r.wine_vintage_id).length} in our catalog, ${pv.fresh.filter((r) => !r.wine_vintage_id).length} not yet)${pv.rows.length - pv.fresh.length ? `; ${pv.rows.length - pv.fresh.length} already on the list` : ""}.${pv.skipped ? ` ${pv.skipped} ${pv.skipped === 1 ? "item that is" : "items that are"} not wine (spirits, sake, glasses, books, non-alcoholic) left out.` : ""} Wines not in our catalog are kept on the list and appear once an editor adds them and you tap Re-check.</div>
+    ${table("<th>Wine</th><th>Status</th>", pv.rows.slice(0, 300).map((r) => `<tr><td>${esc([r.vintage, r.producer, r.wine_name].filter(Boolean).join(" "))}</td><td>${r.onList ? "Already on the list" : r.wine_vintage_id ? "In our catalog" : r.status === "several" ? "Several vintages: add by hand" : "Not in our catalog yet"}</td></tr>`).join(""))}
+    <div class="ocontrols"><button class="opill" data-action="owner:venuesave"${pv.fresh.length ? "" : " disabled"}>Add ${pv.fresh.length} to the list</button><button class="opill" data-action="owner:venuecancel">Cancel</button></div>` : "";
+  const finds = addable(d.cards, v.list, v.q || "", 15).map((c) => `<tr><td>${esc([c.vintage, c.producer, c.cuvee].filter(Boolean).join(" "))}</td><td class="small">${esc([c.appellation || c.region, c.country].filter(Boolean).join(", "))}</td><td><button class="opill" data-action="owner:venueadd:${esc(c.id)}">Add</button></td></tr>`).join("");
+  const body = rows.map((r) => `<tr><td>${esc(r.name)}</td><td>${r.linked ? "In the deck" : r.unpublished ? "Not published" : "Not in our catalog yet"}</td><td class="small">${r.source === "hand" ? "Added by hand" : "From the file"}</td><td><button class="opill" data-action="owner:venueremove:${esc(r.id)}">Remove</button></td></tr>`).join("");
+  return `<div class="muted small onote">Only these wines appear in this version's deck, games and suggestions. Columns the file needs: Producer, Wine name, Vintage. A wine matches when all three are exactly a catalog wine's (accents and case ignored); nothing else is guessed.</div>
+    <div class="ocontrols"><input type="file" accept=".csv,.txt,text/csv,text/plain" data-owner-venuefile aria-label="Choose the venue's file"></div>
+    <textarea class="field" rows="4" data-owner-venuepaste placeholder="Or paste the rows here, with the header row first">${esc(v.paste || "")}</textarea>
+    <div class="ocontrols"><button class="opill" data-action="owner:venueread">Read the pasted rows</button></div>
+    ${preview}
+    <h3 class="serif osub">Add a catalog wine by hand</h3>
+    <input class="ofield osearch" type="search" data-owner-venueq placeholder="Search our catalog" value="${esc(v.q || "")}" aria-label="Search the catalog to add a wine">
+    ${v.q && v.q.trim().length >= 2 ? table("<th>Wine</th><th>Place</th><th></th>", finds, "No catalog wine matches (or it is already on the list).") : ""}
+    <h3 class="serif osub">On the list: ${sum.matched} in the deck, ${sum.missing} not in our catalog yet</h3>
+    <div class="ocontrols"><button class="opill" data-action="owner:venuerecheck"${sum.missing ? "" : " disabled"}>Re-check the ones not in our catalog</button></div>
+    ${table("<th>Wine</th><th>Status</th><th>Added</th><th></th>", body, all.length ? "Nothing matches." : "The list is empty: the deck shows nothing until wines are added.")}`;
+}
 export function ownerTableHtml(O, d) {
+  if (O.tab === "venue") return venueTable(O, d);
   if (O.tab === "roles") return rolesTable(O, d);
   if (O.tab === "legend") return legendTable(O, d);
   if (O.tab === "tags") return tagsTable(O, d);
@@ -218,6 +246,7 @@ export function ownerHtml(O, d) {
     <input class="ofield osearch" type="email" data-owner-staffemail placeholder="Player's email" aria-label="Email of the player to add" autocomplete="off">
     <select class="ofield" data-owner-staffrole aria-label="Role to give">${ASSIGNABLE_ROLES.map((r) => `<option value="${r.id}">${esc(r.label)}</option>`).join("")}</select><button class="opill" data-action="owner:staffadd">Add role</button>`;
   else if (O.tab === "config") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search settings" value="${esc(O.q)}" aria-label="Search settings">`;
+  else if (O.tab === "venue") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search the list" value="${esc(O.q)}" aria-label="Search the list">`;
   else if (O.tab === "lenses") controls = `<select class="ofield" data-owner-lens aria-label="Lens">${LENS_IDS.map((id) => `<option value="${id}"${O.lens === id ? " selected" : ""}>${esc(LENSES[id].label)}</option>`).join("")}</select>
     <select class="ofield" data-owner-player aria-label="Player"><option value="me"${O.player === "me" ? " selected" : ""}>For me</option><option value="new"${O.player === "new" ? " selected" : ""}>For a new player</option></select>
     ${O.lens === "similar" ? `<input class="ofield osearch" list="ownerSeeds" data-owner-seed placeholder="Seed wine" value="${esc(O.seed)}" aria-label="Seed wine"><datalist id="ownerSeeds">${(d.seedNames || []).map((n) => `<option value="${esc(n)}">`).join("")}</datalist>` : ""}
