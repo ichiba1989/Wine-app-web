@@ -198,7 +198,7 @@ export function sheetModel({ identity, facts = [], choices = DEFAULT_CHOICES, un
     .map((c) => ({ id: c.fact_key, label: (fieldById(c.fact_key) || {}).label || c.fact_key, value: displayValue(c.fact_key, c.value), domain: c.domain || domainOf(c.source_url), url: c.source_url || "" }));
   return { identity: identityLines(identity), sections, unconfirmed: pending, confirmedCount: sections.reduce((n, s) => n + s.rows.filter((r) => r.status === "confirmed").length, 0) };
 }
-export const RULE_TEXT = { producer_source: "from the producer's own site", two_sources: "two approved sources agree", editor_entered: "entered and checked by an editor" };
+export const RULE_TEXT = { producer_source: "from the producer's own site", two_sources: "two approved sources agree", editor_entered: "entered and checked by an editor", player_entered: "entered by you" };
 // Plain text for Copy: identity, then each confirmed fact with its source. Missing lines are listed as "not confirmed yet".
 export function sheetText(model, title = "") {
   const out = [];
@@ -208,7 +208,7 @@ export function sheetText(model, title = "") {
     out.push("", s.title.toUpperCase());
     s.rows.forEach((r) => out.push(r.status === "confirmed" ? `${r.label}: ${r.value} (${r.sources.map((x) => x.domain).filter(Boolean).join(", ") || RULE_TEXT[r.rule] || "source on record"})` : `${r.label}: not confirmed yet`));
   });
-  out.push("", "Confirmed from the producer's own site or from approved sources. Not a tasting opinion.");
+  out.push("", "Confirmed from the producer's own site, from approved sources, or entered by the person named. Not a tasting opinion.");
   return out.join("\n");
 }
 
@@ -228,7 +228,7 @@ Rules:
 - Use a different page address for each source. Do not invent addresses. If you cannot find a fact, leave it out (list it under not_found).
 - Producer-level fields (founded, owner_winemaker, estate_size, website, awards) are asked once per producer: use subject_type "producer" and the producer_key from the work list.
 - Also suggest each producer's official website once (producer_sites) with the page where the site says it is the producer's own.
-- Write one JSON file with schema "${RESULTS_SCHEMA}", then run: node tools/verify-research.mjs <file>. Do not mark anything verified yourself.`;
+- Write one JSON file with schema "${RESULTS_SCHEMA}", then run: node tools/verify-research.mjs <results file> --worklist <work list file>. Do not mark anything verified yourself.`;
 
 // cards: the catalog cards the app holds. haveKeys: a Set of vintage ids that already have a confirmed fact (they are left out).
 // options: { search, max, fields }. Returns the work list object (the file's content).

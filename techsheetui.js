@@ -1,12 +1,13 @@
 // TECHSHEET: the screens and the controller for the Tech sheet. Loaded on first use (app.js loadTechModule), only when access().techsheet is on.
 // Part of one removable feature, see docs/TECHSHEET_REMOVAL.md. The rules are in techsheet.js (pure); the database calls are in data.js (marked TECHSHEET).
 //   Player: pick the facts you want -> see which are confirmed (with where each came from) -> make a full printable page.
-//   Staff (Editor tab, Facts): approved sites, the finds waiting for a decision, and typing a fact in with its source.
+//   Staff (Editor tab, Facts): Research (work list out, checked results in), Suggested sites, the finds waiting for a decision, approved sites,
+//   and typing a fact in with its source. Research is only ever pushed by Editors and the Owner (docs/TECHSHEET_RESEARCH.md).
 // A fact is shown as fact only when it is confirmed (techsheet.js confirmRule, or an Editor entered it with its source, or the player entered it themselves).
 import { esc, wineName } from "./logic.js?v=14";
 import { missingFields } from "./catalog.js?v=3";
 import * as db from "./data.js?v=32";
-import * as T from "./techsheet.js?v=2";
+import * as T from "./techsheet.js?v=3";
 
 const KEY = "wine.techfields";   // the player's ticked fields, kept on this phone
 const safeHref = (u) => (/^https?:\/\//i.test(String(u || "")) ? String(u) : "");

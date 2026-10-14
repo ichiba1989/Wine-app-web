@@ -56,7 +56,7 @@ let TECH = null, TECHMOD = null, FACTS = null;
 const loadTechModule = async () => {
   if (TECH) return TECH;
   try {
-    TECHMOD = await import("./techsheetui.js?v=3");
+    TECHMOD = await import("./techsheetui.js?v=4");
     const tctx = { sb: () => state.sb, userId: () => state.user.id, cardById: (id) => cardById(id), cards: () => state.cards, cardName: (id) => { const c = cardById(id); return c ? wineName(c) : ""; } };
     TECH = TECHMOD.createTechSheet(tctx); FACTS = TECHMOD.createFactsStaff(tctx);
   } catch (e) { setBanner("The tech sheet could not be loaded: " + (e.message || e)); throw e; }
