@@ -71,7 +71,7 @@ The Owner sees everyone with a role other than Player: name, email, role, what i
 | Found-online photos, delete a wine | no | no | no | no | yes |
 | Owner page (Wines, Lenses, Bingo, Checks, Tags, Legend, Roles, Config) | no | no | no | no | yes |
 | Tech sheet (when `techsheet_enabled` is 2; staff only at 1; off at 0) | yes | yes | yes | yes | yes |
-| Editor tab: Facts (sources, waiting finds, enter a fact) | no | no | no | yes | yes |
+| Editor tab: Facts (research work lists and import, suggested sites, waiting finds, sources, enter a fact; players never trigger research) | no | no | no | yes | yes |
 | Owner page: Facts tab | no | no | no | no | yes |
 | Plan switch in Settings | while open | while open | while open | while open | while open |
 

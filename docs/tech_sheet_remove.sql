@@ -10,6 +10,11 @@
 update public.app_config set value = to_jsonb(0) where key = 'techsheet_enabled';
 
 -- STEP 2: drop it for good.
+drop function if exists public.techsheet_decide_suggestion(uuid, boolean);
+drop function if exists public.techsheet_import(jsonb, jsonb);
+drop function if exists public.techsheet_recheck_all();
+drop function if exists public.techsheet_confirm_by_rule(text, text, text);
+drop table if exists public.fact_source_suggestions;
 drop function if exists public.techsheet_reject_candidate(uuid);
 drop function if exists public.techsheet_approve_candidate(uuid);
 drop function if exists public.techsheet_enter_fact(text, text, text, text, text, text, text);
@@ -21,4 +26,4 @@ drop table if exists public.wine_fact_candidates;
 drop table if exists public.fact_sources;
 drop function if exists public.techsheet_visible();
 drop function if exists public.techsheet_level();
-delete from public.app_config where key in ('techsheet_enabled', 'techsheet_daily_limit', 'techsheet_batch_max');
+delete from public.app_config where key in ('techsheet_enabled', 'techsheet_daily_limit', 'techsheet_batch_max');   -- (daily_limit is no longer used by the app)

@@ -9,7 +9,7 @@ Owner page, **Facts** tab: press **Off** (the same setting as `techsheet_enabled
 
 ## Level 2: remove it from the app (code), keep the data
 1. Easiest: undo the work with git. The Tech sheet was committed as one labelled series ("Tech sheet ..."). `git log --oneline --grep="Tech sheet"` lists it; `git revert <newest>^..<oldest>` (or revert each) removes it from the app. The earlier steps of the app are untouched.
-2. By hand: delete `techsheet.js` and `techsheetui.js`, then remove the hook lines. Search the files below for these words (every hook is marked or contains one of them): `TECHSHEET`, `techsheet`, `techLevel`, `tech:`, `mountFacts`, `factsHtml`, `techOn`.
+2. By hand: delete `techsheet.js`, `techsheetui.js` and the `tools/` folder (`tools/verify-research.mjs`), then remove the hook lines. Search the files below for these words (every hook is marked or contains one of them): `TECHSHEET`, `techsheet`, `techLevel`, `tech:`, `mountFacts`, `factsHtml`, `techOn`.
 
 | File | What to remove |
 |---|---|
@@ -20,7 +20,7 @@ Owner page, **Facts** tab: press **Off** (the same setting as `techsheet_enabled
 | `data.js` | everything between `TECHSHEET: researched, sourced wine facts` and `END TECHSHEET` |
 | `access.js` | `techsheetShown` and the three `techsheet...` flags |
 | `index.html` | the CSS between `/* TECHSHEET */` and `/* END TECHSHEET */`, and `<div id="techOverlay">` |
-| docs | `CLAUDE.md` convention 24 and the layout-table entry; `docs/ROLES_AND_ACCESS.md` Tech sheet lines; section "Tech sheet" in `docs/TEST_BEFORE_TESTERS.md` |
+| docs | `docs/TECHSHEET_RESEARCH.md`, `docs/tech_sheet_research.sql`; `CLAUDE.md` convention 24 and the layout-table entry; `docs/ROLES_AND_ACCESS.md` Tech sheet lines; section "Tech sheet" in `docs/TEST_BEFORE_TESTERS.md` |
 
 Then bump `?v=` for every changed file and `app.js?v=` in `index.html` (this also replaces the offline cache). A player's ticked fields (`wine.techfields`) stay on their phone and do nothing.
 

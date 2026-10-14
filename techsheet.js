@@ -211,3 +211,95 @@ export function sheetText(model, title = "") {
   out.push("", "Confirmed from the producer's own site or from approved sources. Not a tasting opinion.");
   return out.join("\n");
 }
+
+// ---------------------------------------------------------------- the research pack (Owner/Editors push research; nobody else triggers it)
+// 1. buildWorklist -> a file of catalog wines (identity only, no player data) that an Editor/Owner gives to Claude.
+// 2. Claude writes a results file (schema RESULTS_SCHEMA); tools/verify-research.mjs checks each quote against the real page.
+// 3. validateResults reads that file in the app before anything is filed, and says what is accepted and what is rejected and why.
+// The same two files are what a later automatic runner would produce, so nothing here depends on how the research is done.
+export const WORKLIST_SCHEMA = "techsheet-worklist/1";
+export const RESULTS_SCHEMA = "techsheet-research/1";
+export const MAX_RESULT_ITEMS = 500;
+export const RESEARCH_BRIEF = `You are researching wine facts for the Tech sheet. You are given a work list file (schema ${WORKLIST_SCHEMA}).
+For each wine, and for each producer, look for the fields in "fields" using web search. Prefer the producer's own site and its technical sheet.
+Rules:
+- Return ONLY facts that a page states in words. Never guess, estimate, convert, or infer a fact (no ABV from the grape, no sugar from the style).
+- For every fact give: the page address (url), the exact words from that page that contain the value (quote, copied character for character, 6 to 300 characters), and the value as the page writes it (raw_value).
+- Use a different page address for each source. Do not invent addresses. If you cannot find a fact, leave it out (list it under not_found).
+- Producer-level fields (founded, owner_winemaker, estate_size, website, awards) are asked once per producer: use subject_type "producer" and the producer_key from the work list.
+- Also suggest each producer's official website once (producer_sites) with the page where the site says it is the producer's own.
+- Write one JSON file with schema "${RESULTS_SCHEMA}", then run: node tools/verify-research.mjs <file>. Do not mark anything verified yourself.`;
+
+// cards: the catalog cards the app holds. haveKeys: a Set of vintage ids that already have a confirmed fact (they are left out).
+// options: { search, max, fields }. Returns the work list object (the file's content).
+export function buildWorklist(cards, haveKeys = new Set(), { search = "", max = 25, fields = DEFAULT_CHOICES, includeDone = false, today = new Date().toISOString() } = {}) {
+  const q = fold(search);
+  const live = (cards || []).filter((c) => c && !c.archived && (!c.wineStatus || c.wineStatus === "verified") && c.producer);
+  const picked = live
+    .filter((c) => includeDone || !haveKeys.has(c.id))
+    .filter((c) => !q || fold(`${c.producer} ${c.cuvee || ""} ${c.appellation || ""} ${c.region || ""}`).includes(q))
+    .sort((a, b) => fold(a.producer).localeCompare(fold(b.producer)) || fold(a.cuvee || "").localeCompare(fold(b.cuvee || "")) || String(a.vintage).localeCompare(String(b.vintage)))
+    .slice(0, Math.max(1, Math.min(200, Number(max) || 25)));
+  const want = cleanChoices(fields).map((id) => fieldById(id));
+  const producers = [...new Map(picked.map((c) => [producerKey(c.producer), c.producer])).entries()].map(([producer_key, producer]) => ({ producer_key, producer }));
+  return {
+    schema: WORKLIST_SCHEMA, created_at: today, instructions: "Read docs/TECHSHEET_RESEARCH.md. Catalog wine identity only; no player data.",
+    fields: want.map((f) => ({ id: f.id, label: f.label, level: f.level, kind: f.kind, unit: f.unit || "", min: f.min ?? null, max: f.max ?? null })),
+    wines: picked.map((c) => ({ subject_key: c.id, producer: c.producer, producer_key: producerKey(c.producer), wine: c.cuvee || "", vintage: c.vintage || "", style: c.style || "", country: c.country || "", region: c.region || "", appellation: c.appellation || "", grapes: c.grape || "" })),
+    producers,
+  };
+}
+// Reads a results file (a parsed JSON object) the way the app and the database will: only well-formed, in-range, correctly sourced items get through.
+// Returns { ok, items, sites, rejected: [{ what, why }], verifiedBy, verifiedCount, unverifiedCount, error }.
+export function validateResults(json, worklist = null) {
+  const out = { ok: false, items: [], sites: [], rejected: [], verifiedBy: "", verifiedCount: 0, unverifiedCount: 0, error: "" };
+  if (!json || typeof json !== "object" || Array.isArray(json)) { out.error = "That is not a research results file."; return out; }
+  if (json.schema !== RESULTS_SCHEMA) { out.error = `This file is not a research results file (expected ${RESULTS_SCHEMA}).`; return out; }
+  if (!Array.isArray(json.items)) { out.error = "The file has no list of finds."; return out; }
+  if (json.items.length > MAX_RESULT_ITEMS) { out.error = `Too many finds in one file (${MAX_RESULT_ITEMS} at most). Split the work list.`; return out; }
+  out.verifiedBy = typeof json.verified_by === "string" ? json.verified_by.slice(0, 80) : "";
+  const wines = worklist ? new Set((worklist.wines || []).map((w) => w.subject_key)) : null, prods = worklist ? new Set((worklist.producers || []).map((p) => p.producer_key)) : null;
+  const seen = new Set();
+  json.items.forEach((it, i) => {
+    const what = it && it.fact_key ? `${it.fact_key}${it.subject_key ? " (" + String(it.subject_key).slice(0, 8) + ")" : ""}` : `item ${i + 1}`;
+    const no = (why) => out.rejected.push({ what, why });
+    if (!it || typeof it !== "object") return no("Not an object.");
+    const f = fieldById(it.fact_key);
+    if (!f) return no("That is not a field on the sheet.");
+    if (it.subject_type !== f.level) return no(`${f.label} is about the ${f.level}, not the ${it.subject_type}.`);
+    const key = String(it.subject_key || "").trim();
+    if (!key) return no("No wine or producer given.");
+    if (wines && (f.level === "vintage" ? !wines.has(key) : !prods.has(key))) return no("Not on the work list.");
+    const n = normaliseValue(f.id, it.raw_value);
+    if (!n.ok) return no(n.why);
+    const url = String(it.url || "").trim(), domain = domainOf(url);
+    if (!/^https?:\/\//i.test(url) || !domain) return no("The page address is missing or not a web address.");
+    const quote = String(it.quote || "").trim();
+    if (quote.length < 6 || quote.length > 600) return no("The quote must be between 6 and 600 characters.");
+    if (!fold(quote).includes(fold(it.raw_value))) return no("The value is not inside the quote.");
+    const dup = `${f.level}|${key}|${f.id}|${domain}|${n.value}`;
+    if (seen.has(dup)) return no("Listed twice.");
+    seen.add(dup);
+    const checked = !!out.verifiedBy && it.quote_checked === true;
+    if (checked) out.verifiedCount++; else out.unverifiedCount++;
+    out.items.push({ subject_type: f.level, subject_key: key, producer_key: producerKey(it.producer_key || it.producer || (f.level === "producer" ? key : "")), fact_key: f.id, value: n.value, source_url: url, domain, quote, quote_checked: checked, fetched_at: typeof it.fetched_at === "string" ? it.fetched_at.slice(0, 40) : "", verified_by: checked ? out.verifiedBy : "" });
+  });
+  const seenSite = new Set();
+  (Array.isArray(json.producer_sites) ? json.producer_sites : []).forEach((s) => {
+    const what = `site for ${s && s.producer_key ? s.producer_key : "?"}`;
+    const key = producerKey(s && (s.producer_key || s.producer)), domain = domainOf(s && s.url);
+    if (!key || !domain || !/^https?:\/\//i.test(String(s.url || ""))) { out.rejected.push({ what, why: "Needs the producer and a web address." }); return; }
+    if (prods && !prods.has(key)) { out.rejected.push({ what, why: "Not on the work list." }); return; }
+    if (seenSite.has(key + "|" + domain)) return;
+    seenSite.add(key + "|" + domain);
+    out.sites.push({ producer_key: key, domain, evidence_url: String(s.evidence_url || s.url).slice(0, 500), quote: String(s.quote || "").slice(0, 600) });
+  });
+  out.ok = true;
+  return out;
+}
+// One line each for the preview screen.
+export function previewLines(r) {
+  const by = new Map();
+  r.items.forEach((x) => by.set(x.fact_key, (by.get(x.fact_key) || 0) + 1));
+  return { counts: [...by.entries()].map(([id, n]) => `${(fieldById(id) || {}).label || id}: ${n}`), summary: `${r.items.length} finds (${r.verifiedCount} checked against the page, ${r.unverifiedCount} not checked), ${r.sites.length} producer site suggestions, ${r.rejected.length} rejected.` };
+}

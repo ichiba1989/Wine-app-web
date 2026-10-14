@@ -5,8 +5,8 @@
 // A fact is shown as fact only when it is confirmed (techsheet.js confirmRule, or an Editor entered it with its source, or the player entered it themselves).
 import { esc, wineName } from "./logic.js?v=14";
 import { missingFields } from "./catalog.js?v=3";
-import * as db from "./data.js?v=31";
-import * as T from "./techsheet.js?v=1";
+import * as db from "./data.js?v=32";
+import * as T from "./techsheet.js?v=2";
 
 const KEY = "wine.techfields";   // the player's ticked fields, kept on this phone
 const safeHref = (u) => (/^https?:\/\//i.test(String(u || "")) ? String(u) : "");
@@ -119,13 +119,32 @@ export function createTechSheet(ctx) {
 
 // ---------------------------------------------------------------- staff: the Editor tab's Facts section
 export function createFactsStaff(ctx) {
-  const F = { tab: "sources", sources: null, queue: null, msg: "", error: "", loading: false, pick: null, matches: [] };
+  const F = { tab: "research", sources: null, queue: null, sites: null, have: null, msg: "", error: "", loading: false, pick: null, matches: [], r: { q: "", max: 25, worklist: null, text: "", parsed: null } };
   let host = null;
-  const tabs = [["sources", "Sources"], ["queue", "Waiting"], ["enter", "Enter a fact"]];
+  const tabs = [["research", "Research"], ["sites", "Suggested sites"], ["queue", "Waiting"], ["sources", "Sources"], ["enter", "Enter a fact"]];
   const html = () => {
-    const bar = `<div class="chips left">${tabs.map(([id, l]) => `<button class="chip wide${F.tab === id ? " on" : ""}" data-action="tech:fs:tab:${id}">${esc(l)}${id === "queue" && F.queue ? ` (${F.queue.length})` : ""}</button>`).join("")}</div>`;
+    const bar = `<div class="chips left">${tabs.map(([id, l]) => `<button class="chip wide${F.tab === id ? " on" : ""}" data-action="tech:fs:tab:${id}">${esc(l)}${id === "queue" && F.queue ? ` (${F.queue.length})` : ""}${id === "sites" && F.sites ? ` (${F.sites.length})` : ""}</button>`).join("")}</div>`;
     const note = `<div class="muted small">A fact is confirmed when a producer's own site gives it, or when two different approved sites give the same value. You decide which sites count here. ${F.error ? `<span class="err">${esc(F.error)}</span>` : ""}${F.msg ? `<span class="okmsg">${esc(F.msg)}</span>` : ""}</div>`;
     if (F.loading) return bar + `<div class="center muted">Loading…</div>`;
+    if (F.tab === "research") {
+      const wl = T.buildWorklist(ctx.cards(), F.have || new Set(), { search: F.r.q, max: F.r.max });
+      const P = F.r.parsed, pv = P && P.ok ? T.previewLines(P) : null;
+      return `${bar}${note}<div class="muted small">Research is pushed by Editors and the Owner; players never trigger it. 1) Download a work list. 2) Give it to Claude with the instructions, then check the results file with <code>tools/verify-research.mjs</code> (docs/TECHSHEET_RESEARCH.md). 3) Import the checked file here.</div>
+        <h3 class="serif osub">1. Work list</h3>
+        <div class="two"><input class="field" data-fs="wq" placeholder="Only wines matching (optional)" value="${esc(F.r.q)}" autocomplete="off"><input class="field" data-fs="wmax" inputmode="numeric" value="${esc(String(F.r.max))}" aria-label="How many wines"></div>
+        <div class="muted small">${wl.wines.length} ${wl.wines.length === 1 ? "wine" : "wines"} without confirmed facts in this list (up to ${esc(String(F.r.max))}). Only wine names, no player data.</div>
+        <div class="two"><button class="btn outline" data-action="tech:fs:worklist"${wl.wines.length ? "" : " disabled"}>Download work list</button><button class="btn outline" data-action="tech:fs:copybrief">Copy instructions for Claude</button></div>
+        <h3 class="serif osub">2. Import checked results</h3>
+        <input type="file" accept=".json,application/json" data-fs-file aria-label="Results file"><textarea class="field" data-fs="paste" rows="3" placeholder="...or paste the checked results file here">${esc(F.r.text)}</textarea>
+        <button class="btn outline" data-action="tech:fs:preview">Check the file</button>
+        ${P && !P.ok ? `<div class="err">${esc(P.error)}</div>` : ""}${pv ? `<div class="winecard"><div>${esc(pv.summary)}</div><div class="muted small">${esc(pv.counts.join(", "))}</div>${P.rejected.slice(0, 8).map((x) => `<div class="small err">${esc(x.what)}: ${esc(x.why)}</div>`).join("")}${P.rejected.length > 8 ? `<div class="muted small">and ${P.rejected.length - 8} more not shown.</div>` : ""}${P.unverifiedCount ? `<div class="muted small">Finds that were not checked against the page can never confirm a fact by themselves; they wait for an Editor.</div>` : ""}</div><button class="btn primary" data-action="tech:fs:import"${P.items.length || P.sites.length ? "" : " disabled"}>Add to the waiting list</button>` : ""}
+        <h3 class="serif osub">3. Check waiting finds</h3>
+        <div class="muted small">Applies the rule to everything waiting (it also runs after every import and whenever a site is approved).</div><button class="btn outline" data-action="tech:fs:recheck">Check waiting finds</button>`;
+    }
+    if (F.tab === "sites") {
+      const rows = (F.sites || []).map((s) => `<tr><td><b>${esc(s.domain)}</b><br><span class="muted small">for ${esc(s.producer_key)}</span></td><td class="small">${s.quote ? `&ldquo;${esc(s.quote)}&rdquo;<br>` : ""}${link(s.evidence_url, "page") }${s.site_checked ? ` <span class="gbadge ok">checked</span>` : ` <span class="gbadge">not checked</span>`}</td><td><button class="opill" data-action="tech:fs:siteok:${esc(s.id)}">Approve</button> <button class="opill" data-action="tech:fs:sitedismiss:${esc(s.id)}">Dismiss</button></td></tr>`).join("");
+      return `${bar}${note}<div class="muted small">Claude's suggestions for each producer's official site. Approving one makes it that producer's own site: a fact from it then counts on its own. Look at the site first.</div><div class="otablewrap"><table class="otable"><thead><tr><th>Site</th><th>Why</th><th></th></tr></thead><tbody>${rows || `<tr><td colspan="3" class="muted">No suggestions waiting.</td></tr>`}</tbody></table></div>`;
+    }
     if (F.tab === "sources") {
       const rows = (F.sources || []).map((s) => `<tr><td><b>${esc(s.domain)}</b></td><td>${s.kind === "producer" ? "Official site of " + esc(s.producer_key) : "Approved source"}</td><td><button class="opill" data-action="tech:fs:rmsource:${esc(s.id)}">Remove</button></td></tr>`).join("");
       return `${bar}${note}<div class="two"><input class="field" data-fs="domain" placeholder="Site, e.g. domaine-example.fr" autocomplete="off"><select class="field" data-fs="kind"><option value="approved">Approved source</option><option value="producer">Producer's official site</option></select></div>
@@ -146,18 +165,56 @@ export function createFactsStaff(ctx) {
   };
   const draw = () => { if (host) host.innerHTML = html(); };
   const v = (k) => (document.querySelector(`[data-fs="${k}"]`) || {}).value || "";
+  function preview() {
+    F.error = ""; F.msg = "";
+    try { F.r.parsed = T.validateResults(JSON.parse(F.r.text), F.r.worklist); } catch (_) { F.r.parsed = { ok: false, error: "That is not a valid file. Use the file written by tools/verify-research.mjs." }; }
+    draw();
+  }
+  const download = (name, text) => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type: "application/json" })); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); };
   async function load(tab) {
     F.loading = true; F.error = ""; draw();
-    try { if (tab === "sources") F.sources = await db.loadFactSources(ctx.sb()); if (tab === "queue" || !F.queue) F.queue = await db.loadFactQueue(ctx.sb()); } catch (e) { F.error = String(e.message || e); }
+    try {
+      if (tab === "sources") F.sources = await db.loadFactSources(ctx.sb());
+      if (tab === "sites") F.sites = await db.loadSiteSuggestions(ctx.sb());
+      if (tab === "research") F.have = await db.loadFactedWines(ctx.sb()).catch(() => new Set());
+      if (tab === "queue" || !F.queue) F.queue = await db.loadFactQueue(ctx.sb());
+      if (!F.sites && tab !== "sites") F.sites = await db.loadSiteSuggestions(ctx.sb()).catch(() => null);
+    } catch (e) { F.error = String(e.message || e); }
     F.loading = false; draw();
   }
   return {
-    mount(el) { host = el; F.msg = ""; draw(); load(F.tab); },
+    mount(el) {
+      host = el; F.msg = ""; draw(); load(F.tab);
+      el.addEventListener("change", async (ev) => {   // a chosen results file is read here, then checked like pasted text
+        const t = ev.target;
+        if (t && t.matches && t.matches("[data-fs-file]") && t.files && t.files[0]) {
+          try { F.r.text = await t.files[0].text(); preview(); } catch (_) { F.error = "Could not read that file."; draw(); }
+        }
+      });
+    },
     async act(p) {
       const [, , verb, a, b] = p;   // ["tech","fs",verb,a,b]
       F.error = ""; F.msg = "";
+      if (document.querySelector('[data-fs="wq"]')) { F.r.q = v("wq"); F.r.max = Math.max(1, Math.min(200, Number(v("wmax")) || F.r.max)); }   // keep what was typed across redraws
+      if (document.querySelector('[data-fs="paste"]') && v("paste")) F.r.text = v("paste");
       try {
         if (verb === "tab") { F.tab = a; draw(); return load(a); }
+        if (verb === "worklist" || verb === "copybrief") {
+          F.r.q = v("wq") || F.r.q; F.r.max = Math.max(1, Math.min(200, Number(v("wmax")) || F.r.max));
+          if (verb === "copybrief") { try { await navigator.clipboard.writeText(T.RESEARCH_BRIEF); F.msg = "Instructions copied."; } catch (_) { F.error = "Could not copy here. They are in docs/TECHSHEET_RESEARCH.md."; } return draw(); }
+          const wl = T.buildWorklist(ctx.cards(), F.have || new Set(), { search: F.r.q, max: F.r.max });
+          if (!wl.wines.length) { F.error = "No wines match."; return draw(); }
+          F.r.worklist = wl; download(`techsheet-worklist-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(wl, null, 2)); F.msg = `Downloaded a list of ${wl.wines.length} wines.`; return draw();
+        }
+        if (verb === "preview") { F.r.text = v("paste") || F.r.text; return preview(); }
+        if (verb === "import") {
+          const P = F.r.parsed; if (!P || !P.ok) return;
+          const r = await db.importResearch(ctx.sb(), P.items, P.sites), rc = r.recheck || {};
+          F.msg = `Filed ${r.added}, skipped ${r.skipped}, ${r.sites} site suggestion${r.sites === 1 ? "" : "s"}. Confirmed now: ${rc.confirmed || 0}; waiting: ${rc.waiting || 0}; needs an Editor: ${rc.conflict || 0}.`;
+          F.r.parsed = null; F.r.text = ""; F.queue = null; F.sites = null; F.have = null; return load("research");
+        }
+        if (verb === "recheck") { const rc = await db.recheckFacts(ctx.sb()); F.msg = `Confirmed now: ${rc.confirmed || 0}; waiting: ${rc.waiting || 0}; needs an Editor: ${rc.conflict || 0}.`; F.queue = null; F.have = null; return load(F.tab); }
+        if (verb === "siteok" || verb === "sitedismiss") { const r = await db.decideSiteSuggestion(ctx.sb(), a, verb === "siteok"); const rc = (r && r.recheck) || {}; F.msg = verb === "siteok" ? `Approved as the producer's own site.${rc.confirmed ? " Confirmed now: " + rc.confirmed + "." : ""}` : "Dismissed."; F.sites = null; F.queue = null; return load("sites"); }
         if (verb === "addsource") {
           const domain = T.domainOf(v("domain")), kind = v("kind"), producer = T.producerKey(v("producer"));
           if (!domain) { F.error = "Write the site as a plain address."; return draw(); }
@@ -191,5 +248,5 @@ export function ownerFactsHtml(info) {
   return `<div class="muted small onote">The Tech sheet shows researched, sourced facts for each wine. <b>Who sees it:</b> ${esc(lv)}. Off hides it at once and keeps all the data. To remove it completely see <code>docs/TECHSHEET_REMOVAL.md</code>.</div>
     <div class="gopts" role="group" aria-label="Who sees the Tech sheet">${LEVELS.map(btn).join("")}</div>
     ${info.error ? `<p class="err">${esc(info.error)}</p>` : info.counts ? `<p>${info.counts.facts} confirmed ${info.counts.facts === 1 ? "fact" : "facts"}, ${info.counts.waiting} waiting for an Editor.</p>` : `<p class="muted">Loading…</p>`}
-    <p class="muted small">Researching wines automatically (a batch for the catalog, and "Look it up" for players) needs the research function, a search/AI service and its key. It is not switched on yet. Until then Editors enter facts by hand in the Editor tab, Facts.</p>`;
+    <p class="muted small">Research is pushed by Editors and the Owner (Editor tab, Facts, Research): a work list goes to Claude, the results file is checked against the real pages, then imported. Players never trigger it and no player data is sent anywhere. An automatic scheduled runner can be added later (needs API billing). See <code>docs/TECHSHEET_RESEARCH.md</code>.</p>`;
 }

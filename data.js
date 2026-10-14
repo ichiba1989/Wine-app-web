@@ -790,10 +790,14 @@ export async function loadFactCounts(sb) {
   if (f.error) throw techMissing(f.error);
   return { facts: f.count || 0, waiting: c.error ? 0 : c.count || 0 };
 }
-// Asks the research function to look a wine up. Not built yet (Phase B): until it is deployed this says so plainly.
-export async function requestWineFacts(sb, body) {
-  const { data, error } = await sb.functions.invoke("find-wine-facts", { body });
-  if (error) throw new Error(/not found|404|failed to send|fetch/i.test(String(error.message || "")) ? "Looking facts up is not switched on yet." : error.message);
-  return data;
+// The research pack (docs/TECHSHEET_RESEARCH.md): Editors and the Owner file the finds from a checked results file; the database applies the stored rule.
+// Players never trigger research. Which catalog wines already have a confirmed fact (they are left out of a new work list):
+export async function loadFactedWines(sb) {
+  const rows = techMust(await sb.from("wine_facts").select("subject_key").eq("subject_type", "vintage"));
+  return new Set((rows || []).map((r) => r.subject_key));
 }
+export async function importResearch(sb, items, sites) { return techMust(await sb.rpc("techsheet_import", { p_items: items, p_sites: sites || [] })); }
+export async function recheckFacts(sb) { return techMust(await sb.rpc("techsheet_recheck_all")); }
+export async function loadSiteSuggestions(sb) { return techMust(await sb.from("fact_source_suggestions").select("id, producer_key, domain, evidence_url, quote, site_checked, created_at").eq("status", "pending").order("producer_key")); }
+export async function decideSiteSuggestion(sb, id, approve) { return techMust(await sb.rpc("techsheet_decide_suggestion", { p_id: id, p_approve: !!approve })); }
 // END TECHSHEET

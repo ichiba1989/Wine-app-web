@@ -6,7 +6,7 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete, styleLabel,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=14";
-import * as db from "./data.js?v=31";
+import * as db from "./data.js?v=32";
 import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=8";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=5";
 import { shrinkImage } from "./photos.js?v=5";
@@ -56,7 +56,7 @@ let TECH = null, TECHMOD = null, FACTS = null;
 const loadTechModule = async () => {
   if (TECH) return TECH;
   try {
-    TECHMOD = await import("./techsheetui.js?v=2");
+    TECHMOD = await import("./techsheetui.js?v=3");
     const tctx = { sb: () => state.sb, userId: () => state.user.id, cardById: (id) => cardById(id), cards: () => state.cards, cardName: (id) => { const c = cardById(id); return c ? wineName(c) : ""; } };
     TECH = TECHMOD.createTechSheet(tctx); FACTS = TECHMOD.createFactsStaff(tctx);
   } catch (e) { setBanner("The tech sheet could not be loaded: " + (e.message || e)); throw e; }

@@ -476,9 +476,10 @@ Phases 3–5 ordering is a recommendation; reorder based on what Phase 2 learns.
 - Swipe likes and dislikes now feed the palate and the deck, with provisional weights (+0.5 / -0.5; a journal rating runs from +2 to -2). The owner wants to work out what the distribution should look like: how a swipe should compare with a rating, whether the first few swipes should count more, whether a like on a wine the player has never tasted should count less than one on a wine they know, and whether weights should fade with time. The numbers are in `app_config` (`swipe_like_weight`, `swipe_dislike_weight`) and the context saved with every swipe (tier, fam, pref, skip) is there to study this.
 - "I don't know it" feeds recommendations and, later, quizzes: `gapsOf` lists the grapes, places and producers a player has not met. Questions to settle: which quiz questions to target, and whether a topic stays "unmet" after the player has seen it in a quiz.
 
-## Open items: Tech sheet research (2026-10-14)
-- **Provider and key** for the research function (cited web search + page fetch + a model that only extracts values and quotes). Not chosen; cost per wine unknown.
-- **Third-party page terms:** robots/terms of use of the sites searched, and whether storing a short quote with its address is acceptable to the owner's lawyers.
-- **`privacy.html`:** a line that a wine's producer, name and vintage are sent to the research service (owner and lawyers).
-- **Producer identity:** producers are matched by their folded name (`producerKey`); a proper producer id in the catalog view would be cleaner.
+## Open items: Tech sheet research (2026-10-14, revised)
+- **Research is manual and owner/editor-pushed** (a Claude Code session + `tools/verify-research.mjs` + import). No provider, key or cost inside the app; no player data is sent, so no `privacy.html` line is needed for this version.
+- **Later, an automatic runner** (Supabase scheduled function with the Claude API, or a scheduled Claude Code routine): needs API billing or a plan decision, a budget cap, and a cadence. It would reuse the same files and import.
+- **Third-party page terms:** robots/terms of the sites searched, and whether storing a short quote with its address is acceptable to the owner's lawyers.
+- **Producer identity:** producers are matched by their folded name (`producerKey`); a producer id in the catalog view would be cleaner.
+- **PDF technical sheets** cannot be checked by the tool; a PDF text reader could be added to it.
 - **Pro plan?** Whether the Tech sheet is open to all or a Pro-plan feature.
