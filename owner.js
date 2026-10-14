@@ -3,13 +3,14 @@
 // still decides what anyone may change. The rules at the top (rows, search, sort, checks, coverage) are pure: no page, no network.
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
 import { esc } from "./logic.js?v=14";
-import { REACH_CHOICES } from "./wineinfo.js?v=17";
+import { REACH_CHOICES } from "./wineinfo.js?v=18";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=2";
 import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=6";
 import { TAG_KINDS } from "./tags.js?v=2";
+import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=7";
 import { centsToField } from "./pricing.js?v=1";
 
-export const OWNER_TABS = [{ id: "wines", label: "Wines" }, { id: "lenses", label: "Lenses" }, { id: "bingo", label: "Bingo" }, { id: "checks", label: "Checks" }, { id: "tags", label: "Tags" }, { id: "config", label: "Config" }];
+export const OWNER_TABS = [{ id: "wines", label: "Wines" }, { id: "lenses", label: "Lenses" }, { id: "bingo", label: "Bingo" }, { id: "checks", label: "Checks" }, { id: "tags", label: "Tags" }, { id: "legend", label: "Legend" }, { id: "config", label: "Config" }];
 
 const fold = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const isLive = (c) => !c.archived && (!c.wineStatus || c.wineStatus === "verified");
@@ -139,7 +140,41 @@ function tagsTable(O, d) {
   return `<div class="muted small onote">${rows.length} of ${d.tags.tags.length} tags. Tags say what a quiz question is about; the quiz asks sooner about the grapes, places and producers a player skipped. Editors tick suggested tags and may add two from this list per edit. A new tag below joins the suggestions and the list straight away.</div>
     ${table("<th>Tag</th><th>Kind</th><th>Questions</th>", body, "No tag matches.")}`;
 }
+// The note legend: what players say in tasting notes and which grid answer it means (notegrid.js). Suggestions come from words players chose to share; a person decides.
+const FIELD_LABEL = Object.fromEntries(FIELDS.map((f) => [f.id, f.label]));
+const meansLabel = (field, value) => (field === "tag" ? `Aroma or flavour: ${value}` : `${FIELD_LABEL[field] || field}: ${value}`);
+export function legendMeansOptions() {
+  // every (line, answer) pair a note can mean, across the wine types
+  const out = [];
+  for (const f of fieldsFor("red").concat(fieldsFor("white")).concat(fieldsFor("sparkling")).filter((x, i, a) => a.findIndex((y) => y.id === x.id) === i)) {
+    if (f.type === "text") continue;
+    if (f.type === "tags") continue;
+    const opts = [...new Set(["red", "white", "rose", "sparkling"].flatMap((st) => (fieldsFor(st).some((x) => x.id === f.id) ? optionsOf(f, st) : [])))];
+    out.push({ label: `${f.section}: ${f.label}`, pairs: opts.map((o) => [f.id, o]) });
+  }
+  out.push({ label: "Aroma or flavour", pairs: TAG_LIST.map((t) => ["tag", t]) });
+  return out;
+}
+function legendTable(O, d) {
+  if (!d.legend) return `<p class="muted">${d.legendError ? esc(d.legendError) : "Loading…"}</p>`;
+  const { shared, candidates } = d.legend, q = fold(O.q || "");
+  const rows = shared.filter((r) => !q || fold(r.phrase + " " + meansLabel(r.field, r.value)).includes(q));
+  const ready = d.legend.threshold || 3;
+  const cand = candidates.map((c, i) => `<tr><td><b>${esc(c.phrase)}</b></td><td>${esc(meansLabel(c.field, c.value))}</td><td class="onum">${c.players}${c.players >= ready ? ' <span class="gbadge">ready</span>' : ""}</td>
+    <td><button class="opill" data-action="owner:legendapprove:${i}">Approve</button> <button class="opill" data-action="owner:legendreject:${i}">Reject</button></td></tr>`).join("");
+  const have = rows.map((r) => `<tr><td><b>${esc(r.phrase)}</b></td><td>${esc(meansLabel(r.field, r.value))}</td><td>${esc(r.source)}</td><td><button class="opill" data-action="owner:legendremove:${esc(r.id)}">Remove</button></td></tr>`).join("");
+  const opts = legendMeansOptions().map((g) => `<optgroup label="${esc(g.label)}">${g.pairs.map(([f, v]) => `<option value="${esc(f + "|" + v)}">${esc(v)}</option>`).join("")}</optgroup>`).join("");
+  return `<div class="muted small onote">The words players use in tasting notes and the grid answer each one means. The app also knows a starting list in <code>notelegend.js</code> (not shown here). Suggestions are words players chose to share (never their notes); a word is listed once a player teaches it; ${ready} different players make it "ready". A person approves or rejects each one.</div>
+    <h3 class="serif osub">Add a word</h3>
+    <div class="ocontrols"><input class="ofield osearch" data-owner-legend-phrase placeholder="Word or short phrase (e.g. zippy)" aria-label="Word or phrase" autocomplete="off">
+      <select class="ofield" data-owner-legend-means aria-label="What it means"><option value="">What it means</option>${opts}</select><button class="opill" data-action="owner:legendadd">Add</button></div>
+    <h3 class="serif osub">Suggestions from players (${candidates.length})</h3>
+    ${table("<th>Word</th><th>Means</th><th>Players</th><th></th>", cand, "No suggestions waiting.")}
+    <h3 class="serif osub">Approved words (${rows.length} of ${shared.length})</h3>
+    ${table("<th>Word</th><th>Means</th><th>From</th><th></th>", have, "None yet: the app uses its starting list.")}`;
+}
 export function ownerTableHtml(O, d) {
+  if (O.tab === "legend") return legendTable(O, d);
   if (O.tab === "tags") return tagsTable(O, d);
   if (O.tab === "lenses") return lensesTable(O, d);
   if (O.tab === "bingo") return bingoTable(O, d);
@@ -157,6 +192,7 @@ export function ownerHtml(O, d) {
   else if (O.tab === "tags") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search tags" value="${esc(O.q)}" aria-label="Search tags">
     <select class="ofield" data-owner-tagkind aria-label="Kind of new tag">${TAG_KINDS.map((k) => `<option value="${k.id}">${esc(k.label)}</option>`).join("")}</select>
     <input class="ofield osearch" data-owner-tagname placeholder="New tag name" aria-label="New tag name" autocomplete="off"><button class="opill" data-action="owner:addtag">Add tag</button>`;
+  else if (O.tab === "legend") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search approved words" value="${esc(O.q)}" aria-label="Search approved words">`;
   else if (O.tab === "config") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search settings" value="${esc(O.q)}" aria-label="Search settings">`;
   else if (O.tab === "lenses") controls = `<select class="ofield" data-owner-lens aria-label="Lens">${LENS_IDS.map((id) => `<option value="${id}"${O.lens === id ? " selected" : ""}>${esc(LENSES[id].label)}</option>`).join("")}</select>
     <select class="ofield" data-owner-player aria-label="Player"><option value="me"${O.player === "me" ? " selected" : ""}>For me</option><option value="new"${O.player === "new" ? " selected" : ""}>For a new player</option></select>

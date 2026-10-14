@@ -133,3 +133,12 @@ Keep this list current. Tick each item (and date it) only after trying it on a t
 - [ ] "Speak in": a whole note in Italian or French is heard in that language; the pick is remembered on the phone.
 - [ ] Owner: read `winewords.js` and add the words you use most (producers, places, your own tasting words).
 
+## 17. Notes fill the tasting grid; the legend (added 2026-10-14)
+- [ ] **Run `docs/note_legend.sql` in Supabase** (copy from the repo file). Check: `select count(*) from note_legend;` works; a regular test account cannot insert into `note_legend` or read others' `note_legend_mine` rows; an editor or the owner can run `select * from legend_candidates();`.
+- [ ] As a professional-tier player, rate a wine and dictate or type three real notes: the grid fills itself (acidity, tannin, body, finish, aromas, flavours, colour ...), the structure sliders move, the filled answers are marked, and the matched words show when you press on one. Note which answers were wrong or missing.
+- [ ] Your taps win: change a marked answer, then add to the note: your answer stays and the cleared one is not put back. "Clear what was filled in" removes only the marked ones.
+- [ ] "Words I could not place": teach two words; the next note with them fills the grid at once, in the same rating and in a later one. With the script run, tick "share" on one of them.
+- [ ] With three test accounts sharing the same word and answer, the owner sees it on the Owner page, Legend tab, as "ready"; approve it and check a fourth account's notes now use it. Reject one and check it does not come back.
+- [ ] Owner decision: add a line to `privacy.html` (and bump `CONSENT_VERSION`) about words shared for review; decide how many players make a word "ready" (`legend_share_threshold`, default 3) and whether editors (not only the owner) should review suggestions in the Editor tab.
+- [ ] Add the words your players actually use to `notelegend.js`.
+

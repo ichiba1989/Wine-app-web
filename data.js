@@ -643,3 +643,38 @@ export async function addQuizTag(sb, userId, kind, name) {
   if (!rows || !rows.length) throw new Error("The tag was not saved. Your access may not allow it.");
   return rows[0];
 }
+
+// ---------------------------------------------------------------- the note legend (docs/note_legend.sql)
+// What players say in tasting notes and which grid answer it means (notegrid.js). Every reader returns null when the tables are not there yet (the app then uses its starting list and the
+// player's own words kept on the phone).
+export async function loadSharedLegend(sb) {
+  const r = await sb.from("note_legend").select("id, phrase, field, value, source").order("phrase");
+  return r.error ? null : r.data;
+}
+export async function loadMyLegend(sb) {
+  const r = await sb.from("note_legend_mine").select("phrase, field, value, rejected, share");
+  return r.error ? null : r.data;
+}
+// One line of the player's own legend: a word they taught (rejected false) or an answer they pushed back on (rejected true). share offers the word to editors, never a note.
+export async function saveMyLegend(sb, userId, e) {
+  const r = await sb.from("note_legend_mine").upsert({ user_id: userId, phrase: e.phrase, field: e.field, value: e.value, rejected: !!e.rejected, share: !!e.share && !e.rejected }, { onConflict: "user_id,phrase,field,value" });
+  if (r.error) throw r.error;
+}
+// Editors and the owner: suggestions (how many different players shared each word and answer), and the decisions.
+export async function loadLegendCandidates(sb) {
+  const r = await sb.rpc("legend_candidates");
+  if (r.error) throw r.error;
+  return r.data || [];
+}
+export async function approveLegend(sb, userId, c) {
+  const ins = await sb.from("note_legend").insert({ phrase: c.phrase, field: c.field, value: c.value, source: c.source || "learned", approved_by: userId });
+  if (ins.error && ins.error.code !== "23505") throw ins.error;   // 23505: already there, which is fine
+  if (c.review !== false) must(await sb.from("note_legend_review").upsert({ phrase: c.phrase, field: c.field, value: c.value, decision: "approved", decided_by: userId }, { onConflict: "phrase,field,value" }));
+}
+export async function rejectLegend(sb, userId, c) {
+  must(await sb.from("note_legend_review").upsert({ phrase: c.phrase, field: c.field, value: c.value, decision: "rejected", decided_by: userId }, { onConflict: "phrase,field,value" }));
+}
+export async function removeSharedLegend(sb, id) {
+  must(await sb.from("note_legend").delete().eq("id", id));
+}
+

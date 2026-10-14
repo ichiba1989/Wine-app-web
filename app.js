@@ -6,8 +6,8 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete, styleLabel,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=14";
-import * as db from "./data.js?v=27";
-import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=7";
+import * as db from "./data.js?v=28";
+import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=8";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=5";
 import { shrinkImage } from "./photos.js?v=5";
 import {
@@ -31,12 +31,13 @@ import { applyVisualTables } from "./visualdata.js?v=1";
 import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=4";
 import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=9";
 import { infoLine, entryInfoLine } from "./wineline.js?v=1";
-import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting } from "./tasting.js?v=5";
+import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, paintNoteMarks, teachHtml, autoCount } from "./tasting.js?v=7";
+import { gridFromNotes, mergeFromNotes, touched, legendEntry, compileWith } from "./notegrid.js?v=1";
 import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=7";
 import { createProfile } from "./profile.js?v=22";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=11";
 import { createFeedback } from "./feedback.js?v=6";
-import { createEditor } from "./editor.js?v=28";
+import { createEditor } from "./editor.js?v=29";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=7";
 import { gamesHtml } from "./games.js?v=13";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
@@ -45,10 +46,10 @@ import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, card
 import { recommendMix, recommend } from "./recommend.js?v=6";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=5"));
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=7"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=6"));
 const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=9"));
-import { createWineInfo } from "./wineinfo.js?v=17";
+import { createWineInfo } from "./wineinfo.js?v=18";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -87,7 +88,7 @@ if (SUPABASE_URL.startsWith("PASTE")) SUPABASE_URL = cleanProjectUrl(store.get("
 if (SUPABASE_KEY.startsWith("PASTE")) SUPABASE_KEY = store.get("wine_key") || SUPABASE_KEY;
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
-const OWNER_START = { tab: "wines", q: "", issue: "all", sort: { wines: { key: "producer", dir: 1 }, bingo: { key: "tier", dir: 1 } }, lens: "confident", player: "me", seed: "", weights: {}, open: {}, msg: "", wineIds: null, config: null, configError: "", tags: null, tagsError: "" };
+const OWNER_START = { tab: "wines", q: "", issue: "all", sort: { wines: { key: "producer", dir: 1 }, bingo: { key: "tier", dir: 1 } }, lens: "confident", player: "me", seed: "", weights: {}, open: {}, msg: "", wineIds: null, config: null, configError: "", tags: null, tagsError: "", legend: null, legendError: "" };
 const TOT_KEY = "wine.thisorthat";   // the This or That picks (thisorthat.js): only on this phone
 const GAMES_KEY = "wine.games";   // which bingo cards this phone has cleared (bingo.js)
 const state = {
@@ -106,6 +107,8 @@ const state = {
   sheet: null, sheetUi: { saving: false, error: "" },
   form: null,
   blind: null,                                     // the blind tasting sheet (blind.js)
+  legend: { shared: [], mine: [], dbMine: false, loaded: false, compiled: null },   // the note legend (notegrid.js): shared lines and the player's own
+  teach: null,                                     // the "what did you mean by this word" form in the open grid
   wf: null,                                        // wine words fixed in the last dictation (termfix.js), for the undo chips
   qn: null,                                        // the quick-note sheet (voice or typed notes in the journal)
   photoUrls: new Map(),                 // signed links for the photos shown in Journal and Swipes
@@ -345,7 +348,7 @@ function ownerData() {
   const O = state.owner;
   if (state._ownerFor !== state.cards) { state._ownerFor = state.cards; state._ownerCache = { rows: OWN.wineRows(state.cards), bingo: OWN.bingoCoverage(state.cards) }; }
   const { rows, bingo } = state._ownerCache;
-  return { rows, bingo, checks: OWN.checkCounts(rows), config: O.config, configError: O.configError, tags: O.tags, tagsError: O.tagsError, seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
+  return { rows, bingo, checks: OWN.checkCounts(rows), config: O.config, configError: O.configError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
 }
 // The lens preview: the top picks of one lens for the owner's own profile, or for a brand-new player, using the weights typed on the page.
 function ownerLens() {
@@ -385,6 +388,40 @@ async function loadOwnerTags() {
   try { state.owner.tags = await db.loadQuizTags(state.sb); state.owner.tagsError = ""; }
   catch (e) { state.owner.tagsError = "Tags need one more database update (docs/quiz_tags.sql). " + (e.message || ""); }
   if (state.tab === "owner" && state.owner.tab === "tags") ownerRedraw();
+}
+async function loadOwnerLegend() {
+  try {
+    const shared = await db.loadSharedLegend(state.sb);
+    if (shared === null) throw new Error("The legend needs one more database update (docs/note_legend.sql).");
+    const [candidates, cfg] = await Promise.all([db.loadLegendCandidates(state.sb), db.loadAppConfig(state.sb).catch(() => [])]);
+    const t = (cfg || []).find((r) => r.key === "legend_share_threshold");
+    state.owner.legend = { shared, candidates, threshold: t ? Number(shownConfigValueOf(t)) || 3 : 3 }; state.owner.legendError = "";
+  } catch (e) { state.owner.legendError = "Could not load the legend: " + (e.message || e); state.owner.legend = null; }
+  if (state.tab === "owner" && state.owner.tab === "legend") ownerRedraw();
+}
+const shownConfigValueOf = (r) => (r && r.value !== null && typeof r.value === "object" ? r.value.value : r && r.value);
+// After the shared legend changed: reload it for the owner's page and for the notes reader, so the change counts at once.
+async function legendChanged() { await loadOwnerLegend(); state.legend.loaded = false; state.legend.compiled = null; }
+async function ownerLegend(a, b) {
+  const O = state.owner;
+  try {
+    if (a === "legendadd") {
+      const phrase = (document.querySelector("[data-owner-legend-phrase]") || {}).value || "", means = (document.querySelector("[data-owner-legend-means]") || {}).value || "";
+      const [field, ...rest] = means.split("|"), value = rest.join("|");
+      // the picker lists answers for every wine type, so the answer only has to be real for one of them
+      const tries = ["red", "white", "sparkling", "rose"].map((st) => legendEntry(phrase, field, value, st)), v = tries.find((r) => r.ok) || tries[0];
+      if (!field || !value) { ownerSay("Write the word and choose what it means."); return; }
+      if (!v.ok) { ownerSay(v.why); return; }
+      const entry = v.entry;
+      await db.approveLegend(state.sb, state.user.id, { ...entry, source: "owner", review: false });
+      ownerSay(`Added: ${entry.phrase}.`);
+    } else if (a === "legendapprove" || a === "legendreject") {
+      const c = (O.legend && O.legend.candidates || [])[Number(b)]; if (!c) return;
+      if (a === "legendapprove") await db.approveLegend(state.sb, state.user.id, c); else await db.rejectLegend(state.sb, state.user.id, c);
+      ownerSay(a === "legendapprove" ? `Approved: ${c.phrase}.` : `Rejected: ${c.phrase}.`);
+    } else if (a === "legendremove") { await db.removeSharedLegend(state.sb, b); ownerSay("Removed."); }
+    await legendChanged();
+  } catch (e) { ownerSay("Could not save: " + (e.message || e)); }
 }
 async function ownerAddTag() {
   const kind = document.querySelector("[data-owner-tagkind]"), name = document.querySelector("[data-owner-tagname]");
@@ -474,6 +511,7 @@ function drawTab(body) {
     if (!isOwner()) body.innerHTML = `<p class="muted">The owner page is only for the owner.</p>`;
     else if (!OWN) { body.innerHTML = `<div class="center muted">Loading\u2026</div>`; loadOwnerModule().then(() => { if (state.tab === "owner") renderBody(); }); }
     else body.innerHTML = OWN.ownerHtml(state.owner, ownerData());
+    if (isOwner() && state.owner.tab === "legend" && !state.owner.legend && !state.owner.legendError) loadOwnerLegend();
     if (isOwner() && state.owner.tab === "tags" && !state.owner.tags && !state.owner.tagsError) loadOwnerTags();
     if (isOwner() && state.owner.tab === "config" && !state.owner.config && !state.owner.configError) loadOwnerConfig();
   } else if (state.tab === "games") {
@@ -876,7 +914,7 @@ function dictateInto(target) {
     const fx = fixTerms(finals, wineVocab());   // only the finished words are checked, so nothing flickers while the player is still talking
     state.wf = { target, changes: fx.changes.map((c) => ({ ...c, applied: c.kind === "fix" })) };
     const text = composeNote(base, fx.text + (interim ? (fx.text ? " " : "") + interim : ""), stamp);
-    if (target === "sheet" && state.sheet) { state.sheet.notes = text; const el = document.querySelector('[data-field="notes"]'); if (el) el.value = text; }
+    if (target === "sheet" && state.sheet) { state.sheet.notes = text; const el = document.querySelector('[data-field="notes"]'); if (el) el.value = text; scheduleFill(); }
     if (target === "qn" && state.qn) { state.qn.text = text; const el = document.querySelector('[data-qn="text"]'); if (el) el.value = text; }
     if (target === "blind" && state.blind) { state.blind.notes = text; const el = document.querySelector('[data-bl="notes"]'); if (el) el.value = text; }
     drawWordFix();
@@ -1061,7 +1099,7 @@ function showExtras() {
   paintSteps();
   if (!state.pro) { a.innerHTML = tastePageHtml(state.sheet); return; }
   a.querySelectorAll("[data-feelblock], [data-problock]").forEach((e) => e.remove());
-  a.insertAdjacentHTML("afterbegin", feelBlockHtml(state.sheet) + proBlockHtml(state.sheet.tasting || {}, state.sheet.style));
+  a.insertAdjacentHTML("afterbegin", feelBlockHtml(state.sheet) + proBlockHtml(state.sheet.tasting || {}, state.sheet.style, autoCount({ auto: state.sheet.tastingAuto })));
 }
 // The small line of wine info (varietal, vineyard, region ...) under the wine's name.
 function sheetInfo(sheet) {
@@ -1081,26 +1119,41 @@ function showWineLine() {
   const info = sheetInfo(state.sheet);
   if (info) big.insertAdjacentHTML("afterend", `<div class="muted small" id="sheetInfo">${esc(info)}</div>`);
 }
+let gridTimer = null, fillTimer = null;
 function openGrid() {
   if (!state.sheet) return;
   const values = JSON.parse(JSON.stringify(cleanGrid(state.sheet.tasting || {}, state.sheet.style)));
-  state.grid = { values, open: openFromGrid(values), timer: null };
+  state.grid = { values, open: openFromGrid(values) };
   $("#confirm").innerHTML = gridHtml(values, state.grid.open, state.sheet.style, state.sheet.target.name, sheetInfo(state.sheet));
+  paintMarks();
+  fillGridFromNotes();   // the notes fill in what they can as the grid opens
 }
 const setGridMsg = (m) => { const el = document.getElementById("gridMsg"); if (el) el.textContent = m || ""; };
 // Every tap is kept at once: it goes into the rating window (and moves the structure sliders), and for an entry that already exists it is also
 // saved to the database a moment later. For a new entry it is saved together with the rating.
 async function saveGridNow() {
-  const g = state.grid, sheet = state.sheet;
-  if (g) { clearTimeout(g.timer); g.timer = null; }
+  const sheet = state.sheet;
+  clearTimeout(gridTimer); gridTimer = null;
   if (!sheet || !sheet.entryId || !sheet.tastingDirty) return;
   try { await saveTasting(state.sb, sheet.entryId, sheet.tasting || {}, sheet.style); sheet.tastingDirty = false; setGridMsg(""); }
   catch (e) { setGridMsg("Not saved yet (" + (e.message || e) + "). It will be saved with the rating."); }
 }
 function scheduleGridSave() {
-  const g = state.grid;
-  if (!g || !state.sheet || !state.sheet.entryId) return;
-  clearTimeout(g.timer); g.timer = setTimeout(saveGridNow, 600);
+  if (!state.sheet || !state.sheet.entryId) return;
+  clearTimeout(gridTimer); gridTimer = setTimeout(saveGridNow, 600);
+}
+// Puts a whole set of grid answers into the rating window: the same path as a tap (structure sliders, saving), whether or not the grid is open.
+function applyValues(values, withDims = true) {
+  const sheet = state.sheet; if (!sheet) return;
+  const style = sheet.style, clean = cleanGrid(values, style);
+  sheet.tasting = clean; sheet.tastingDirty = true;
+  if (state.grid) { state.grid.values = JSON.parse(JSON.stringify(clean)); state.grid.open = [...new Set([...state.grid.open, ...openFromGrid(clean)])]; syncGridDom(state.grid.values, state.grid.open, style); }
+  if (withDims) {
+    Object.entries(gridToDims(clean, style)).forEach(([key, value]) => { if (state.sheet.dims[key]) state.sheet = setDim(state.sheet, key, value); });
+    state.sheet.taste = null; state.sheet.tasteDirty = true; syncSheet(); showExtras();
+  }
+  paintMarks();
+  scheduleGridSave();
 }
 function applyGridLive(withDims = true) {
   if (!state.grid || !state.sheet) return;
@@ -1111,6 +1164,91 @@ function applyGridLive(withDims = true) {
     state.sheet.taste = null; state.sheet.tasteDirty = true; syncSheet(); showExtras();
   }
   scheduleGridSave();
+}
+
+// ------- the note legend: reading the notes into the grid (notegrid.js)
+const LEGEND_KEY = "wine.legend";
+const localMine = () => { try { const v = JSON.parse(store.get(LEGEND_KEY) || "[]"); return Array.isArray(v) ? v : []; } catch (_) { return []; } };
+async function ensureLegend() {
+  const L = state.legend;
+  if (L.loaded) return;
+  L.loaded = true;
+  try {
+    const [shared, mine] = await Promise.all([db.loadSharedLegend(state.sb), db.loadMyLegend(state.sb)]);
+    L.shared = shared || []; L.dbMine = mine !== null; L.mine = mine !== null ? mine : localMine();
+  } catch (_) { L.shared = []; L.dbMine = false; L.mine = localMine(); }
+  L.compiled = null;
+}
+const compiledLegend = () => { const L = state.legend; return L.compiled || (L.compiled = compileWith(L.shared, L.mine)); };
+// A word the player taught (rejected false) or an answer they pushed back on (rejected true). Kept in the database when it is there, otherwise on the phone.
+async function addMineLegend(e) {
+  const L = state.legend, key = (x) => `${x.phrase}|${x.field}|${x.value}`;
+  L.mine = [...L.mine.filter((x) => key(x) !== key(e)), { phrase: e.phrase, field: e.field, value: e.value, rejected: !!e.rejected, share: !!e.share }];
+  L.compiled = null;
+  if (L.dbMine) { try { await db.saveMyLegend(state.sb, state.user.id, e); return; } catch (_) { /* fall back to the phone */ } }
+  store.set(LEGEND_KEY, JSON.stringify(L.mine.slice(-300)));
+}
+const paintMarks = () => {
+  const s = state.sheet; if (!s) return;
+  const marks = { auto: s.tastingAuto || {}, evidence: s.tastingEvidence || {}, unplaced: s.unplaced || [] };
+  if (state.grid) { paintNoteMarks(marks, state.grid.values, s.style); drawTeach(); }
+};
+function drawTeach() {
+  const el = document.getElementById("gridTeach"); if (!el) return;
+  el.innerHTML = state.teach ? teachHtml(state.teach, state.sheet.style, state.legend.dbMine) : "";
+}
+// Reads the notes and fills in the grid answers they give. The player's own answers are never overwritten, and an answer the player cleared in this rating is not put back.
+async function fillGridFromNotes(manual = false) {
+  const s = state.sheet;
+  if (!s || !state.pro) return;
+  await ensureLegend();
+  if (state.sheet !== s) return;
+  const found = gridFromNotes(s.notes || "", s.style, compiledLegend());
+  const blocked = s.tastingBlocked || new Set();
+  const values = {};
+  for (const [f, v] of Object.entries(found.values)) {
+    if (Array.isArray(v)) { const keep = v.filter((t) => !blocked.has(`${f}|${t}`)); if (keep.length) values[f] = keep; }
+    else if (!blocked.has(`${f}|${v}`)) values[f] = v;
+  }
+  const cur = cleanGrid(s.tasting || {}, s.style);
+  const r = mergeFromNotes(cur, values, s.tastingAuto || {});
+  s.tastingAuto = r.auto; s.tastingEvidence = { ...(s.tastingEvidence || {}), ...found.evidence }; s.tastingTagPhrase = { ...(s.tastingTagPhrase || {}), ...found.tagPhrase }; s.unplaced = found.unplaced;
+  if (JSON.stringify(r.values) !== JSON.stringify(cur)) applyValues(r.values);
+  else { showExtras(); paintMarks(); if (manual) setGridMsg(found.unplaced.length ? "" : "Nothing new to fill in from your notes."); }
+}
+// Notes changed (typing or dictation): read them again a moment after the last change.
+const scheduleFill = () => { if (!state.pro || !state.sheet) return; clearTimeout(fillTimer); fillTimer = setTimeout(() => fillGridFromNotes(), 900); };
+// The player changed the grid by hand: the changed answers are theirs now. Answers they pushed back on are remembered so the notes do not put them back, and the words behind them are noted as "not that".
+function afterGridTouch(before) {
+  const s = state.sheet, g = state.grid; if (!s || !g) return;
+  const after = cleanGrid(g.values, s.style);
+  const t = touched(s.tastingAuto || {}, before, after);
+  s.tastingAuto = t.auto;
+  s.tastingBlocked = s.tastingBlocked || new Set();
+  for (const c of t.changed) {
+    const items = c.tags ? c.tags.map((tag) => ({ value: tag, phrase: (s.tastingTagPhrase || {})[tag], field: "tag" })) : [{ value: c.value, phrase: ((s.tastingEvidence || {})[c.field] || [])[0], field: c.field }];
+    items.forEach((it) => { s.tastingBlocked.add(`${c.field}|${it.value}`); if (it.phrase && it.value !== undefined) addMineLegend({ phrase: it.phrase, field: it.field, value: it.value, rejected: true }); });
+  }
+  paintMarks(); showExtras();
+}
+function clearAutoAnswers() {
+  const s = state.sheet; if (!s) return;
+  const auto = s.tastingAuto || {}, vals = { ...cleanGrid(s.tasting || {}, s.style) };
+  s.tastingBlocked = s.tastingBlocked || new Set();
+  for (const [f, v] of Object.entries(auto)) {
+    if (Array.isArray(v)) { vals[f] = (vals[f] || []).filter((t) => !v.includes(t)); v.forEach((t) => s.tastingBlocked.add(`${f}|${t}`)); if (!vals[f].length) delete vals[f]; }
+    else { s.tastingBlocked.add(`${f}|${vals[f]}`); delete vals[f]; }
+  }
+  s.tastingAuto = {};
+  applyValues(vals);
+}
+async function saveTeach() {
+  const t = state.teach, s = state.sheet; if (!t || !s) return;
+  const r = legendEntry(t.word, t.field, t.value, s.style);
+  if (!r.ok) { t.error = r.why; drawTeach(); return; }
+  await addMineLegend({ ...r.entry, share: !!t.share });
+  state.teach = null; drawTeach();
+  fillGridFromNotes(true);
 }
 async function closeGrid() { await saveGridNow(); state.grid = null; $("#confirm").innerHTML = ""; showExtras(); }
 // Go to page n of the rating window (0 to 4). Everything stays on the page, so nothing entered is lost.
@@ -1422,8 +1560,13 @@ document.addEventListener("click", (ev) => {
   if (action === "open") openGrid();
   else if (!state.grid) return;
   else if (action === "close") closeGrid();
-  else if (action === "pick") { state.grid.values = pickValue(state.grid.values, id, Number(i), state.sheet.style); syncGridDom(state.grid.values, state.grid.open, state.sheet.style); applyGridLive(); }
-  else if (action === "tag") { const r = tapTag(state.grid.values, state.grid.open, id, Number(i)); state.grid.values = r.grid; state.grid.open = r.open; syncGridDom(state.grid.values, state.grid.open, state.sheet.style); applyGridLive(); }
+  else if (action === "pick") { const before = cleanGrid(state.grid.values, state.sheet.style); state.grid.values = pickValue(state.grid.values, id, Number(i), state.sheet.style); syncGridDom(state.grid.values, state.grid.open, state.sheet.style); applyGridLive(); afterGridTouch(before); }
+  else if (action === "tag") { const before = cleanGrid(state.grid.values, state.sheet.style); const r = tapTag(state.grid.values, state.grid.open, id, Number(i)); state.grid.values = r.grid; state.grid.open = r.open; syncGridDom(state.grid.values, state.grid.open, state.sheet.style); applyGridLive(); afterGridTouch(before); }
+  else if (action === "fill") fillGridFromNotes(true);
+  else if (action === "clearauto") clearAutoAnswers();
+  else if (action === "teach") { state.teach = { word: id, field: "", value: "", share: false, error: "" }; drawTeach(); const el = document.getElementById("gridTeach"); if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" }); }
+  else if (action === "tsave") saveTeach();
+  else if (action === "tcancel") { state.teach = null; drawTeach(); }
 });
 document.addEventListener("click", async (ev) => {
   const wb = ev.target.closest("[data-wedit], [data-wedit-style]");
@@ -1526,6 +1669,7 @@ document.addEventListener("click", async (ev) => {
       else if (a === "saveprice") await ownerSavePrice(b);
       else if (a === "savecfg") await ownerSaveConfig(b);
       else if (a === "addtag") await ownerAddTag();
+      else if (a.startsWith("legend")) await ownerLegend(a, b);
     }
     else if (action === "settings") openSettings();
     else if (action === "setclose") closeSettings();
@@ -1650,7 +1794,11 @@ document.addEventListener("input", (ev) => {
   const t = ev.target;
   if (t.dataset.gridNote !== undefined && state.grid) { state.grid.values.note = t.value; applyGridLive(false); }
   else if (t.dataset.dim) { state.sheet = setDim(state.sheet, t.dataset.dim, Number(t.value)); syncSheet(); }
-  else if (t.dataset.field && state.sheet) state.sheet[t.dataset.field] = t.value;
+  else if (t.dataset.teach && state.teach) {   // the "what did you mean" form: line, answer, share
+    if (t.dataset.teach === "share") state.teach.share = t.checked;
+    else { state.teach[t.dataset.teach] = t.value; if (t.dataset.teach === "field") state.teach.value = ""; state.teach.error = ""; drawTeach(); }
+  }
+  else if (t.dataset.field && state.sheet) { state.sheet[t.dataset.field] = t.value; if (t.dataset.field === "notes") scheduleFill(); }
   else if (t.dataset.pscope !== undefined) syncGrapePlace(t.dataset.pscope);
   else if (t.dataset.speaklang !== undefined) { state.settings = changeSetting(state.settings, "lang", t.value); store.set(SETTINGS_KEY, JSON.stringify(state.settings)); applySettings(); }
   else if (t.dataset.qn && state.qn) state.qn[t.dataset.qn] = t.value;
