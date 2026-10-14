@@ -4,7 +4,7 @@ import { esc, wineName, entryName } from "./logic.js?v=14";
 import { infoLine } from "./wineline.js?v=1";
 import { PAIRS, AXES, AXIS_ORDER, AXIS_VIEW, nextPair, answeredCount, pickedCount, isDone, leanings, axisValues, compareAxes, isClear } from "./thisorthat.js?v=4";
 import { TIERS, CARDS, CLEARS_TO_UNLOCK, cardById, cardsOfTier, tierOpen, clearedIn } from "./bingo.js?v=2";
-import { MODES as GUESS_MODES, LEVELS, ROUND, modeById, bestOf, isRight, scoreOf } from "./blindgame.js?v=1";
+import { MODES as GUESS_MODES, LEVELS, ROUND, modeById, bestOf, isRight, scoreOf } from "./blindgame.js?v=2";
 
 // g: { screen: "hub" | "bingo" | "card", cardId, sq }
 // data: { progress: Map(cardId -> progress), memory, news: [{ id, kind }], help }
@@ -179,9 +179,9 @@ function guessHub({ memory, level, message }) {
     <div class="chips left" role="group" aria-label="How hard">${levels}</div>
     <div class="muted small glevel">${level === "hard" ? "Hard: the wrong answers are close to the right one." : "Easy: the wrong answers are clearly different."}</div>${tiles}`;
 }
+// The profile reads as a short paragraph; the clue words are in bold.
 function profileHtml(q) {
-  return `<div class="gprof">${q.profile.map((grp) => `<div class="gpgroup"><div class="gplabel">${esc(grp.title)}</div>
-    ${grp.id === "flavors" ? `<div class="gpchips">${grp.lines.map((t) => `<span class="gpchip">${esc(t)}</span>`).join("")}</div>` : `<div class="gptext">${grp.lines.map(esc).join(grp.id === "feel" || grp.id === "type" || grp.id === "climate" ? ", " : "<br>")}</div>`}</div>`).join("")}</div>`;
+  return `<div class="gprof"><div class="gplabel">In the glass</div><p class="gptext">${(q.text || []).map((x) => (x.b ? `<b>${esc(x.t)}</b>` : esc(x.t))).join("")}</p></div>`;
 }
 function guessQuestion(play, guess) {
   const q = play.round[play.i], picked = play.picks[play.i], answered = picked !== undefined;

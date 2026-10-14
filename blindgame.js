@@ -5,7 +5,7 @@
 // age rule below (AGE_CUES). Nothing is guessed about a wine. The profile is "typical for this grape, place and age", never a fact about one bottle.
 // The game's answers never touch the palate profile, the Discover deck or the taste model; the best scores are kept on the phone (wine.guess).
 // Pure: no browser, no network.
-import { flavorsForCard, varKeyFor, placeKeysFor, tables, LABEL } from "./flavors.js?v=1";
+import { flavorsForCard, varKeyFor, placeKeysFor, tables, ruleScores, LABEL } from "./flavors.js?v=1";
 import { climateOf, factsOf, suggestStructure, dimsForStyle, grapeFor, norm } from "./rules.js?v=4";
 import { startingValues } from "./structure.js?v=5";
 
@@ -81,33 +81,34 @@ export function ageOf(card, now = new Date()) {
   const a = now.getFullYear() - y;
   return a >= 0 && a <= 80 ? a : null;
 }
-// look: colour; smell: smell and taste; feel: in the mouth. Each list is in everyday words.
+// look: the colour, read after "In the glass it is ..."; smell: things it smells and tastes of, read after "It smells and tastes of ..."; feel: whole
+// clauses read after "In the mouth, ...". Written so each band reads as a short paragraph in everyday words.
 export const AGE_CUES = {
   red: {
-    young: { look: ["deep purple to ruby, the same colour right to the rim"], smell: ["fresh, juicy red and black fruit", "flowers such as violet"], feel: ["tannins feel firm, even a little rough"] },
-    developing: { look: ["ruby moving toward garnet, a little lighter at the rim"], smell: ["the fruit is softer and riper, like cooked or jammy fruit", "spice and oak notes have blended in"], feel: ["tannins are rounder and smoother"] },
-    mature: { look: ["garnet with a brick or tawny rim, paler at the edge"], smell: ["dried fruit such as prune, fig and raisin", "leather, tobacco, cedar, forest floor and mushroom"], feel: ["silky, soft tannins; the fruit is fading", "there may be sediment in the bottle"] },
+    young: { look: ["deep purple to ruby, the same colour right to the rim"], smell: ["fresh, juicy red and black fruit", "flowers such as violet"], feel: ["the tannins feel firm, even a little rough"] },
+    developing: { look: ["ruby moving toward garnet, a little lighter at the rim"], smell: ["softer, riper fruit, like cooked or jammy fruit", "a first savoury note"], feel: ["the tannins are rounder and smoother"] },
+    mature: { look: ["garnet with a brick or tawny rim, paler at the edge"], smell: ["dried fruit such as prune, fig and raisin", "leather, tobacco, forest floor and mushroom"], feel: ["the tannins are silky and soft and the fruit is fading", "there may be sediment in the bottle"] },
   },
   white: {
-    young: { look: ["pale lemon, often with a green tint"], smell: ["fresh citrus, green apple and pear", "white flowers"], feel: ["crisp and zesty"] },
-    developing: { look: ["lemon to light gold"], smell: ["riper stone fruit such as peach and apricot", "the first hint of honey"], feel: ["rounder, a little softer"] },
-    mature: { look: ["deep gold, even amber"], smell: ["honey, nuts (almond, hazelnut) and toast", "dried apricot, marmalade, beeswax"], feel: ["softer acidity, a fuller, waxy feel"] },
+    young: { look: ["pale lemon, often with a green tint"], smell: ["fresh citrus, green apple and pear", "white flowers"], feel: ["it is crisp and zesty"] },
+    developing: { look: ["lemon to light gold"], smell: ["riper stone fruit such as peach and apricot", "the first hint of honey"], feel: ["it is rounder and a little softer"] },
+    mature: { look: ["deep gold, even amber"], smell: ["honey and nuts such as almond and hazelnut", "dried apricot, marmalade and beeswax"], feel: ["the acidity feels softer and the texture fuller, almost waxy"] },
   },
   sparkling: {
-    young: { look: ["pale lemon with lively, steady bubbles"], smell: ["fresh apple, pear and citrus"], feel: ["bright and lively, energetic bubbles"] },
-    developing: { look: ["lemon to light gold"], smell: ["biscuit and bread dough (from resting on the yeast)", "the fruit is riper"], feel: ["the bubbles feel creamier"] },
-    mature: { look: ["deeper gold, fewer and finer bubbles"], smell: ["toast, brioche, nuts and honey", "dried or baked apple"], feel: ["gentle, soft bubbles"] },
+    young: { look: ["pale lemon with lively, steady bubbles"], smell: ["fresh apple, pear and citrus"], feel: ["the bubbles are bright and energetic"] },
+    developing: { look: ["lemon to light gold"], smell: ["biscuit and bread dough (from resting on the yeast)", "riper fruit"], feel: ["the bubbles feel creamier"] },
+    mature: { look: ["deeper gold, with fewer and finer bubbles"], smell: ["toast, brioche, nuts and honey", "dried or baked apple"], feel: ["the bubbles are gentle and soft"] },
   },
   rose: {
-    young: { look: ["pale pink, bright and clear"], smell: ["fresh strawberry, raspberry and citrus"], feel: ["crisp and refreshing"] },
-    developing: { look: ["deeper pink turning orange at the edge (onion skin)"], smell: ["the fresh berry fruit is fading", "a dried or nutty note"], feel: ["softer, less lively"] },
-    mature: { look: ["orange to copper"], smell: ["the fruit is mostly gone; dried fruit and nuts"], feel: ["flat and soft"] },
+    young: { look: ["pale pink, bright and clear"], smell: ["fresh strawberry, raspberry and citrus"], feel: ["it is crisp and refreshing"] },
+    developing: { look: ["a deeper pink turning orange at the edge (onion skin)"], smell: ["fading berry fruit", "a dried or nutty note"], feel: ["it is softer and less lively"] },
+    mature: { look: ["orange to copper"], smell: ["little fruit, mostly dried fruit and nuts"], feel: ["it feels flat and soft"] },
   },
 };
 // What a few grapes are known for as they age. from: the first band where it shows. Keys are the flavor rules' grape keys (varKeyFor).
 export const GRAPE_AGE = {
   riesling: { from: "developing", notes: ["petrol (kerosene)", "honey"] },
-  nebbiolo: { from: "developing", notes: ["tar and roses", "an orange tint at the rim early on"] },
+  nebbiolo: { from: "developing", notes: ["tar and roses", "an orange tint at the rim"] },
   cheninblanc: { from: "developing", notes: ["honey", "wax (lanolin)"] },
   cabernetsauvignon: { from: "developing", notes: ["cedar and cigar box", "pencil shavings"] },
   pinotnoir: { from: "developing", notes: ["forest floor and mushroom", "a gamey note"] },
@@ -161,6 +162,52 @@ export function feelLine(values, style, mode = "beginner") {
   });
   return out;
 }
+// The same feel written as a sentence for the profile: "It is full and rich, with mouth-watering, zesty freshness, a firm grip and an oaky note of
+// vanilla and toast." BODY_WORDS start the sentence; WITH_WORDS follow "with". Same steps as FEEL_WORDS.
+const BODY_WORDS = { beginner: ["light and delicate", "of medium weight", "fairly full", "full and rich"], enthusiast: ["light-bodied", "medium-bodied", "medium-plus in body", "full-bodied"], pro: ["light-bodied", "medium-bodied", "medium(+) in body", "full-bodied"] };
+const WITH_WORDS = {
+  acidity: { beginner: ["soft, mellow freshness", "gentle freshness", "bright, lively freshness", "mouth-watering, zesty freshness"], enthusiast: ["low acidity", "medium acidity", "medium-plus acidity", "high acidity"], pro: ["low acidity", "medium acidity", "medium(+) acidity", "high acidity"] },
+  tannin: { beginner: ["a smooth, silky feel", "a little grip", "a firm grip", "a very grippy, drying feel"], enthusiast: ["soft tannins", "medium tannins", "firm tannins", "high tannins"], pro: ["low tannin", "medium tannin", "medium(+) tannin", "high tannin"] },
+  sweetness: { beginner: ["", "a touch of sweetness", "noticeable sweetness", "dessert sweetness"], enthusiast: ["", "an off-dry touch", "medium sweetness", "full sweetness"], pro: ["", "off-dry sweetness", "medium-sweet", "sweet (dessert) style"] },
+  co2: { beginner: ["", "a light spritz", "lively bubbles"], enthusiast: ["", "a frizzante spritz", "a fully sparkling mousse"], pro: ["", "a frizzante spritz", "a fully sparkling mousse"] },
+  oak: { beginner: ["no oak taste", "a light touch of oak", "an oaky note of vanilla and toast"], enthusiast: ["no oak", "a little neutral oak", "new oak (vanilla, toast)"], pro: ["no oak", "neutral oak", "new oak (vanilla, toast)"] },
+};
+export function feelSentence(values, style, mode = "beginner") {
+  const m = modeKey(mode), dims = dimsForStyle(style === "unknown" ? "red" : style);
+  const body = typeof values.body === "number" ? BODY_WORDS[m][STEP(values.body)] : "";
+  const parts = [];
+  ["acidity", "tannin", "co2", "sweetness", "oak"].forEach((d) => {
+    if (!dims.includes(d) || typeof values[d] !== "number") return;
+    const list = WITH_WORDS[d][m];
+    const w = d === "acidity" || d === "tannin" ? list[STEP(values[d])] : list[Math.max(0, Math.min(list.length - 1, Math.round(values[d])))];
+    if (w) parts.push(w);
+  });
+  if (!body && !parts.length) return "";
+  return `It is ${body || "balanced"}${parts.length ? `, with ${listText(parts)}` : ""}.`;
+}
+// The profile as a short paragraph, in pieces so the screen can bold the clue words: [{ t: text, b: true for a clue }].
+export function profileText(item, mode = "full", { band = null, mode: words = "beginner", level = "easy" } = {}) {
+  const seg = [], say = (t, b = false) => seg.push({ t, b });
+  const list = (arr) => arr.forEach((x, i) => { say(x, true); if (i < arr.length - 2) say(", "); else if (i === arr.length - 2) say(" and "); });
+  if (mode === "age" && band) {
+    const cues = AGE_CUES[item.type][band];
+    if (level !== "hard") { say("In the glass it is "); say(cues.look[0], true); say(". "); }
+    say("It smells and tastes of "); list(cues.smell); say(". ");
+    say("In the mouth, "); list(cues.feel); say(". ");
+    const g = GRAPE_AGE[item.vk];
+    if (g && AGE_BANDS.findIndex((b) => b.id === band) >= AGE_BANDS.findIndex((b) => b.id === g.from)) { say(`It also shows what ${item.grapeName} gains with time: `); list(g.notes); say(". "); }
+    return seg;
+  }
+  const type = TYPE_WORDS[item.type].toLowerCase().replace(/^rosé$/, "rosé wine");
+  say(an(type));
+  if (mode === "full" || mode === "place") say(` ${CLIMATE_WORDS[item.climate].hint}`);
+  say(". ");
+  if (mode === "full" || mode === "grape" || mode === "place") {
+    say("It smells and tastes of "); list(item.clues.slice(0, mode === "place" ? 5 : 4).map((f) => LABEL[f].toLowerCase())); say(". ");
+    say(feelSentence(item.values, item.type, words));
+  }
+  return seg;
+}
 const CLIMATE_WORDS = {
   cool: { hint: "from a cool place", why: "Cool places keep acidity bright and the body lighter." },
   moderate: { hint: "from a mild place", why: "A mild climate gives a middle path: ripe fruit with fresh acidity." },
@@ -168,6 +215,46 @@ const CLIMATE_WORDS = {
   hot: { hint: "from a hot place", why: "Hot places give very ripe fruit, a full body and gentle acidity." },
 };
 export const TYPE_WORDS = { red: "Red wine", white: "White wine", sparkling: "Sparkling wine", rose: "Rosé", fortified: "Fortified wine" };
+
+// ---------------------------------------------------------------- which flavors to show (hallmarks, not shared notes)
+// A clue is only useful if it points to one grape. Notes that come from how a wine is MADE (new oak gives vanilla, toast and cedar; a buttery feel comes
+// from a softening step; brioche from resting on yeast) say "oak" or "method", not "this grape", and many grapes share them, so they are never shown as
+// the grape's flavors. Oak is told by the feel instead ("an oaky note of vanilla and toast"), so a Tempranillo's vanilla is not mistaken for its fruit.
+export const WINEMAKING = ["vanilla", "toast", "butter", "cedar", "chocolate", "brioche"];
+// For sparkling wine, the bread and toast of resting on the yeast IS the classic marker of the method, so it stays.
+const KEEP_FOR = { sparkling: ["brioche", "toast"] };
+// The textbook marker of each grape (only flavors already in that grape's own list in flavordata.js, so nothing new is claimed; this only says which
+// of its notes to show first). Shown first, then the grape's other notes that few other grapes share.
+export const HALLMARKS = {
+  cabernetsauvignon: ["blackcurrant", "bellpepper", "mint"], merlot: ["plum", "cherry"], pinotnoir: ["cherry", "strawberry", "earth"],
+  nebbiolo: ["tar", "rose"], syrah: ["pepper", "blackberry"], shiraz: ["blackberry", "pepper", "licorice"], malbec: ["violet", "plum"],
+  tempranillo: ["leather", "cherry"], sangiovese: ["cherry", "herb"], zinfandel: ["raspberry", "blackberry", "pepper"], garnacha: ["strawberry", "herb"],
+  aglianico: ["tar", "earth"], carmenere: ["bellpepper"], gamay: ["strawberry", "raspberry", "violet"], monastrell: ["leather", "blackberry"],
+  montepulciano: ["cherry", "licorice"], primitivo: ["plum", "raspberry"], saperavi: ["blackberry", "pepper"],
+  chardonnay: ["apple", "lemon"], sauvignonblanc: ["grass", "gooseberry", "grapefruit"], riesling: ["petrol", "lime", "slate"], pinotgris: ["pear", "almond"],
+  cheninblanc: ["honey", "apple"], viognier: ["apricot", "flowers"], albarino: ["peach", "lemon"], gruner: ["pepper"], vermentino: ["lime", "herb"],
+  glera: ["pear", "apple"], cortese: ["lemon", "almond"], melon: ["chalk", "lemon"], manzoni: ["pear", "peach"], moscato: ["flowers", "peach", "orange"],
+  chardonnaysparkling: ["brioche", "apple"], pinotnoirsparkling: ["strawberry", "brioche"], pinotnoirrose: ["strawberry", "cherry"], garnacharose: ["strawberry", "herb"],
+};
+// How few grapes of the same type share a flavor: log(grapes / grapes with it). A note every red has (plum) scores low; tar or petrol scores high.
+function rarity(type) {
+  const V = tables().VAR, keys = Object.keys(V).filter((k) => !/^generic/.test(k) && V[k].type === type);
+  const out = {};
+  Object.keys(LABEL).forEach((f) => { const n = keys.filter((k) => (V[k].f || {})[f]).length; out[f] = Math.log((keys.length + 1) / (n + 1)); });
+  return out;
+}
+// The flavors to show for a wine, best clue first: hallmarks, then the rest by weight times rarity, never a winemaking note (except a sparkling
+// wine's yeast notes). The place's nudges (flavordata.js) count as they do on the card, so a Chablis still shows its chalk.
+export function clueFlavors(vk, placeKeys, type) {
+  const { score, order } = ruleScores(vk, placeKeys), rare = rarity(type), keep = KEEP_FOR[type] || [];
+  const allowed = order.filter((f) => score[f] > 0 && (!WINEMAKING.includes(f) || keep.includes(f)));
+  const marks = (HALLMARKS[vk] || []).filter((f) => allowed.includes(f));
+  const rest = allowed.filter((f) => !marks.includes(f)).sort((a, b) => score[b] * (0.5 + (rare[b] || 0)) - score[a] * (0.5 + (rare[a] || 0)) || order.indexOf(a) - order.indexOf(b));
+  // A faint note (weight under 3, such as the pineapple a warm Chardonnay can show) would mislead in a cool Chablis, so it is used only to fill up to three.
+  const strong = rest.filter((f) => score[f] >= 3), faint = rest.filter((f) => score[f] < 3);
+  const list = [...marks, ...strong];
+  return { list: list.length >= 3 ? list : [...list, ...faint.slice(0, 3 - list.length)], marks };
+}
 
 // ---------------------------------------------------------------- items: everything a question can be about
 // An item is a classic or a catalog wine, with everything worked out once: the grape key and name, the place, the type, the flavors, the structure.
@@ -184,11 +271,12 @@ function makeItem(card, { classic = null, ref = null, now = new Date() } = {}) {
   if (!Object.keys(values).length) return null;
   const grapeName = classic ? (classic.label || classic.grapes[0]) : ((card.grapes && card.grapes.length === 1 && card.grapes[0]) || (!card.grapes.length && card.ruleGrapes && card.ruleGrapes.length === 1 && card.ruleGrapes[0]) || "");
   if (!grapeName) return null;
-  const facts = factsOf(card), climate = climateOf(facts);
+  const facts = factsOf(card), climate = climateOf(facts), clue = clueFlavors(vk, placeKeysFor(card), type);
+  if (!clue.list.length) return null;
   return {
     id: card.id, kind: classic ? "classic" : "catalog", card, vk, grapeName, blend: !!(classic && classic.blend), type,
     place: placeName(card), country: card.country, placeLabel: placeLabel(card), answer: `${grapeName} · ${placeLabel(card)}`,
-    flavors: fl.picks.map((p) => p.key), values, climate: climate.zone, climateSure: climate.sure, edited: !!(ref && Object.keys(ref).length),
+    flavors: fl.picks.map((p) => p.key), clues: clue.list, marks: clue.marks, values, climate: climate.zone, climateSure: climate.sure, edited: !!(ref && Object.keys(ref).length),
     age: classic ? null : ageOf(card, now),
   };
 }
@@ -258,7 +346,7 @@ function pickWrong(answer, candidates, level, rng, n = CHOICES - 1) {
 // The profile the player sees, as clue groups. Each clue says where it comes from (source), so the "Why" can be honest.
 export function profileOf(item, mode = "full", { band = null, mode: words = "beginner", level = "easy" } = {}) {
   const groups = [];
-  const flavorList = item.flavors.slice(0, mode === "place" ? 6 : 4);
+  const flavorList = item.clues.slice(0, mode === "place" ? 5 : 4);
   if (mode !== "age") groups.push({ id: "type", title: "In the glass", lines: [TYPE_WORDS[item.type]], source: "type" });
   if (mode === "full" || mode === "grape" || mode === "place") groups.push({ id: "feel", title: "How it feels", lines: feelLine(item.values, item.type, words), source: item.edited ? "editor" : "rules" });
   if (mode === "full" || mode === "grape" || mode === "place") groups.push({ id: "flavors", title: "Smells and tastes like", lines: flavorList.map((f) => LABEL[f]), keys: flavorList, source: "flavors" });
@@ -322,7 +410,7 @@ export function makeQuestion(mode, item, items, { level = "easy", rng = Math.ran
   const choices = mode === "age" ? AGE_BANDS.map((b) => b.label) : shuffled([answer, ...wrong], rng);
   return {
     mode, level, itemId: item.id, kind: item.kind, prompt: promptOf(item, mode), profile: profileOf(item, mode, { band, mode: words, level }),
-    choices, answer, band, why: whyLines(item, mode, band, words), topics: topicsOf(item, mode), reveal: revealOf(item, band),
+    choices, answer, band, why: whyLines(item, mode, band, words), text: profileText(item, mode, { band, mode: words, level }), topics: topicsOf(item, mode), reveal: revealOf(item, band),
   };
 }
 // What the answer was, in full, shown after the pick.
@@ -338,13 +426,18 @@ export function whyLines(item, mode, band = null, words = "beginner") {
   const out = [];
   const T = tables();
   if (mode === "full" || mode === "grape" || mode === "place") {
-    const shown = item.flavors.slice(0, mode === "place" ? 6 : 4);
-    const grapeF = Object.keys((T.VAR[item.vk] || {}).f || {});
-    const fromGrape = shown.filter((f) => grapeF.includes(f)).map((f) => LABEL[f]);
-    if (fromGrape.length) out.push(`${sentence(listText(fromGrape))}: typical of ${item.grapeName}.`);
+    // Each flavor shown is explained once: the grape's hallmark, then what the place adds (flavordata.js nudges), then the grape's other notes.
+    const shown = item.clues.slice(0, mode === "place" ? 5 : 4);
+    const who = item.blend ? item.place || item.grapeName : item.grapeName;
     const nudged = new Set();
-    placeKeysFor(item.card).forEach((k) => { const p = T.REGION.get(k); if (p) Object.keys(p.add || {}).forEach((f) => { if (shown.includes(f)) nudged.add(f); }); });
-    if (nudged.size && item.place) out.push(`${sentence(listText([...nudged].map((f) => LABEL[f])))}: ${nudged.size === 1 ? "a note" : "notes"} ${item.place} often adds.`);
+    placeKeysFor(item.card).forEach((k) => { const p = T.REGION.get(k); if (p) Object.keys(p.add || {}).forEach((f) => nudged.add(f)); });
+    const marks = shown.filter((f) => item.marks.includes(f));
+    const fromPlace = shown.filter((f) => !marks.includes(f) && nudged.has(f));
+    const rest = shown.filter((f) => !marks.includes(f) && !fromPlace.includes(f));
+    const names = (a) => sentence(listText(a.map((f) => LABEL[f])));
+    if (marks.length) out.push(`${names(marks)}: the hallmark of ${who}.`);
+    if (fromPlace.length && item.place) out.push(`${names(fromPlace)}: ${fromPlace.length === 1 ? "a note" : "notes"} ${item.place} often adds.`);
+    if (rest.length) out.push(`${names(rest)}: also typical of ${who}.`);
   }
   if (mode === "full" || mode === "place" || mode === "grape" || mode === "feel") {
     const s = safeSuggest(item.card);
@@ -354,6 +447,7 @@ export function whyLines(item, mode, band = null, words = "beginner") {
       if (!seen.size) out.push(`${item.grapeName} is usually ${feelLine(item.values, item.type, words).slice(0, 3).join(", ")}.`);
     }
     if (item.edited) out.push("Our editors scored how this wine feels.");
+    if (item.values.oak === 2 && mode !== "feel") out.push("Vanilla and toast come from new oak barrels, not from the grape: any oaked wine can show them, so they do not point to one grape.");
   }
   if (mode === "full" || mode === "place" || mode === "feel") out.push(CLIMATE_WORDS[item.climate].why);
   if (mode === "age" && band) {
