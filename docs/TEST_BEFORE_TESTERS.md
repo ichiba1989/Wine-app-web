@@ -162,3 +162,12 @@ Needs no database script. On a real phone, in **Safari (tab and home-screen app)
 - [ ] Owner page, Roles tab: list shows each staff member; add a role by email (a guest or unknown email gives "No account with that email"); change Editor to Quiz reviewer and back; remove a role; Recent changes lists each. The Owner row is locked, and calling `staff_set_role(..., 'owner')` or `staff_remove` on an Owner in the SQL editor is refused.
 - [ ] Settings, Plan: switching to Pro turns on the tasting grid, 500-row import and feedback at once; switching back reverses it; with `plan_switch_open` = 0 the row disappears. Offline it says it needs a connection.
 - [ ] Mode check: Professional mode alone does not show the grid or raise the import limit.
+
+## 20. Tech sheet (added 2026-10-14; remove with docs/TECHSHEET_REMOVAL.md)
+- [ ] Run `docs/tech_sheet.sql` in Supabase (safe to repeat). The feature starts **off** (`techsheet_enabled` = 0).
+- [ ] Set `techsheet_enabled` to **1** (Owner page, Config). As Owner/Editor: Editor tab, Facts: add a producer's official site and one approved source; type in a fact for a real wine with the page address and the exact quote; check a normal player account still sees nothing.
+- [ ] Set it to **2**. As a player: a journal entry, rating sheet, Details, **Tech sheet**: tick fields, confirmed facts show with their source site(s); missing ones say "Not confirmed yet"; Make the full page, Print or save as PDF on a real phone (the app screens must not print), Copy as text.
+- [ ] A wine you typed in: blocked until it has a producer, vintage and type; then add ABV from the bottle ("Entered by you"); the entry is private to you.
+- [ ] Offline: facts already seen are still shown; nothing breaks.
+- [ ] Switch back to **0**: the button, the Facts section and the Owner Facts tab disappear for everyone; set to 1 and 2 again and the data is still there.
+- [ ] Owner decisions: research function provider/key/cost (Phase B), line in `privacy.html`, whether the Tech sheet should be a Pro-plan feature, and a legal look at quoting third-party pages.

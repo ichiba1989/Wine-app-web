@@ -27,5 +27,8 @@ The Discover deck as it works today, before the planned change to how swiping wo
 ## Like / Dislike deck, v2 (current, from 2026-10-10)
 Swipe right Like, swipe left Dislike, a button for I don't know it, swipe up / button for I've had this bottle. Likes and dislikes count toward the palate (provisional weights); I don't know it counts for nothing in the palate, pushes similar wines down the deck (never removes them) and is recorded for recommendations and quizzes. Needs `docs/reactions.sql` in the database. To go back to v1, see the steps above (the database keeps the extra `reaction` and `context` columns; v1 code ignores them and still reads the rows through the old familiarity and interest columns).
 
+## Before the Tech sheet (branch `backup/before-tech-sheet`, commit `f0da923`) — saved 2026-10-14
+The app exactly as it was before the Tech sheet (researched, sourced wine facts and the full-page sheet) was started: offline mode, roles/plans/Roles tab included, no Tech sheet. **Why it exists:** the owner asked for the Tech sheet to be fully retractable. To go back, use the same steps as above with this branch name; the database scripts for the Tech sheet only add separate tables, and `docs/tech_sheet_remove.sql` drops them (see `docs/TECHSHEET_REMOVAL.md`). The app at this point: `app.js?v=83`.
+
 ## How to save a new version
 `git push origin HEAD:refs/heads/backup/NAME` (a new name each time, never an existing one), and add a section here with the commit. Use clear names (for example `deck-v2-...`).

@@ -744,3 +744,56 @@ export async function removeSharedLegend(sb, id) {
   must(await sb.from("note_legend").delete().eq("id", id));
 }
 
+// ---------------------------------------------------------------- TECHSHEET: researched, sourced wine facts (docs/tech_sheet.sql; removal in docs/TECHSHEET_REMOVAL.md)
+// All of this is one removable feature. Every function throws a plain message when the script has not been run, and nothing here touches the journal, swipes or wines.
+const techMissing = (error) => (error && (error.code === "42P01" || error.code === "PGRST202" || error.code === "PGRST205" || /techsheet|wine_facts|fact_sources|wine_fact_candidates|my_wine_facts/.test(String(error.message || ""))) && !/needs a connection/.test(String(error.message || "")) ? new Error("The tech sheet needs a database update (docs/tech_sheet.sql).") : error);
+const techMust = (r) => { if (r.error) throw techMissing(r.error); return r.data; };
+// 0 = off for everyone, 1 = staff only, 2 = everyone (app_config techsheet_enabled). Missing or unreadable means off.
+export async function loadTechsheetLevel(sb) {
+  try {
+    const { data, error } = await sb.from("app_config").select("value").eq("key", "techsheet_enabled").maybeSingle();
+    if (error || !data) return 0;
+    const v = data.value !== null && typeof data.value === "object" ? data.value.value : data.value;
+    const n = Number(v);
+    return n === 1 || n === 2 ? n : 0;
+  } catch (_) { return 0; }
+}
+// The confirmed facts for a catalog wine (about this vintage and about its producer) and the finds still waiting for a second source or an editor.
+export async function loadWineFacts(sb, vintageId, producerKey) {
+  const [a, b, c] = await Promise.all([
+    sb.from("wine_facts").select("fact_key, value, rule, sources, confirmed_at").eq("subject_type", "vintage").eq("subject_key", vintageId),
+    producerKey ? sb.from("wine_facts").select("fact_key, value, rule, sources, confirmed_at").eq("subject_type", "producer").eq("subject_key", producerKey) : Promise.resolve({ data: [], error: null }),
+    sb.from("wine_fact_candidates").select("id, fact_key, value, source_url, domain, status").or(`and(subject_type.eq.vintage,subject_key.eq.${vintageId})${producerKey ? `,and(subject_type.eq.producer,subject_key.eq.${producerKey.replace(/[,()"]/g, " ")})` : ""}`).neq("status", "rejected"),
+  ]);
+  return { facts: [...techMust(a), ...techMust(b)], unconfirmed: techMust(c) };
+}
+// A player's own wine: what they entered themselves, and (once the research function exists) what was found for it.
+export async function loadMyWineFacts(sb, userWineId) {
+  const rows = techMust(await sb.from("my_wine_facts").select("fact_key, value, status, rule, sources, created_at").eq("user_wine_id", userWineId));
+  return { facts: rows.filter((r) => r.status === "confirmed" || r.status === "player_entered"), unconfirmed: rows.filter((r) => r.status === "found").map((r) => ({ fact_key: r.fact_key, value: r.value, source_url: ((r.sources || [])[0] || {}).url || "", domain: ((r.sources || [])[0] || {}).domain || "", status: "pending" })) };
+}
+export async function saveMyWineFact(sb, userId, userWineId, factKey, value) {
+  techMust(await sb.from("my_wine_facts").upsert({ user_id: userId, user_wine_id: userWineId, fact_key: factKey, value, status: "player_entered", rule: "player_entered", sources: [] }, { onConflict: "user_wine_id,fact_key" }).select("fact_key"));
+}
+export async function removeMyWineFact(sb, userWineId, factKey) {
+  techMust(await sb.from("my_wine_facts").delete().eq("user_wine_id", userWineId).eq("fact_key", factKey).select("fact_key"));
+}
+// Editors and the Owner: the approved and producer sites, the waiting finds, and typing a fact in with its source.
+export async function loadFactSources(sb) { return techMust(await sb.from("fact_sources").select("id, domain, kind, producer_key, note, approved_at").order("domain")); }
+export async function loadFactQueue(sb) { return techMust(await sb.from("wine_fact_candidates").select("id, subject_type, subject_key, producer_key, fact_key, value, source_url, domain, quote, status, found_by, created_at").eq("status", "pending").order("created_at", { ascending: false }).limit(200)); }
+export async function addFactSource(sb, domain, kind, producerKey, note) { return techMust(await sb.rpc("techsheet_set_source", { p_domain: domain, p_kind: kind, p_producer_key: producerKey || null, p_note: note || null })); }
+export async function removeFactSource(sb, id) { techMust(await sb.rpc("techsheet_remove_source", { p_id: id })); }
+export async function enterFact(sb, f) { return techMust(await sb.rpc("techsheet_enter_fact", { p_subject_type: f.subjectType, p_subject_key: f.subjectKey, p_producer_key: f.producerKey || null, p_fact_key: f.factKey, p_value: f.value, p_url: f.url, p_quote: f.quote })); }
+export async function decideCandidate(sb, id, approve) { return techMust(await sb.rpc(approve ? "techsheet_approve_candidate" : "techsheet_reject_candidate", { p_id: id })); }
+export async function loadFactCounts(sb) {
+  const [f, c] = await Promise.all([sb.from("wine_facts").select("id", { count: "exact", head: true }), sb.from("wine_fact_candidates").select("id", { count: "exact", head: true }).eq("status", "pending")]);
+  if (f.error) throw techMissing(f.error);
+  return { facts: f.count || 0, waiting: c.error ? 0 : c.count || 0 };
+}
+// Asks the research function to look a wine up. Not built yet (Phase B): until it is deployed this says so plainly.
+export async function requestWineFacts(sb, body) {
+  const { data, error } = await sb.functions.invoke("find-wine-facts", { body });
+  if (error) throw new Error(/not found|404|failed to send|fetch/i.test(String(error.message || "")) ? "Looking facts up is not switched on yet." : error.message);
+  return data;
+}
+// END TECHSHEET
