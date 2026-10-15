@@ -15,17 +15,31 @@ const SIZE = /\b\d+(?:[.,]\d+)?\s?(?:ml|l|cl)\b|\bmagnum\b|\bcan\b|\(\s*[a-z]?\d
 export const words = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(SIZE, " ").replace(/[^a-z0-9]+/g, " ").trim()
   .split(" ").filter((w) => w && !/^(19|20)\d{2}$/.test(w) && w !== "nv");
 export const yearOf = (s) => { const m = String(s || "").match(/\b(19|20)\d{2}\b/); return m ? m[0] : ""; };
-const sameVintage = (row, title) => { const y = yearOf(title); return row.vintage && row.vintage !== "NV" ? y === row.vintage : !y; };
+// Each product's words are worked out once (a list of 2000 wines against 2500 pages would otherwise redo them millions of times and run
+// past the server's time limit), and the pages are grouped by vintage year so a wine is only compared with pages of its own year.
+const PREPARED = new WeakMap();
+function prepare(products) {
+  let ix = PREPARED.get(products);
+  if (ix) return ix;
+  ix = new Map();
+  for (const p of products) {
+    const w = words(p.title), item = { p, key: w.join(" "), set: new Set(w), len: w.length }, y = yearOf(p.title) || "NV";
+    if (!ix.has(y)) ix.set(y, []);
+    ix.get(y).push(item);
+  }
+  PREPARED.set(products, ix);
+  return ix;
+}
 // products: [{ title, url }]. Returns the one page that is the same wine, or null.
 export function matchProduct(row, products) {
   const want = words(row.title), key = want.join(" ");
   if (!want.length) return null;
-  const fits = products.filter((p) => sameVintage(row, p.title));
-  const exact = fits.filter((p) => words(p.title).join(" ") === key);
-  if (exact.length === 1) return exact[0];
+  const fits = prepare(products).get(row.vintage && row.vintage !== "NV" ? row.vintage : "NV") || [];
+  const exact = fits.filter((x) => x.key === key);
+  if (exact.length === 1) return exact[0].p;
   if (exact.length > 1) return null;
-  const wider = fits.filter((p) => { const have = new Set(words(p.title)); return want.every((w) => have.has(w)) && words(p.title).length <= want.length + 2; });
-  return wider.length === 1 ? wider[0] : null;
+  const wider = fits.filter((x) => x.len <= want.length + 2 && want.every((w) => x.set.has(w)));
+  return wider.length === 1 ? wider[0].p : null;
 }
 // Is this page still the wine? Its title must hold the wine's words and the same vintage.
 export function pageMatches(row, pageTitle) {

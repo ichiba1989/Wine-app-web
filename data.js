@@ -631,7 +631,18 @@ export async function loadVenueList(sb, venueId) {
 // Asks the server function to find pages (action "find") or check links (action "check"). It only reads the venue's public website.
 export async function venueLinks(sb, action, rows) {
   const { data, error } = await sb.functions.invoke("venue-links", { body: { action, rows } });
-  if (error) { const m = String(error.message || error); throw new Error(/not found|404|failed to send|fetch/i.test(m) ? "The venue-links server function is not deployed yet (docs/VENUE_LINKS.md)." : m); }
+  if (error) {
+    // A refusal from the function carries its answer in error.context (the reply); read it so the editor sees the reason, not "non-2xx".
+    const res = error.context && typeof error.context.text === "function" ? error.context : null;
+    const status = res ? res.status : 0;
+    let said = "";
+    if (res) { try { const t = await res.text(); try { said = JSON.parse(t).error || JSON.parse(t).message || t; } catch (_) { said = t; } } catch (_) { /* no body */ } }
+    const m = String(error.message || error);
+    if (status === 404 || (!res && /not found|404|failed to send|fetch/i.test(m))) throw new Error("The venue-links server function is not deployed yet (docs/VENUE_LINKS.md).");
+    if (status === 401 || status === 403) throw new Error(`The server function refused the sign-in (${status}${said ? `: ${said}` : ""}). In Supabase, Edge Functions, venue-links, Details: check that it is deployed under the name venue-links; if it still refuses, turn off "Verify JWT" (docs/VENUE_LINKS.md).`);
+    if (status === 546 || /WORKER_LIMIT|compute resources/i.test(said)) throw new Error("The server function ran out of time. Re-deploy it from docs/venue_links_function.js (the newer version is faster) and try again.");
+    throw new Error(`The server function answered ${status || "with an error"}${said ? `: ${String(said).slice(0, 300)}` : ""}.`);
+  }
   if (data && data.error) throw new Error(data.error);
   return data || { results: [] };
 }

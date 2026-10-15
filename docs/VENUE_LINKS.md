@@ -9,6 +9,8 @@ On the Vintage Wine Merchants version, a wine's name on the Discover card opens 
    - Supabase dashboard → **Edge Functions** → **Deploy a new function** → **Via Editor**.
    - Name it exactly **`venue-links`**.
    - Replace the example code with the whole of `docs/venue_links_function.js` and press **Deploy**.
+   - **To update it** (after a change to the file): Edge Functions → **venue-links** → **Code** → replace everything with the file again → **Deploy updates**.
+   - If Find links says the function "refused the sign-in": venue-links → **Details** → turn off **Verify JWT** (also called "Enforce JWT verification") and save. Newer Supabase projects sign people in with keys the old check does not accept.
    - It needs no secrets. It only reads public pages on vintagewinemerchants.com and never writes to the database (the editor's app saves the results under the editor's own access).
 
 ## Using it (editors)

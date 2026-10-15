@@ -8,9 +8,9 @@
 // Everything fits on one phone screen. Editor writes are online only. The rules are in venue.js (pure); this file draws the screen and handles the taps.
 import { esc, WINE_STYLES } from "./logic.js?v=17";
 import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf, placeLookalikes, linkSummary, rowTitle } from "./venue.js?v=14";
-import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=29";
+import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=30";
 import { placeFromArea, savePlace, designationPlan, broadPlace } from "./geo.js?v=8";
-import * as db from "./data.js?v=42";
+import * as db from "./data.js?v=43";
 import { caseKey, lookalikes } from "./text.js?v=3";
 
 const fold = caseKey;   // text.js: accents and capitals ignored, punctuation still counts
