@@ -1,25 +1,37 @@
 // Editor tab, "Vintage Wine Merchants": the shop's wines that are not in our catalog yet, reviewed one at a time and added to the catalog.
-// The venue's file only gives a title per wine ("2019 Ridge Vineyards Monte Bello Santa Cruz Mountains"). For each row the app SUGGESTS where the producer's
-// name ends, the type, the place and the grapes, using only the title's words and the lists the app already holds (venue.js suggestRow). The editor checks
-// and changes every field, then adds the wine: published at once, or waiting for review (Catalog section). Nothing is created without that tap, and nothing
-// is looked up outside the app. The new wine is linked to the list row, so it joins the venue's deck as soon as it is published.
-// Editor writes are online only. The rules are in venue.js (pure); this file draws the screen and handles the taps.
+// The venue's file only gives a title per wine ("2019 Ridge Vineyards Monte Bello Santa Cruz Mountains"). For each row the form is filled with SUGGESTIONS:
+// first the ones prepared once from the shop's titles (vwmprep.js, loaded only here), else the app's own (venue.js suggestRow). Either way they come only
+// from the title's words and lists the app already holds. The editor checks and changes every field, then adds the wine: published at once, or waiting
+// for review (Catalog section). Nothing is created without that tap, and nothing is looked up outside the app. The new wine is linked to the list row,
+// so it joins the venue's deck as soon as it is published. The queue keeps one country, region and producer together.
+// The place is chosen by searching the place list; a place that is not in it yet is typed in and created when the wine is added (geo.js savePlace).
+// Everything fits on one phone screen. Editor writes are online only. The rules are in venue.js (pure); this file draws the screen and handles the taps.
 import { esc, WINE_STYLES } from "./logic.js?v=14";
-import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview } from "./venue.js?v=2";
-import { placeOptions } from "./wineinfo.js?v=20";
-import * as db from "./data.js?v=35";
+import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf } from "./venue.js?v=3";
+import { placeOptions } from "./wineinfo.js?v=21";
+import { placeFromArea, savePlace } from "./geo.js?v=1";
+import * as db from "./data.js?v=36";
 
 const fold = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 const STYLE_CHOICES = WINE_STYLES.map((s) => ({ id: s.id, label: s.label }));
 
-// The form for one row, filled with the suggestions.
-export function formFor(row, lists) {
+// The form for one row, filled with the prepared suggestions when there are some, else the app's own.
+export function formFor(row, lists, prep = null) {
+  const p = prepOf(prep, row.wine_name);
+  const base = { rowId: row.id, title: row.wine_name, shopType: row.shop_type || "", vintage: row.vintage || "NV", prepared: !!p, typing: false, q: "" };
+  if (p) {
+    const split = splitOf(row.wine_name, p.producer);
+    const sp = split ? splitTitle(row.wine_name, split) : { producer: p.producer, wine: p.wine };
+    return {
+      ...base, split, producer: sp.producer, wine: p.wine || sp.wine, style: p.style, styleWhy: p.styleWhy, place: canonPlace(lists.areas, p.place), placeWhy: p.placeWhy,
+      grapes: p.grapes.join(", "), notWine: p.notWine, knownProducer: lists.producers.some((x) => fold(x.name) === fold(sp.producer)),
+    };
+  }
   const s = suggestRow(row.wine_name, { producers: lists.producers, areas: lists.areas, shopType: row.shop_type || "" });
   const sp = splitTitle(row.wine_name, s.split);
   return {
-    rowId: row.id, title: row.wine_name, shopType: row.shop_type || "", split: s.split, producer: sp.producer, wine: sp.wine,
-    vintage: row.vintage || "NV", style: s.style, styleWhy: s.styleWhy, areaId: s.areaId || "", areaWhy: s.areaWhy, grapes: s.grapes.join(", "),
-    knownProducer: !!s.producerId,
+    ...base, split: s.split, producer: sp.producer, wine: sp.wine, style: s.style, styleWhy: s.styleWhy, place: s.areaId ? placeFromArea(lists.areas, s.areaId) : { country: "", region: "", appellation: "" },
+    placeWhy: s.areaWhy, grapes: s.grapes.join(", "), notWine: false, knownProducer: !!s.producerId,
   };
 }
 // The grapes typed in the form, as ids of grapes already in the list, or new names.
@@ -33,54 +45,77 @@ export function grapesFrom(text, grapes) {
   return out;
 }
 
+// The place line: what is chosen, and what adding the wine would create.
+export function placeNowHtml(f, areas) {
+  const text = placeText(f.place), plan = placePlan(areas, f.place);
+  const why = f.placeWhy && text ? ` <span class="muted">(from ${esc(f.placeWhy)})</span>` : "";
+  const note = plan.error ? `<span class="err">${esc(plan.error)}</span>` : plan.notes.length ? `<span class="vrnew">${esc(plan.notes.join(" "))}</span>` : "";
+  return `${text ? `<b>${esc(text)}</b>` : `<span class="muted">No place chosen</span>`}${why}${note ? `<br>${note}` : ""}`;
+}
+export function hitsHtml(f, options) {
+  if (!f.q.trim()) return "";
+  const hits = searchPlaces(options, f.q);
+  return hits.length
+    ? hits.map((o) => `<button class="vrhit" data-vr="place:${esc(o.id)}">${esc(o.label)}</button>`).join("")
+    : `<div class="muted small">No place called that yet. <button class="link" data-vr="type">Type it as a new place</button></div>`;
+}
+
 export function reviewHtml(R, queue, opts) {
   if (R.error) return `<div class="err">${esc(R.error)}</div><button class="btn outline slim" data-vr="retry">Try again</button>`;
   if (!R.lists) return `<p class="muted">Loading…</p>`;
-  const intro = `<p class="muted small">Wines on ${esc(VENUE.name)}' list that are not in our catalog yet: <b>${queue.length}</b>. Check each one against the shop's title. Every field below is only a suggestion until you add the wine.</p>`;
-  const msg = R.msg ? `<div class="notice">${esc(R.msg)}</div>` : "";
-  if (!queue.length) return `${intro}${msg}<p class="muted">Nothing is waiting. New wines appear here when the owner uploads a new list.</p>`;
+  const msg = R.msg ? `<div class="notice vrmsg">${esc(R.msg)}</div>` : "";
+  const count = `<div class="muted small vrcount"><b>${queue.length}</b> of ${esc(VENUE.name)}’ wines to add. Every field is a suggestion until you add it.</div>`;
+  if (!queue.length) return `${count}${msg}<p class="muted">Nothing is waiting. New wines appear here when the owner uploads a new list.</p>`;
   const f = R.form;
-  if (!f) return `${intro}${msg}`;
+  if (!f) return `${count}${msg}`;
+  const dis = R.busy ? " disabled" : "";
   const words = f.title.split(/\s+/).filter(Boolean);
-  const wordBtns = words.map((w, i) => `<button class="chip wide vrword${i < f.split ? " on" : ""}" data-vr="split:${i + 1}" aria-pressed="${i < f.split}">${esc(w)}</button>`).join("");
-  const styles = STYLE_CHOICES.map((s) => `<button class="chip wide${f.style === s.id ? " on" : ""}" data-vr="style:${s.id}" aria-pressed="${f.style === s.id}">${esc(s.label)}</button>`).join("");
-  const places = `<option value="">No place (choose if you know it)</option>` + R.places.map((p) => `<option value="${esc(p.id)}"${String(f.areaId) === String(p.id) ? " selected" : ""}>${esc(p.label)}</option>`).join("");
-  return `${intro}${msg}
+  const wordBtns = words.map((w, i) => `<button class="chip vrword${i < f.split ? " on" : ""}" data-vr="split:${i + 1}" aria-pressed="${i < f.split}">${esc(w)}</button>`).join("");
+  const styles = STYLE_CHOICES.map((s) => `<button class="chip${f.style === s.id ? " on" : ""}" data-vr="style:${s.id}" aria-pressed="${f.style === s.id}">${esc(s.label)}</button>`).join("");
+  const typed = f.typing ? `<div class="vrrow3">${["appellation", "region", "country"].map((k) => `<input class="field" data-vr-p="${k}" value="${esc(f.place[k] || "")}" placeholder="${k === "appellation" ? "Appellation" : k === "region" ? "Region" : "Country"}" aria-label="${k}" autocomplete="off">`).join("")}</div>` : "";
+  const facts = [`Vintage on the list: ${f.vintage}`, f.shopType ? `shop category: ${f.shopType}` : "", f.styleWhy ? `type from ${f.styleWhy}` : ""].filter(Boolean).join(" · ");
+  return `${count}${msg}
     <div class="vrcard">
-      <div class="serif vrtitle">${esc(f.title)}</div>
-      <div class="muted small">Vintage on the list: ${esc(f.vintage)}${f.shopType ? ` · Shop category: ${esc(f.shopType)}` : ""}</div>
-      <div class="glabel">Where does the producer's name end? Tap the last word of it.</div>
-      <div class="chips left vrwords">${wordBtns}</div>
-      ${f.knownProducer ? `<div class="muted small">Suggested: a producer already in our catalog.</div>` : `<div class="muted small">No producer in our catalog starts this title: tap where the name ends.</div>`}
-      <label class="glabel" for="vrProducer">Producer</label><input class="field" id="vrProducer" data-vr-f="producer" value="${esc(f.producer)}" autocomplete="off">
-      <label class="glabel" for="vrWine">Wine name (as on the label)</label><input class="field" id="vrWine" data-vr-f="wine" value="${esc(f.wine)}" autocomplete="off">
-      <label class="glabel" for="vrVintage">Vintage (a year or NV)</label><input class="field" id="vrVintage" data-vr-f="vintage" value="${esc(f.vintage)}" autocomplete="off" inputmode="text">
-      <div class="glabel">Type of wine</div><div class="chips left">${styles}</div>
-      ${f.styleWhy ? `<div class="muted small">Suggested from ${esc(f.styleWhy)}.</div>` : `<div class="muted small">No suggestion: choose the type.</div>`}
-      <label class="glabel" for="vrPlace">Place</label><select class="field" id="vrPlace" data-vr-f="areaId">${places}</select>
-      ${f.areaWhy ? `<div class="muted small">Suggested from ${esc(f.areaWhy)}.</div>` : ""}
-      <label class="glabel" for="vrGrapes">Grapes on the label (comma between them)</label><input class="field" id="vrGrapes" data-vr-f="grapes" value="${esc(f.grapes)}" autocomplete="off">
-      <div class="err" id="vrErr">${esc(R.err || "")}</div>
-      <div class="gopts vrbtns">
-        <button class="btn primary slim" data-vr="add:pub"${R.busy ? " disabled" : ""}>Add and publish</button>
-        <button class="btn outline slim" data-vr="add:rev"${R.busy ? " disabled" : ""}>Add, waiting for review</button>
-        <button class="btn outline slim" data-vr="skip"${R.busy ? " disabled" : ""}>Skip for now</button>
-        ${opts.owner ? `<button class="link" data-vr="remove"${R.busy ? " disabled" : ""}>Not a wine we want: remove from the list</button>` : ""}
+      <div class="vrhead"><span class="serif vrtitle">${esc(f.title)}</span>${opts.owner ? `<button class="link" data-vr="remove"${dis} title="Not a wine we want">Remove from list</button>` : ""}</div>
+      <div class="muted small">${esc(facts)}</div>
+      ${f.notWine ? `<div class="vrwarn">This looks like a spirit or something that is not wine.${opts.owner ? " If so, remove it from the list." : " Skip it; the owner can remove it."}</div>` : ""}
+      <div class="vrlbl">Tap the last word of the producer’s name${f.knownProducer ? ` <span class="muted">(a producer we already have)</span>` : ""}</div>
+      <div class="vrwords">${wordBtns}</div>
+      <div class="vrrow2">
+        <label class="vrf">Producer<input class="field" data-vr-f="producer" value="${esc(f.producer)}" autocomplete="off"></label>
+        <label class="vrf">Wine name<input class="field" data-vr-f="wine" value="${esc(f.wine)}" autocomplete="off"></label>
       </div>
-      <div class="muted small">Publish only what you have checked: published wines go straight into ${esc(VENUE.name)}' deck.</div>
+      <div class="vrstyles" role="group" aria-label="Type of wine">${styles}</div>
+      <div class="vrlbl">Place <button class="link" data-vr="type">${f.typing ? "Search instead" : "Type a new place"}</button></div>
+      <div class="vrplace" id="vrPlaceNow">${placeNowHtml(f, R.lists.areas)}</div>
+      ${typed}
+      <input class="field" id="vrPlaceQ" data-vr-q value="${esc(f.q)}" placeholder="Search places: Barolo, Napa, St-Julien…" autocomplete="off" aria-label="Search places">
+      <div class="vrhits" id="vrHits">${hitsHtml(f, R.places)}</div>
+      <div class="vrrow2 vrvg">
+        <label class="vrf">Vintage<input class="field" data-vr-f="vintage" value="${esc(f.vintage)}" autocomplete="off" placeholder="year or NV"></label>
+        <label class="vrf">Grapes on the label<input class="field" data-vr-f="grapes" value="${esc(f.grapes)}" autocomplete="off" placeholder="comma between"></label>
+      </div>
+      <div class="err" id="vrErr">${esc(R.err || "")}</div>
+      <div class="vrbtns">
+        <button class="btn primary slim" data-vr="add:pub"${dis}>Publish now</button>
+        <button class="btn outline slim" data-vr="add:rev"${dis}>Add for review</button>
+        <button class="btn outline slim" data-vr="skip"${dis}>Skip</button>
+      </div>
     </div>`;
 }
 
-// ctx: { sb(), userId(), list() (the venue's rows), owner() (true for the owner), onChanged() (reload the catalog and the list), onError(msg) }
+// ctx: { sb(), userId(), list() (the venue's rows), listError(), owner() (true for the owner), onChanged() (reload the catalog and the list) }
 export function createVenueReview(ctx) {
-  const R = { lists: null, places: [], loading: false, error: "", form: null, busy: false, msg: "", err: "", skipped: new Set() };
+  const R = { lists: null, prep: null, places: [], loading: false, error: "", form: null, busy: false, msg: "", err: "", skipped: new Set() };
   let root = null;
-  const queue = () => reviewQueue(ctx.list() || [], R.skipped);
+  // Sorted by the prepared country, region and producer, so one producer's wines come one after another.
+  const sortKey = (r) => { const p = prepOf(R.prep, r.wine_name); return p ? [p.place.country, p.place.region, p.producer] : ["", "", ""]; };
+  const queue = () => reviewQueue(ctx.list() || [], R.skipped, R.prep ? sortKey : null);
   function pickNext() {
     const q = queue();
     const cur = R.form && q.find((r) => r.id === R.form.rowId && !R.skipped.has(r.id));
     if (cur) return;
-    R.form = q.length && R.lists ? formFor(q[0], R.lists) : null;
+    R.form = q.length && R.lists ? formFor(q[0], R.lists, R.prep) : null;
     R.err = "";
   }
   function draw() {
@@ -89,20 +124,28 @@ export function createVenueReview(ctx) {
     pickNext();
     root.innerHTML = `<div class="vrev">${reviewHtml(R, queue(), { owner: ctx.owner() })}</div>`;
   }
+  const drawPlace = () => { const el = document.getElementById("vrPlaceNow"); if (el && R.form) el.innerHTML = placeNowHtml(R.form, R.lists.areas); };
+  const drawHits = () => { const el = document.getElementById("vrHits"); if (el && R.form) el.innerHTML = hitsHtml(R.form, R.places); };
+  async function loadLists() { R.lists = await db.loadEditorLists(ctx.sb()); R.places = placeOptions(R.lists.areas); }
   async function load() {
     R.loading = true; R.error = "";
-    try { R.lists = await db.loadEditorLists(ctx.sb()); R.places = placeOptions(R.lists.areas); }
+    // The prepared suggestions are a large file, read only here; without them the app's own suggestions are used.
+    const prep = import("./vwmprep.js?v=1").then((m) => prepIndex(m.PREP)).catch(() => null);
+    try { await loadLists(); R.prep = await prep; }
     catch (e) { R.error = "Could not load the producer, grape and place lists: " + (e.message || e); }
     R.loading = false; draw();
   }
   async function add(publish) {
     const f = R.form; if (!f || R.busy) return;
-    const chk = checkReview(f);
-    if (!chk.ok) { R.err = chk.why; const e = document.getElementById("vrErr"); if (e) e.textContent = chk.why; return; }
+    const chk = checkReview(f), plan = placePlan(R.lists.areas, f.place);
+    const why = !chk.ok ? chk.why : plan.error;
+    if (why) { R.err = why; const e = document.getElementById("vrErr"); if (e) e.textContent = why; return; }
     R.busy = true; R.err = ""; draw();
     try {
+      const areaId = await savePlace(ctx.sb(), R.lists.areas, canonPlace(R.lists.areas, f.place));
+      if (plan.notes.length) await loadLists();   // new places join the search at once
       await db.addVenueCatalogWine(ctx.sb(), ctx.userId(), {
-        producerName: f.producer, wineName: f.wine, style: f.style, areaId: f.areaId || null, vintage: f.vintage === "NV" ? "NV" : f.vintage,
+        producerName: f.producer, wineName: f.wine, style: f.style, areaId: areaId || null, vintage: f.vintage === "NV" ? "NV" : f.vintage,
         grapes: grapesFrom(f.grapes, R.lists.grapes), publish, rowId: f.rowId, listedAs: f.title, sourceName: `${VENUE.name} list`,
       });
       R.msg = `Added: ${f.producer}${f.wine ? " " + f.wine : ""} ${f.vintage}${publish ? ", published" : ", waiting for review in Catalog"}.`;
@@ -115,11 +158,17 @@ export function createVenueReview(ctx) {
   document.addEventListener("click", async (ev) => {
     const t = ev.target.closest("[data-vr]");
     if (!t || !root || t.disabled) return;
-    const [action, a] = t.dataset.vr.split(":");
+    const i = t.dataset.vr.indexOf(":"), action = i < 0 ? t.dataset.vr : t.dataset.vr.slice(0, i), a = i < 0 ? "" : t.dataset.vr.slice(i + 1);
     const f = R.form;
     if (action === "retry") load();
     else if (action === "split" && f) { f.split = Number(a) === f.split ? 0 : Number(a); const sp = splitTitle(f.title, f.split); f.producer = sp.producer; f.wine = sp.wine; draw(); }
-    else if (action === "style" && f) { f.style = a; draw(); }
+    else if (action === "style" && f) { f.style = a; f.styleWhy = ""; draw(); }
+    else if (action === "place" && f) { f.place = placeFromArea(R.lists.areas, a); f.placeWhy = ""; f.q = ""; f.typing = false; draw(); }
+    else if (action === "type" && f) {
+      f.typing = !f.typing;
+      if (f.typing && f.q.trim() && !placeText(f.place)) f.place = { country: "", region: "", appellation: f.q.trim() };   // start from what was searched
+      f.q = ""; draw();
+    }
     else if (action === "add") await add(a === "pub");
     else if (action === "skip" && f) { R.skipped.add(f.rowId); R.form = null; R.msg = ""; draw(); }
     else if (action === "remove" && f && ctx.owner()) {
@@ -129,10 +178,13 @@ export function createVenueReview(ctx) {
       R.busy = false; draw();
     }
   });
-  // Typing changes the form without redrawing, so the box keeps its focus.
+  // Typing changes the form without redrawing, so the box keeps its focus; only the place line and the search results are redrawn.
   document.addEventListener("input", (ev) => {
     const t = ev.target;
-    if (!t || !t.dataset || t.dataset.vrF === undefined || !R.form) return;
+    if (!t || !t.dataset || !R.form || !root || !root.contains(t)) return;
+    if (t.dataset.vrQ !== undefined) { R.form.q = t.value; drawHits(); return; }
+    if (t.dataset.vrP !== undefined) { R.form.place = { ...R.form.place, [t.dataset.vrP]: t.value }; R.form.placeWhy = ""; drawPlace(); return; }
+    if (t.dataset.vrF === undefined) return;
     R.form[t.dataset.vrF] = t.value;
     if (t.dataset.vrF === "vintage") R.form.vintage = t.value.trim().toUpperCase() === "NV" ? "NV" : t.value.trim();
   });

@@ -569,9 +569,9 @@ export async function reuseWinePhoto(sb, fromVintageId, toVintageId, note, { rep
 // Every player reads it (their deck is built from it); only the owner changes it. Changes are online only (owner writes are never queued offline).
 const venueMissing = (error) => (error && (error.code === "42P01" || /venue_wines/.test(String(error.message || ""))) ? Object.assign(new Error("The venue list needs a database update (docs/venue_decks.sql)."), { missing: true }) : error);
 export async function loadVenueList(sb, venueId) {
-  const { data, error } = await sb.from("venue_wines").select("id, wine_vintage_id, producer, wine_name, vintage, shop_type, source, added_at").eq("venue_id", venueId);
-  if (error) throw venueMissing(error);
-  return data || [];
+  // A shop's list can be longer than the 1000 rows one read returns, so it is read 1000 at a time (in a fixed order, so no row is missed or read twice).
+  try { return await allRows(() => sb.from("venue_wines").select("id, wine_vintage_id, producer, wine_name, vintage, shop_type, source, added_at").eq("venue_id", venueId).order("id")); }
+  catch (e) { throw venueMissing(e); }
 }
 // Saves rows read from the venue's file. Wines already on the list are skipped by the app before this is called. rows: [{ producer, wine_name, vintage, wine_vintage_id }]
 export async function addVenueRows(sb, venueId, rows, source = "file") {

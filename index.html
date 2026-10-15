@@ -573,10 +573,32 @@
   .glist { padding-left: 4px; list-style: none; font-size: calc(14px * var(--ts)); line-height: 1.6; margin: 8px 0; }
   .gtopics { display: flex; flex-direction: column; gap: 6px; }
   .gtopic { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; font-size: calc(15px * var(--ts)); }
-  .vrcard { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
-  .vrtitle { font-size: calc(18px * var(--ts)); }
-  .vrwords .chip { flex: 0 0 auto; padding: 5px 10px; font-size: calc(13px * var(--ts)); }
-  .vrbtns { margin-top: 8px; }
+  /* Editor, Vintage Wine Merchants review: one wine per screen, compact so the whole form fits on a phone without scrolling */
+  .vrcount { margin-bottom: 6px; }
+  .vrmsg { margin: 0 0 6px; padding: 6px 10px; }
+  .vrcard { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px; display: flex; flex-direction: column; gap: 4px; }
+  .vrcard .field { margin-top: 2px; padding: 7px 9px; border-radius: 10px; font-size: calc(14px * var(--ts)); }
+  .vrtitle { font-size: calc(16px * var(--ts)); line-height: 1.25; }
+  .vrwarn { background: #fff4e5; border: 1px solid #f0c27a; border-radius: 10px; padding: 5px 8px; font-size: calc(12px * var(--ts)); }
+  .vrlbl { font-size: calc(12px * var(--ts)); font-weight: 600; margin-top: 2px; }
+  .vrlbl .link, .vrlbl .muted { font-weight: 400; }
+  .vrwords { display: flex; flex-wrap: wrap; gap: 3px; }
+  .vrwords .chip { flex: 0 0 auto; padding: 3px 8px; font-size: calc(12px * var(--ts)); }
+  .vrf { display: block; font-size: calc(12px * var(--ts)); font-weight: 600; min-width: 0; }
+  .vrrow2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .vrrow2.vrvg { grid-template-columns: 84px 1fr; }
+  .vrrow3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
+  .vrstyles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; margin-top: 4px; }
+  .vrstyles .chip { padding: 6px 2px; font-size: calc(12px * var(--ts)); overflow: hidden; text-overflow: ellipsis; }
+  .vrhead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .vrhead .link { flex: none; padding: 0; }
+  .vrplace { font-size: calc(13px * var(--ts)); line-height: 1.3; }
+  .vrnew { color: #8a5a00; font-size: calc(12px * var(--ts)); }
+  .vrhits { display: flex; flex-direction: column; gap: 2px; }
+  .vrhits:empty { display: none; }
+  .vrhit { text-align: left; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: calc(13px * var(--ts)); }
+  .vrbtns { display: grid; grid-template-columns: 1.25fr 1.25fr 0.7fr; gap: 6px; margin-top: 2px; }
+  .vrbtns .btn.slim { margin: 0; padding: 9px 4px; font-size: calc(13px * var(--ts)); }
   .lonly { margin-top: 8px; } .lonly .chip { flex: 0 0 auto; padding: 6px 12px; font-size: calc(12px * var(--ts)); }
 
   /* ---- owner page */
@@ -635,6 +657,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=94" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=95" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>

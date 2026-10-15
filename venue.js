@@ -6,6 +6,7 @@
 // The list is kept in the database (venue_wines, docs/venue_decks.sql): the owner uploads the venue's file and adds or removes wines by hand on the Owner page.
 // Pure: no browser, no network. The file reading itself is done by importer.js, loaded on the Owner page.
 import { grapeFor } from "./rules.js?v=4";
+import { planPlace } from "./geo.js?v=1";
 
 // ---------------------------------------------------------------- the venue (the one line a new venue branch changes)
 export const VENUE = { id: "vwm", name: "Vintage Wine Merchants" };
@@ -43,7 +44,7 @@ export function parseTitle(title) {
 }
 // Things a wine shop sells that are not wine: they never join a wine list. Words are matched whole in the title, or the shop's own category.
 export const NOT_WINE_TYPES = ["accessories", "sake"];
-const NOT_WINE = /\b(whisk(?:e)?y|bourbon|scotch|mezcal|tequila|calvados|distillato|grappa|cognac|brandy|vodka|gin|rum|sake|olive oil|corkscrew|decanter|glass(?:es)?|carafe|gift set|non alcoholic|perlage|wine bar|encyclopedia|guide|atlas|companion|zalto|coravin|riedel|pulltex|bullet)\b/i;
+const NOT_WINE = /\b(spirits?|liqueur|whisk(?:e)?y|bourbon|scotch|mezcal|tequila|calvados|distillato|grappa|cognac|armagnac|brandy|vodka|gin|rum|sake|olive oil|corkscrew|decanter|glass(?:es)?|carafe|gift set|non alcoholic|perlage|wine bar|encyclopedia|guide|atlas|companion|zalto|coravin|riedel|pulltex|bullet)\b/i;
 export const isWine = (title, type = "") => !NOT_WINE_TYPES.includes(norm(type)) && !NOT_WINE.test(String(title || "")) && /[a-z]/i.test(String(title || ""));
 const words = (s) => new Set(norm(s).split(" ").filter(Boolean));
 // catalog cards prepared for title matching: { card, need: words that must all be in the title, exact: the whole name when there is no wine name }
@@ -179,11 +180,72 @@ export function splitTitle(title, k) {
   const words = String(title || "").trim().split(/\s+/).filter(Boolean), n = Math.max(0, Math.min(words.length, k));
   return { producer: words.slice(0, n).join(" "), wine: words.slice(n).join(" ") };
 }
-// The rows still waiting: on the list, not linked to a catalog wine, in A-to-Z order; skipped ones (this session) go last.
-export function reviewQueue(list, skipped = new Set()) {
-  const rows = (list || []).filter((r) => !r.wine_vintage_id).sort((a, b) => String(a.wine_name).localeCompare(String(b.wine_name)) || String(a.vintage).localeCompare(String(b.vintage)));
+// The rows still waiting: on the list, not linked to a catalog wine; skipped ones (this session) go last.
+// sortKey(row) -> [country, region, producer, wine] (from the prepared suggestions) keeps one place and one producer together, so an editor checks
+// a producer's wines one after another; without it the order is A to Z by title. Rows with no country come after the others.
+export function reviewQueue(list, skipped = new Set(), sortKey = null) {
+  const keys = new Map();
+  const key = (r) => { if (!keys.has(r.id)) keys.set(r.id, [...(sortKey ? sortKey(r) : []), String(r.wine_name || ""), String(r.vintage || "")].map((x) => norm(x))); return keys.get(r.id); };
+  const cmp = (a, b) => {
+    const ka = key(a), kb = key(b);
+    if (sortKey && !ka[0] !== !kb[0]) return ka[0] ? -1 : 1;
+    for (let i = 0; i < ka.length; i++) { const c = ka[i].localeCompare(kb[i]); if (c) return c; }
+    return 0;
+  };
+  const rows = (list || []).filter((r) => !r.wine_vintage_id).sort(cmp);
   return [...rows.filter((r) => !skipped.has(r.id)), ...rows.filter((r) => skipped.has(r.id))];
 }
+
+// ---------------------------------------------------------------- prepared suggestions (vwmprep.js) and places
+// vwmprep.js holds suggestions worked out once from the shop's titles (unverified; see its header). They are read here row by row; an editor still checks them.
+export function prepIndex(prep) {
+  const m = new Map();
+  (prep || []).forEach((r) => m.set(norm(r[0]), {
+    producer: r[1] || "", wine: r[2] || "", style: r[3] || "", place: { appellation: r[4] || "", region: r[5] || "", country: r[6] || "" },
+    grapes: r[7] ? String(r[7]).split("|") : [], notWine: !!r[8], styleWhy: r[9] ? `${r[9]} in the title` : "", placeWhy: placeWhyOf(r[10]),
+  }));
+  return m;
+}
+const placeWhyOf = (w) => (!w ? "" : w === "producer" ? "where the producer is" : w === "shop category" ? "the shop's category" : `"${w}" in the title`);
+export const prepOf = (index, title) => (index && index.get(norm(title))) || null;
+// Place names compared loosely: accents, case and punctuation ignored, and "St." read as "Saint" ("St.-Julien" = "Saint-Julien").
+const placeKey = (s) => norm(s).replace(/\bst\b/g, "saint").replace(/\bste\b/g, "sainte").replace(/\bsta\b/g, "santa");
+// A place given by name { country, region, appellation } with each name replaced by the place already in the list when there is one, so nothing is
+// created twice. An appellation filed straight under the country (or under another region of it) is found too, and then its own region is used.
+export function canonPlace(areas, place) {
+  const p = { country: String(place.country || "").trim(), region: String(place.region || "").trim(), appellation: String(place.appellation || "").trim() };
+  const find = (name, level, parentIds) => (name ? (areas || []).find((a) => a.level === level && placeKey(a.name) === placeKey(name) && (!parentIds || parentIds.includes(a.parent_id))) : null);
+  const country = find(p.country, "country");
+  if (!country) return p;
+  p.country = country.name;
+  const regions = (areas || []).filter((a) => a.level === "region" && a.parent_id === country.id);
+  let region = find(p.region, "region", [country.id]);
+  const app = find(p.appellation, "appellation", region ? [region.id] : [country.id, ...regions.map((r) => r.id)]);
+  if (app) { p.appellation = app.name; if (!region || app.parent_id !== region.id) region = regions.find((r) => r.id === app.parent_id) || null; p.region = region ? region.name : (app.parent_id === country.id ? "" : p.region); }
+  else if (region) p.region = region.name;
+  return p;
+}
+// "Barolo, Piedmont, Italy" for the screen; "" for no place.
+export const placeText = (place) => [place.appellation, place.region, place.country].filter((x) => String(x || "").trim()).join(", ");
+// What adding the wine will do with its place: { error } or { notes: ["A new appellation will be created in Piedmont."] } (geo.js planPlace).
+export function placePlan(areas, place) {
+  const p = planPlace(areas || [], canonPlace(areas, place));
+  return p.error ? { error: p.error, notes: [] } : { error: "", notes: p.notes };
+}
+// The place search: every word typed must be in the place's full name ("barolo", "piedmont barolo", "st julien"). Places whose own name starts with the
+// search come first, then shorter names. options: [{ id, label }] (wineinfo.js placeOptions).
+export function searchPlaces(options, q, limit = 8) {
+  const t = placeKey(q).split(" ").filter(Boolean);
+  if (!t.length) return [];
+  return (options || []).map((o) => {
+    const k = placeKey(o.label), own = placeKey(String(o.label).split(",")[0]);
+    if (!t.every((w) => ` ${k}`.includes(` ${w}`))) return null;
+    return { o, rank: own.startsWith(t.join(" ")) ? 0 : own.includes(t[0]) ? 1 : 2, len: k.length };
+  }).filter(Boolean).sort((a, b) => a.rank - b.rank || a.len - b.len || a.o.label.localeCompare(b.o.label)).slice(0, limit).map((x) => x.o);
+}
+// How many title words make up the producer's name (for the word chips).
+export const splitOf = (title, producer) => prefixWords(String(title || "").trim().split(/\s+/).filter(Boolean), producer);
+
 // Checks the editor's form before anything is saved. Returns { ok, why }.
 export function checkReview(f) {
   if (!String(f.producer || "").trim()) return { ok: false, why: "Write the producer (tap the word where the producer's name ends)." };
