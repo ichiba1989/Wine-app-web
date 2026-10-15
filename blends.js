@@ -4,7 +4,7 @@
 //   * Main varietal and other varietals (if blended): the forms show two inputs, while a typed-in wine still stores one text,
 //     "main, other, other", so nothing changes in the database.
 //   * Country and region: the forms show two inputs, while a typed-in wine still stores one place text, "region, country".
-import { splitGrapeText, resolveGrape, fold } from "./grapes.js?v=1";
+import { splitGrapeText, resolveGrape, fold } from "./grapes.js?v=3";
 
 // Names the grape fields accept in addition to the grape list. Pass these to setExtraGrapes.
 export const BLENDS = { gsm: { name: "GSM", grapes: ["Grenache", "Syrah", "Mourvèdre"] } };

@@ -14,9 +14,9 @@
 // online is never shown here.
 // "Draft" cards (the very specific ones) name particular vineyards and growths. Those lists are facts, so an editor must check them against a
 // source before testers rely on them; see docs/PRE_TEST_REVIEW.md.
-import { fold as foldText, splitGrapeText } from "./grapes.js?v=1";
-import { splitPlace } from "./blends.js?v=1";
-import { plainKey } from "./text.js?v=1";
+import { fold as foldText, splitGrapeText } from "./grapes.js?v=3";
+import { splitPlace } from "./blends.js?v=3";
+import { plainKey } from "./text.js?v=3";
 
 export const CLEARS_TO_UNLOCK = 3;
 // Catalog photo kinds (wine_images.kind) that may be shown on a bingo square. "found_online" is deliberately not here. Add the kind used for licensed or

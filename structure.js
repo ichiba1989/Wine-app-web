@@ -5,8 +5,8 @@
 // The starting structure is used for three things: where the rating sliders begin, the baseline the palate is worked out from,
 // and how well a wine fits a person's taste in the Discover deck. Nothing here is shown to players as a "correct" answer.
 // This file is pure: no browser, no network.
-import { suggestStructure, values as ruleValues } from "./rules.js?v=4";
-import { clampDimValue, dimMeta } from "./logic.js?v=16";
+import { suggestStructure, values as ruleValues } from "./rules.js?v=6";
+import { clampDimValue, dimMeta } from "./logic.js?v=17";
 
 // A wine typed in by a player (or a journal row) shaped like a catalog card, so the same rules can read it.
 // The place a player types ("Barolo, Piedmont, Italy") is offered as both the appellation and the region, because the rules look for place names inside it.

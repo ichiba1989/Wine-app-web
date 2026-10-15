@@ -5,9 +5,9 @@
 // age rule below (AGE_CUES). Nothing is guessed about a wine. The profile is "typical for this grape, place and age", never a fact about one bottle.
 // The game's answers never touch the palate profile, the Discover deck or the taste model; the best scores are kept on the phone (wine.guess).
 // Pure: no browser, no network.
-import { flavorsForCard, varKeyFor, placeKeysFor, tables, ruleScores, LABEL, CATS } from "./flavors.js?v=3";
-import { climateOf, factsOf, suggestStructure, dimsForStyle, grapeFor, norm } from "./rules.js?v=4";
-import { startingValues } from "./structure.js?v=7";
+import { flavorsForCard, varKeyFor, placeKeysFor, tables, ruleScores, LABEL, CATS } from "./flavors.js?v=4";
+import { climateOf, factsOf, suggestStructure, dimsForStyle, grapeFor, norm } from "./rules.js?v=6";
+import { startingValues } from "./structure.js?v=8";
 
 // ---------------------------------------------------------------- the classics
 // Well-known grape and place pairs, so the game works with any catalog. Each is only a grape and a place that the flavor and structure rules

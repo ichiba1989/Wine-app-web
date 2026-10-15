@@ -5,10 +5,10 @@
 // "VWM" is only the internal short name (the branch, venue_id "vwm", code and docs); every screen says the full name.
 // The list is kept in the database (venue_wines, docs/venue_decks.sql): the owner uploads the venue's file and adds or removes wines by hand on the Owner page.
 // Pure: no browser, no network. The file reading itself is done by importer.js, loaded on the Owner page.
-import { grapeFor } from "./rules.js?v=4";
-import { planPlace } from "./geo.js?v=6";
-import { duplicateGroups } from "./catalog.js?v=5";
-import { plainKey, matchKey, caseKey, lookalikes } from "./text.js?v=1";
+import { grapeFor } from "./rules.js?v=6";
+import { planPlace } from "./geo.js?v=8";
+import { duplicateGroups } from "./catalog.js?v=6";
+import { plainKey, matchKey, caseKey, lookalikes } from "./text.js?v=3";
 
 // ---------------------------------------------------------------- the venue (the one line a new venue branch changes)
 export const VENUE = { id: "vwm", name: "Vintage Wine Merchants" };

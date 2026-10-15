@@ -1,16 +1,16 @@
 // Wine info (editors only): change a catalog wine's details. Producer, wine name, vineyard, vintage, type of wine,
 // place, the grapes printed on the label, and other grapes in the wine (for blends the label does not list).
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
-import { esc, WINE_STYLES } from "./logic.js?v=16";
-import { checkGrapeText, grapeProblem, grapeIndex, setExtraGrapes } from "./grapes.js?v=1";
-import { expandBlends, BLEND_NAMES } from "./blends.js?v=1";
-import { infoLine } from "./wineline.js?v=3";
-import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, savePlace, designationChoices, designationFromText, designationPlan, placeDesignation, splitDesignation, BROAD_PLACES, ruleDesignation } from "./geo.js?v=6";
-import { loadWinePrice, saveWinePrice, parsePrice, centsToField, blendPrice, formatPrice } from "./pricing.js?v=3";
-import { archivePlanFor } from "./catalog.js?v=5";
-import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=15";
-import * as db from "./data.js?v=40";
-import { caseKey, lookalikes } from "./text.js?v=1";
+import { esc, WINE_STYLES } from "./logic.js?v=17";
+import { checkGrapeText, grapeProblem, grapeIndex, setExtraGrapes } from "./grapes.js?v=3";
+import { expandBlends, BLEND_NAMES } from "./blends.js?v=3";
+import { infoLine } from "./wineline.js?v=4";
+import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, savePlace, designationChoices, designationFromText, designationPlan, placeDesignation, splitDesignation, BROAD_PLACES, ruleDesignation } from "./geo.js?v=8";
+import { loadWinePrice, saveWinePrice, parsePrice, centsToField, blendPrice, formatPrice } from "./pricing.js?v=4";
+import { archivePlanFor } from "./catalog.js?v=6";
+import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=16";
+import * as db from "./data.js?v=41";
+import { caseKey, lookalikes } from "./text.js?v=3";
 
 const fold = caseKey;   // text.js: accents and capitals ignored, punctuation still counts
 
@@ -382,7 +382,11 @@ export function createWineInfo(ctx) {
       const field = lk.dataset.wilook || lk.dataset.wikeep;
       if (lk.dataset.wilook) {
         const name = lk.dataset.name;
-        if (field === "producerName") W.form.producerName = name;
+        if (field === "producerName") {
+          const typed = W.form.producerName, prod = W.lists.producers.find((p) => p.name === name);
+          W.form.producerName = name;
+          if (prod && prod.id && caseKey(typed) !== caseKey(name)) db.addProducerAlias(ctx.sb(), typed.trim(), prod.id).catch(() => {});   // remembered, so it is offered next time
+        }
         else { const a = W.lists.areas.find((x) => x.name === name && x.level === field); if (a) Object.assign(W.form, placeFromArea(W.lists.areas, a.id)); else W.form[field] = name; }
       } else W.form.keep = [...(W.form.keep || []), `${field}|${caseKey(W.form[field])}`];
       draw(); return;

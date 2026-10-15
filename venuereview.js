@@ -6,12 +6,12 @@
 // so it joins the venue's deck as soon as it is published. The queue keeps one country, region and producer together.
 // The place is chosen by searching the place list; a place that is not in it yet is typed in and created when the wine is added (geo.js savePlace).
 // Everything fits on one phone screen. Editor writes are online only. The rules are in venue.js (pure); this file draws the screen and handles the taps.
-import { esc, WINE_STYLES } from "./logic.js?v=16";
-import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf, placeLookalikes } from "./venue.js?v=12";
-import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=27";
-import { placeFromArea, savePlace, designationPlan, broadPlace } from "./geo.js?v=6";
-import * as db from "./data.js?v=40";
-import { caseKey, lookalikes } from "./text.js?v=1";
+import { esc, WINE_STYLES } from "./logic.js?v=17";
+import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf, placeLookalikes } from "./venue.js?v=13";
+import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=28";
+import { placeFromArea, savePlace, designationPlan, broadPlace } from "./geo.js?v=8";
+import * as db from "./data.js?v=41";
+import { caseKey, lookalikes } from "./text.js?v=3";
 
 const fold = caseKey;   // text.js: accents and capitals ignored, punctuation still counts
 const STYLE_CHOICES = WINE_STYLES.map((s) => ({ id: s.id, label: s.label }));
@@ -193,7 +193,11 @@ export function createVenueReview(ctx) {
     if (lk && root && R.form && !R.busy) {
       const f = R.form, field = lk.dataset.vrlook || lk.dataset.vrkeep;
       if (lk.dataset.vrkeep) f.keep = [...(f.keep || []), `${field}|${caseKey(field === "producer" ? f.producer : f.place[field])}`];
-      else if (field === "producer") f.producer = lk.dataset.name;
+      else if (field === "producer") {
+        const typed = f.producer, prod = R.lists.producers.find((p) => p.name === lk.dataset.name);
+        f.producer = lk.dataset.name;
+        if (prod && prod.id && caseKey(typed) !== caseKey(prod.name)) db.addProducerAlias(ctx.sb(), typed.trim(), prod.id).catch(() => {});   // remembered, so it is offered next time
+      }
       else {
         const a = R.lists.areas.find((x) => x.level === field && x.name === lk.dataset.name);
         f.place = a ? broadPlace(placeFromArea(R.lists.areas, a.id)) : { ...f.place, [field]: lk.dataset.name };

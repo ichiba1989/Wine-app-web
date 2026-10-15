@@ -35,11 +35,17 @@ export function editDistance(a, b, max = 2) {
 // Existing names that look like the typed one but are not the same text (for the "Looks like ... already in our list" prompt).
 // Same after matchKey ("Saint-Julien" / "St.-Julien", "Donnhoff" / "Dönnhoff"), or one letter apart on a longer name ("Billecart Salmon" /
 // "Billecart Salmonn"). A name already in the list exactly (caseKey) returns nothing: there is nothing to ask.
+// Other names an editor confirmed for the same producer ("Donnhoff" for "Dönnhoff"): caseKey(alias) -> the name in the list (setNameAliases,
+// from the database's producer_aliases). A typed alias is offered as its producer.
+let ALIASES = new Map();
+export const setNameAliases = (pairs) => { ALIASES = new Map((pairs || []).map(([alias, name]) => [caseKey(alias), name])); };
 export function lookalikes(name, names, limit = 3) {
   const typed = String(name || "").trim();
   if (!typed) return [];
   const k = matchKey(typed), c = caseKey(typed);
   if (!k || (names || []).some((n) => caseKey(n) === c)) return [];
+  const alias = ALIASES.get(c);
+  if (alias && (names || []).includes(alias)) return [alias];
   const seen = new Set(), out = [];
   for (const n of names || []) {
     const nk = matchKey(n);
