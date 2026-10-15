@@ -7,9 +7,9 @@
 // The place is chosen by searching the place list; a place that is not in it yet is typed in and created when the wine is added (geo.js savePlace).
 // Everything fits on one phone screen. Editor writes are online only. The rules are in venue.js (pure); this file draws the screen and handles the taps.
 import { esc, WINE_STYLES } from "./logic.js?v=14";
-import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf } from "./venue.js?v=9";
-import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=25";
-import { placeFromArea, savePlace, designationPlan, broadPlace } from "./geo.js?v=4";
+import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf } from "./venue.js?v=11";
+import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=26";
+import { placeFromArea, savePlace, designationPlan, broadPlace } from "./geo.js?v=5";
 import * as db from "./data.js?v=39";
 
 const fold = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -58,8 +58,8 @@ export function grapesFrom(text, grapes) {
 // The place line: what is chosen, and what adding the wine would create.
 export function placeNowHtml(f, areas) {
   const text = placeText(f.place), plan = placePlan(areas, f.place);
-  const why = f.placeWhy && text ? ` <span class="muted">(from ${esc(f.placeWhy)})</span>` : "";
-  const note = plan.error ? `<span class="err">${esc(plan.error)}</span>` : plan.notes.length ? `<span class="vrnew">${esc(plan.notes.join(" "))}</span>` : "";
+  const why = f.placeWhy && text ? ` <span class="muted" title="Suggested from ${esc(f.placeWhy)}">· suggested</span>` : "";   // the reason is in the tooltip, so the line stays short
+  const note = plan.error ? `<span class="err">${esc(plan.error)}</span>` : plan.creates.length ? `<span class="vrnew">New: ${esc(plan.creates.join(", "))}</span>` : "";   // short, so the form stays on one screen
   return `${text ? `<b>${esc(text)}</b>` : `<span class="muted">No place chosen</span>`}${why}${note ? `<br>${note}` : ""}`;
 }
 export function hitsHtml(f, options) {
@@ -75,7 +75,7 @@ export function reviewHtml(R, queue, opts) {
   if (R.error) return `<div class="err">${esc(R.error)}</div><button class="btn outline slim" data-vr="retry">Try again</button>`;
   if (!R.lists) return `<p class="muted">Loading…</p>`;
   const msg = R.msg ? `<div class="notice vrmsg">${esc(R.msg)}</div>` : "";
-  const count = `<div class="muted small vrcount"><b>${queue.length}</b> of ${esc(VENUE.name)}’ wines to add. Every field is a suggestion until you add it.</div>`;
+  const count = `<div class="muted small vrcount"><b>${queue.length}</b> wines to add · every field is a suggestion</div>`;
   if (!queue.length) return `${count}${msg}<p class="muted">Nothing is waiting. New wines appear here when the owner uploads a new list.</p>`;
   const f = R.form;
   if (!f) return `${count}${msg}`;

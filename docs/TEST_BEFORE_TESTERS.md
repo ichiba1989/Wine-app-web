@@ -190,3 +190,5 @@ No database script. Check on a phone:
 - [ ] A wine at a place with no designation: pick one, save, and the wine card shows it next to the place; other wines at that place show it too.
 - [ ] A wine at a new appellation: pick a designation; the new place is created with it.
 - [ ] German and Austrian places: in Edit wine info, a vineyard typed as a German appellation ("Wehlener Sonnenuhr") is refused with the wine-region message; "Mosel" is found; "Kamptal DAC" becomes Kamptal with DAC under Designation; "Corton Grand Cru" as a new place is refused.
+- [ ] **An editor checks the designation rule list** (`KNOWN_DESIGNATIONS` in `geo.js`, prepared 2026-10-15) against the official registers (Austrian DACs, Italian DOCG/DOC/IGT, French AOC/IGP, Spanish DO/DOCa, US AVAs). Then run `docs/geo_designations_fill.sql` once (it fills only empty designations and lists what it filled). If the list changes, regenerate the script from it.
+- [ ] Edit wine info on an Austrian wine at Leithaberg (or a new Napa Valley wine): DAC (or AVA) is selected by itself, "our rule list"; saving keeps it on the place.

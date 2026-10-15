@@ -5,7 +5,7 @@ import { esc, WINE_STYLES } from "./logic.js?v=14";
 import { checkGrapeText, grapeProblem, grapeIndex, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES } from "./blends.js?v=1";
 import { infoLine } from "./wineline.js?v=1";
-import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, savePlace, designationChoices, designationFromText, designationPlan, placeDesignation, splitDesignation, BROAD_PLACES } from "./geo.js?v=4";
+import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, savePlace, designationChoices, designationFromText, designationPlan, placeDesignation, splitDesignation, BROAD_PLACES, ruleDesignation } from "./geo.js?v=5";
 import { loadWinePrice, saveWinePrice, parsePrice, centsToField, blendPrice, formatPrice } from "./pricing.js?v=1";
 import { archivePlanFor } from "./catalog.js?v=3";
 import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=14";
@@ -108,6 +108,8 @@ export function startDesignation(areas, place, text) {
   const have = placeDesignation(areas, place);
   if (have) return { designation: have, why: "" };
   if (!designationChoices(place.country).length) return { designation: "", why: "" };
+  const rule = ruleDesignation(place);   // the stored rule list (geo.js KNOWN_DESIGNATIONS): Leithaberg -> DAC
+  if (rule) return { designation: rule.designation, why: `${rule.name} is ${rule.designation} (our rule list)` };
   const typed = [place.appellation, place.region].map((x) => splitDesignation(x).designation).find(Boolean);   // "Kamptal DAC" typed as the place
   if (typed) return { designation: typed, why: `"${typed}" typed with the place` };
   const t = designationFromText(text);

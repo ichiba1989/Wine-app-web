@@ -6,7 +6,7 @@
 // The list is kept in the database (venue_wines, docs/venue_decks.sql): the owner uploads the venue's file and adds or removes wines by hand on the Owner page.
 // Pure: no browser, no network. The file reading itself is done by importer.js, loaded on the Owner page.
 import { grapeFor } from "./rules.js?v=4";
-import { planPlace } from "./geo.js?v=4";
+import { planPlace } from "./geo.js?v=5";
 import { duplicateGroups } from "./catalog.js?v=3";
 
 // ---------------------------------------------------------------- the venue (the one line a new venue branch changes)
@@ -240,7 +240,7 @@ export const placeText = (place) => [place.appellation, place.region, place.coun
 // What adding the wine will do with its place: { error } or { notes: ["A new appellation will be created in Piedmont."] } (geo.js planPlace).
 export function placePlan(areas, place) {
   const p = planPlace(areas || [], canonPlace(areas, place));
-  return p.error ? { error: p.error, notes: [] } : { error: "", notes: p.notes };
+  return p.error ? { error: p.error, notes: [], creates: [] } : { error: "", notes: p.notes, creates: p.creates.map((c) => `${c.name} (${c.level})`) };
 }
 // The place search: every word typed must be in the place's full name ("barolo", "piedmont barolo", "st julien"). Places whose own name starts with the
 // search come first, then shorter names. options: [{ id, label }] (wineinfo.js placeOptions).
