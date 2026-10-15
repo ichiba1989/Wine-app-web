@@ -253,6 +253,36 @@ export function searchPlaces(options, q, limit = 8) {
     return { o, rank: own.startsWith(t.join(" ")) ? 0 : own.includes(t[0]) ? 1 : 2, len: k.length };
   }).filter(Boolean).sort((a, b) => a.rank - b.rank || a.len - b.len || a.o.label.localeCompare(b.o.label)).slice(0, limit).map((x) => x.o);
 }
+// The wine name without the words that already fill their own fields (owner, 2026-10-15): a grape in the grapes field and a place in the place field
+// are taken out of the name ("Pinot Noir Cuvee Catherine Sonoma Coast" with Pinot Noir and Sonoma Coast -> "Cuvee Catherine"), together with the place's
+// label term (DOC, DOCG, AOC ...) once its place is out. Words are matched whole, accents, case and punctuation ignored, "St." read as "Saint".
+// Leftover joining words at either end ("de", "di", "of" ...) go too. The name may end up empty: the wine is then known by its producer, type, place
+// and grapes (a catalog wine's name can be empty; adding one reuses an existing wine only when those all agree, data.js addVenueCatalogWine).
+const PLACE_TERMS = ["doc", "docg", "doca", "docq", "aoc", "aop", "ac", "do", "dop", "igt", "igp", "ava", "qba", "dac", "vdp"];
+const RANK_WORDS = new Set(["grand", "cru", "crus", "premier", "1er", "villages", "classico", "superiore", "riserva", "reserva", "gran", "crianza"]);
+const JOINERS = new Set(["de", "di", "du", "des", "del", "della", "dei", "da", "la", "le", "les", "el", "of", "from", "and", "et", "e", "y", "und"]);
+export function wineNameOf(text, { grapes = [], place = {} } = {}) {
+  let words = String(text || "").trim().split(/\s+/).filter(Boolean);
+  const placeNames = [place.appellation, place.region, place.country].map((x) => String(x || "").trim()).filter(Boolean);
+  const phrases = [...(grapes || []), ...placeNames].map((x) => placeKey(x)).filter(Boolean).sort((a, b) => b.length - a.length);
+  let placeOut = false;
+  for (const ph of phrases) {
+    for (let i = 0; i < words.length; i++) {
+      for (let j = i + 1; j <= Math.min(words.length, i + 6); j++) {
+        if (placeKey(words.slice(i, j).join(" ")) === ph) {
+          if (placeNames.some((n) => placeKey(n) === ph)) placeOut = true;
+          words = [...words.slice(0, i), ...words.slice(j)]; i--; break;
+        }
+      }
+    }
+  }
+  if (placeOut) words = words.filter((w) => !PLACE_TERMS.includes(norm(w)));
+  // "Corton Grand Cru" with Corton as the place: a rank left on its own belongs to the place (the place list holds its classification), so it goes too.
+  if (placeOut && words.length && words.every((w) => RANK_WORDS.has(norm(w)))) words = [];
+  while (words.length && (JOINERS.has(norm(words[0])) || !norm(words[0]))) words.shift();
+  while (words.length && (JOINERS.has(norm(words[words.length - 1])) || !norm(words[words.length - 1]))) words.pop();
+  return words.join(" ");
+}
 // How many title words make up the producer's name (for the word chips).
 export const splitOf = (title, producer) => prefixWords(String(title || "").trim().split(/\s+/).filter(Boolean), producer);
 

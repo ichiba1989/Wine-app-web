@@ -7,10 +7,10 @@
 // The place is chosen by searching the place list; a place that is not in it yet is typed in and created when the wine is added (geo.js savePlace).
 // Everything fits on one phone screen. Editor writes are online only. The rules are in venue.js (pure); this file draws the screen and handles the taps.
 import { esc, WINE_STYLES } from "./logic.js?v=14";
-import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf } from "./venue.js?v=4";
-import { placeOptions } from "./wineinfo.js?v=21";
+import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf } from "./venue.js?v=5";
+import { placeOptions } from "./wineinfo.js?v=22";
 import { placeFromArea, savePlace } from "./geo.js?v=1";
-import * as db from "./data.js?v=36";
+import * as db from "./data.js?v=37";
 
 const fold = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 const STYLE_CHOICES = WINE_STYLES.map((s) => ({ id: s.id, label: s.label }));
@@ -22,18 +22,22 @@ export function formFor(row, lists, prep = null) {
   if (p) {
     const split = splitOf(row.wine_name, p.producer);
     const sp = split ? splitTitle(row.wine_name, split) : { producer: p.producer, wine: p.wine };
+    const place = canonPlace(lists.areas, p.place);
     return {
-      ...base, split, producer: sp.producer, wine: p.wine || sp.wine, style: p.style, styleWhy: p.styleWhy, place: canonPlace(lists.areas, p.place), placeWhy: p.placeWhy,
+      ...base, split, producer: sp.producer, wine: wineNameOf(p.wine || sp.wine, { grapes: p.grapes, place: { ...p.place, ...place } }), style: p.style, styleWhy: p.styleWhy, place, placeWhy: p.placeWhy,
       grapes: p.grapes.join(", "), notWine: p.notWine, knownProducer: lists.producers.some((x) => fold(x.name) === fold(sp.producer)),
     };
   }
   const s = suggestRow(row.wine_name, { producers: lists.producers, areas: lists.areas, shopType: row.shop_type || "" });
   const sp = splitTitle(row.wine_name, s.split);
+  const place = s.areaId ? placeFromArea(lists.areas, s.areaId) : { country: "", region: "", appellation: "" };
   return {
-    ...base, split: s.split, producer: sp.producer, wine: sp.wine, style: s.style, styleWhy: s.styleWhy, place: s.areaId ? placeFromArea(lists.areas, s.areaId) : { country: "", region: "", appellation: "" },
+    ...base, split: s.split, producer: sp.producer, wine: wineNameOf(sp.wine, { grapes: s.grapes, place }), style: s.style, styleWhy: s.styleWhy, place,
     placeWhy: s.areaWhy, grapes: s.grapes.join(", "), notWine: false, knownProducer: !!s.producerId,
   };
 }
+// The wine name for the form's current grapes and place (venue.js wineNameOf), from the title words after the producer.
+const nameFor = (f, rest) => wineNameOf(rest, { grapes: String(f.grapes || "").split(/[,;]/).map((x) => x.trim()).filter(Boolean), place: f.place });
 // The grapes typed in the form, as ids of grapes already in the list, or new names.
 export function grapesFrom(text, grapes) {
   const seen = new Set(), out = [];
@@ -83,7 +87,7 @@ export function reviewHtml(R, queue, opts) {
       <div class="vrwords">${wordBtns}</div>
       <div class="vrrow2">
         <label class="vrf">Producer<input class="field" data-vr-f="producer" value="${esc(f.producer)}" autocomplete="off"></label>
-        <label class="vrf">Wine name<input class="field" data-vr-f="wine" value="${esc(f.wine)}" autocomplete="off"></label>
+        <label class="vrf">Wine name<input class="field" data-vr-f="wine" value="${esc(f.wine)}" autocomplete="off" placeholder="none: grape and place say it"></label>
       </div>
       <div class="vrstyles" role="group" aria-label="Type of wine">${styles}</div>
       <div class="vrlbl">Place <button class="link" data-vr="type">${f.typing ? "Search instead" : "Type a new place"}</button></div>
@@ -161,9 +165,9 @@ export function createVenueReview(ctx) {
     const i = t.dataset.vr.indexOf(":"), action = i < 0 ? t.dataset.vr : t.dataset.vr.slice(0, i), a = i < 0 ? "" : t.dataset.vr.slice(i + 1);
     const f = R.form;
     if (action === "retry") load();
-    else if (action === "split" && f) { f.split = Number(a) === f.split ? 0 : Number(a); const sp = splitTitle(f.title, f.split); f.producer = sp.producer; f.wine = sp.wine; draw(); }
+    else if (action === "split" && f) { f.split = Number(a) === f.split ? 0 : Number(a); const sp = splitTitle(f.title, f.split); f.producer = sp.producer; f.wine = nameFor(f, sp.wine); draw(); }
     else if (action === "style" && f) { f.style = a; f.styleWhy = ""; draw(); }
-    else if (action === "place" && f) { f.place = placeFromArea(R.lists.areas, a); f.placeWhy = ""; f.q = ""; f.typing = false; draw(); }
+    else if (action === "place" && f) { f.place = placeFromArea(R.lists.areas, a); f.wine = nameFor(f, f.wine); f.placeWhy = ""; f.q = ""; f.typing = false; draw(); }   // the chosen place's words leave the name
     else if (action === "type" && f) {
       f.typing = !f.typing;
       if (f.typing && f.q.trim() && !placeText(f.place)) f.place = { country: "", region: "", appellation: f.q.trim() };   // start from what was searched

@@ -612,10 +612,17 @@ export async function addVenueCatalogWine(sb, userId, plan) {
     return found.length ? found[0].id : must(await sb.from("producers").insert({ name: pname }).select("id").single()).id;
   });
   const wineId = await step("Wine", async () => {
-    let q = sb.from("wines").select("id").eq("producer_id", producerId);
+    let q = sb.from("wines").select("id, style, appellation_id").eq("producer_id", producerId);
     q = wname ? q.ilike("name", like(wname)) : q.is("name", null);
-    const found = must(await q.limit(1));
-    if (found.length) return found[0].id;
+    const found = must(await q.limit(wname ? 1 : 50));
+    if (wname && found.length) return found[0].id;
+    // A wine with no name (its grape and place words went to their own fields: "Trimbach Riesling Alsace") is the same wine only when its type,
+    // place and label grapes all agree; otherwise "Trimbach Riesling" and "Trimbach Pinot Gris" would become one wine.
+    const want = (plan.grapes || []).map((g) => g.id || `new:${g.name}`).sort().join("|");
+    for (const w of found.filter((x) => x.style === plan.style && (x.appellation_id || null) === (plan.areaId || null))) {
+      const have = must(await sb.from("wine_grapes").select("grape_id").eq("wine_id", w.id)).map((x) => x.grape_id).sort().join("|");
+      if (have === want) return w.id;
+    }
     return must(await sb.from("wines").insert({ producer_id: producerId, name: wname || null, style: plan.style, style_basis: "editor", appellation_id: plan.areaId || null, status: plan.publish ? "verified" : "pending_review" }).select("id").single()).id;
   });
   const vintageId = await step("Vintage", async () => {
