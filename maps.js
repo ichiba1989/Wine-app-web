@@ -7,9 +7,9 @@
 //   in that country. The region view is a close-up of the place with a grid, nearby places, a scale, a compass and a small locator map.
 // Anything drawn from schematic data says so. Pure: no browser, no network.
 import { COUNTRY, VILLAGES, DETAIL } from "./geodata.js?v=1";
-import { placeFor, tables } from "./flavors.js?v=1";
-import { fold } from "./flavordata.js?v=1";
-import { tintFor } from "./visuals.js?v=2";
+import { placeFor, tables } from "./flavors.js?v=2";
+import { fold } from "./flavordata.js?v=2";
+import { tintFor } from "./visuals.js?v=3";
 
 const COS = (lat) => Math.cos((lat * Math.PI) / 180);
 const r1 = (n) => Math.round(n * 10) / 10;

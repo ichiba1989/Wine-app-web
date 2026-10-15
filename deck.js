@@ -15,6 +15,7 @@
 // likelier to like come first, with some randomness so it never feels fixed, and the same producer or place does not repeat back to back.
 
 import { SWIPE_WEIGHT, DECK_CONFIG, reactionOf, skipComesBack } from "./reactions.js?v=3";
+import { plainKey } from "./text.js?v=1";
 
 export const TIERS = ["high", "medium", "low"];
 export const TIER_LABEL = { high: "Familiar", medium: "Getting warmer", low: "New territory" };
@@ -30,7 +31,7 @@ export const UNRATED_WEIGHT = 0.25;
 export const DEFAULT_REACH = 3;
 
 export const clamp01 = (v) => Math.max(0, Math.min(1, v));
-const fold = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const fold = plainKey;   // text.js: the shared lookup key
 const keyOf = (kind, v) => (v ? kind + ":" + fold(v) : "");
 
 // Everything about a card that the deck cares about, as keys.

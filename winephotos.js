@@ -2,8 +2,9 @@
 // The rules here (what counts as missing, what the choices are) are pure, so they can be tested on their own.
 // The upload step shrinks the picture in the browser first, then saves it through data.js.
 import { shrinkImage } from "./photos.js?v=5";
-import * as db from "./data.js?v=34";
-import { looseKey } from "./catalog.js?v=3";
+import * as db from "./data.js?v=35";
+import { looseKey } from "./catalog.js?v=4";
+import { caseKey } from "./text.js?v=1";
 
 // Bottle photos are saved at about 900 px on the longest side: sharp on a phone card, small to download.
 export const DECK_PHOTO_SIDE = 900;
@@ -36,7 +37,7 @@ export function photoSummary(cards) {
   const withPhoto = list.filter((c) => !!c.image).length;
   return { total: list.length, withPhoto, without: list.length - withPhoto, found: list.filter((c) => c.imageKind === "found_online").length, pct: list.length ? Math.round((withPhoto / list.length) * 100) : 0 };
 }
-const fold = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const fold = caseKey;   // text.js
 // filter: 'needs' | 'has' | 'found' | 'all'. Needing a photo first, then by name; the search looks at producer, wine name, vintage and place.
 export function photoList(cards, { filter = "needs", query = "" } = {}) {
   const q = fold(query).trim();

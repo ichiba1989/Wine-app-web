@@ -1,7 +1,8 @@
 // Country, region and appellation as three separate fields in Edit wine info.
 // The database keeps places as a tree (country, then region, then appellation) and a wine points at the most specific one it has.
 // The rules at the top are pure (no browser, no network). savePlace at the bottom creates any missing places.
-const fold = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+import { caseKey, plainKey } from "./text.js?v=1";
+const fold = caseKey;   // text.js: accents and capitals ignored, punctuation still counts
 const byName = (a, b) => fold(a).localeCompare(fold(b));
 
 // areas: [{ id, name, level: 'country' | 'region' | 'appellation', parent_id, classification }]
@@ -39,7 +40,7 @@ export const BROAD_PLACES = {
   austria: ["Niederösterreich", "Burgenland", "Steiermark", "Wien", "Wachau", "Kremstal", "Kamptal", "Traisental", "Wagram", "Weinviertel", "Carnuntum", "Thermenregion",
     "Neusiedlersee", "Leithaberg", "Rosalia", "Mittelburgenland", "Eisenberg", "Vulkanland Steiermark", "Südsteiermark", "Weststeiermark", "Wiener Gemischter Satz", "Ruster Ausbruch"],
 };
-const key = (s) => fold(s).replace(/ß/g, "ss").replace(/[^a-z0-9]+/g, " ").trim();
+const key = plainKey;
 const broadList = (country) => BROAD_PLACES[key(country)] || null;
 const isBroad = (country, name) => { const l = broadList(country); return !l || l.some((x) => key(x) === key(name)); };
 // A German or Austrian place cut down to what is on the list (a village or vineyard is dropped: it stays in the wine name). Other countries unchanged.

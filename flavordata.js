@@ -2,6 +2,7 @@
 // and the places (REGION: where they are, and a small nudge to the flavors the place adds). These tables are also kept in the database
 // (flavor_varietals, flavor_regions) so the Owner or an editor can tune them; what is here is the starting set, and the database wins where both have a row.
 // Pure data: no browser, no network.
+import { plainKey } from "./text.js?v=1";
 
 // ---------------------------------------------------------------- flavors
 export const LABEL = {
@@ -154,6 +155,6 @@ export const PLACES = [
 export const COUNTRY_CENTER = { USA: [39.5, -98.5], France: [46.6, 2.5], Italy: [42.8, 12.5], Spain: [40.2, -3.6], Portugal: [39.6, -8.0], Germany: [51.0, 10.3], Austria: [47.6, 14.2],
   Argentina: [-35.0, -65.0], Chile: [-33.5, -70.7], Australia: [-25.5, 134.0], "New Zealand": [-41.0, 173.0], "South Africa": [-30.5, 24.5] };
 
-export const fold = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+export const fold = plainKey;   // text.js: the shared lookup key
 export const varKey = (name) => fold(name).replace(/ /g, "");
 export const placeKey = (country, name) => `${fold(country)}|${fold(name)}`;

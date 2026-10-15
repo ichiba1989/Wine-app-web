@@ -3,13 +3,14 @@
 // The owner adds new tags (Owner page, Tags tab) and from then on they are in the suggestions and the pull-down. (2) The quiz uses the tags: a question tagged with
 // something the player said "I don't know it" to (see gapsOf in deck.js) is asked sooner (boostFor, used by learn.js).
 // A tag's key is "kind:folded name", the same keys the Discover deck uses for grapes, regions, countries, producers and styles, so the two line up with no extra mapping.
+import { plainKey } from "./text.js?v=1";
 export const TAG_KINDS = [
   { id: "grape", label: "Grape" }, { id: "region", label: "Region or appellation" }, { id: "country", label: "Country" },
   { id: "producer", label: "Producer" }, { id: "style", label: "Style" }, { id: "theme", label: "Theme" },
 ];
 export const MAX_PULLDOWN = 2;                 // how many tags an editor may add from the pull-down in one edit (suggested tags are not limited)
 export const SUGGEST_MIN = 5, SUGGEST_MAX = 10;
-export const fold = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+export const fold = plainKey;   // text.js: the shared lookup key
 export const tagKey = (t) => (t && t.kind && t.kind !== "theme" && fold(t.name) ? t.kind + ":" + fold(t.name) : "");
 // Which kinds of tag usually belong to each quiz topic (used only to fill up the suggestions).
 const TOPIC_KINDS = { Grapes: ["grape"], Regions: ["region", "country"], Producers: ["producer"], Winemaking: ["theme", "style"], "Other alcohol": ["theme"] };

@@ -16,6 +16,7 @@
 // source before testers rely on them; see docs/PRE_TEST_REVIEW.md.
 import { fold as foldText, splitGrapeText } from "./grapes.js?v=1";
 import { splitPlace } from "./blends.js?v=1";
+import { plainKey } from "./text.js?v=1";
 
 export const CLEARS_TO_UNLOCK = 3;
 // Catalog photo kinds (wine_images.kind) that may be shown on a bingo square. "found_online" is deliberately not here. Add the kind used for licensed or
@@ -105,7 +106,7 @@ export const cardById = (id) => CARDS.find((c) => c.id === id) || null;
 export const cardsOfTier = (n) => CARDS.filter((c) => c.tier === n);
 
 // ---------------------------------------------------------------- facts about a rated wine
-const norm = (s) => foldText(s).replace(/[^a-z0-9]+/g, " ").trim();
+const norm = plainKey;   // text.js: the shared lookup key
 // whole-word match: "latour" is not found in "Latouraine"; "Bordeaux" is found in "Bordeaux Superieur"
 const has = (hay, needle) => { const n = norm(needle); return !!n && (" " + hay + " ").includes(" " + n + " "); };
 const yearOf = (text) => { const m = /^(\d{4})/.exec(String(text || "")); return m ? Number(m[1]) : null; };

@@ -1,7 +1,7 @@
 // The Swipes tab as a tab view: which wines show on each tab, how they are grouped (grape, region, producer, vintage, how well the app thinks they fit),
 // filtered and sorted. Pure: no page, no network. views.js draws it, app.js keeps the choices in state.sw.
 // An "entry" is { card, kind } where kind is liked, disliked, dontKnow, rec (older "recognized" answers), tried (rated wines found through Discover) or had.
-import { fold } from "./tags.js?v=2";
+import { fold } from "./tags.js?v=3";
 
 export const SW_START = { tab: "like", status: "all", group: "recent", sort: "recent", q: "", style: "all", more: false, open: {} };
 // One row of four: thumbs up, thumbs down, skip, all. `icon` names a picture in reactions.js ICONS; the label is what screen readers say.

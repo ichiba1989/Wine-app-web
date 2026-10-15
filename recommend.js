@@ -10,13 +10,14 @@
 //   similar    "More like this"      Close to one wine they give (the seed): shared grape and place, how it feels, and flavors in common.
 //   value      "Everyday pick"       Likely to be liked, easy to find, and gentle on the budget (a missing price counts as neutral).
 // Add a lens by adding one entry to LENSES: score(ctx, card) returns { score, reason }.
-import { prefOf, famOf, cardKeys, isLive, reachOf, VERDICT_WEIGHT, UNRATED_WEIGHT } from "./deck.js?v=7";
-import { flavorsForCard } from "./flavors.js?v=1";
+import { prefOf, famOf, cardKeys, isLive, reachOf, VERDICT_WEIGHT, UNRATED_WEIGHT } from "./deck.js?v=8";
+import { flavorsForCard } from "./flavors.js?v=2";
 import { splitGrapeText } from "./grapes.js?v=1";
 import { splitPlace } from "./blends.js?v=1";
-import { wineName } from "./logic.js?v=14";
+import { wineName } from "./logic.js?v=15";
+import { plainKey } from "./text.js?v=1";
 
-const fold = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const fold = plainKey;   // text.js: the shared lookup key
 const keyOf = (kind, v) => (v ? kind + ":" + fold(v) : "");   // the same key shape deck.js uses
 const aff = (map, k) => { const v = map.get(k) || 0; return v / (Math.abs(v) + 1); };   // -1 to 1
 const to01 = (a) => (a + 1) / 2;
