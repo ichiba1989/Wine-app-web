@@ -183,3 +183,8 @@ No database script. Check on a phone:
 - [ ] German and Austrian places: in Edit wine info, a vineyard typed as a German appellation ("Wehlener Sonnenuhr") is refused with the wine-region message; "Mosel" is found; "Kamptal DAC" becomes Kamptal with DAC under Designation; "Corton Grand Cru" as a new place is refused.
 - [ ] **An editor checks the designation rule list** (`KNOWN_DESIGNATIONS` in `geo.js`, prepared 2026-10-15) against the official registers (Austrian DACs, Italian DOCG/DOC/IGT, French AOC/IGP, Spanish DO/DOCa, US AVAs). Then run `docs/geo_designations_fill.sql` once (it fills only empty designations and lists what it filled). If the list changes, regenerate the script from it.
 - [ ] Edit wine info on an Austrian wine at Leithaberg (or a new Napa Valley wine): DAC (or AVA) is selected by itself, "our rule list"; saving keeps it on the place.
+
+## Place list checks (added 2026-10-15)
+- [ ] Run `docs/place_fixes.sql` once in Supabase (the check at its end should list no duplicates).
+- [ ] Owner page, Checks tab, Places: Mosel is suggested as a region and St.-Julien as Saint-Julien (both "Source checked"); St.-Joseph and St.-Émilion are "To check" (confirm the official name on the INAO site before applying); Sta. Rita Hills and "American" are not listed. Apply one and the place changes for every wine there; it appears in `place_changes`.
+

@@ -5,11 +5,11 @@ import { esc, WINE_STYLES } from "./logic.js?v=15";
 import { checkGrapeText, grapeProblem, grapeIndex, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES } from "./blends.js?v=1";
 import { infoLine } from "./wineline.js?v=2";
-import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, savePlace, designationChoices, designationFromText, designationPlan, placeDesignation, splitDesignation, BROAD_PLACES, ruleDesignation } from "./geo.js?v=5";
+import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, savePlace, designationChoices, designationFromText, designationPlan, placeDesignation, splitDesignation, BROAD_PLACES, ruleDesignation } from "./geo.js?v=6";
 import { loadWinePrice, saveWinePrice, parsePrice, centsToField, blendPrice, formatPrice } from "./pricing.js?v=2";
 import { archivePlanFor } from "./catalog.js?v=4";
-import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=10";
-import * as db from "./data.js?v=35";
+import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=11";
+import * as db from "./data.js?v=36";
 import { caseKey, lookalikes } from "./text.js?v=1";
 
 const fold = caseKey;   // text.js: accents and capitals ignored, punctuation still counts

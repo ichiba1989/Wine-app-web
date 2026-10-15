@@ -3,7 +3,7 @@
 // still decides what anyone may change. The rules at the top (rows, search, sort, checks, coverage) are pure: no page, no network.
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
 import { esc } from "./logic.js?v=15";
-import { REACH_CHOICES } from "./wineinfo.js?v=22";
+import { REACH_CHOICES } from "./wineinfo.js?v=23";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=3";
 import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=7";
 import { TAG_KINDS } from "./tags.js?v=3";
@@ -11,6 +11,8 @@ import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=10";
 import { centsToField } from "./pricing.js?v=2";
 import { ASSIGNABLE_ROLES, ROLES, PERMISSIONS, staffRows, filterStaff, rowActions } from "./access.js?v=4";
 import { plainKey } from "./text.js?v=1";
+import { placeChecks } from "./geo.js?v=6";
+export { placeChecks };   // used by app.js through the lazily loaded Owner module
 
 export const OWNER_TABS = [{ id: "wines", label: "Wines" }, { id: "lenses", label: "Lenses" }, { id: "bingo", label: "Bingo" }, { id: "checks", label: "Checks" }, { id: "tags", label: "Tags" }, { id: "legend", label: "Legend" }, { id: "roles", label: "Roles" }, { id: "config", label: "Config" }];
 
@@ -122,7 +124,23 @@ function bingoTable(O, d) {
 }
 function checksTable(O, d) {
   const body = d.checks.map((c) => `<tr><td>${esc(c.label)}</td><td class="onum">${c.count}</td><td>${c.count ? `<button class="opill" data-action="owner:filter:${c.id}">Show these wines</button>` : '<span class="muted">all good</span>'}</td></tr>`).join("");
-  return `<div class="muted small onote">Things in the catalog that may need attention, out of ${d.rows.length} wines.</div>${table("<th>Check</th><th>Wines</th><th></th>", body)}`;
+  return `<div class="muted small onote">Things in the catalog that may need attention, out of ${d.rows.length} wines.</div>${table("<th>Check</th><th>Wines</th><th></th>", body)}${placesSection(d)}`;
+}
+// The place list (geo.js placeChecks): each finding with its suggestion and source. Nothing changes until you tap Apply; Dismiss hides it on this phone.
+// The check's id is "kind:area id(s)", passed whole in the button as owner:place...:<kind>:<ids>.
+export function placesSection(d) {
+  const P = d.places;
+  const head = `<h3 class="serif osub">Places</h3><div class="muted small onote">Suggestions for the place list. Official names and legal abbreviations (such as Sta. Rita Hills) are kept exactly as written; nothing changes until you tap Apply. "Source checked" means a source was read; "To check" means please confirm it first.</div>`;
+  if (!P) return `${head}<p class="muted">Loading the place list…</p>`;
+  if (P.error) return `${head}<div class="err">${esc(P.error)}</div>`;
+  const rows = P.list.filter((c) => !(P.dismissed || []).includes(c.id));
+  const body = rows.map((c) => {
+    const [kind, ...rest] = c.id.split(":"), ref = `${kind}:${rest.join(":")}`;
+    return `<tr><td><b>${esc(c.title)}</b><div class="small">${esc(c.suggestion)}</div></td>
+      <td class="small">${esc(c.why)}${c.source ? ` <a href="${esc(c.source)}" target="_blank" rel="noopener noreferrer">Source</a>` : ""}<div>${c.confirmed ? '<span class="gbadge">Source checked</span>' : '<span class="gbadge draft">To check</span>'}</div></td>
+      <td>${c.fix ? `<button class="opill" data-action="owner:placefix:${esc(ref)}">Apply</button> ` : ""}<button class="opill" data-action="owner:placedismiss:${esc(ref)}">Dismiss</button></td></tr>`;
+  }).join("");
+  return `${head}${table("<th>Place</th><th>Why</th><th></th>", body, "Nothing to look at in the place list.")}`;
 }
 function configTable(O, d) {
   if (!d.config) return `<p class="muted">${d.configError ? esc(d.configError) : "Loading…"}</p>`;

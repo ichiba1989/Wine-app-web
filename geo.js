@@ -1,7 +1,7 @@
 // Country, region and appellation as three separate fields in Edit wine info.
 // The database keeps places as a tree (country, then region, then appellation) and a wine points at the most specific one it has.
 // The rules at the top are pure (no browser, no network). savePlace at the bottom creates any missing places.
-import { caseKey, plainKey } from "./text.js?v=1";
+import { caseKey, plainKey, matchKey } from "./text.js?v=1";
 const fold = caseKey;   // text.js: accents and capitals ignored, punctuation still counts
 const byName = (a, b) => fold(a).localeCompare(fold(b));
 
@@ -273,4 +273,46 @@ export async function savePlace(sb, areas, place, opts = {}) {
     made.push(data.id);
   }
   return made[made.length - 1];
+}
+
+// ---------------------------------------------------------------- checks on the place list: suggestions the OWNER applies one by one (owner, 2026-10-15)
+// Nothing here changes a place. Each finding carries a suggestion and where it comes from; the owner taps Apply (data.js applyPlaceFix) or Dismiss.
+// Names that the law requires as written are listed with their source so they are never suggested for change.
+export const LEGAL_NAMES = [
+  { country: "USA", name: "Sta. Rita Hills", why: "Official AVA name since 2006: TTB changed \"Santa Rita Hills\" to \"Sta. Rita Hills\" (TTB-37, 70 FR 72710).", source: "https://origin.winespectator.com/articles/santa-rita-hills-appellation-changes-its-name-to-settle-conflict-2859" },
+  { country: "USA", name: "American", why: "\"American\" is a legal appellation of origin for wine from the United States (27 CFR 4.25).", source: "https://www.law.cornell.edu/cfr/text/27/4.25" },
+];
+// Official spellings that differ from what may be stored. confirmed: true only when a source was checked (2026-10-15).
+export const OFFICIAL_SPELLINGS = [
+  { country: "France", from: "St.-Julien", to: "Saint-Julien", confirmed: true, why: "INAO names the appellation \"Saint-Julien\" (decree of 14 November 1936).", source: "https://www.inao.gouv.fr/node/1782/printable/pdf" },
+  { country: "France", from: "St.-Joseph", to: "Saint-Joseph", confirmed: false, why: "Probably written out in full like Saint-Julien; check the name on the INAO site before applying.", source: "https://www.inao.gouv.fr/" },
+  { country: "France", from: "St.-Émilion", to: "Saint-Émilion", confirmed: false, why: "Probably written out in full like Saint-Julien; check the name on the INAO site before applying.", source: "https://www.inao.gouv.fr/" },
+];
+// Places filed as appellations straight under their country that are broad wine regions.
+export const REGION_LEVEL = [
+  { country: "Germany", name: "Mosel", confirmed: true, why: "Mosel is one of Germany's 13 wine regions (Anbaugebiete).", source: "https://en.wikipedia.org/wiki/List_of_German_wine_regions" },
+];
+const legalName = (country, name) => LEGAL_NAMES.find((l) => caseKey(l.country) === caseKey(country) && caseKey(l.name) === caseKey(name));
+// areas: the place list; wineAreaIds: ids of places that wines point at (to find unused ones; optional).
+// Returns [{ id, areaId, kind, title, suggestion, why, source, confirmed, fix: { name?, level? } | null }].
+export function placeChecks(areas, wineAreaIds = null) {
+  const byId = new Map((areas || []).map((a) => [a.id, a])), out = [];
+  const countryOf = (a) => { for (let x = a, n = 0; x && n < 6; x = byId.get(x.parent_id), n++) if (x.level === "country") return x.name; return ""; };
+  for (const a of areas || []) {
+    const country = countryOf(a), parent = byId.get(a.parent_id);
+    if (a.level === "country" || legalName(country, a.name)) continue;
+    const sp = OFFICIAL_SPELLINGS.find((o) => caseKey(o.country) === caseKey(country) && caseKey(o.from) === caseKey(a.name));
+    if (sp) out.push({ id: `spell:${a.id}`, areaId: a.id, kind: "spelling", title: `${a.name} (${country})`, suggestion: `Rename to ${sp.to}`, why: sp.why, source: sp.source, confirmed: sp.confirmed, fix: { name: sp.to } });
+    const rl = REGION_LEVEL.find((r) => caseKey(r.country) === caseKey(country) && caseKey(r.name) === caseKey(a.name));
+    if (rl && a.level !== "region") out.push({ id: `level:${a.id}`, areaId: a.id, kind: "level", title: `${a.name} (${country})`, suggestion: "File it as a region", why: rl.why, source: rl.source, confirmed: rl.confirmed, fix: { level: "region" } });
+    else if (!rl && a.level === "appellation" && parent && parent.level === "country") out.push({ id: `under:${a.id}`, areaId: a.id, kind: "level", title: `${a.name} (${country})`, suggestion: "Level to confirm: an appellation filed straight under its country", why: "No source checked yet. It may be right (an appellation with no region in our tree) or it may be a region.", source: "", confirmed: false, fix: null });
+    const problem = placeNameProblem(a.name, "", "");
+    if (problem && !(broadList(country) && isBroad(country, a.name))) out.push({ id: `word:${a.id}`, areaId: a.id, kind: "word", title: `${a.name} (${country})`, suggestion: "Take the classification word out of the name", why: problem, source: "", confirmed: false, fix: null });
+    if (wineAreaIds && !wineAreaIds.has(a.id) && !(areas || []).some((c) => c.parent_id === a.id)) out.push({ id: `unused:${a.id}`, areaId: a.id, kind: "unused", title: `${a.name} (${country})`, suggestion: "No wine points at this place", why: "It can stay; it is listed only so you know.", source: "", confirmed: true, fix: null });
+  }
+  // names that look alike under the same parent ("Saint-Julien" and "St.-Julien")
+  const groups = new Map();
+  (areas || []).forEach((a) => { const k = `${a.parent_id}|${a.level}|${matchKey(a.name)}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(a); });
+  for (const g of groups.values()) if (g.length > 1) out.push({ id: `same:${g.map((a) => a.id).join(",")}`, areaId: g[0].id, kind: "lookalike", title: g.map((a) => a.name).join(" / "), suggestion: "Two places that look like the same place", why: "Decide which spelling to keep; wines pointing at the other one need moving by hand.", source: "", confirmed: false, fix: null });
+  return out;
 }

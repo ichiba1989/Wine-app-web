@@ -6,8 +6,8 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete, styleLabel,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=15";
-import * as db from "./data.js?v=35";
-import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=10";
+import * as db from "./data.js?v=36";
+import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=11";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=6";
 import { shrinkImage } from "./photos.js?v=5";
 import {
@@ -37,7 +37,7 @@ import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=8";
 import { createProfile } from "./profile.js?v=23";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=13";
 import { createFeedback } from "./feedback.js?v=7";
-import { createEditor } from "./editor.js?v=35";
+import { createEditor } from "./editor.js?v=36";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=10";
 import { gamesHtml } from "./games.js?v=17";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
@@ -50,10 +50,10 @@ import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
 import { setOffline, setCardLookup } from "./overlay.js?v=1";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=16"));
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=17"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=7"));
 const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=10"));
-import { createWineInfo } from "./wineinfo.js?v=22";
+import { createWineInfo } from "./wineinfo.js?v=23";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -432,7 +432,7 @@ function ownerData() {
   const O = state.owner;
   if (state._ownerFor !== state.cards) { state._ownerFor = state.cards; state._ownerCache = { rows: OWN.wineRows(state.cards), bingo: OWN.bingoCoverage(state.cards) }; }
   const { rows, bingo } = state._ownerCache;
-  return { rows, bingo, checks: OWN.checkCounts(rows), config: O.config, configError: O.configError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, staff: O.staff, staffError: O.staffError, staffAudit: O.staffAudit, seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
+  return { rows, bingo, checks: OWN.checkCounts(rows), places: O.places, config: O.config, configError: O.configError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, staff: O.staff, staffError: O.staffError, staffAudit: O.staffAudit, seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
 }
 // The lens preview: the top picks of one lens for the owner's own profile, or for a brand-new player, using the weights typed on the page.
 function ownerLens() {
@@ -467,6 +467,26 @@ async function ownerSaveReach(vintageId, value) {
   try { await db.saveWineReach(state.sb, await ownerWineId(vintageId), value); card.reach = Number(value); state._ownerFor = null; rebuildDeck(); ownerSay(`Saved: ${wineName(card)}, reach ${value}.`); }
   catch (e) { ownerSay("Could not save: " + (e.message || e)); }
   ownerRedraw();
+}
+// The place list checks (Owner page, Checks tab): geo.js placeChecks over the place list, and which places wines point at.
+const PLACE_DISMISSED = "wine.placeDismissed";
+async function loadOwnerPlaces() {
+  state.owner.places = null;
+  try {
+    const [lists, used] = await Promise.all([db.loadEditorLists(state.sb), db.loadPlaceUse(state.sb)]);
+    let dismissed = []; try { dismissed = JSON.parse(store.get(PLACE_DISMISSED) || "[]"); } catch (_) { dismissed = []; }
+    state.owner.places = { list: OWN.placeChecks(lists.areas, used), dismissed, error: "" };
+  } catch (e) { state.owner.places = { list: [], dismissed: [], error: "Could not load the place list: " + (e.message || e) }; }
+  if (state.tab === "owner" && state.owner.tab === "checks") ownerRedraw();
+}
+async function ownerPlace(a, kind, ids) {
+  const O = state.owner, P = O.places;
+  if (!P) return;
+  const id = `${kind}:${ids}`, check = P.list.find((c) => c.id === id);
+  if (a === "placedismiss") { P.dismissed = [...(P.dismissed || []), id]; store.set(PLACE_DISMISSED, JSON.stringify(P.dismissed)); ownerRedraw(); return; }
+  if (!check || !check.fix) return;
+  try { await db.applyPlaceFix(state.sb, check.areaId, check.fix); ownerSay(`Done: ${check.title}: ${check.suggestion}.`); await loadOwnerPlaces(); }
+  catch (e) { ownerSay("Not changed: " + (e.message || e)); ownerRedraw(); }
 }
 async function loadOwnerTags() {
   try { state.owner.tags = await db.loadQuizTags(state.sb); state.owner.tagsError = ""; }
@@ -673,6 +693,7 @@ function drawTab(body) {
     else body.innerHTML = OWN.ownerHtml(state.owner, ownerData());
     if (isOwner() && state.owner.tab === "legend" && !state.owner.legend && !state.owner.legendError) loadOwnerLegend();
     if (isOwner() && state.owner.tab === "tags" && !state.owner.tags && !state.owner.tagsError) loadOwnerTags();
+    if (isOwner() && state.owner.tab === "checks" && state.owner.places === undefined) loadOwnerPlaces();
     if (isOwner() && state.owner.tab === "roles" && !state.owner.staff && !state.owner.staffError) loadOwnerStaff();
     if (isOwner() && state.owner.tab === "config" && !state.owner.config && !state.owner.configError) loadOwnerConfig();
   } else if (state.tab === "games") {
@@ -1870,6 +1891,7 @@ document.addEventListener("click", async (ev) => {
       else if (a === "savecfg") await ownerSaveConfig(b);
       else if (a === "addtag") await ownerAddTag();
       else if (a.startsWith("legend")) await ownerLegend(a, b);
+      else if (a === "placefix" || a === "placedismiss") await ownerPlace(a, b, t.dataset.action.split(":").slice(3).join(":"));
       else if (a.startsWith("staff")) await ownerStaff(a, b, c);
     }
     else if (action === "settings" || action === "syncinfo") openSettings();

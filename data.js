@@ -329,6 +329,16 @@ export async function loadEditorLists(sb) {
   ]);
   return { producers, grapes, areas };
 }
+// The place list checks on the Owner page (geo.js placeChecks): which places wines point at, and applying one fix the owner chose.
+export async function loadPlaceUse(sb) {
+  const rows = await allRows(() => sb.from("wines").select("appellation_id"));
+  return new Set(rows.map((r) => r.appellation_id).filter(Boolean));
+}
+// fix: { name?, level? }. Goes through apply_place_fix (docs/place_fixes.sql, run by hand): owner only, logged, refuses a name already there.
+export async function applyPlaceFix(sb, areaId, fix) {
+  const { error } = await sb.rpc("apply_place_fix", { p_area: areaId, p_name: fix.name || null, p_level: fix.level || null });
+  if (error) throw new Error(/apply_place_fix|PGRST202|42883/.test(`${error.code} ${error.message}`) ? "This needs a database update first (docs/place_fixes.sql)." : (error.message || String(error)));
+}
 // Fills in a place's designation (DOC, DOCG, AOC ...; geo.js designationPlan) when it has none. A place that already has one is never changed here.
 // Goes through fill_place_designation (docs/geo_classification.sql, run by hand): editors only, empty designations only. Until it is run, the message says so.
 export async function savePlaceDesignation(sb, areaId, value) {
