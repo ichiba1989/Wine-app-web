@@ -174,3 +174,9 @@ No database script. Check on a phone:
 - [ ] Try a wine like it: the wines shown share the grape (or place) and are never ones the player has rated or turned down.
 - [ ] Playing writes nothing else to the database and does not change Discover or the Profile.
 - [ ] Editors: tag a few quiz questions with the theme "Wine ageing" so "How old?" has Learn questions to point to.
+
+## Designations on places (added 2026-10-15)
+- [ ] Run `docs/geo_classification.sql` once in Supabase; the check at its end lists the places that have a designation.
+- [ ] Editor, Edit wine info on a Barolo wine: the Designation row shows DOCG "From our place list"; picking DOC shows "Our place list says DOCG" and saving changes nothing on the place.
+- [ ] A wine at a place with no designation: pick one, save, and the wine card shows it next to the place; other wines at that place show it too.
+- [ ] A wine at a new appellation: pick a designation; the new place is created with it.

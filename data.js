@@ -329,6 +329,13 @@ export async function loadEditorLists(sb) {
   ]);
   return { producers, grapes, areas };
 }
+// Fills in a place's designation (DOC, DOCG, AOC ...; geo.js designationPlan) when it has none. A place that already has one is never changed here.
+// Goes through fill_place_designation (docs/geo_classification.sql, run by hand): editors only, empty designations only. Until it is run, the message says so.
+export async function savePlaceDesignation(sb, areaId, value) {
+  const { data, error } = await sb.rpc("fill_place_designation", { p_area: areaId, p_value: value });
+  if (error) throw new Error(/fill_place_designation|function|42883|PGRST202/.test(`${error.code} ${error.message}`) ? "The designation was not saved: it needs a database update (docs/geo_classification.sql)." : `The designation was not saved: ${error.message || error}`);
+  if (data === false) throw new Error("The designation was not saved: the place already has one, or your access does not allow it.");
+}
 // One wine as the database stores it, for the editor's form.
 export async function loadWineInfo(sb, wineVintageId) {
   const vintage = must(await sb.from("wine_vintages").select("id, wine_id, vintage_year, is_non_vintage").eq("id", wineVintageId).single());

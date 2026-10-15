@@ -6,8 +6,8 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete, styleLabel,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=14";
-import * as db from "./data.js?v=33";
-import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=8";
+import * as db from "./data.js?v=34";
+import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=9";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=5";
 import { shrinkImage } from "./photos.js?v=5";
 import {
@@ -37,7 +37,7 @@ import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=7";
 import { createProfile } from "./profile.js?v=22";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=12";
 import { createFeedback } from "./feedback.js?v=6";
-import { createEditor } from "./editor.js?v=31";
+import { createEditor } from "./editor.js?v=32";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=9";
 import { gamesHtml } from "./games.js?v=16";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
@@ -50,10 +50,10 @@ import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
 import { setOffline, setCardLookup } from "./overlay.js?v=1";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=12"));
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=13"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=6"));
 const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=9"));
-import { createWineInfo } from "./wineinfo.js?v=18";
+import { createWineInfo } from "./wineinfo.js?v=19";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
