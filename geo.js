@@ -30,12 +30,58 @@ export function placeFromArea(areas, id) {
   return out;
 }
 
+// ---------------------------------------------------------------- what may be a place (owner, 2026-10-15; every version)
+// Germany and Austria: the village and the vineyard are part of the wine's classification ("Wehlener Sonnenuhr", "Ried Heiligenstein 1ÖTW") and stay in
+// the wine's name; the place is only the broad wine region. This is the fixed list of places a German or Austrian wine may point at (Germany: the 13
+// wine regions; Austria: the four regions and the wine areas and DACs in them). Places already in the database are never changed by it.
+export const BROAD_PLACES = {
+  germany: ["Ahr", "Baden", "Franken", "Hessische Bergstraße", "Mittelrhein", "Mosel", "Nahe", "Pfalz", "Rheingau", "Rheinhessen", "Saale-Unstrut", "Sachsen", "Württemberg"],
+  austria: ["Niederösterreich", "Burgenland", "Steiermark", "Wien", "Wachau", "Kremstal", "Kamptal", "Traisental", "Wagram", "Weinviertel", "Carnuntum", "Thermenregion",
+    "Neusiedlersee", "Leithaberg", "Rosalia", "Mittelburgenland", "Eisenberg", "Vulkanland Steiermark", "Südsteiermark", "Weststeiermark", "Wiener Gemischter Satz", "Ruster Ausbruch"],
+};
+const key = (s) => fold(s).replace(/ß/g, "ss").replace(/[^a-z0-9]+/g, " ").trim();
+const broadList = (country) => BROAD_PLACES[key(country)] || null;
+const isBroad = (country, name) => { const l = broadList(country); return !l || l.some((x) => key(x) === key(name)); };
+// A German or Austrian place cut down to what is on the list (a village or vineyard is dropped: it stays in the wine name). Other countries unchanged.
+export function broadPlace(place) {
+  const p = { country: String(place.country || ""), region: String(place.region || ""), appellation: String(place.appellation || "") };
+  if (!broadList(p.country)) return p;
+  if (p.region && !isBroad(p.country, p.region)) p.region = "";
+  if (p.appellation && !isBroad(p.country, p.appellation)) p.appellation = "";
+  if (!p.region && p.appellation) { p.region = p.appellation; p.appellation = ""; }   // one broad name is the region
+  return p;
+}
+// Classification words never belong in a place name: they say something about one wine or one vineyard ("Erste Lage", "Grand Cru", "Kabinett").
+const RANKS = ["grand cru", "grands crus", "premier cru", "1er cru", "erste lage", "grosse lage", "grosses gewachs", "gg", "otw", "1otw", "vdp",
+  "kabinett", "spatlese", "auslese", "beerenauslese", "trockenbeerenauslese", "eiswein", "ausbruch", "smaragd", "federspiel", "steinfeder",
+  "riserva", "reserva", "gran reserva", "crianza", "cru classe", "grand cru classe"];
+// A designation written at the end of a place name is moved out of it ("Kamptal DAC" -> Kamptal, DAC); the screen offers it under Designation.
+export function splitDesignation(name) {
+  const t = String(name || "").trim(), d = designationFromText(t);
+  if (!d) return { name: t, designation: "" };
+  const words = t.split(/\s+/);
+  const last = words.length > 1 && designationFromText(words[words.length - 1]) ? words.slice(0, -1).join(" ") : null;
+  return last != null ? { name: last, designation: d } : { name: t, designation: d, inside: true };
+}
+// Why a NEW place's name cannot be used, or "" when it can. country: the place's country (for the broad-place rule).
+export function placeNameProblem(name, country = "", level = "") {
+  const n = String(name || "").trim();
+  if (!n) return "";
+  const sp = splitDesignation(n);
+  if (sp.inside) return `${sp.designation} is a designation, not part of a place's name: leave it out and pick it under Designation.`;
+  const k = ` ${key(sp.name)} `, rank = RANKS.find((r) => k.includes(` ${r} `));
+  if (rank && !(broadList(country) && isBroad(country, sp.name))) return `"${sp.name}" holds a classification (${rank}): that stays in the wine name, not in the place.`;
+  if (level && level !== "country" && !isBroad(country, sp.name)) return `For ${key(country) === "austria" ? "Austrian" : "German"} wines choose the wine region (for example ${key(country) === "austria" ? "Kamptal or Wachau" : "Mosel or Rheingau"}): the village and vineyard stay in the wine name.`;
+  return "";
+}
+
 // What saving these three fields would do. { error } when the fields do not make sense, otherwise { areaId, creates, notes }:
 //   areaId   the existing place the wine will point at (null when it points at one that will be created)
 //   creates  the places that do not exist yet, in the order to create them: { name, level, parent: <existing id> | <index in creates> | null }
 //   notes    plain sentences for the screen ("A new region will be created in Italy.")
+// A designation at the end of a typed name is left out of the place (splitDesignation); a new place's name must pass placeNameProblem.
 export function planPlace(areas, { country = "", region = "", appellation = "" } = {}) {
-  const c = String(country).trim(), r = String(region).trim(), ap = String(appellation).trim();
+  const c = String(country).trim(), r = splitDesignation(region).name, ap = splitDesignation(appellation).name;
   if (!c && !r && !ap) return { areaId: null, creates: [], notes: [], classification: "" };
   if (!c) return { error: "Choose the country first." };
   const creates = [], notes = [];
@@ -43,9 +89,12 @@ export function planPlace(areas, { country = "", region = "", appellation = "" }
   let parent = null, parentName = c;   // parent: an existing place id, or { index } of a place that will be created
   if (countryArea) parent = countryArea.id;
   else { creates.push({ name: c, level: "country", parent: null }); parent = { index: 0 }; notes.push(`A new country will be created: ${c}.`); }
+  let problem = "";
   const add = (name, level) => {
-    const existing = typeof parent === "string" ? areas.find((a) => a.parent_id === parent && a.level === level && fold(a.name) === fold(name)) : null;
+    // A broad region filed as an appellation straight under the country (Mosel in Germany) is the same place as the region of that name.
+    const existing = typeof parent === "string" ? areas.find((a) => a.parent_id === parent && (a.level === level || (level === "region" && a.level === "appellation")) && fold(a.name) === fold(name)) : null;
     if (existing) { parent = existing.id; parentName = existing.name; return existing; }
+    problem = problem || placeNameProblem(name, c, level);
     creates.push({ name, level, parent });
     parent = { index: creates.length - 1 };
     notes.push(`A new ${level} will be created in ${parentName}.`);
@@ -54,6 +103,7 @@ export function planPlace(areas, { country = "", region = "", appellation = "" }
   };
   const regionArea = r ? add(r, "region") : null;
   const appArea = ap ? add(ap, "appellation") : null;
+  if (problem) return { error: problem };
   const areaId = typeof parent === "string" ? parent : null;   // the existing place the wine will point at
   return { areaId, creates, notes, classification: (appArea && appArea.classification) || "" };
 }
@@ -77,8 +127,8 @@ export const DESIGNATIONS = {
   italy: ["DOCG", "DOC", "IGT", "Vino d'Italia"],
   spain: ["DOCa", "DOQ", "DO", "VP", "IGP"],
   portugal: ["DOC", "IPR", "Vinho Regional"],
-  germany: ["Prädikatswein", "Qualitätswein", "Landwein"],
-  austria: ["DAC", "Qualitätswein", "Landwein"],
+  germany: [],   // Germany has no place designation: its quality words (Kabinett, Grosse Lage ...) belong to one wine and stay in its name
+  austria: ["DAC"],   // Kamptal DAC; Erste Lage and 1ÖTW belong to one vineyard and stay in the wine name
   usa: ["AVA"],
   "united states": ["AVA"],
   greece: ["PDO", "PGI"],
@@ -107,7 +157,8 @@ const targetArea = (areas, place) => { const p = planPlace(areas, place); return
 //   { conflict }       the place already has a DIFFERENT one: nothing is written; a place's designation is changed for every wine, never from one wine's form
 //   {}                 no place, or nothing picked
 export function designationPlan(areas, place, chosen) {
-  const a = targetArea(areas, place), want = String(chosen || "").trim(), have = (a && a.classification) || "";
+  const a = targetArea(areas, place), have = (a && a.classification) || "";
+  const want = designationChoices(place.country).length ? String(chosen || "").trim() : "";   // a country with no place designations (Germany) never gets one
   if (!a && planPlace(areas, place).error) return {};
   if (!a && !String(place.country || place.region || place.appellation || "").trim()) return {};
   if (have && (!want || fold(have) === fold(want))) return { existing: have };

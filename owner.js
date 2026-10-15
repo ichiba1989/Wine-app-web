@@ -3,7 +3,7 @@
 // still decides what anyone may change. The rules at the top (rows, search, sort, checks, coverage) are pure: no page, no network.
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
 import { esc } from "./logic.js?v=14";
-import { REACH_CHOICES } from "./wineinfo.js?v=19";
+import { REACH_CHOICES } from "./wineinfo.js?v=20";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=2";
 import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=6";
 import { TAG_KINDS } from "./tags.js?v=2";

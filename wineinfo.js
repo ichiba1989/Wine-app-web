@@ -5,7 +5,7 @@ import { esc, WINE_STYLES } from "./logic.js?v=14";
 import { checkGrapeText, grapeProblem, grapeIndex, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES } from "./blends.js?v=1";
 import { infoLine } from "./wineline.js?v=1";
-import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, savePlace, designationChoices, designationFromText, designationPlan, placeDesignation } from "./geo.js?v=2";
+import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, savePlace, designationChoices, designationFromText, designationPlan, placeDesignation, splitDesignation, BROAD_PLACES } from "./geo.js?v=3";
 import { loadWinePrice, saveWinePrice, parsePrice, centsToField, blendPrice, formatPrice } from "./pricing.js?v=1";
 import { archivePlanFor } from "./catalog.js?v=3";
 import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=9";
@@ -83,11 +83,14 @@ function placeNoteHtml(W) {
   return plan.error ? esc(plan.error) : plan.notes.map(esc).join(" ");
 }
 const placeOf = (f) => ({ country: f.country, region: f.region, appellation: f.appellation });
+// Germany and Austria: only the broad wine region is a place (geo.js BROAD_PLACES); the village and vineyard stay in the wine name.
+const appPlaceholder = (country) => { const k = String(country || "").trim().toLowerCase(); return BROAD_PLACES[k] ? `Only a wine region (for example ${k === "austria" ? "Kamptal" : "Mosel"}); the vineyard stays in the name` : "For example Barolo or Rutherford"; };
 
 // ---------------------------------------------------------------- designation (DOC, DOCG, AOC ...), kept on the place (geo.js)
 // The row of choices under the place, used here and in the venue review (venuereview.js). attr is the data attribute the chips use.
 // chosen: the pick so far; why: where a suggestion came from. The place's own designation always shows and wins (geo.js designationPlan).
 export function designationRowHtml(areas, place, chosen, why, attr) {
+  if (!designationChoices(place.country).length) return `<div class="muted small">${esc(place.country)} has no place designation: quality words (Kabinett, Grosse Lage …) stay in the wine name.</div>`;
   const plan = designationPlan(areas, place, chosen), have = plan.existing || plan.conflict || "";
   const pick = plan.conflict ? chosen : have || chosen || "";
   const choices = [...designationChoices(place.country)];
@@ -104,6 +107,9 @@ export function designationRowHtml(areas, place, chosen, why, attr) {
 export function startDesignation(areas, place, text) {
   const have = placeDesignation(areas, place);
   if (have) return { designation: have, why: "" };
+  if (!designationChoices(place.country).length) return { designation: "", why: "" };
+  const typed = [place.appellation, place.region].map((x) => splitDesignation(x).designation).find(Boolean);   // "Kamptal DAC" typed as the place
+  if (typed) return { designation: typed, why: `"${typed}" typed with the place` };
   const t = designationFromText(text);
   return { designation: t, why: t ? `"${t}" in the name` : "" };
 }
@@ -141,7 +147,7 @@ function sheetHtml(W) {
     ${f.reach ? `<div class="qlabel">How easy to find (helps decide who is likely to recognize it)</div><select class="field" data-wif="reach" aria-label="How easy to find">${REACH_CHOICES.map(([v, l]) => `<option value="${v}"${f.reach === v ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>` : ""}
     <div class="qlabel">Country</div><input class="field" list="dlCountries" data-wif="country" value="${esc(f.country)}" placeholder="Start typing, then pick from the list" autocomplete="off">
     <div class="qlabel">Region</div><input class="field" list="dlRegions" data-wif="region" value="${esc(f.region)}" placeholder="For example Piedmont or Napa Valley" autocomplete="off">
-    <div class="qlabel">Appellation (optional)</div><input class="field" list="dlApps" data-wif="appellation" value="${esc(f.appellation)}" placeholder="For example Barolo or Rutherford" autocomplete="off">
+    <div class="qlabel">Appellation (optional)</div><input class="field" list="dlApps" data-wif="appellation" value="${esc(f.appellation)}" placeholder="${esc(appPlaceholder(f.country))}" autocomplete="off">
     <div id="wiPlaceNote" class="muted small">${placeNoteHtml(W)}</div>
     <div class="qlabel">Designation (DOC, DOCG, AOC …)</div><div id="wiDesig">${designationRowHtml(L.areas, placeOf(f), f.designation, f.designationWhy, "data-widesig")}</div>
     <div class="qlabel">Main varietal</div><div class="muted tiny">The grape named on the label. If the label names more than one, separate them with commas. GSM is accepted.</div><input class="field" data-grapes="multi" data-wif="labelGrapes" value="${esc(f.labelGrapes)}" placeholder="Start typing, then pick from the list" autocomplete="off" autocapitalize="words" spellcheck="false">
@@ -213,6 +219,8 @@ export function createWineInfo(ctx) {
     const fill = (id, names) => { const el = document.getElementById(id); if (el) el.innerHTML = names.map((n) => `<option value="${esc(n)}">`).join(""); };
     fill("dlRegions", regionsOf(L.areas, f.country)); fill("dlApps", appellationsOf(L.areas, f.country, f.region));
     const note = document.getElementById("wiPlaceNote"); if (note) note.innerHTML = placeNoteHtml(W);
+    const app = document.querySelector('[data-wif="appellation"]'); if (app) app.placeholder = appPlaceholder(f.country);
+    if (!W.form.desigPicked) { const d = startDesignation(L.areas, placeOf(f), f.wineName); W.form.designation = d.designation; W.form.designationWhy = d.why; }
     drawDesignation();
   }
   const drawDesignation = () => { const el = document.getElementById("wiDesig"); if (el && W.form) el.innerHTML = designationRowHtml(W.lists.areas, placeOf(W.form), W.form.designation, W.form.designationWhy, "data-widesig"); };
@@ -349,7 +357,7 @@ export function createWineInfo(ctx) {
 
   document.addEventListener("click", (ev) => {
     const d = ev.target.closest("[data-widesig]");
-    if (d && W.open && W.form && !W.del && !W.pub) { W.form.designation = d.dataset.widesig; W.form.designationWhy = ""; drawDesignation(); return; }
+    if (d && W.open && W.form && !W.del && !W.pub) { W.form.designation = d.dataset.widesig; W.form.designationWhy = ""; W.form.desigPicked = true; drawDesignation(); return; }
     const t = ev.target.closest("[data-wi]");
     if (!t || !W.open || !W.form) return;
     const [action, arg] = t.dataset.wi.split(":");

@@ -37,7 +37,7 @@ import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=7";
 import { createProfile } from "./profile.js?v=22";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=12";
 import { createFeedback } from "./feedback.js?v=6";
-import { createEditor } from "./editor.js?v=32";
+import { createEditor } from "./editor.js?v=33";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=9";
 import { gamesHtml } from "./games.js?v=16";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
@@ -50,10 +50,10 @@ import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
 import { setOffline, setCardLookup } from "./overlay.js?v=1";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=13"));
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=14"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=6"));
 const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=9"));
-import { createWineInfo } from "./wineinfo.js?v=19";
+import { createWineInfo } from "./wineinfo.js?v=20";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.

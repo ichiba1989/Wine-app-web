@@ -180,3 +180,4 @@ No database script. Check on a phone:
 - [ ] Editor, Edit wine info on a Barolo wine: the Designation row shows DOCG "From our place list"; picking DOC shows "Our place list says DOCG" and saving changes nothing on the place.
 - [ ] A wine at a place with no designation: pick one, save, and the wine card shows it next to the place; other wines at that place show it too.
 - [ ] A wine at a new appellation: pick a designation; the new place is created with it.
+- [ ] German and Austrian places: in Edit wine info, a vineyard typed as a German appellation ("Wehlener Sonnenuhr") is refused with the wine-region message; "Mosel" is found; "Kamptal DAC" becomes Kamptal with DAC under Designation; "Corton Grand Cru" as a new place is refused.
