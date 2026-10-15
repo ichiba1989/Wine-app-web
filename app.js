@@ -6,12 +6,12 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete, styleLabel,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=17";
-import * as db from "./data.js?v=41";
-import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=16";
+import * as db from "./data.js?v=42";
+import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=17";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=8";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=40";
+  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=41";
 import { createLearn } from "./learn.js?v=13";
 import { setMode } from "./words.js?v=1";
 import { journalCsv, exportName } from "./exportcsv.js?v=4";
@@ -37,28 +37,28 @@ import { infoLine, entryInfoLine } from "./wineline.js?v=4";
 import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, paintNoteMarks, teachHtml, autoCount } from "./tasting.js?v=12";
 import { gridFromNotes, mergeFromNotes, touched, legendEntry, compileWith } from "./notegrid.js?v=5";
 import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=10";
-import { createProfile } from "./profile.js?v=25";
+import { createProfile } from "./profile.js?v=26";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=15";
 import { createFeedback } from "./feedback.js?v=9";
-import { createEditor } from "./editor.js?v=45";
+import { createEditor } from "./editor.js?v=46";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=12";
 import { gamesHtml } from "./games.js?v=19";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
 import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=4";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=5";
 import * as GG from "./blindgame.js?v=6";
-import { createVenueReview } from "./venuereview.js?v=15";
-import { VENUE, venueCardsOf, readList, recheck as venueRecheck, listIds } from "./venue.js?v=13";
+import { createVenueReview } from "./venuereview.js?v=16";
+import { VENUE, venueCardsOf, readList, recheck as venueRecheck, listIds, linkMap } from "./venue.js?v=14";
 import { recommendMix, recommend } from "./recommend.js?v=9";
 import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=1";
 import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
 import { setOffline, setCardLookup } from "./overlay.js?v=1";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=26"));
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=27"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=9"));
-const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=12"));
-import { createWineInfo } from "./wineinfo.js?v=28";
+const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=13"));
+import { createWineInfo } from "./wineinfo.js?v=29";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -425,7 +425,13 @@ const photoCache = new Map();
 // Every place that picks catalog wines to show or suggest uses only these: the deck, Bingo help, This or That wines, Guess the Glass.
 // Until the list has loaded (or when it is empty) it is empty: the app never falls back to the whole catalog. The player's own record (journal, swipes,
 // adding a wine they drank, import, blind tasting) still reads the whole catalog through state.cards.
-const venueCards = () => (state.venue.list ? venueCardsOf(state.cards, state.venue.list) : []);
+// The venue's wines. Each one carries its page on the venue's website (shopUrl), or null when it is not on the website: the card's name then is not a link.
+const venueCards = () => {
+  if (!state.venue.list) return [];
+  const links = linkMap(state.venue.list), cards = venueCardsOf(state.cards, state.venue.list);
+  cards.forEach((c) => { c.shopUrl = links.get(c.id) || null; });
+  return cards;
+};
 async function loadVenue() {
   try { state.venue.list = await db.loadVenueList(state.sb, VENUE.id); state.venue.error = ""; state.venue.missing = false; }
   catch (e) { state.venue.list = null; state.venue.missing = !!(e && e.missing); state.venue.error = (e && e.missing) ? e.message : "Could not load the list: " + ((e && e.message) || e); }

@@ -7,10 +7,10 @@
 // The place is chosen by searching the place list; a place that is not in it yet is typed in and created when the wine is added (geo.js savePlace).
 // Everything fits on one phone screen. Editor writes are online only. The rules are in venue.js (pure); this file draws the screen and handles the taps.
 import { esc, WINE_STYLES } from "./logic.js?v=17";
-import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf, placeLookalikes } from "./venue.js?v=13";
-import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=28";
+import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf, placeLookalikes, linkSummary, rowTitle } from "./venue.js?v=14";
+import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=29";
 import { placeFromArea, savePlace, designationPlan, broadPlace } from "./geo.js?v=8";
-import * as db from "./data.js?v=41";
+import * as db from "./data.js?v=42";
 import { caseKey, lookalikes } from "./text.js?v=3";
 
 const fold = caseKey;   // text.js: accents and capitals ignored, punctuation still counts
@@ -83,11 +83,30 @@ export function hitsHtml(f, options) {
 }
 
 const desigRow = (f, areas) => designationRowHtml(areas, canonPlace(areas, f.place), f.designation, f.designationWhy, "data-vrdesig");
+// ---------------------------------------------------------------- links to the venue's website (owner, 2026-10-15)
+// The server function venue-links (docs/VENUE_LINKS.md) reads the venue's website: "Find links" gives each wine its page there, or none when the
+// wine is not on the website; "Check links" opens each saved link and removes the ones whose page is gone or shows a different wine.
+export function linksHtml(R, list) {
+  const s = linkSummary(list), L = R.links || {};
+  const removed = (L.removed || []).map((x) => `<li>${esc(x.title)}: <span class="muted">${esc(x.reason)}</span></li>`).join("");
+  return `<div class="muted small vrcount"><button class="link" data-vr="view:add">← Back to adding wines</button></div>
+    <div class="vrcard">
+      <div class="serif vrtitle">Links to ${esc(VENUE.name)}’ website</div>
+      <div class="muted small">A wine's name on the card opens its page on the website. A wine that is not on the website gets no link.</div>
+      <div class="vrlinks"><span><b>${s.linked}</b> linked</span><span><b>${s.notFound}</b> not on the website</span><span><b>${s.removed}</b> removed</span><span><b>${s.unchecked}</b> not looked for yet</span></div>
+      ${L.msg ? `<div class="notice vrmsg" role="status">${esc(L.msg)}</div>` : ""}${L.err ? `<div class="err">${esc(L.err)}</div>` : ""}
+      <div class="vrbtns vrlinkbtns">
+        <button class="btn primary slim" data-vr="links:find"${L.busy ? " disabled" : ""}>Find links</button>
+        <button class="btn outline slim" data-vr="links:check"${L.busy || !s.linked ? " disabled" : ""}>Check links</button>
+      </div>
+      ${removed ? `<div class="vrlbl">Removed in this check</div><ul class="small vrremoved">${removed}</ul>` : ""}
+    </div>`;
+}
 export function reviewHtml(R, queue, opts) {
   if (R.error) return `<div class="err">${esc(R.error)}</div><button class="btn outline slim" data-vr="retry">Try again</button>`;
   if (!R.lists) return `<p class="muted">Loading…</p>`;
   const msg = R.msg ? `<div class="notice vrmsg">${esc(R.msg)}</div>` : "";
-  const count = `<div class="muted small vrcount"><b>${queue.length}</b> wines to add · every field is a suggestion</div>`;
+  const count = `<div class="muted small vrcount"><b>${queue.length}</b> wines to add · every field is a suggestion · <button class="link" data-vr="view:links">Website links</button></div>`;
   if (!queue.length) return `${count}${msg}<p class="muted">Nothing is waiting. New wines appear here when the owner uploads a new list.</p>`;
   const f = R.form;
   if (!f) return `${count}${msg}`;
@@ -146,6 +165,7 @@ export function createVenueReview(ctx) {
   function draw() {
     if (!root) return;
     if (!ctx.list()) { root.innerHTML = `<p class="muted">${esc(ctx.listError() || "The venue's list has not loaded yet.")}</p>`; return; }
+    if (R.view === "links") { root.innerHTML = `<div class="vrev">${linksHtml(R, ctx.list())}</div>`; return; }
     pickNext();
     root.innerHTML = `<div class="vrev">${reviewHtml(R, queue(), { owner: ctx.owner() })}</div>`;
   }
@@ -212,6 +232,8 @@ export function createVenueReview(ctx) {
     const i = t.dataset.vr.indexOf(":"), action = i < 0 ? t.dataset.vr : t.dataset.vr.slice(0, i), a = i < 0 ? "" : t.dataset.vr.slice(i + 1);
     const f = R.form;
     if (action === "retry") load();
+    else if (action === "view") { R.view = a; draw(); }
+    else if (action === "links") await runLinks(a);
     else if (action === "split" && f) { f.split = Number(a) === f.split ? 0 : Number(a); const sp = splitTitle(f.title, f.split); f.producer = sp.producer; f.wine = nameFor(f, sp.wine); draw(); }
     else if (action === "style" && f) { f.style = a; f.styleWhy = ""; draw(); }
     else if (action === "place" && f) { f.place = broadPlace(placeFromArea(R.lists.areas, a)); refreshDesig(f); f.wine = nameFor(f, f.wine); f.placeWhy = ""; f.q = ""; f.typing = false; draw(); }   // the chosen place's words leave the name
@@ -240,6 +262,37 @@ export function createVenueReview(ctx) {
     if (t.dataset.vrF === "producer") { const el = document.getElementById("vrProdLook"); if (el) el.innerHTML = producerLookHtml(R.form, R.lists.producers); }
     if (t.dataset.vrF === "vintage") R.form.vintage = t.value.trim().toUpperCase() === "NV" ? "NV" : t.value.trim();
   });
+  // Find or check links in batches, saving each answer as it comes (editor writes are online only). Nothing is linked unless the website shows the wine.
+  async function runLinks(kind) {
+    const L = (R.links = { busy: true, msg: kind === "find" ? "Reading the website…" : "Opening the links…", err: "", removed: [] });
+    draw();
+    const list = ctx.list() || [];
+    let saved = 0, gone = 0, kept = 0, failed = 0, none = 0;
+    const save = async (id, fields) => { try { await db.saveVenueLink(ctx.sb(), id, fields); saved++; } catch (e) { failed++; L.err = e.message || String(e); } };
+    try {
+      if (kind === "find") {
+        const rows = list.filter((r) => !r.product_url).map((r) => ({ id: r.id, title: rowTitle(r), vintage: r.vintage || "" }));
+        const res = await db.venueLinks(ctx.sb(), "find", rows);
+        for (const x of res.results || []) { if (x.url) await save(x.id, { product_url: x.url, link_status: "found" }); else { none++; await save(x.id, { product_url: null, link_status: "not found" }); } }
+        L.msg = `Looked for ${rows.length} wines on the website${res.count ? ` (${res.count} products there)` : ""}: ${rows.length - none} linked, ${none} not on the website.`;
+      } else {
+        const rows = list.filter((r) => r.product_url).map((r) => ({ id: r.id, title: rowTitle(r), vintage: r.vintage || "", url: r.product_url }));
+        for (let i = 0; i < rows.length; i += 50) {
+          L.msg = `Checking links ${i + 1}–${Math.min(i + 50, rows.length)} of ${rows.length}…`; draw();
+          const res = await db.venueLinks(ctx.sb(), "check", rows.slice(i, i + 50));
+          for (const x of res.results || []) {
+            const row = rows.find((r) => r.id === x.id);
+            if (x.status === "ok") { kept++; await save(x.id, { link_status: "ok" }); }
+            else if (x.status === "gone" || x.status === "different") { gone++; L.removed.push({ title: row ? row.title : x.id, reason: x.reason || x.status }); await save(x.id, { product_url: null, link_status: "removed" }); }
+          }
+        }
+        L.msg = `Checked ${rows.length} links: ${kept} fine, ${gone} removed (page gone or a different wine)${rows.length - kept - gone ? `, ${rows.length - kept - gone} could not be opened and were left as they are` : ""}.`;
+      }
+      if (failed) L.msg += ` ${failed} could not be saved.`;
+      await ctx.onChanged();
+    } catch (e) { L.err = e.message || String(e); L.msg = ""; }
+    L.busy = false; draw();
+  }
   return {
     state: R,
     mount(el) { root = el; if (!R.lists && !R.loading) load(); draw(); },

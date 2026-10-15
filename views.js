@@ -71,7 +71,8 @@ export function visualFor(c, stats = null) {
 export const mapZoomIconHtml = (hint = false) => `<span class="badge${hint ? " hint" : ""}" aria-hidden="true"><svg viewBox="0 0 32 32" width="20" height="20"><circle cx="13" cy="13" r="8.5" fill="none" stroke="currentColor" stroke-width="3"/><path d="M19.5 19.5 L27 27" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"/><path d="M13 9 V17 M9 13 H17" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg></span>`;
 export function cardHtml(c, { mapHint = false } = {}) {
   const labels = ["like", "dislike", "had", "dont_know"].map((k) => `<div class="swipe-label" data-label="${k}" role="img" aria-label="${esc(REACTIONS[k].label)}" style="background:${REACTIONS[k].color}">${k === "like" || k === "dislike" ? iconHtml(k, 34) : esc(REACTIONS[k].label)}</div>`).join("");
-  const v = visualFor(c), href = imageSearchUrl(c), t = tintFor(v.type);
+  // The venue version: the name links to the wine's page on the venue's website, or is not a link when the wine is not there (shopUrl null).
+  const shop = c.shopUrl !== undefined, v = visualFor(c), href = shop ? c.shopUrl : imageSearchUrl(c), t = tintFor(v.type);
   const map = v.map ? `<${v.zoomable ? "button" : "div"} class="mapbtn${v.zoomable ? "" : " still"}"${v.zoomable ? ` data-zoom="${esc(c.id)}" aria-label="Show where this wine is from"` : ""}>${v.map}${v.zoomable ? mapZoomIconHtml(mapHint) : ""}</${v.zoomable ? "button" : "div"}>` : "";
   const place = c.appellation || c.region || c.country || "";
   const flag = FLAGS[c.country];
@@ -79,9 +80,9 @@ export function cardHtml(c, { mapHint = false } = {}) {
   const facts = c.facts.filter((f) => f.text !== place);   // the place is already in the summary line
   return `<div class="card" id="card">${labels}<button class="zreset" data-zreset hidden aria-label="Reset zoom">Reset zoom</button>
     <div class="body">
-      <a class="winelink" data-wimg href="${esc(href)}" target="_blank" rel="noopener noreferrer" draggable="false" aria-label="Search Google Images for ${esc(wineName(c))}">
+      ${href ? `<a class="winelink" data-wimg href="${esc(href)}" target="_blank" rel="noopener noreferrer" draggable="false" aria-label="${shop ? `See ${esc(wineName(c))} on the shop's website` : `Search Google Images for ${esc(wineName(c))}`}">` : `<div class="winelink">`}
         <div class="topline"><div class="producer serif">${esc(c.producer)}</div>${c.vintage ? `<span class="vpill">${esc(c.vintage)}</span>` : ""}</div>
-        ${c.cuvee ? `<div class="title serif">${esc(c.cuvee)}</div>` : ""}</a>
+        ${c.cuvee ? `<div class="title serif">${esc(c.cuvee)}</div>` : ""}${href ? "</a>" : "</div>"}
       ${summary ? `<div class="metaline"><span class="tdot" style="background:${t.dot}"></span><span>${summary}</span></div>` : ""}
       <div class="visrow" style="background:${t.pin}1a">${bottleSilhouette(v.shape, v.type)}${flavorRowHtml(v.flavors)}${map}</div>
       <div class="facts">${facts.map((f) => `<span class="${f.derived ? "derived" : ""}">${esc(f.text)}</span>`).join("")}</div>

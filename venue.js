@@ -125,6 +125,16 @@ export function venueCardsOf(cards, list) {
   const older = olderVintageIds(listed);
   return listed.filter((c) => !older.has(c.id));
 }
+// ---------------------------------------------------------------- links to the venue's website (docs/venue_links.sql)
+// A row has a link only when the wine was found on the venue's website (server function venue-links). The card's name links there, and a card
+// whose wine is not on the website has no link at all (owner, 2026-10-15): never a made-up address, never a web search.
+export const rowTitle = (r) => [r.producer, r.wine_name].filter(Boolean).join(" ");
+export const linkMap = (list) => new Map((list || []).filter((r) => r.wine_vintage_id && r.product_url).map((r) => [r.wine_vintage_id, r.product_url]));
+export function linkSummary(list) {
+  const rows = list || [];
+  return { linked: rows.filter((r) => r.product_url).length, notFound: rows.filter((r) => !r.product_url && r.link_status === "not found").length,
+    removed: rows.filter((r) => !r.product_url && r.link_status === "removed").length, unchecked: rows.filter((r) => !r.product_url && !r.link_status).length, total: rows.length };
+}
 // Catalog wines that could be added by hand: matching the search, not on the list yet.
 export function addable(cards, list, q, limit = 20) {
   const t = norm(q), ids = listIds(list);
@@ -139,7 +149,7 @@ export function listRows(list, cardsById, q = "") {
   return (list || []).map((r) => {
     const c = r.wine_vintage_id ? cardsById.get(r.wine_vintage_id) : null;
     const name = c ? [c.vintage, c.producer, c.cuvee].filter(Boolean).join(" ") : [r.vintage, r.producer, r.wine_name].filter(Boolean).join(" ");
-    return { id: r.id, name, linked: !!c, older: !!c && older.has(c.id), unpublished: !!r.wine_vintage_id && !c, source: r.source || "file" };
+    return { id: r.id, name, linked: !!c, older: !!c && older.has(c.id), unpublished: !!r.wine_vintage_id && !c, source: r.source || "file", url: r.product_url || "", linkStatus: r.link_status || "" };
   }).filter((x) => !t || norm(x.name).includes(t)).sort((a, b) => (b.linked - a.linked) || a.name.localeCompare(b.name));
 }
 

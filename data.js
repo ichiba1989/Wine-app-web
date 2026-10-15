@@ -618,8 +618,28 @@ export async function reuseWinePhoto(sb, fromVintageId, toVintageId, note, { rep
 const venueMissing = (error) => (error && (error.code === "42P01" || /venue_wines/.test(String(error.message || ""))) ? Object.assign(new Error("The venue list needs a database update (docs/venue_decks.sql)."), { missing: true }) : error);
 export async function loadVenueList(sb, venueId) {
   // A shop's list can be longer than the 1000 rows one read returns, so it is read 1000 at a time (in a fixed order, so no row is missed or read twice).
-  try { return await allRows(() => sb.from("venue_wines").select("id, wine_vintage_id, producer, wine_name, vintage, shop_type, source, added_at").eq("venue_id", venueId).order("id")); }
-  catch (e) { throw venueMissing(e); }
+  // The website links (docs/venue_links.sql) are read too; before that update the list is read without them.
+  const read = (cols) => allRows(() => sb.from("venue_wines").select(cols).eq("venue_id", venueId).order("id"));
+  const base = "id, wine_vintage_id, producer, wine_name, vintage, shop_type, source, added_at";
+  try { return await read(`${base}, product_url, link_status, link_checked_at`); }
+  catch (e) {
+    if (/product_url|link_status|link_checked_at|42703/.test(`${e.code} ${e.message}`)) { try { return await read(base); } catch (e2) { throw venueMissing(e2); } }
+    throw venueMissing(e);
+  }
+}
+// ---------------------------------------------------------------- links to the venue's website (docs/venue_links.sql; server function venue-links, docs/VENUE_LINKS.md)
+// Asks the server function to find pages (action "find") or check links (action "check"). It only reads the venue's public website.
+export async function venueLinks(sb, action, rows) {
+  const { data, error } = await sb.functions.invoke("venue-links", { body: { action, rows } });
+  if (error) { const m = String(error.message || error); throw new Error(/not found|404|failed to send|fetch/i.test(m) ? "The venue-links server function is not deployed yet (docs/VENUE_LINKS.md)." : m); }
+  if (data && data.error) throw new Error(data.error);
+  return data || { results: [] };
+}
+// Saves what was found or checked for one row: { product_url (null = no link), link_status }. Editors and the owner only; online only.
+export async function saveVenueLink(sb, id, fields) {
+  const { data, error } = await sb.from("venue_wines").update({ ...fields, link_checked_at: new Date().toISOString() }).eq("id", id).select("id");
+  if (error) throw new Error(/product_url|link_status|42703/.test(`${error.code} ${error.message}`) ? "Links need a database update first (docs/venue_links.sql)." : (error.message || String(error)));
+  if (!data || !data.length) throw new Error("Not saved. Your access may not allow changing the list.");
 }
 // Saves rows read from the venue's file. Wines already on the list are skipped by the app before this is called. rows: [{ producer, wine_name, vintage, wine_vintage_id }]
 export async function addVenueRows(sb, venueId, rows, source = "file") {

@@ -3,14 +3,14 @@
 // still decides what anyone may change. The rules at the top (rows, search, sort, checks, coverage) are pure: no page, no network.
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
 import { esc } from "./logic.js?v=17";
-import { REACH_CHOICES } from "./wineinfo.js?v=28";
+import { REACH_CHOICES } from "./wineinfo.js?v=29";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=5";
 import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=9";
 import { TAG_KINDS } from "./tags.js?v=5";
 import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=12";
 import { centsToField } from "./pricing.js?v=4";
 import { ASSIGNABLE_ROLES, ROLES, PERMISSIONS, staffRows, filterStaff, rowActions } from "./access.js?v=4";
-import { VENUE, listRows, addable, summary } from "./venue.js?v=13";
+import { VENUE, listRows, addable, summary } from "./venue.js?v=14";
 import { plainKey } from "./text.js?v=3";
 import { placeChecks } from "./geo.js?v=8";
 export { placeChecks };   // used by app.js through the lazily loaded Owner module
@@ -225,7 +225,7 @@ function venueTable(O, d) {
     ${table("<th>Wine</th><th>Status</th>", pv.rows.slice(0, 300).map((r) => `<tr><td>${esc([r.vintage, r.producer, r.wine_name].filter(Boolean).join(" "))}</td><td>${r.onList ? "Already on the list" : r.wine_vintage_id ? "In our catalog" : r.status === "several" ? "Several vintages: add by hand" : "Not in our catalog yet"}</td></tr>`).join(""))}
     <div class="ocontrols"><button class="opill" data-action="owner:venuesave"${pv.fresh.length ? "" : " disabled"}>Add ${pv.fresh.length} to the list</button><button class="opill" data-action="owner:venuecancel">Cancel</button></div>` : "";
   const finds = addable(d.cards, v.list, v.q || "", 15).map((c) => `<tr><td>${esc([c.vintage, c.producer, c.cuvee].filter(Boolean).join(" "))}</td><td class="small">${esc([c.appellation || c.region, c.country].filter(Boolean).join(", "))}</td><td><button class="opill" data-action="owner:venueadd:${esc(c.id)}">Add</button></td></tr>`).join("");
-  const body = rows.map((r) => `<tr><td>${esc(r.name)}</td><td>${r.older ? "Older vintage: kept on record, not in the deck" : r.linked ? "In the deck" : r.unpublished ? "Not published" : "Not in our catalog yet"}</td><td class="small">${r.source === "hand" ? "Added by hand" : "From the file"}</td><td><button class="opill" data-action="owner:venueremove:${esc(r.id)}">Remove</button></td></tr>`).join("");
+  const body = rows.map((r) => `<tr><td>${esc(r.name)}</td><td>${r.older ? "Older vintage: kept on record, not in the deck" : r.linked ? "In the deck" : r.unpublished ? "Not published" : "Not in our catalog yet"}</td><td class="small">${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">Website</a>` : r.linkStatus === "not found" ? "Not on the website" : r.linkStatus === "removed" ? "Link removed" : "Not checked"}</td><td class="small">${r.source === "hand" ? "Added by hand" : "From the file"}</td><td><button class="opill" data-action="owner:venueremove:${esc(r.id)}">Remove</button></td></tr>`).join("");
   return `<div class="muted small onote">Only these wines appear in this version's deck, games and suggestions. Columns the file needs: Producer, Wine name, Vintage. A wine matches when all three are exactly a catalog wine's (accents and case ignored); nothing else is guessed.</div>
     <div class="ocontrols"><input type="file" accept=".csv,.txt,text/csv,text/plain" data-owner-venuefile aria-label="Choose the venue's file"></div>
     <textarea class="field" rows="4" data-owner-venuepaste placeholder="Or paste the rows here, with the header row first">${esc(v.paste || "")}</textarea>
@@ -238,7 +238,7 @@ function venueTable(O, d) {
     ${all.some((r) => r.older) ? `<div class="muted small onote">${all.filter((r) => r.older).length} older ${all.filter((r) => r.older).length === 1 ? "vintage is" : "vintages are"} kept on the list for the record but not shown: only the most recent vintage of a wine is in the deck.</div>` : ""}
     ${sum.missing ? `<div class="muted small onote">Editors add the ones not in our catalog yet in the Editor tab, section “${esc(VENUE.name)}”, one at a time; each joins the deck when it is published.</div>` : ""}
     <div class="ocontrols"><button class="opill" data-action="owner:venuerecheck"${sum.missing ? "" : " disabled"}>Re-check the ones not in our catalog</button></div>
-    ${table("<th>Wine</th><th>Status</th><th>Added</th><th></th>", body, all.length ? "Nothing matches." : "The list is empty: the deck shows nothing until wines are added.")}`;
+    ${table("<th>Wine</th><th>Status</th><th>Website</th><th>Added</th><th></th>", body, all.length ? "Nothing matches." : "The list is empty: the deck shows nothing until wines are added.")}`;
 }
 // ---------------------------------------------------------------- the reference lists (docs/reference_lists.sql; data.js loadReferenceLists)
 // Four lists that used to live only in the code. Rows 'suggested' are not used until you tap Use; "Mark checked" records that a source was read.
