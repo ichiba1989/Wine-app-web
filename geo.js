@@ -132,8 +132,96 @@ export const DESIGNATIONS = {
   usa: ["AVA"],
   "united states": ["AVA"],
   greece: ["PDO", "PGI"],
+  chile: ["DO"],
+  canada: ["VQA"],
+  "south africa": ["WO"],
+  australia: ["GI"],
+  "new zealand": ["GI"],
 };
 const GENERAL = ["PDO", "PGI", "AVA", "GI", "WO", "DO"];
+
+// ---------------------------------------------------------------- known designations: the stored rule (owner, 2026-10-15; every version)
+// A place on this list gets its designation filled in automatically (Leithaberg -> DAC, Barolo -> DOCG, Napa Valley -> AVA): the rule
+// "appellation -> classification" the product rules allow. Prepared 2026-10-15 for the places in our place list and in Vintage Wine Merchants' list;
+// AN EDITOR MUST CHECK IT before testers rely on it (docs/TEST_BEFORE_TESTERS.md). Only names whose designation is the same for every wine there are
+// listed: a place where it depends on the wine (Montefalco: Rosso DOC, Sagrantino DOCG; Valtellina; Verdicchio) is left out, so nothing is guessed.
+// A place's own designation in the database always wins over this list. docs/geo_designations_fill.sql fills existing empty places from the same list.
+// Add a place by adding its name (as spelled in the place list) under its country and designation.
+export const KNOWN_DESIGNATIONS = {
+  austria: {
+    DAC: ["Kamptal", "Kremstal", "Wachau", "Traisental", "Weinviertel", "Carnuntum", "Leithaberg", "Neusiedlersee", "Rosalia", "Mittelburgenland", "Eisenberg",
+      "Ruster Ausbruch", "Vulkanland Steiermark", "Südsteiermark", "Weststeiermark", "Wiener Gemischter Satz"],
+  },
+  france: {
+    AOC: [
+      // regions used for the generic wine of the same name
+      "Alsace", "Beaujolais", "Bordeaux", "Champagne",
+      // Bordeaux
+      "Bordeaux Supérieur", "Côtes de Bordeaux", "Francs Côtes de Bordeaux", "Fronsac", "Haut-Médoc", "Margaux", "Pauillac", "Pessac-Léognan", "Pomerol",
+      "Saint-Estèphe", "St.-Julien", "Saint-Julien", "St.-Émilion", "Saint-Émilion", "Sauternes",
+      // Burgundy and Beaujolais
+      "Bourgogne", "Bourgogne Aligoté", "Bourgogne Côte d'Or", "Bourgogne Hautes-Côtes de Beaune", "Bourgogne Hautes-Côtes de Nuits", "Bourgogne Passe-Tout-Grains",
+      "Coteaux Bourguignons", "Crémant de Bourgogne", "Auxey-Duresses", "Beaune", "Bienvenues-Bâtard-Montrachet", "Blagny", "Bonnes-Mares", "Bouzeron",
+      "Bâtard-Montrachet", "Chablis", "Petit Chablis", "Chambertin", "Chambertin-Clos de Bèze", "Chambolle-Musigny", "Chapelle-Chambertin", "Charmes-Chambertin",
+      "Chassagne-Montrachet", "Chevalier-Montrachet", "Clos Saint-Denis", "Clos de Vougeot", "Clos de la Roche", "Clos des Lambrays", "Corton", "Corton-Charlemagne",
+      "Criots-Bâtard-Montrachet", "Côte de Nuits-Villages", "Fixin", "Gevrey-Chambertin", "Grands-Échezeaux", "Échezeaux", "Griotte-Chambertin", "Irancy",
+      "Latricières-Chambertin", "Marsannay", "Mazis-Chambertin", "Mazoyères-Chambertin", "Mercurey", "Meursault", "Monthélie", "Montrachet", "Morey-Saint-Denis",
+      "Musigny", "Mâcon", "Nuits-Saint-Georges", "Pommard", "Pouilly-Fuissé", "Puligny-Montrachet", "Richebourg", "Romanée-Saint-Vivant", "Rully", "Saint-Aubin",
+      "Saint-Romain", "Santenay", "Savigny-lès-Beaune", "Viré-Clessé", "Volnay", "Vosne-Romanée", "Vougeot",
+      "Beaujolais-Villages", "Brouilly", "Chiroubles", "Chénas", "Fleurie", "Morgon", "Moulin-à-Vent", "Régnié", "Saint-Amour",
+      // Rhône
+      "Châteauneuf-du-Pape", "Condrieu", "Cornas", "Crozes-Hermitage", "Côte-Rôtie", "Côtes du Rhône", "Côtes du Rhône Villages", "Gigondas", "Hermitage",
+      "St.-Joseph", "Saint-Joseph", "Vacqueyras",
+      // Loire
+      "Chinon", "Muscadet de Sèvre et Maine Clisson", "Pouilly-Fumé", "Sancerre", "Saumur", "Saumur-Champigny", "Savennières", "Touraine", "Vouvray", "Coteaux du Giennois",
+      // elsewhere
+      "Crémant d'Alsace", "Coteaux Champenois", "Rosé des Riceys", "Bandol", "Cassis", "Côtes de Provence", "Coteaux Varois en Provence", "Arbois", "Côtes du Jura",
+      "Bugey", "Cahors", "Bergerac", "Jurançon", "Languedoc", "Limoux", "Vin de Corse"],
+    IGP: ["Alpilles", "Collines Rhodaniennes", "Pays d'Hérault", "Vaucluse"],
+  },
+  italy: {
+    DOCG: ["Alta Langa", "Amarone della Valpolicella", "Asti", "Barbaresco", "Barolo", "Brunello di Montalcino", "Chianti Classico", "Chianti Rufina",
+      "Conegliano Valdobbiadene Prosecco Superiore", "Fiano di Avellino", "Gattinara", "Gavi", "Greco di Tufo", "Moscato d'Asti", "Roero", "Taurasi",
+      "Vernaccia di San Gimignano"],
+    DOC: ["Alto Adige", "Barbera d'Alba", "Barbera del Monferrato", "Bolgheri", "Bolgheri Sassicaia", "Carema", "Carso", "Colli di Luni", "Collio", "Costa d'Amalfi",
+      "Delle Venezie", "Dolcetto d'Alba", "Eloro", "Etna", "Friuli Colli Orientali", "Irpinia", "Langhe", "Maremma Toscana", "Marsala", "Montepulciano d'Abruzzo",
+      "Nebbiolo d'Alba", "Oltrepò Pavese", "Prosecco", "Rosso Piceno", "Rosso di Montalcino", "Soave", "Trentino", "Valdadige", "Valle d'Aosta", "Valpolicella",
+      "Valpolicella Ripasso", "Vin Santo del Chianti Classico"],
+    IGT: ["Colli della Toscana Centrale", "Colli di Salerno", "Colline Pescaresi", "Emilia", "Lazio", "Rosso del Veronese", "Salento", "Salina", "Terre Siciliane",
+      "Toscana", "Venezia Giulia", "Vigneti delle Dolomiti"],
+  },
+  spain: {
+    DOCa: ["Rioja", "Priorat"],
+    DO: ["Bierzo", "Calatayud", "Campo de Borja", "Cava", "Jumilla", "Montsant", "Ribeira Sacra", "Ribera del Duero", "Rías Baixas", "Terra Alta", "Vinos de Madrid",
+      "Vinos de Madrid Sierra de Gredos"],
+  },
+  portugal: { DOC: ["Douro", "Madeira", "Port", "Porto", "Vinho Verde"] },
+  usa: {
+    AVA: ["Alexander Valley", "Anderson Valley", "Bennett Valley", "Carneros", "Central Coast", "Chehalem Mountains", "Clarksburg", "Columbia Valley", "Coombsville",
+      "Diamond Mountain District", "Dry Creek Valley", "Dundee Hills", "Eagle Peak", "El Dorado", "Eola-Amity Hills", "Finger Lakes", "Fort Ross-Seaview",
+      "Howell Mountain", "Knights Valley", "Mendocino", "Monterey", "Mount Veeder", "Napa Valley", "North Coast", "Oakville", "Paso Robles",
+      "Paso Robles Willow Creek District", "Ribbon Ridge", "Rogue Valley", "Russian River Valley", "Rutherford", "Santa Cruz Mountains", "Santa Lucia Highlands",
+      "Santa Maria Valley", "Santa Ynez Valley", "Sonoma Coast", "Sonoma Valley", "Spring Mountain District", "Sta. Rita Hills", "Stags Leap District",
+      "Suisun Valley", "Walla Walla Valley", "West Sonoma Coast", "Willamette Valley", "Yamhill-Carlton"],
+  },
+  chile: { DO: ["Maipo Valley", "Colchagua Valley", "Central Valley"] },
+  canada: { VQA: ["Niagara Peninsula"] },
+  "south africa": { WO: ["Constantia", "Stellenbosch"] },
+  australia: { GI: ["Barossa", "Barossa Valley", "South Eastern Australia"] },
+  "new zealand": { GI: ["Marlborough", "Central Otago", "Hawke's Bay"] },
+  greece: { PDO: ["Archanes"] },
+};
+KNOWN_DESIGNATIONS["united states"] = KNOWN_DESIGNATIONS.usa;
+// The designation the rule list gives a place: its most specific part that is listed (the appellation, else the region). null when none is.
+export function ruleDesignation(place) {
+  const list = KNOWN_DESIGNATIONS[fold((place && place.country) || "")];
+  if (!list) return null;
+  for (const name of [place.appellation, place.region].map((x) => splitDesignation(x).name).filter(Boolean)) {
+    for (const [d, names] of Object.entries(list)) if (names.some((n) => key(n) === key(name))) return { designation: d, name };
+    return null;   // the most specific part decides: a region's designation never stands in for an unlisted appellation inside it
+  }
+  return null;
+}
 export const designationChoices = (country) => DESIGNATIONS[fold(country)] || GENERAL;
 // Every term any country uses, longest first, for reading one out of a title or name.
 const ALL_TERMS = [...new Set([...Object.values(DESIGNATIONS).flat(), ...GENERAL, "AC", "DOP", "QbA"])].sort((a, b) => b.length - a.length);

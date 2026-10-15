@@ -12,7 +12,7 @@ import { dimsFor, dimMeta, defaultFor, esc, wineName, placeLine, editorList, has
 import * as db from "./data.js?v=34";
 import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=37";
 import { createReview } from "./review.js?v=12";
-import { createWineInfo, publishSummary } from "./wineinfo.js?v=20";
+import { createWineInfo, publishSummary } from "./wineinfo.js?v=21";
 import { groupSubmissions, planPromotion, duplicateGroups, rulesFrom } from "./catalog.js?v=3";
 import { visibleKinds, FOUND_ONLINE_PERMISSION, photoSummary, photoList, photoTag, pullSource, shareWinePhoto, shareNote, uploadWinePhoto, removeWinePhoto, reuseWinePhoto } from "./winephotos.js?v=9";
 import { communityHtml, loadSubmissionState, approvalPlan } from "./sharing.js?v=9";
