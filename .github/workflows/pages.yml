@@ -1,0 +1,54 @@
+# Publishes the web app with GitHub Pages: the main app at the site's address, and the Vintage Wine Merchants version under /vwm/.
+# The same file is kept on both branches, so a push to either one republishes both. It copies the files as they are: there is no build step.
+# One-time setup in GitHub: Settings > Pages > Build and deployment > Source: "GitHub Actions".
+# To publish another venue later, add one more "Get ..." step and copy line like the vwm ones.
+name: Publish the app
+
+on:
+  push:
+    branches: ["claude/wine-discovery-architecture-3pithw", "vwm"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  MAIN_BRANCH: claude/wine-discovery-architecture-3pithw   # the main app, at the site's address
+  VWM_BRANCH: vwm                                          # Vintage Wine Merchants, at <site>/vwm/
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Get the main app
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.MAIN_BRANCH }}
+          path: main
+      - name: Get the Vintage Wine Merchants version
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.VWM_BRANCH }}
+          path: vwm
+      - name: Put the site together
+        run: |
+          mkdir -p site/vwm
+          rsync -a --exclude .git --exclude .github main/ site/
+          rsync -a --exclude .git --exclude .github vwm/ site/vwm/
+          touch site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - name: Publish
+        id: deploy
+        uses: actions/deploy-pages@v4
