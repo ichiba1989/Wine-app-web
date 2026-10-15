@@ -596,6 +596,9 @@
   .okmsg { min-height: 1.2em; font-size: calc(13px * min(var(--ts), 1.2)); color: var(--wine); margin-bottom: 4px; }
   .onote { margin: 4px 0 8px; line-height: 1.4; }
   .osub { font-size: calc(18px * var(--ts)); font-weight: 400; margin: 18px 0 6px; }
+  .obulk { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+  .obulk .opill { margin-left: 0; }
+  .otable tr.osel td { background: #f3ece4; }
   .otablewrap { overflow: auto; max-height: calc(100dvh - 280px); min-height: 160px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); -webkit-overflow-scrolling: touch; }
   .otable { border-collapse: collapse; width: 100%; font-size: calc(13px * min(var(--ts), 1.2)); }
   .otable th, .otable td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; vertical-align: middle; }
@@ -635,6 +638,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=97" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=98" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>

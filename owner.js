@@ -3,7 +3,7 @@
 // still decides what anyone may change. The rules at the top (rows, search, sort, checks, coverage) are pure: no page, no network.
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
 import { esc } from "./logic.js?v=16";
-import { REACH_CHOICES } from "./wineinfo.js?v=24";
+import { REACH_CHOICES } from "./wineinfo.js?v=25";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=4";
 import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=8";
 import { TAG_KINDS } from "./tags.js?v=4";
@@ -23,7 +23,7 @@ const isLive = (c) => !c.archived && (!c.wineStatus || c.wineStatus === "verifie
 export const WINE_COLUMNS = [
   { key: "producer", label: "Producer" }, { key: "wine", label: "Wine" }, { key: "year", label: "Year", num: true }, { key: "style", label: "Type" },
   { key: "country", label: "Country" }, { key: "place", label: "Region / appellation" }, { key: "grapes", label: "Grapes" },
-  { key: "reach", label: "Reach", num: true }, { key: "price", label: "Price ($)", num: true }, { key: "photo", label: "Photo" },
+  { key: "reach", label: "Reach", num: true }, { key: "price", label: "Price ($)", num: true }, { key: "photo", label: "Photo" }, { key: "tags", label: "Tags" },
 ];
 export function wineRows(cards) {
   return (cards || []).filter(isLive).map((c) => {
@@ -32,7 +32,7 @@ export function wineRows(cards) {
       id: c.id, producer: c.producer || "", wine: c.cuvee || "", year: c.vintage === "NV" ? null : (Number(raw.vintage_year) || Number(c.vintage) || null), yearText: c.vintage || "",
       style: c.style || "", country: c.country || "", place: [c.appellation, c.region].filter((x, i, a) => x && a.indexOf(x) === i).join(" · "),
       grapes: [...(c.grapes || []), ...(c.ruleGrapes || [])].join(", "), reach: c.reach == null ? null : Number(c.reach), price: typeof c.price === "number" ? c.price : null,
-      photo: c.photo ? (c.imageKind || "photo") : "", hasPhoto: !!c.photo, photoKind: c.imageKind || "",
+      photo: c.photo ? (c.imageKind || "photo") : "", hasPhoto: !!c.photo, photoKind: c.imageKind || "", tags: "", tagIds: [],
     };
   });
 }
@@ -75,6 +75,23 @@ export function nextConfigValue(old, text) {
 }
 export const shownConfigValue = (row) => (row && row.value !== null && typeof row.value === "object" ? row.value.value : row && row.value);
 
+// ---------------------------------------------------------------- wine tags (docs/wine_tags.sql): the owner's labels, on the wine (every vintage)
+// wt: { tags: [{ id, name }], links: [{ wine_id, tag_id }] }; wineOf: Map vintage id -> wine id. Labels only: nothing else reads them yet.
+export function withTags(rows, wt, wineOf) {
+  if (!wt || !wineOf) return rows;
+  const name = new Map(wt.tags.map((t) => [t.id, t.name])), byWine = new Map();
+  for (const l of wt.links) { if (!byWine.has(l.wine_id)) byWine.set(l.wine_id, []); byWine.get(l.wine_id).push(l.tag_id); }
+  return rows.map((r) => { const ids = (byWine.get(wineOf.get(r.id)) || []).filter((id) => name.has(id)); return { ...r, tagIds: ids, tags: ids.map((id) => name.get(id)).sort().join(", ") }; });
+}
+export const tagCounts = (wt) => { const n = new Map(); for (const l of (wt && wt.links) || []) n.set(l.tag_id, (n.get(l.tag_id) || 0) + 1); return n; };
+// The rows the Wines tab shows (search, problem filter, tag filter: "all", "none" or a tag id), sorted. Select all ticks exactly these.
+export function shownWineRows(O, rows) {
+  const sort = O.sort.wines, col = WINE_COLUMNS.find((c) => c.key === sort.key) || WINE_COLUMNS[0];
+  const tf = O.tagFilter || "all";
+  const tagged = tf === "all" ? rows : rows.filter((r) => (tf === "none" ? !r.tagIds.length : r.tagIds.includes(tf)));
+  return sortRows(filterRows(tagged, O.q, O.issue), col.key, sort.dir, !!col.num);
+}
+
 // ---------------------------------------------------------------- bingo coverage: how many catalog wines could fill each square
 export function bingoCoverage(cards, today = new Date()) {
   const facts = (cards || []).filter(isLive).map((c) => cardFacts(c, today));
@@ -89,16 +106,45 @@ const arrow = (sort, key) => (sort && sort.key === key ? (sort.dir === 1 ? " ▲
 const th = (tab, col, sort) => `<th scope="col"><button class="oth" data-action="owner:sort:${col.key}" aria-label="Sort by ${esc(col.label)}">${esc(col.label)}${arrow(sort, col.key)}</button></th>`;
 const table = (head, body, empty = "Nothing matches.") => `<div class="otablewrap"><table class="otable"><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="12" class="muted">${esc(empty)}</td></tr>`}</tbody></table></div>`;
 
+// Ticked rows and what can be done to all of them at once.
+export function bulkBar(O, d, shown) {
+  const sel = O.sel || new Set(), n = sel.size, wt = d.wineTags, dis = n ? "" : " disabled";
+  const tagPick = wt && wt.tags.length ? `<select class="ofield" data-owner-bulktag aria-label="Tag">${wt.tags.map((t) => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join("")}</select>
+      <button class="opill" data-action="owner:bulktag:on"${dis}>Add tag</button><button class="opill" data-action="owner:bulktag:off"${dis}>Remove tag</button>` : "";
+  return `<div class="obulk" role="group" aria-label="Change the ticked wines">
+    <span class="small"><b>${n}</b> ticked</span>
+    <button class="opill" data-action="owner:selall">Tick all ${shown.length} shown</button><button class="opill" data-action="owner:selnone"${dis}>Untick all</button>
+    ${tagPick}
+    <select class="ofield" data-owner-bulkreach aria-label="Reach"><option value="">Reach…</option>${REACH_CHOICES.map(([v, l]) => `<option value="${v}">${v} – ${esc(l)}</option>`).join("")}<option value="clear">Clear reach</option></select>
+    <button class="opill" data-action="owner:bulkreach"${dis}>Set reach</button>
+  </div>`;
+}
+// The owner's tags: make, rename, delete (deleting a tag takes it off every wine; the wines stay).
+function wineTagsHtml(O, d) {
+  const wt = d.wineTags;
+  if (d.wineTagsError) return `<div class="err small">${esc(d.wineTagsError)}</div>`;
+  if (wt === null) return `<div class="muted small onote">Wine tags need a database update first (docs/wine_tags.sql).</div>`;
+  if (!wt) return "";
+  const n = tagCounts(wt), open = !!(O.open || {}).wtags;
+  const rows = wt.tags.map((t) => `<tr><td><input class="ofield" data-owner-wtagname="${esc(t.id)}" value="${esc(t.name)}" aria-label="Name of tag ${esc(t.name)}" maxlength="40"></td><td class="onum">${n.get(t.id) || 0}</td>
+    <td><button class="opill" data-action="owner:wtagrename:${esc(t.id)}">Rename</button><button class="opill" data-action="owner:wtagdel:${esc(t.id)}">Delete</button></td></tr>`).join("");
+  return `<div class="ocontrols"><button class="opill" data-action="owner:toggle:wtags" aria-expanded="${open}">${open ? "Hide" : "Manage"} tags (${wt.tags.length})</button></div>
+    ${open ? `<div class="muted small onote">Tags are your own labels on a wine (every vintage carries them). For now they are labels only: the deck and suggestions do not use them yet.</div>
+    <div class="ocontrols"><input class="ofield osearch" data-owner-wtagnew placeholder="New tag name" maxlength="40" aria-label="New tag name" autocomplete="off"><button class="opill" data-action="owner:wtagadd">Add tag</button></div>
+    ${table("<th>Tag</th><th>Wines</th><th></th>", rows, "No tags yet. Add your first one above.")}` : ""}`;
+}
 function winesTable(O, d) {
-  const sort = O.sort.wines, col = WINE_COLUMNS.find((c) => c.key === sort.key) || WINE_COLUMNS[0];
-  const rows = sortRows(filterRows(d.rows, O.q, O.issue), col.key, sort.dir, !!col.num).slice(0, 400);
-  const body = rows.map((r) => `<tr>
+  const sort = O.sort.wines, sel = O.sel || new Set();
+  const shown = shownWineRows(O, d.rows), rows = shown.slice(0, 400);
+  const body = rows.map((r) => `<tr${sel.has(r.id) ? ' class="osel"' : ""}>
+    <td><input type="checkbox" data-owner-sel="${esc(r.id)}"${sel.has(r.id) ? " checked" : ""} aria-label="Tick ${esc(r.producer)} ${esc(r.wine)}"></td>
     <td>${esc(r.producer)}</td><td>${esc(r.wine)}</td><td>${esc(r.yearText)}</td><td>${esc(r.style)}</td><td>${esc(r.country)}</td><td>${esc(r.place)}</td><td>${esc(r.grapes)}</td>
     <td><select class="ofield" data-owner-reach="${esc(r.id)}" aria-label="Reach of ${esc(r.producer)}"><option value=""${r.reach === null ? " selected" : ""}>-</option>${REACH_CHOICES.map(([v, l]) => `<option value="${v}"${String(r.reach) === v ? " selected" : ""}>${v} – ${esc(l)}</option>`).join("")}</select></td>
     <td class="onum"><input class="ofield oprice" inputmode="decimal" data-owner-price="${esc(r.id)}" value="${esc(centsToField(r.price))}" placeholder="-" aria-label="Price of ${esc(r.producer)}"><button class="opill" data-action="owner:saveprice:${esc(r.id)}">Save</button></td>
-    <td>${esc(r.photo || "none")}</td><td><button class="opill" data-action="owner:edit:${esc(r.id)}">Edit all</button></td></tr>`).join("");
-  return `<div class="muted small onote">${rows.length} of ${d.rows.length} wines. Reach: how easy the wine is to find (5 everywhere, 1 rare). Price sets the editor price; players' prices are blended in once enough players add one. Edit all opens the full editor.</div>
-    ${table(WINE_COLUMNS.map((c) => th("wines", c, sort)).join("") + "<th></th>", body, "No wine matches.")}`;
+    <td>${esc(r.photo || "none")}</td><td class="small">${esc(r.tags)}</td><td><button class="opill" data-action="owner:edit:${esc(r.id)}">Edit all</button></td></tr>`).join("");
+  return `${wineTagsHtml(O, d)}${bulkBar(O, d, shown)}
+    <div class="muted small onote">${shown.length} of ${d.rows.length} wines${shown.length > rows.length ? ` (the first ${rows.length} are listed; ticking all ticks every one of the ${shown.length})` : ""}. Reach: how easy the wine is to find (5 everywhere, 1 rare). Price sets the editor price; players' prices are blended in once enough players add one. Edit all opens the full editor.</div>
+    ${table("<th></th>" + WINE_COLUMNS.map((c) => th("wines", c, sort)).join("") + "<th></th>", body, "No wine matches.")}`;
 }
 function lensesTable(O, d) {
   const w = mergeWeights(O.weights);
@@ -261,7 +307,8 @@ export function ownerHtml(O, d) {
   const tabs = OWNER_TABS.map((t) => `<button class="otab${O.tab === t.id ? " on" : ""}" data-action="owner:tab:${t.id}" aria-pressed="${O.tab === t.id}">${esc(t.label)}</button>`).join("");
   let controls = "";
   if (O.tab === "wines") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search wines" value="${esc(O.q)}" aria-label="Search wines">
-    <select class="ofield" data-owner-issue aria-label="Show"><option value="all">All wines</option>${ISSUES.map((i) => `<option value="${i.id}"${O.issue === i.id ? " selected" : ""}>${esc(i.label)}</option>`).join("")}</select>`;
+    <select class="ofield" data-owner-issue aria-label="Show"><option value="all">All wines</option>${ISSUES.map((i) => `<option value="${i.id}"${O.issue === i.id ? " selected" : ""}>${esc(i.label)}</option>`).join("")}</select>
+    ${d.wineTags ? `<select class="ofield" data-owner-tagfilter aria-label="Tag"><option value="all">Any tag</option><option value="none"${O.tagFilter === "none" ? " selected" : ""}>No tag</option>${d.wineTags.tags.map((t) => `<option value="${esc(t.id)}"${O.tagFilter === t.id ? " selected" : ""}>${esc(t.name)}</option>`).join("")}</select>` : ""}`;
   else if (O.tab === "bingo") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search cards or squares" value="${esc(O.q)}" aria-label="Search bingo cards">`;
   else if (O.tab === "lists") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search this list" value="${esc(O.q)}" aria-label="Search this list">`;
   else if (O.tab === "tags") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search tags" value="${esc(O.q)}" aria-label="Search tags">

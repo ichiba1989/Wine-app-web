@@ -359,6 +359,43 @@ export async function addProducerAlias(sb, alias, producerId) {
   const { error } = await sb.from("producer_aliases").insert({ alias, producer_id: producerId });
   if (error && !/duplicate|23505|producer_aliases|42P01|PGRST205/.test(`${error.code} ${error.message}`)) throw new Error(error.message || String(error));
 }
+// ---------------------------------------------------------------- wine tags (docs/wine_tags.sql, run by hand; all versions)
+// The owner's own labels on catalog wines. LABELS ONLY for now: nothing in the deck or the suggestions reads them. Online only.
+// Returns null when the update has not been run.
+const tagsMissing = (e) => /wine_tags|wine_tag_links|42P01|PGRST205/.test(`${e && e.code} ${e && e.message}`);
+const tagError = (e, what) => new Error(tagsMissing(e) ? "Wine tags need a database update first (docs/wine_tags.sql)." : /23505|duplicate/.test(`${e.code} ${e.message}`) ? "A tag with that name is already there." : `${what}: ${e.message || e}`);
+export async function loadWineTags(sb) {
+  try {
+    const [tags, links] = await Promise.all([allRows(() => sb.from("wine_tags").select("id, name").order("name")), allRows(() => sb.from("wine_tag_links").select("wine_id, tag_id").order("wine_id"))]);
+    return { tags, links };
+  } catch (e) { if (tagsMissing(e)) return null; throw e; }
+}
+export async function addWineTag(sb, name) {
+  const { data, error } = await sb.from("wine_tags").insert({ name: String(name).trim() }).select("id, name").single();
+  if (error) throw tagError(error, "Not added");
+  return data;
+}
+export async function renameWineTag(sb, id, name) {
+  const { data, error } = await sb.from("wine_tags").update({ name: String(name).trim() }).eq("id", id).select("id");
+  if (error) throw tagError(error, "Not renamed");
+  if (!data || !data.length) throw new Error("Not renamed. Your access may not allow it.");
+}
+export async function deleteWineTag(sb, id) {
+  const { data, error } = await sb.from("wine_tags").delete().eq("id", id).select("id");
+  if (error) throw tagError(error, "Not deleted");
+  if (!data || !data.length) throw new Error("Not deleted. Your access may not allow it.");
+}
+// Puts one tag on many wines, or takes it off (wineIds: catalog wine ids, not vintages). Sent 200 at a time; a wine that already has it is skipped.
+export async function tagWines(sb, wineIds, tagId, on = true) {
+  const ids = [...new Set(wineIds)].filter(Boolean);
+  for (let i = 0; i < ids.length; i += 200) {
+    const part = ids.slice(i, i + 200);
+    const { error } = on ? await sb.from("wine_tag_links").upsert(part.map((w) => ({ wine_id: w, tag_id: tagId })), { onConflict: "wine_id,tag_id", ignoreDuplicates: true })
+      : await sb.from("wine_tag_links").delete().eq("tag_id", tagId).in("wine_id", part);
+    if (error) throw tagError(error, on ? "Not tagged" : "Not untagged");
+  }
+  return ids.length;
+}
 // The place list checks on the Owner page (geo.js placeChecks): which places wines point at, and applying one fix the owner chose.
 export async function loadPlaceUse(sb) {
   const rows = await allRows(() => sb.from("wines").select("appellation_id"));
