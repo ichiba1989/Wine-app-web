@@ -7,10 +7,10 @@
 // The place is chosen by searching the place list; a place that is not in it yet is typed in and created when the wine is added (geo.js savePlace).
 // Everything fits on one phone screen. Editor writes are online only. The rules are in venue.js (pure); this file draws the screen and handles the taps.
 import { esc, WINE_STYLES } from "./logic.js?v=14";
-import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf } from "./venue.js?v=6";
-import { placeOptions } from "./wineinfo.js?v=23";
-import { placeFromArea, savePlace } from "./geo.js?v=1";
-import * as db from "./data.js?v=38";
+import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf } from "./venue.js?v=7";
+import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=24";
+import { placeFromArea, savePlace, designationPlan } from "./geo.js?v=3";
+import * as db from "./data.js?v=39";
 
 const fold = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 const STYLE_CHOICES = WINE_STYLES.map((s) => ({ id: s.id, label: s.label }));
@@ -24,7 +24,7 @@ export function formFor(row, lists, prep = null) {
     const sp = split ? splitTitle(row.wine_name, split) : { producer: p.producer, wine: p.wine };
     const place = canonPlace(lists.areas, p.place);
     return {
-      ...base, split, producer: sp.producer, wine: wineNameOf(p.wine || sp.wine, { grapes: p.grapes, place: { ...p.place, ...place } }), style: p.style, styleWhy: p.styleWhy, place, placeWhy: p.placeWhy,
+      ...base, ...desigFor(lists, place, row.wine_name), split, producer: sp.producer, wine: wineNameOf(p.wine || sp.wine, { grapes: p.grapes, place: { ...p.place, ...place } }), style: p.style, styleWhy: p.styleWhy, place, placeWhy: p.placeWhy,
       grapes: p.grapes.join(", "), notWine: p.notWine, knownProducer: lists.producers.some((x) => fold(x.name) === fold(sp.producer)),
     };
   }
@@ -32,9 +32,15 @@ export function formFor(row, lists, prep = null) {
   const sp = splitTitle(row.wine_name, s.split);
   const place = s.areaId ? placeFromArea(lists.areas, s.areaId) : { country: "", region: "", appellation: "" };
   return {
-    ...base, split: s.split, producer: sp.producer, wine: wineNameOf(sp.wine, { grapes: s.grapes, place }), style: s.style, styleWhy: s.styleWhy, place,
+    ...base, ...desigFor(lists, place, row.wine_name), split: s.split, producer: sp.producer, wine: wineNameOf(sp.wine, { grapes: s.grapes, place }), style: s.style, styleWhy: s.styleWhy, place,
     placeWhy: s.areaWhy, grapes: s.grapes.join(", "), notWine: false, knownProducer: !!s.producerId,
   };
+}
+// The designation (DOC, DOCG, AOC ...) the form starts with: the place's own, else the one in the shop's title (wineinfo.js startDesignation).
+// It is kept on the place, never on the wine (geo.js); the title keeps "DOCG" even though the wine name leaves it out.
+function desigFor(lists, place, title) {
+  const d = startDesignation(lists.areas, place, title);
+  return { designation: d.designation, designationWhy: d.why ? d.why.replace("in the name", "in the title") : "", desigPicked: false };
 }
 // The wine name for the form's current grapes and place (venue.js wineNameOf), from the title words after the producer.
 const nameFor = (f, rest) => wineNameOf(rest, { grapes: String(f.grapes || "").split(/[,;]/).map((x) => x.trim()).filter(Boolean), place: f.place });
@@ -64,6 +70,7 @@ export function hitsHtml(f, options) {
     : `<div class="muted small">No place called that yet. <button class="link" data-vr="type">Type it as a new place</button></div>`;
 }
 
+const desigRow = (f, areas) => designationRowHtml(areas, canonPlace(areas, f.place), f.designation, f.designationWhy, "data-vrdesig");
 export function reviewHtml(R, queue, opts) {
   if (R.error) return `<div class="err">${esc(R.error)}</div><button class="btn outline slim" data-vr="retry">Try again</button>`;
   if (!R.lists) return `<p class="muted">Loading…</p>`;
@@ -95,6 +102,7 @@ export function reviewHtml(R, queue, opts) {
       ${typed}
       <input class="field" id="vrPlaceQ" data-vr-q value="${esc(f.q)}" placeholder="Search places: Barolo, Napa, St-Julien…" autocomplete="off" aria-label="Search places">
       <div class="vrhits" id="vrHits">${hitsHtml(f, R.places)}</div>
+      <div class="vrdesig" id="vrDesig"><span class="vrlbl">Designation</span>${desigRow(f, R.lists.areas)}</div>
       <div class="vrrow2 vrvg">
         <label class="vrf">Vintage<input class="field" data-vr-f="vintage" value="${esc(f.vintage)}" autocomplete="off" placeholder="year or NV"></label>
         <label class="vrf">Grapes on the label<input class="field" data-vr-f="grapes" value="${esc(f.grapes)}" autocomplete="off" placeholder="comma between"></label>
@@ -128,7 +136,12 @@ export function createVenueReview(ctx) {
     pickNext();
     root.innerHTML = `<div class="vrev">${reviewHtml(R, queue(), { owner: ctx.owner() })}</div>`;
   }
-  const drawPlace = () => { const el = document.getElementById("vrPlaceNow"); if (el && R.form) el.innerHTML = placeNowHtml(R.form, R.lists.areas); };
+  // A new place brings its own designation, unless the editor picked one.
+  const refreshDesig = (f) => { if (!f.desigPicked) Object.assign(f, desigFor(R.lists, canonPlace(R.lists.areas, f.place), f.title)); };
+  const drawPlace = () => {
+    const el = document.getElementById("vrPlaceNow"); if (el && R.form) el.innerHTML = placeNowHtml(R.form, R.lists.areas);
+    const d = document.getElementById("vrDesig"); if (d && R.form) { refreshDesig(R.form); d.innerHTML = `<span class="vrlbl">Designation</span>${desigRow(R.form, R.lists.areas)}`; }
+  };
   const drawHits = () => { const el = document.getElementById("vrHits"); if (el && R.form) el.innerHTML = hitsHtml(R.form, R.places); };
   async function loadLists() { R.lists = await db.loadEditorLists(ctx.sb()); R.places = placeOptions(R.lists.areas); }
   async function load() {
@@ -146,13 +159,16 @@ export function createVenueReview(ctx) {
     if (why) { R.err = why; const e = document.getElementById("vrErr"); if (e) e.textContent = why; return; }
     R.busy = true; R.err = ""; draw();
     try {
-      const areaId = await savePlace(ctx.sb(), R.lists.areas, canonPlace(R.lists.areas, f.place));
-      if (plan.notes.length) await loadLists();   // new places join the search at once
+      const place = canonPlace(R.lists.areas, f.place), dPlan = designationPlan(R.lists.areas, place, f.designation);
+      const areaId = await savePlace(ctx.sb(), R.lists.areas, place, { classification: dPlan.set || "" });   // a new place is created with its designation
+      let desigNote = "";
+      if (dPlan.set && !plan.notes.length && areaId) { try { await db.savePlaceDesignation(ctx.sb(), areaId, dPlan.set); } catch (e) { desigNote = " " + (e.message || e); } }
+      if (plan.notes.length || dPlan.set) await loadLists();   // new places, and new designations, show at once
       await db.addVenueCatalogWine(ctx.sb(), ctx.userId(), {
         producerName: f.producer, wineName: f.wine, style: f.style, areaId: areaId || null, vintage: f.vintage === "NV" ? "NV" : f.vintage,
         grapes: grapesFrom(f.grapes, R.lists.grapes), publish, rowId: f.rowId, listedAs: f.title, sourceName: `${VENUE.name} list`,
       });
-      R.msg = `Added: ${f.producer}${f.wine ? " " + f.wine : ""} ${f.vintage}${publish ? ", published" : ", waiting for review in Catalog"}.`;
+      R.msg = `Added: ${f.producer}${f.wine ? " " + f.wine : ""} ${f.vintage}${publish ? ", published" : ", waiting for review in Catalog"}.${desigNote}`;
       R.form = null;
       if (!R.lists.producers.some((p) => fold(p.name) === fold(f.producer))) R.lists.producers.push({ id: null, name: f.producer });   // so the next titles from this producer are split for you
       await ctx.onChanged();
@@ -160,6 +176,8 @@ export function createVenueReview(ctx) {
     R.busy = false; draw();
   }
   document.addEventListener("click", async (ev) => {
+    const d = ev.target.closest("[data-vrdesig]");
+    if (d && root && R.form && !R.busy) { R.form.designation = d.dataset.vrdesig; R.form.designationWhy = ""; R.form.desigPicked = true; draw(); return; }
     const t = ev.target.closest("[data-vr]");
     if (!t || !root || t.disabled) return;
     const i = t.dataset.vr.indexOf(":"), action = i < 0 ? t.dataset.vr : t.dataset.vr.slice(0, i), a = i < 0 ? "" : t.dataset.vr.slice(i + 1);
@@ -167,7 +185,7 @@ export function createVenueReview(ctx) {
     if (action === "retry") load();
     else if (action === "split" && f) { f.split = Number(a) === f.split ? 0 : Number(a); const sp = splitTitle(f.title, f.split); f.producer = sp.producer; f.wine = nameFor(f, sp.wine); draw(); }
     else if (action === "style" && f) { f.style = a; f.styleWhy = ""; draw(); }
-    else if (action === "place" && f) { f.place = placeFromArea(R.lists.areas, a); f.wine = nameFor(f, f.wine); f.placeWhy = ""; f.q = ""; f.typing = false; draw(); }   // the chosen place's words leave the name
+    else if (action === "place" && f) { f.place = placeFromArea(R.lists.areas, a); refreshDesig(f); f.wine = nameFor(f, f.wine); f.placeWhy = ""; f.q = ""; f.typing = false; draw(); }   // the chosen place's words leave the name
     else if (action === "type" && f) {
       f.typing = !f.typing;
       if (f.typing && f.q.trim() && !placeText(f.place)) f.place = { country: "", region: "", appellation: f.q.trim() };   // start from what was searched

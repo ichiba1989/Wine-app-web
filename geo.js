@@ -68,15 +68,67 @@ export function placeClassification(areas, place) {
   return p.error ? "" : p.classification;
 }
 
+// ---------------------------------------------------------------- designation (DOC, DOCG, AOC ...), kept on the place (owner, 2026-10-15)
+// A designation belongs to a place, not to one wine: Barolo is DOCG for every Barolo. It is stored in geo_areas.classification of the place a wine
+// points at (an appellation, or a region such as Rioja), and the wine card shows it next to the place (logic.js cardFromRow).
+// The choices offered follow the place's country; any other country gets the general set.
+export const DESIGNATIONS = {
+  france: ["AOC", "AOP", "IGP", "Vin de France"],
+  italy: ["DOCG", "DOC", "IGT", "Vino d'Italia"],
+  spain: ["DOCa", "DOQ", "DO", "VP", "IGP"],
+  portugal: ["DOC", "IPR", "Vinho Regional"],
+  germany: ["Prädikatswein", "Qualitätswein", "Landwein"],
+  austria: ["DAC", "Qualitätswein", "Landwein"],
+  usa: ["AVA"],
+  "united states": ["AVA"],
+  greece: ["PDO", "PGI"],
+};
+const GENERAL = ["PDO", "PGI", "AVA", "GI", "WO", "DO"];
+export const designationChoices = (country) => DESIGNATIONS[fold(country)] || GENERAL;
+// Every term any country uses, longest first, for reading one out of a title or name.
+const ALL_TERMS = [...new Set([...Object.values(DESIGNATIONS).flat(), ...GENERAL, "AC", "DOP", "QbA"])].sort((a, b) => b.length - a.length);
+const SAME = { ac: "AOC", dop: "DOP", qba: "Qualitätswein" };
+// The designation written as a whole word in a title or name ("Barolo Cerequio DOCG" -> "DOCG"); "" when there is none.
+// Short terms count only in capitals as printed ("DO", not "do"), so ordinary words are never read as one.
+export function designationFromText(text) {
+  const t = String(text || "");
+  for (const term of ALL_TERMS) {
+    const esc = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s+");
+    const re = term.length <= 3 ? new RegExp(`(^|[^\\p{L}\\d])${esc}(?=$|[^\\p{L}\\d])`, "u") : new RegExp(`(^|[^\\p{L}\\d])${esc}(?=$|[^\\p{L}\\d])`, "iu");
+    if (re.test(t)) return SAME[fold(term)] || term;
+  }
+  return "";
+}
+// The place a wine will point at, once saving has created what is missing: the existing area, or null for one still to be made.
+const targetArea = (areas, place) => { const p = planPlace(areas, place); return p.error || p.creates.length ? null : (areas.find((a) => a.id === p.areaId) || null); };
+// What saving a designation would do for this place:
+//   { existing }       the place already has this designation (or has one and none was picked): nothing to write
+//   { set }            write it (on a place still to be created, or one with none yet)
+//   { conflict }       the place already has a DIFFERENT one: nothing is written; a place's designation is changed for every wine, never from one wine's form
+//   {}                 no place, or nothing picked
+export function designationPlan(areas, place, chosen) {
+  const a = targetArea(areas, place), want = String(chosen || "").trim(), have = (a && a.classification) || "";
+  if (!a && planPlace(areas, place).error) return {};
+  if (!a && !String(place.country || place.region || place.appellation || "").trim()) return {};
+  if (have && (!want || fold(have) === fold(want))) return { existing: have };
+  if (have) return { conflict: have };
+  return want ? { set: want } : {};
+}
+// The designation a place already has ("" for none or a place still to be created).
+export const placeDesignation = (areas, place) => { const a = targetArea(areas, place); return (a && a.classification) || ""; };
+
 // Creates what is missing (a place an editor adds is verified straight away, so players see it) and returns the id the wine should point at.
-export async function savePlace(sb, areas, place) {
+// opts.classification: the designation to write on the most specific place created (savePlaceDesignation in data.js fills an existing place).
+export async function savePlace(sb, areas, place, opts = {}) {
   const plan = planPlace(areas, place);
   if (plan.error) throw new Error(plan.error);
   if (!plan.creates.length) return plan.areaId;
   const made = [];
-  for (const c of plan.creates) {
+  for (const [i, c] of plan.creates.entries()) {
     const parent_id = c.parent == null ? null : typeof c.parent === "string" ? c.parent : made[c.parent.index];
-    const { data, error } = await sb.from("geo_areas").insert({ name: c.name, level: c.level, parent_id, status: "verified" }).select("id").single();
+    const row = { name: c.name, level: c.level, parent_id, status: "verified" };
+    if (opts.classification && i === plan.creates.length - 1 && c.level !== "country") row.classification = opts.classification;
+    const { data, error } = await sb.from("geo_areas").insert(row).select("id").single();
     if (error) throw new Error(`Could not add the ${c.level} ${c.name}: ${error.message || error}`);
     made.push(data.id);
   }

@@ -6,7 +6,7 @@
 // The list is kept in the database (venue_wines, docs/venue_decks.sql): the owner uploads the venue's file and adds or removes wines by hand on the Owner page.
 // Pure: no browser, no network. The file reading itself is done by importer.js, loaded on the Owner page.
 import { grapeFor } from "./rules.js?v=4";
-import { planPlace } from "./geo.js?v=1";
+import { planPlace } from "./geo.js?v=3";
 import { duplicateGroups } from "./catalog.js?v=3";
 
 // ---------------------------------------------------------------- the venue (the one line a new venue branch changes)

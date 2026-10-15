@@ -184,3 +184,8 @@ No database script. Check on a phone:
 - [ ] A wine on the list in two vintages (e.g. 2018 and 2019, both in the catalog): only the 2019 shows in Discover and the games; the Owner tab lists the 2018 as "Older vintage: kept on record, not in the deck", and it is still in Editor, Catalog.
 - [ ] Nothing on screen says "VWM".
 
+## Designations on places (added 2026-10-15)
+- [ ] Run `docs/geo_classification.sql` once in Supabase; the check at its end lists the places that have a designation.
+- [ ] Editor, Edit wine info on a Barolo wine: the Designation row shows DOCG "From our place list"; picking DOC shows "Our place list says DOCG" and saving changes nothing on the place.
+- [ ] A wine at a place with no designation: pick one, save, and the wine card shows it next to the place; other wines at that place show it too.
+- [ ] A wine at a new appellation: pick a designation; the new place is created with it.

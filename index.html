@@ -175,6 +175,8 @@
   .wfoot .btn { margin-top: 0; }
   .stylerow { display: flex; gap: 6px; margin: 6px 0 10px; flex-wrap: wrap; }
   .stylerow .chip { flex: 1 1 auto; text-align: center; }
+  .desigchips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }   /* designation (DOC, DOCG, AOC ...) chips, on a place */
+  .desigchips .chip { flex: 0 0 auto; padding: 6px 10px; font-size: calc(12px * var(--ts)); }
   .seg.sub { margin-top: 0; } .seg.sub[hidden] { display: none; }
   .deleterow { margin-top: 36px; text-align: right; }
   .deletelink { border: 0; background: transparent; padding: 2px 0; font-size: calc(10px * var(--ts)); color: #8A978D; text-decoration: none; opacity: .8; }
@@ -596,6 +598,10 @@
   .vrnew { color: #8a5a00; font-size: calc(12px * var(--ts)); }
   .vrhits { display: flex; flex-direction: column; gap: 2px; }
   .vrhits:empty { display: none; }
+  .vrdesig { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
+  .vrdesig .desigchips { margin-top: 0; gap: 3px; }
+  .vrdesig .desigchips .chip { padding: 4px 8px; }
+  .vrdesig .muted.small { flex-basis: 100%; font-size: calc(11px * var(--ts)); }
   .vrhit { text-align: left; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: calc(13px * var(--ts)); }
   .vrbtns { display: grid; grid-template-columns: 1.25fr 1.25fr 0.7fr; gap: 6px; margin-top: 2px; }
   .vrbtns .btn.slim { margin: 0; padding: 9px 4px; font-size: calc(13px * var(--ts)); }
@@ -657,6 +663,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=99" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=101" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>
