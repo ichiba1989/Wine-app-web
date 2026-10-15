@@ -6,7 +6,7 @@
 // The list is kept in the database (venue_wines, docs/venue_decks.sql): the owner uploads the venue's file and adds or removes wines by hand on the Owner page.
 // Pure: no browser, no network. The file reading itself is done by importer.js, loaded on the Owner page.
 import { grapeFor } from "./rules.js?v=4";
-import { planPlace } from "./geo.js?v=3";
+import { planPlace } from "./geo.js?v=4";
 import { duplicateGroups } from "./catalog.js?v=3";
 
 // ---------------------------------------------------------------- the venue (the one line a new venue branch changes)
@@ -259,7 +259,7 @@ export function searchPlaces(options, q, limit = 8) {
 // Grand Cru, Premier Cru, Villages, Riserva and the like are an important distinction on the label (owner, 2026-10-15). Words are matched whole, accents, case and punctuation ignored, "St." read as "Saint".
 // Leftover joining words at either end ("de", "di", "of" ...) go too. The name may end up empty: the wine is then known by its producer, type, place
 // and grapes (a catalog wine's name can be empty; adding one reuses an existing wine only when those all agree, data.js addVenueCatalogWine).
-const PLACE_TERMS = ["doc", "docg", "doca", "docq", "aoc", "aop", "ac", "do", "dop", "igt", "igp", "ava", "qba", "dac", "vdp"];
+const PLACE_TERMS = ["doc", "docg", "doca", "docq", "aoc", "aop", "ac", "do", "dop", "igt", "igp", "ava", "dac"];   // VDP and QbA are not place terms: "VDP.Grosse Lage" stays whole
 const JOINERS = new Set(["de", "di", "du", "des", "del", "della", "dei", "da", "la", "le", "les", "el", "of", "from", "and", "et", "e", "y", "und"]);
 export function wineNameOf(text, { grapes = [], place = {} } = {}) {
   let words = String(text || "").trim().split(/\s+/).filter(Boolean);

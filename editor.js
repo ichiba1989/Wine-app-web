@@ -12,14 +12,14 @@ import { dimsFor, dimMeta, defaultFor, esc, wineName, placeLine, editorList, has
 import * as db from "./data.js?v=39";
 import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=38";
 import { createReview } from "./review.js?v=17";
-import { createWineInfo, publishSummary } from "./wineinfo.js?v=24";
+import { createWineInfo, publishSummary } from "./wineinfo.js?v=25";
 import { groupSubmissions, planPromotion, duplicateGroups, rulesFrom } from "./catalog.js?v=3";
 import { visibleKinds, FOUND_ONLINE_PERMISSION, photoSummary, photoList, photoTag, pullSource, shareWinePhoto, shareNote, uploadWinePhoto, removeWinePhoto, reuseWinePhoto } from "./winephotos.js?v=14";
 import { communityHtml, loadSubmissionState, approvalPlan } from "./sharing.js?v=14";
 import { infoLine } from "./wineline.js?v=1";
 import { sortWines, sortSelectHtml, STRUCTURE_SORTS, PHOTO_SORTS } from "./sorting.js?v=4";
 import { suggestStructure, values as ruleValues, goldInfo, GOLD, GROUPS, evaluateRules, reportText, TARGETS, RULES_VERSION } from "./rules.js?v=4";
-import { VENUE } from "./venue.js?v=7";
+import { VENUE } from "./venue.js?v=9";
 
 // "venue" (this venue branch only): the venue's wines that are not in our catalog yet, reviewed one at a time (venuereview.js).
 const SECTIONS = [{ id: "venue", label: VENUE.name }, { id: "structure", label: "Structure" }, { id: "catalog", label: "Catalog" }, { id: "photos", label: "Photos" }, { id: "flags", label: "Flags" }, { id: "quiz", label: "Quiz" }, { id: "feedback", label: "Feedback" }];

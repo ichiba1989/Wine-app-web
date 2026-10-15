@@ -7,9 +7,9 @@
 // The place is chosen by searching the place list; a place that is not in it yet is typed in and created when the wine is added (geo.js savePlace).
 // Everything fits on one phone screen. Editor writes are online only. The rules are in venue.js (pure); this file draws the screen and handles the taps.
 import { esc, WINE_STYLES } from "./logic.js?v=14";
-import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf } from "./venue.js?v=7";
-import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=24";
-import { placeFromArea, savePlace, designationPlan } from "./geo.js?v=3";
+import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf } from "./venue.js?v=9";
+import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=25";
+import { placeFromArea, savePlace, designationPlan, broadPlace } from "./geo.js?v=4";
 import * as db from "./data.js?v=39";
 
 const fold = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -22,7 +22,7 @@ export function formFor(row, lists, prep = null) {
   if (p) {
     const split = splitOf(row.wine_name, p.producer);
     const sp = split ? splitTitle(row.wine_name, split) : { producer: p.producer, wine: p.wine };
-    const place = canonPlace(lists.areas, p.place);
+    const place = canonPlace(lists.areas, broadPlace(p.place));   // Germany and Austria: only the broad wine region (geo.js)
     return {
       ...base, ...desigFor(lists, place, row.wine_name), split, producer: sp.producer, wine: wineNameOf(p.wine || sp.wine, { grapes: p.grapes, place: { ...p.place, ...place } }), style: p.style, styleWhy: p.styleWhy, place, placeWhy: p.placeWhy,
       grapes: p.grapes.join(", "), notWine: p.notWine, knownProducer: lists.producers.some((x) => fold(x.name) === fold(sp.producer)),
@@ -30,7 +30,7 @@ export function formFor(row, lists, prep = null) {
   }
   const s = suggestRow(row.wine_name, { producers: lists.producers, areas: lists.areas, shopType: row.shop_type || "" });
   const sp = splitTitle(row.wine_name, s.split);
-  const place = s.areaId ? placeFromArea(lists.areas, s.areaId) : { country: "", region: "", appellation: "" };
+  const place = broadPlace(s.areaId ? placeFromArea(lists.areas, s.areaId) : { country: "", region: "", appellation: "" });
   return {
     ...base, ...desigFor(lists, place, row.wine_name), split: s.split, producer: sp.producer, wine: wineNameOf(sp.wine, { grapes: s.grapes, place }), style: s.style, styleWhy: s.styleWhy, place,
     placeWhy: s.areaWhy, grapes: s.grapes.join(", "), notWine: false, knownProducer: !!s.producerId,
@@ -185,7 +185,7 @@ export function createVenueReview(ctx) {
     if (action === "retry") load();
     else if (action === "split" && f) { f.split = Number(a) === f.split ? 0 : Number(a); const sp = splitTitle(f.title, f.split); f.producer = sp.producer; f.wine = nameFor(f, sp.wine); draw(); }
     else if (action === "style" && f) { f.style = a; f.styleWhy = ""; draw(); }
-    else if (action === "place" && f) { f.place = placeFromArea(R.lists.areas, a); refreshDesig(f); f.wine = nameFor(f, f.wine); f.placeWhy = ""; f.q = ""; f.typing = false; draw(); }   // the chosen place's words leave the name
+    else if (action === "place" && f) { f.place = broadPlace(placeFromArea(R.lists.areas, a)); refreshDesig(f); f.wine = nameFor(f, f.wine); f.placeWhy = ""; f.q = ""; f.typing = false; draw(); }   // the chosen place's words leave the name
     else if (action === "type" && f) {
       f.typing = !f.typing;
       if (f.typing && f.q.trim() && !placeText(f.place)) f.place = { country: "", region: "", appellation: f.q.trim() };   // start from what was searched
