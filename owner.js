@@ -2,19 +2,19 @@
 // Every table can be searched and sorted (tap a heading). It is reached from the gear (Settings) and only offered to the owner; the database
 // still decides what anyone may change. The rules at the top (rows, search, sort, checks, coverage) are pure: no page, no network.
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
-import { esc } from "./logic.js?v=15";
-import { REACH_CHOICES } from "./wineinfo.js?v=23";
-import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=3";
-import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=7";
-import { TAG_KINDS } from "./tags.js?v=3";
-import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=10";
-import { centsToField } from "./pricing.js?v=2";
+import { esc } from "./logic.js?v=16";
+import { REACH_CHOICES } from "./wineinfo.js?v=24";
+import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=4";
+import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=8";
+import { TAG_KINDS } from "./tags.js?v=4";
+import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=11";
+import { centsToField } from "./pricing.js?v=3";
 import { ASSIGNABLE_ROLES, ROLES, PERMISSIONS, staffRows, filterStaff, rowActions } from "./access.js?v=4";
-import { plainKey } from "./text.js?v=1";
-import { placeChecks } from "./geo.js?v=6";
+import { plainKey } from "./text.js?v=2";
+import { placeChecks } from "./geo.js?v=7";
 export { placeChecks };   // used by app.js through the lazily loaded Owner module
 
-export const OWNER_TABS = [{ id: "wines", label: "Wines" }, { id: "lenses", label: "Lenses" }, { id: "bingo", label: "Bingo" }, { id: "checks", label: "Checks" }, { id: "tags", label: "Tags" }, { id: "legend", label: "Legend" }, { id: "roles", label: "Roles" }, { id: "config", label: "Config" }];
+export const OWNER_TABS = [{ id: "wines", label: "Wines" }, { id: "lenses", label: "Lenses" }, { id: "bingo", label: "Bingo" }, { id: "checks", label: "Checks" }, { id: "tags", label: "Tags" }, { id: "legend", label: "Legend" }, { id: "roles", label: "Roles" }, { id: "config", label: "Config" }, { id: "lists", label: "Lists" }];
 
 const fold = plainKey;   // text.js: the shared lookup key
 const isLive = (c) => !c.archived && (!c.wineStatus || c.wineStatus === "verified");
@@ -211,6 +211,40 @@ function rolesTable(O, d) {
     <h3 class="serif osub">Recent changes</h3>
     ${table("<th>When</th><th>Person</th><th>Change</th>", audit, "No changes recorded yet.")}`;
 }
+// ---------------------------------------------------------------- the reference lists (docs/reference_lists.sql; data.js loadReferenceLists)
+// Four lists that used to live only in the code. Rows 'suggested' are not used until you tap Use; "Mark checked" records that a source was read.
+export const REF_KINDS = [
+  { id: "grape_aliases", label: "Grape other names", cols: [["alias", "Word"], ["grape", "Grape"], ["kind", "Kind"]],
+    note: "Shortcut: typing help (\"cab\" finds Cabernet Sauvignon). Synonym: the same grape under another name; only used to find the grape's rules, and a label keeps its own word." },
+  { id: "producer_aliases", label: "Producer spellings", cols: [["alias", "Spelling"], ["producer_name", "Producer"]],
+    note: "Other spellings editors confirmed with \"Use it\". They are offered as \"Looks like ...\"; the producer's own name is never changed." },
+  { id: "place_designation_rules", label: "Designations", cols: [["country", "Country"], ["place_name", "Place"], ["designation", "Designation"]],
+    note: "Places whose designation is the same for every wine there (Leithaberg: DAC). Filled in automatically on wine forms; a place's own designation always wins." },
+  { id: "broad_places", label: "Broad regions", cols: [["country", "Country"], ["name", "Region"]],
+    note: "For Germany and Austria only these regions are places; the village and vineyard stay in the wine name." },
+];
+const REF_FIELD = { grape_aliases: "grapeAliases", producer_aliases: "producerAliases", place_designation_rules: "designationRules", broad_places: "broadPlaces" };
+export function refRows(lists, kind, q = "") {
+  const rows = (lists && lists[REF_FIELD[kind]]) || [];
+  const t = fold(q);
+  return t ? rows.filter((r) => fold(Object.values(r).filter((v) => typeof v === "string").join(" ")).includes(t)) : rows;
+}
+function listsTable(O, d) {
+  const L = d.refLists;
+  if (!L) return `<p class="muted">${d.refListsError ? esc(d.refListsError) : "Loading…"}</p>`;
+  const kind = REF_KINDS.find((k) => k.id === (O.refKind || "grape_aliases")), rows = refRows(L, kind.id, O.q);
+  const status = (r) => (r.status === "checked" ? `<span class="gbadge ok">Checked</span>` : r.status === "in use" ? `<span class="gbadge">In use</span>` : `<span class="gbadge draft">Suggested</span>`);
+  const body = rows.slice(0, 300).map((r) => `<tr>${kind.cols.map(([k]) => `<td>${esc(r[k] || "")}</td>`).join("")}<td>${status(r)}<div class="muted tiny">${esc(r.basis || "")}</div></td>
+    <td>${r.status === "suggested" ? `<button class="opill" data-action="owner:refuse:${r.id}">Use</button> ` : ""}${r.status !== "checked" ? `<button class="opill" data-action="owner:refcheck:${r.id}">Mark checked</button> ` : ""}<button class="opill" data-action="owner:refremove:${r.id}">Remove</button></td></tr>`).join("");
+  const inputs = kind.id === "grape_aliases" ? `<input class="ofield" data-owner-ref="alias" placeholder="Word" aria-label="Word"><input class="ofield" data-owner-ref="grape" placeholder="Grape (as on the grape list)" aria-label="Grape"><select class="ofield" data-owner-ref="kind" aria-label="Kind"><option value="synonym">Synonym</option><option value="shortcut">Shortcut</option></select>`
+    : kind.id === "producer_aliases" ? `<input class="ofield" data-owner-ref="alias" placeholder="Spelling" aria-label="Spelling"><input class="ofield" data-owner-ref="producer_name" placeholder="Producer (as in our list)" aria-label="Producer">`
+    : kind.id === "place_designation_rules" ? `<input class="ofield" data-owner-ref="country" placeholder="Country" aria-label="Country"><input class="ofield" data-owner-ref="place_name" placeholder="Place" aria-label="Place"><input class="ofield" data-owner-ref="designation" placeholder="Designation (DAC, DOCG …)" aria-label="Designation">`
+    : `<input class="ofield" data-owner-ref="country" placeholder="Country" aria-label="Country"><input class="ofield" data-owner-ref="name" placeholder="Region" aria-label="Region">`;
+  return `<div class="ocontrols">${REF_KINDS.map((k) => `<button class="opill${k.id === kind.id ? " on" : ""}" data-action="owner:refkind:${k.id}" aria-pressed="${k.id === kind.id}">${esc(k.label)}</button>`).join("")}</div>
+    <div class="muted small onote">${esc(kind.note)}</div>
+    <div class="ocontrols">${inputs}<button class="opill" data-action="owner:refadd">Add</button></div>
+    ${table(`${kind.cols.map(([, l]) => `<th>${esc(l)}</th>`).join("")}<th>Status</th><th></th>`, body, "Nothing in this list yet.")}`;
+}
 export function ownerTableHtml(O, d) {
   if (O.tab === "roles") return rolesTable(O, d);
   if (O.tab === "legend") return legendTable(O, d);
@@ -219,6 +253,7 @@ export function ownerTableHtml(O, d) {
   if (O.tab === "bingo") return bingoTable(O, d);
   if (O.tab === "checks") return checksTable(O, d);
   if (O.tab === "config") return configTable(O, d);
+  if (O.tab === "lists") return listsTable(O, d);
   return winesTable(O, d);
 }
 // The page: tabs, the controls for the tab, a message line, and the table (which app.js can redraw alone while someone types).
@@ -228,6 +263,7 @@ export function ownerHtml(O, d) {
   if (O.tab === "wines") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search wines" value="${esc(O.q)}" aria-label="Search wines">
     <select class="ofield" data-owner-issue aria-label="Show"><option value="all">All wines</option>${ISSUES.map((i) => `<option value="${i.id}"${O.issue === i.id ? " selected" : ""}>${esc(i.label)}</option>`).join("")}</select>`;
   else if (O.tab === "bingo") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search cards or squares" value="${esc(O.q)}" aria-label="Search bingo cards">`;
+  else if (O.tab === "lists") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search this list" value="${esc(O.q)}" aria-label="Search this list">`;
   else if (O.tab === "tags") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search tags" value="${esc(O.q)}" aria-label="Search tags">
     <select class="ofield" data-owner-tagkind aria-label="Kind of new tag">${TAG_KINDS.map((k) => `<option value="${k.id}">${esc(k.label)}</option>`).join("")}</select>
     <input class="ofield osearch" data-owner-tagname placeholder="New tag name" aria-label="New tag name" autocomplete="off"><button class="opill" data-action="owner:addtag">Add tag</button>`;

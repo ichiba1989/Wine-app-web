@@ -3,7 +3,7 @@
 // with a vocabulary (grapes, the catalog's own producers and places, and the wine words in winewords.js) and corrects near misses to the real spelling.
 // It is rule-based and only fixes SPELLING of the player's own words from known lists; it never adds a fact. Fixes are reversible (every fix keeps what was heard), weaker matches are only
 // offered as "Did you mean", and an ordinary English word is never changed.
-import { fold } from "./grapes.js?v=1";
+import { fold } from "./grapes.js?v=2";
 
 // Ordinary words that must never be "corrected" into a wine word (the list is deliberately plain and short; add to it if a real word gets changed).
 const COMMON = new Set(("a about after all also always an and any are as at back be because been beer but by can cold dark day did do does dry each easy even every fresh find first for from full get give go good great had has have he her here him his how i if in into is it its just keep know last light like little long look made make many may me more most much my near new next no not now of off old on one only or other our out over own past pretty quite rather red right rose same see she short should since so some soft still such sweet take than that the their them then there these they thin this those thought through to too two under until up us use very want was way we well were what when where which while white who why will with would year yes you your " +

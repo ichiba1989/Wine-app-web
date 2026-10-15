@@ -1,5 +1,5 @@
 // Everything that talks to Supabase. Each function takes the client and throws on an error.
-import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=15";
+import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=16";
 import { BUCKET, newPhotoPath } from "./photos.js?v=5";
 import { LEGACY_OF } from "./reactions.js?v=3";
 import { overlayStates, overlayJournal, overlayCounts, overlayPerceptions, entryRowOf, isOffline } from "./overlay.js?v=1";
@@ -328,6 +328,36 @@ export async function loadEditorLists(sb) {
     allRows(() => sb.from("geo_areas").select("id, name, level, parent_id, classification")),
   ]);
   return { producers, grapes, areas };
+}
+// ---------------------------------------------------------------- reference lists (docs/reference_lists.sql, run by hand)
+// grape_aliases, producer_aliases, place_designation_rules, broad_places. Returns null when the update has not been run (the app keeps its built-in lists).
+export const REFERENCE_TABLES = ["grape_aliases", "producer_aliases", "place_designation_rules", "broad_places"];
+export async function loadReferenceLists(sb) {
+  try {
+    const cols = { producer_aliases: "*, producers(name)" };   // the producer's name, so "Looks like ..." can offer it
+    const [grapeAliases, producerAliases, designationRules, broadPlaces] = await Promise.all(REFERENCE_TABLES.map((t) => allRows(() => sb.from(t).select(cols[t] || "*").order("id"))));
+    return { grapeAliases, producerAliases: producerAliases.map((r) => ({ ...r, producer_name: (r.producers && r.producers.name) || "" })), designationRules, broadPlaces };
+  } catch (e) {
+    if (/grape_aliases|producer_aliases|place_designation_rules|broad_places|42P01|PGRST205/.test(`${e.code} ${e.message}`)) return null;
+    throw e;
+  }
+}
+// Adds or changes one row (row.id present = change). Online only; a refusal is thrown with the database's words.
+export async function saveReferenceRow(sb, table, row) {
+  if (!REFERENCE_TABLES.includes(table)) throw new Error("Unknown list.");
+  const { id, ...fields } = row;
+  const rows = must(await (id ? sb.from(table).update(fields).eq("id", id) : sb.from(table).insert(fields)).select("id"));
+  if (!rows || !rows.length) throw new Error("Not saved. Your access may not allow changing this list.");
+}
+export async function removeReferenceRow(sb, table, id) {
+  if (!REFERENCE_TABLES.includes(table)) throw new Error("Unknown list.");
+  const rows = must(await sb.from(table).delete().eq("id", id).select("id"));
+  if (!rows || !rows.length) throw new Error("Not removed. Your access may not allow changing this list.");
+}
+// An editor answered "Use <producer>" for a typed spelling: remember the spelling so it is offered next time. Quietly does nothing before the update.
+export async function addProducerAlias(sb, alias, producerId) {
+  const { error } = await sb.from("producer_aliases").insert({ alias, producer_id: producerId });
+  if (error && !/duplicate|23505|producer_aliases|42P01|PGRST205/.test(`${error.code} ${error.message}`)) throw new Error(error.message || String(error));
 }
 // The place list checks on the Owner page (geo.js placeChecks): which places wines point at, and applying one fix the owner chose.
 export async function loadPlaceUse(sb) {

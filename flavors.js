@@ -4,7 +4,7 @@
 //   (never fewer than two stay from the base rule), and the six are ordered by confidence. It is applied only to published stats and is never explained to the player.
 // stats = { n, flavors: { flavor: entries that mention it }, tags: { tag: entries with that tag } } (nothing supplies this yet; without it the base rule is used).
 // Pure: no browser, no network.
-import { VAR as VAR0, VAR_ALIASES, PLACES, CATS, SYN, LABEL, fold, varKey, placeKey } from "./flavordata.js?v=2";
+import { VAR as VAR0, VAR_ALIASES, PLACES, CATS, SYN, LABEL, fold, varKey, placeKey } from "./flavordata.js?v=3";
 
 export const S = { minEntries: 10, fullEntries: 30, fullShare: 0.5, cap: 3, catWeight: 1, offProfile: 0.5, maxSwaps: 4, margin: 0.5 };
 export { LABEL, CATS };

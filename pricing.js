@@ -4,7 +4,7 @@
 //     move the price a little with each new entry, and more as they add up.
 //   * Neither: no price is shown.
 // The rules at the top are pure (no browser, no network). The functions at the bottom talk to Supabase.
-import { caseKey } from "./text.js?v=1";
+import { caseKey } from "./text.js?v=2";
 
 export const EDITOR_WEIGHT = 4;
 

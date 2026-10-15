@@ -5,55 +5,58 @@ import {
   wineName, esc, clamp01, filterEntries, groupEntries, swipeLists,
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete, styleLabel,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
-  dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=15";
-import * as db from "./data.js?v=36";
-import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=11";
-import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=6";
+  dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=16";
+import * as db from "./data.js?v=37";
+import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=12";
+import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=7";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=38";
-import { createLearn } from "./learn.js?v=11";
+  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=39";
+import { createLearn } from "./learn.js?v=12";
 import { setMode } from "./words.js?v=1";
-import { journalCsv, exportName } from "./exportcsv.js?v=2";
-import { newBlind, cleanPending, hasGuess, scoreGuess, summarize, resultLine, notesAfterReveal, actualOfCard, actualOfForm } from "./blind.js?v=1";
+import { journalCsv, exportName } from "./exportcsv.js?v=3";
+import { newBlind, cleanPending, hasGuess, scoreGuess, summarize, resultLine, notesAfterReveal, actualOfCard, actualOfForm } from "./blind.js?v=2";
 import { composeNote, stampOf, noteProblem } from "./notes.js?v=1";
 import { createDictation, dictationSupported } from "./dictation.js?v=5";
-import { SW_START, defaultSortFor } from "./swipetabs.js?v=5";
-import { gapWeights } from "./tags.js?v=3";
-import { wireGrapeInputs, checkGrapeInput, setExtraGrapes, GRAPES } from "./grapes.js?v=1";
-import { buildVocab, fixTerms } from "./termfix.js?v=1";
+import { SW_START, defaultSortFor } from "./swipetabs.js?v=6";
+import { gapWeights } from "./tags.js?v=4";
+import { wireGrapeInputs, checkGrapeInput, setExtraGrapes, GRAPES, addGrapeShortcuts } from "./grapes.js?v=2";
+import { addGrapeSynonyms } from "./rules.js?v=5";
+import { setPlaceLists } from "./geo.js?v=7";
+import { setNameAliases } from "./text.js?v=2";
+import { buildVocab, fixTerms } from "./termfix.js?v=2";
 import { WINE_TERMS, setSpeechLang, speechCodeOf } from "./winewords.js?v=1";
-import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=1";
-import { loadPrices, applyPrices, tidyFacts, parsePrice, saveWinePrice } from "./pricing.js?v=2";
-import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=11";
-import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=7";
-import { applyVisualTables } from "./visualdata.js?v=2";
-import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=5";
-import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=10";
-import { infoLine, entryInfoLine } from "./wineline.js?v=2";
-import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, paintNoteMarks, teachHtml, autoCount } from "./tasting.js?v=10";
-import { gridFromNotes, mergeFromNotes, touched, legendEntry, compileWith } from "./notegrid.js?v=3";
-import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=8";
-import { createProfile } from "./profile.js?v=23";
-import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=13";
-import { createFeedback } from "./feedback.js?v=7";
-import { createEditor } from "./editor.js?v=36";
-import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=10";
-import { gamesHtml } from "./games.js?v=17";
+import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=2";
+import { loadPrices, applyPrices, tidyFacts, parsePrice, saveWinePrice } from "./pricing.js?v=3";
+import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=12";
+import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=8";
+import { applyVisualTables } from "./visualdata.js?v=3";
+import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=6";
+import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=11";
+import { infoLine, entryInfoLine } from "./wineline.js?v=3";
+import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, paintNoteMarks, teachHtml, autoCount } from "./tasting.js?v=11";
+import { gridFromNotes, mergeFromNotes, touched, legendEntry, compileWith } from "./notegrid.js?v=4";
+import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=9";
+import { createProfile } from "./profile.js?v=24";
+import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=14";
+import { createFeedback } from "./feedback.js?v=8";
+import { createEditor } from "./editor.js?v=37";
+import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=11";
+import { gamesHtml } from "./games.js?v=18";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
 import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=4";
-import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=3";
-import * as GG from "./blindgame.js?v=4";
-import { recommendMix, recommend } from "./recommend.js?v=7";
+import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=4";
+import * as GG from "./blindgame.js?v=5";
+import { recommendMix, recommend } from "./recommend.js?v=8";
 import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=1";
 import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
 import { setOffline, setCardLookup } from "./overlay.js?v=1";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=17"));
-const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=7"));
-const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=10"));
-import { createWineInfo } from "./wineinfo.js?v=23";
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=18"));
+const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=8"));
+const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=11"));
+import { createWineInfo } from "./wineinfo.js?v=24";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -191,7 +194,7 @@ function addVineyard(card) {
 // while sign-in and the profile load instead of after them. state.early holds the pending requests; once() uses one if it is there (and asks again if it failed).
 const keepQuiet = (p) => { p.catch(() => {}); return p; };
 function startEarlyLoads() {
-  state.early = { visual: keepQuiet(applyVisualTables(state.sb)), cards: keepQuiet(db.loadCards(state.sb)), vintages: keepQuiet(db.loadVintageWines(state.sb)), refs: keepQuiet(db.loadReferenceRows(state.sb)) };
+  state.early = { visual: keepQuiet(applyVisualTables(state.sb)), cards: keepQuiet(db.loadCards(state.sb)), vintages: keepQuiet(db.loadVintageWines(state.sb)), refs: keepQuiet(db.loadReferenceRows(state.sb)), lists: keepQuiet(db.loadReferenceLists(state.sb)) };
 }
 const once = (key, fn) => {
   const p = state.early && state.early[key];
@@ -201,12 +204,14 @@ const once = (key, fn) => {
 };
 async function loadAllCards() {
   // The flavor tables, the player's private wine changes, the catalog and the prices are separate requests that do not need each other: ask for them together.
-  const [, mine, rawCards, prices] = await Promise.all([
+  const [, mine, rawCards, prices, lists] = await Promise.all([
     once("visual", () => applyVisualTables(state.sb)),   // flavor weights and place nudges the Owner or an editor tuned in the database (the built-in set is used if there are none)
     loadMyInfo(state.sb).catch(() => new Map()),          // before database update 24 nobody has private changes
     once("cards", () => db.loadCards(state.sb)),
     loadPrices(state.sb).then((p) => ({ p }), () => null),
+    once("lists", () => db.loadReferenceLists(state.sb)).catch(() => null),   // grape and producer aliases, designation rules, broad regions (built-in lists if none)
   ]);
+  applyReferenceLists(lists);
   state.mine = mine;
   const cards = [];
   for (const c of rawCards) {
@@ -217,6 +222,20 @@ async function loadAllCards() {
   }
   try { if (!prices) throw new Error("no prices"); applyPrices(cards, prices.p); } catch (_) { cards.forEach(tidyFacts); }
   return cards;
+}
+// The reference lists from the database (docs/reference_lists.sql): only rows in use or checked. Without them the built-in lists stay.
+function applyReferenceLists(r) {
+  if (!r) return;
+  const used = (x) => x.status === "in use" || x.status === "checked";
+  addGrapeShortcuts(r.grapeAliases.filter((x) => used(x) && x.kind === "shortcut").map((x) => [x.alias, x.grape]));
+  addGrapeSynonyms(r.grapeAliases.filter((x) => used(x) && x.kind === "synonym").map((x) => [x.alias, x.grape]));
+  const key = (c) => String(c || "").toLowerCase().trim();
+  const broad = {}, designations = {};
+  r.broadPlaces.filter(used).forEach((x) => { (broad[key(x.country)] = broad[key(x.country)] || []).push(x.name); });
+  r.designationRules.filter(used).forEach((x) => { const c = (designations[key(x.country)] = designations[key(x.country)] || {}); (c[x.designation] = c[x.designation] || []).push(x.place_name); });
+  setPlaceLists({ broad, designations });
+  state.producerAliases = r.producerAliases.filter(used);
+  setNameAliases(state.producerAliases.map((x) => [x.alias, x.producer_name || ""]).filter((x) => x[1]));
 }
 // Counts for the Discover screen. Only swipes count as swipes (not later changes of interest).
 const loadCounts = () => db.countSwipesAndJournal(state.sb);
@@ -432,7 +451,7 @@ function ownerData() {
   const O = state.owner;
   if (state._ownerFor !== state.cards) { state._ownerFor = state.cards; state._ownerCache = { rows: OWN.wineRows(state.cards), bingo: OWN.bingoCoverage(state.cards) }; }
   const { rows, bingo } = state._ownerCache;
-  return { rows, bingo, checks: OWN.checkCounts(rows), places: O.places, config: O.config, configError: O.configError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, staff: O.staff, staffError: O.staffError, staffAudit: O.staffAudit, seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
+  return { rows, bingo, checks: OWN.checkCounts(rows), places: O.places, refLists: O.refLists, refListsError: O.refListsError, config: O.config, configError: O.configError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, staff: O.staff, staffError: O.staffError, staffAudit: O.staffAudit, seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
 }
 // The lens preview: the top picks of one lens for the owner's own profile, or for a brand-new player, using the weights typed on the page.
 function ownerLens() {
@@ -487,6 +506,44 @@ async function ownerPlace(a, kind, ids) {
   if (!check || !check.fix) return;
   try { await db.applyPlaceFix(state.sb, check.areaId, check.fix); ownerSay(`Done: ${check.title}: ${check.suggestion}.`); await loadOwnerPlaces(); }
   catch (e) { ownerSay("Not changed: " + (e.message || e)); ownerRedraw(); }
+}
+// The reference lists (Owner page, Lists tab; docs/reference_lists.sql). Producers are read too, to turn a typed producer name into its id.
+async function loadOwnerLists() {
+  const O = state.owner;
+  O.refListsError = "";
+  try {
+    const [lists, ed] = await Promise.all([db.loadReferenceLists(state.sb), db.loadEditorLists(state.sb)]);
+    if (!lists) throw new Error("These lists need a database update (docs/reference_lists.sql, then docs/reference_lists_seed.sql). Until then the app uses its built-in lists.");
+    O.refLists = lists; O.refProducers = ed.producers;
+  } catch (e) { O.refLists = null; O.refListsError = e.message || String(e); }
+  if (state.tab === "owner" && O.tab === "lists") ownerRedraw();
+}
+async function ownerRef(a, b) {
+  const O = state.owner, table = O.refKind || "grape_aliases";
+  const field = { grape_aliases: "grapeAliases", producer_aliases: "producerAliases", place_designation_rules: "designationRules", broad_places: "broadPlaces" }[table];
+  if (a === "refkind") { O.refKind = b; O.q = ""; renderBody(); return; }
+  try {
+    if (a === "refadd") {
+      const v = {};
+      document.querySelectorAll("[data-owner-ref]").forEach((el) => { v[el.dataset.ownerRef] = el.value.trim(); });
+      const row = { ...v, status: "in use", basis: "owner" };
+      if (table === "producer_aliases") {
+        const p = (O.refProducers || []).find((x) => x.name.toLowerCase() === String(v.producer_name || "").toLowerCase());
+        if (!p) throw new Error("Type the producer exactly as it is in our list.");
+        delete row.producer_name; row.producer_id = p.id;
+      }
+      if (Object.values(v).some((x) => !x)) throw new Error("Fill in every box first.");
+      await db.saveReferenceRow(state.sb, table, row); ownerSay("Added.");
+    } else {
+      const row = ((O.refLists && O.refLists[field]) || []).find((r) => String(r.id) === String(b));
+      if (!row) return;
+      if (a === "refremove") { await db.removeReferenceRow(state.sb, table, row.id); ownerSay("Removed."); }
+      else if (a === "refuse") { await db.saveReferenceRow(state.sb, table, { id: row.id, status: "in use" }); ownerSay("Now in use."); }
+      else if (a === "refcheck") { await db.saveReferenceRow(state.sb, table, { id: row.id, status: "checked", ...(table === "producer_aliases" ? {} : { checked_at: new Date().toISOString() }) }); ownerSay("Marked checked."); }
+    }
+    await loadOwnerLists();
+    applyReferenceLists(O.refLists);   // the app uses the change at once
+  } catch (e) { ownerSay("Not saved: " + (e.message || e)); ownerRedraw(); }
 }
 async function loadOwnerTags() {
   try { state.owner.tags = await db.loadQuizTags(state.sb); state.owner.tagsError = ""; }
@@ -694,6 +751,7 @@ function drawTab(body) {
     if (isOwner() && state.owner.tab === "legend" && !state.owner.legend && !state.owner.legendError) loadOwnerLegend();
     if (isOwner() && state.owner.tab === "tags" && !state.owner.tags && !state.owner.tagsError) loadOwnerTags();
     if (isOwner() && state.owner.tab === "checks" && state.owner.places === undefined) loadOwnerPlaces();
+    if (isOwner() && state.owner.tab === "lists" && state.owner.refLists === undefined) loadOwnerLists();
     if (isOwner() && state.owner.tab === "roles" && !state.owner.staff && !state.owner.staffError) loadOwnerStaff();
     if (isOwner() && state.owner.tab === "config" && !state.owner.config && !state.owner.configError) loadOwnerConfig();
   } else if (state.tab === "games") {
@@ -1891,6 +1949,7 @@ document.addEventListener("click", async (ev) => {
       else if (a === "savecfg") await ownerSaveConfig(b);
       else if (a === "addtag") await ownerAddTag();
       else if (a.startsWith("legend")) await ownerLegend(a, b);
+      else if (a.startsWith("ref")) await ownerRef(a, b);
       else if (a === "placefix" || a === "placedismiss") await ownerPlace(a, b, t.dataset.action.split(":").slice(3).join(":"));
       else if (a.startsWith("staff")) await ownerStaff(a, b, c);
     }

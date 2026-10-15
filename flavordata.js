@@ -2,7 +2,7 @@
 // and the places (REGION: where they are, and a small nudge to the flavors the place adds). These tables are also kept in the database
 // (flavor_varietals, flavor_regions) so the Owner or an editor can tune them; what is here is the starting set, and the database wins where both have a row.
 // Pure data: no browser, no network.
-import { plainKey } from "./text.js?v=1";
+import { plainKey } from "./text.js?v=2";
 
 // ---------------------------------------------------------------- flavors
 export const LABEL = {

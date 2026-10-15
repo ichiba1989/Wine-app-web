@@ -1,7 +1,7 @@
 // Country, region and appellation as three separate fields in Edit wine info.
 // The database keeps places as a tree (country, then region, then appellation) and a wine points at the most specific one it has.
 // The rules at the top are pure (no browser, no network). savePlace at the bottom creates any missing places.
-import { caseKey, plainKey, matchKey } from "./text.js?v=1";
+import { caseKey, plainKey, matchKey } from "./text.js?v=2";
 const fold = caseKey;   // text.js: accents and capitals ignored, punctuation still counts
 const byName = (a, b) => fold(a).localeCompare(fold(b));
 
@@ -41,7 +41,9 @@ export const BROAD_PLACES = {
     "Neusiedlersee", "Leithaberg", "Rosalia", "Mittelburgenland", "Eisenberg", "Vulkanland Steiermark", "Südsteiermark", "Weststeiermark", "Wiener Gemischter Satz", "Ruster Ausbruch"],
 };
 const key = plainKey;
-const broadList = (country) => BROAD_PLACES[key(country)] || null;
+// The lists in use: the ones above, or the reference lists read from the database (docs/reference_lists.sql) through setPlaceLists.
+let BROAD = BROAD_PLACES;
+const broadList = (country) => BROAD[key(country)] || null;
 const isBroad = (country, name) => { const l = broadList(country); return !l || l.some((x) => key(x) === key(name)); };
 // A German or Austrian place cut down to what is on the list (a village or vineyard is dropped: it stays in the wine name). Other countries unchanged.
 export function broadPlace(place) {
@@ -214,8 +216,15 @@ export const KNOWN_DESIGNATIONS = {
 };
 KNOWN_DESIGNATIONS["united states"] = KNOWN_DESIGNATIONS.usa;
 // The designation the rule list gives a place: its most specific part that is listed (the appellation, else the region). null when none is.
+let KNOWN = KNOWN_DESIGNATIONS;
+// Replaces the built-in lists with the database's (only rows in use). broad: { country: [names] }; designations: { country: { designation: [names] } }.
+// An empty or missing list keeps the built-in one, so the app works before the update is run and offline.
+export function setPlaceLists({ broad, designations } = {}) {
+  if (broad && Object.keys(broad).length) BROAD = broad;
+  if (designations && Object.keys(designations).length) { KNOWN = designations; if (KNOWN.usa && !KNOWN["united states"]) KNOWN["united states"] = KNOWN.usa; }
+}
 export function ruleDesignation(place) {
-  const list = KNOWN_DESIGNATIONS[fold((place && place.country) || "")];
+  const list = KNOWN[fold((place && place.country) || "")];
   if (!list) return null;
   for (const name of [place.appellation, place.region].map((x) => splitDesignation(x).name).filter(Boolean)) {
     for (const [d, names] of Object.entries(list)) if (names.some((n) => key(n) === key(name))) return { designation: d, name };

@@ -1,6 +1,6 @@
-import { fold, splitGrapeText, checkGrapeText, grapeProblem } from "./grapes.js?v=1";
+import { fold, splitGrapeText, checkGrapeText, grapeProblem } from "./grapes.js?v=2";
 import { reactionOf, skipsOf } from "./reactions.js?v=3";
-import { isComplete, missingFields } from "./catalog.js?v=4";
+import { isComplete, missingFields } from "./catalog.js?v=5";
 // Pure logic for the wine app web page. No browser and no network in this file,
 // so every rule here can be tested on its own.
 

@@ -1,13 +1,13 @@
 // Profile tab: Overview, Palate, Knowledge, Explored and Trophies.
 // The rules at the top are pure (no browser, no network) so they can be tested on their own.
 // The controller at the bottom loads what it needs from Supabase and draws the tab.
-import { DIMS, dimRange, VERDICTS, FLAGS, esc, styleLabel, verdictShort, entryCard, entryName } from "./logic.js?v=15";
-import { marksHtml } from "./views.js?v=38";
-import { accountCardHtml } from "./account.js?v=13";
-import { feedbackCardHtml } from "./feedback.js?v=7";
+import { DIMS, dimRange, VERDICTS, FLAGS, esc, styleLabel, verdictShort, entryCard, entryName } from "./logic.js?v=16";
+import { marksHtml } from "./views.js?v=39";
+import { accountCardHtml } from "./account.js?v=14";
+import { feedbackCardHtml } from "./feedback.js?v=8";
 import { worldOf } from "./thisorthat.js?v=4";
 import { reactionOf, palateWeightOf } from "./reactions.js?v=3";
-import { entryInfoLine } from "./wineline.js?v=2";
+import { entryInfoLine } from "./wineline.js?v=3";
 
 // ---------------------------------------------------------------- settings
 // How much each verdict counts toward the palate. A journal wine with no verdict yet counts a

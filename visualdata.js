@@ -1,6 +1,6 @@
 // Loads the flavor tables from the database (flavor_varietals and flavor_regions, database update 27) over the built-in ones, so the Owner or an editor
 // can tune a grape's flavors or a place's nudges without a new version of the app. If the tables are missing or the call fails, the built-in set is used.
-import { setTables } from "./flavors.js?v=2";
+import { setTables } from "./flavors.js?v=3";
 
 export async function loadVisualTables(sb) {
   const [v, r] = await Promise.all([

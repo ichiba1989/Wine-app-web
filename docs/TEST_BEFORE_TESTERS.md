@@ -188,3 +188,8 @@ No database script. Check on a phone:
 - [ ] Run `docs/place_fixes.sql` once in Supabase (the check at its end should list no duplicates).
 - [ ] Owner page, Checks tab, Places: Mosel is suggested as a region and St.-Julien as Saint-Julien (both "Source checked"); St.-Joseph and St.-Émilion are "To check" (confirm the official name on the INAO site before applying); Sta. Rita Hills and "American" are not listed. Apply one and the place changes for every wine there; it appears in `place_changes`.
 
+## Reference lists (added 2026-10-15)
+- [ ] Run `docs/reference_lists.sql`, then `docs/reference_lists_seed.sql`, in Supabase (the check at the end counts each list).
+- [ ] Owner page, Lists tab: the four lists show; "Lemberger" and "Kékfrankos" are Suggested until you tap Use; add a designation rule and it is offered on a wine at that place right away; Remove works.
+- [ ] Edit wine info: type a producer spelled slightly differently from one in the list, tap "Use ...", then type the same spelling on another wine: it is offered again (a producer alias was saved).
+

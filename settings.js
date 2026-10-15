@@ -1,8 +1,8 @@
 // Settings: the gear in the header opens one sheet of choices that change how the app looks and how a wine is answered.
 // They are kept on this phone (in the browser), not in the database, so each device can be set up differently.
 // The rules at the top are pure (no browser, no network) so they can be tested on their own. The sheet is drawn by settingsHtml.
-import { esc } from "./logic.js?v=15";
-import { accountCardHtml } from "./account.js?v=13";
+import { esc } from "./logic.js?v=16";
+import { accountCardHtml } from "./account.js?v=14";
 import { MODES, cleanMode } from "./words.js?v=1";
 import { cleanLang } from "./winewords.js?v=1";
 

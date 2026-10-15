@@ -1,7 +1,7 @@
 // Blind tasting: taste first and name the wine, then reveal what it was and see how close the guess was. Pure: no page, no network.
 // The reveal only compares the guess with facts the app already holds about the wine (the catalog card, or what the player typed in): nothing about the wine is worked out or guessed here.
 // A guess is kept on the phone (wine.blind) until it is revealed; the revealed result goes into the wine's journal notes as plain words, and the player rates the wine as usual.
-import { fold, splitGrapeText } from "./grapes.js?v=1";
+import { fold, splitGrapeText } from "./grapes.js?v=2";
 
 export const GUESS_FIELDS = [
   { id: "style", label: "Type of wine" },

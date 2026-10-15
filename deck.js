@@ -15,7 +15,7 @@
 // likelier to like come first, with some randomness so it never feels fixed, and the same producer or place does not repeat back to back.
 
 import { SWIPE_WEIGHT, DECK_CONFIG, reactionOf, skipComesBack } from "./reactions.js?v=3";
-import { plainKey } from "./text.js?v=1";
+import { plainKey } from "./text.js?v=2";
 
 export const TIERS = ["high", "medium", "low"];
 export const TIER_LABEL = { high: "Familiar", medium: "Getting warmer", low: "New territory" };

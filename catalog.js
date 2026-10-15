@@ -5,8 +5,8 @@
 // 2. An editor decides: add it (it is created as "pending review" and stays out of the deck until the editor publishes it) or not now.
 // 3. "The same wine, minus the vintage" is checked against the catalog. Only the MOST RECENT vintage is used for the deck;
 //    older vintages of the same wine are archived (kept, with players' swipes and journals intact, but not shown in Discover again).
-import { fold, checkGrapeText, splitGrapeText } from "./grapes.js?v=1";
-import { plainKey } from "./text.js?v=1";
+import { fold, checkGrapeText, splitGrapeText } from "./grapes.js?v=2";
+import { plainKey } from "./text.js?v=2";
 
 export const DEFAULT_RULES = { minEntries: 10, minPeople: 1 };
 // app_config rows [{ key, value }] -> rules. Anything missing or silly falls back to the default.

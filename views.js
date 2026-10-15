@@ -2,18 +2,18 @@
 import {
   FAMILIARITY, FLAGS, VERDICTS, isChoice, GROUPS, GROUP_PAGE, SORTS, YEARS,
   esc, wineName, entryCard, entryName, entryIncomplete, entryMissing, verdictShort, groupEntries, filterEntries, sortCards,
-  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims } from "./logic.js?v=15";
-import { splitGrapeParts, splitPlace } from "./blends.js?v=1";
+  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims } from "./logic.js?v=16";
+import { splitGrapeParts, splitPlace } from "./blends.js?v=2";
 import { REACTIONS, iconHtml, SKIP_LIMIT } from "./reactions.js?v=3";
 import { say, proToolsOn } from "./words.js?v=1";
 import { SPEECH_LANGS, speechLangNow } from "./winewords.js?v=1";
-import { GUESS_FIELDS, scoreGuess, summarize, RESULT_WORDS } from "./blind.js?v=1";
-import { SW_TABS, SW_KINDS, SW_GROUPS, SW_SORTS, entriesFor, tabCounts, filtersOn, stylesIn, filterEntries as filterSwipes, groupEntries as groupSwipes, fitBand } from "./swipetabs.js?v=5";
-import { infoLine, entryInfoLine } from "./wineline.js?v=2";
-import { flavorsForCard, placeFor } from "./flavors.js?v=2";
-import { bottleSilhouette, flavorRowHtml, tintFor } from "./visuals.js?v=3";
-import { countryMapSvg, zoomPlan } from "./maps.js?v=4";
-import { imageSearchUrl } from "./winelinks.js?v=2";
+import { GUESS_FIELDS, scoreGuess, summarize, RESULT_WORDS } from "./blind.js?v=2";
+import { SW_TABS, SW_KINDS, SW_GROUPS, SW_SORTS, entriesFor, tabCounts, filtersOn, stylesIn, filterEntries as filterSwipes, groupEntries as groupSwipes, fitBand } from "./swipetabs.js?v=6";
+import { infoLine, entryInfoLine } from "./wineline.js?v=3";
+import { flavorsForCard, placeFor } from "./flavors.js?v=3";
+import { bottleSilhouette, flavorRowHtml, tintFor } from "./visuals.js?v=4";
+import { countryMapSvg, zoomPlan } from "./maps.js?v=5";
+import { imageSearchUrl } from "./winelinks.js?v=3";
 
 // The grape and place inputs shared by the two forms. The form keeps one grape text and one place text; these show them as
 // "main varietal" and "other varietals (if blended)", and as "country" and "region". app.js puts them back together as you type.

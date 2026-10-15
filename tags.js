@@ -3,7 +3,7 @@
 // The owner adds new tags (Owner page, Tags tab) and from then on they are in the suggestions and the pull-down. (2) The quiz uses the tags: a question tagged with
 // something the player said "I don't know it" to (see gapsOf in deck.js) is asked sooner (boostFor, used by learn.js).
 // A tag's key is "kind:folded name", the same keys the Discover deck uses for grapes, regions, countries, producers and styles, so the two line up with no extra mapping.
-import { plainKey } from "./text.js?v=1";
+import { plainKey } from "./text.js?v=2";
 export const TAG_KINDS = [
   { id: "grape", label: "Grape" }, { id: "region", label: "Region or appellation" }, { id: "country", label: "Country" },
   { id: "producer", label: "Producer" }, { id: "style", label: "Style" }, { id: "theme", label: "Theme" },
