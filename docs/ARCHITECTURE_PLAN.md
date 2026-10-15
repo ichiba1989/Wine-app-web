@@ -456,6 +456,7 @@ Phases 3–5 ordering is a recommendation; reorder based on what Phase 2 learns.
 12. **Inference rule set.** Initial appellations/rules, approver, and the policy for appellations that permit multiple grapes.
 13. **Content authorship.** Who are the editors, what is the review SLA/approval policy, and who may approve AI-drafted content?
 14. **Found-online images.** Is the prototype's "find bottle photos online, then editor-approves" approach legally acceptable for production? (Needs legal review.)
+14b. **Wine tags (2026-10-15).** The owner's own labels on catalog wines (`docs/wine_tags.sql`, Owner page, Wines tab) are labels only for now. Open: how, if at all, a tag should change the deck and suggestions (a gentle boost per tag, matching a player's likes, or none), and whether players ever see tags.
 
 **Platform & compliance**
 15. **Markets, languages, currencies, units** at launch.

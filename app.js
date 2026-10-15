@@ -6,8 +6,8 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete, styleLabel,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=17";
-import * as db from "./data.js?v=43";
-import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=18";
+import * as db from "./data.js?v=44";
+import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=19";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=8";
 import { shrinkImage } from "./photos.js?v=5";
 import {
@@ -40,14 +40,14 @@ import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=10";
 import { createProfile } from "./profile.js?v=26";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=15";
 import { createFeedback } from "./feedback.js?v=9";
-import { createEditor } from "./editor.js?v=47";
+import { createEditor } from "./editor.js?v=48";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=12";
 import { gamesHtml } from "./games.js?v=19";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
 import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=4";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=5";
 import * as GG from "./blindgame.js?v=6";
-import { createVenueReview } from "./venuereview.js?v=19";
+import { createVenueReview } from "./venuereview.js?v=20";
 import { VENUE, venueCardsOf, readList, recheck as venueRecheck, listIds, linkMap } from "./venue.js?v=14";
 import { recommendMix, recommend } from "./recommend.js?v=9";
 import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=1";
@@ -55,10 +55,10 @@ import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
 import { setOffline, setCardLookup } from "./overlay.js?v=1";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=29"));
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=30"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=9"));
 const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=13"));
-import { createWineInfo } from "./wineinfo.js?v=30";
+import { createWineInfo } from "./wineinfo.js?v=31";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -101,7 +101,7 @@ const offline = createOffline({ store: createIdbStore() });
 setOffline(offline);
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
-const OWNER_START = { tab: "wines", q: "", issue: "all", sort: { wines: { key: "producer", dir: 1 }, bingo: { key: "tier", dir: 1 } }, lens: "confident", player: "me", seed: "", weights: {}, open: {}, msg: "", wineIds: null, config: null, configError: "", tags: null, tagsError: "", legend: null, legendError: "" };
+const OWNER_START = { tab: "wines", q: "", issue: "all", sort: { wines: { key: "producer", dir: 1 }, bingo: { key: "tier", dir: 1 } }, lens: "confident", player: "me", seed: "", weights: {}, open: {}, msg: "", wineIds: null, config: null, configError: "", tags: null, tagsError: "", legend: null, legendError: "", sel: null, tagFilter: "all", wineTags: undefined, wineTagsError: "" };
 const TOT_KEY = "wine.thisorthat";   // the This or That picks (thisorthat.js): only on this phone
 const GAMES_KEY = "wine.games";   // which bingo cards this phone has cleared (bingo.js)
 const GUESS_KEY = "wine.guess";   // Guess the Glass: the best score of each mode (blindgame.js), only on this phone
@@ -475,8 +475,8 @@ function renderBody() {
 function ownerData() {
   const O = state.owner;
   if (state._ownerFor !== state.cards) { state._ownerFor = state.cards; state._ownerCache = { rows: OWN.wineRows(state.cards), bingo: OWN.bingoCoverage(state.cards) }; }
-  const { rows, bingo } = state._ownerCache;
-  return { rows, bingo, checks: OWN.checkCounts(rows), places: O.places, refLists: O.refLists, refListsError: O.refListsError, config: O.config, configError: O.configError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, staff: O.staff, staffError: O.staffError, staffAudit: O.staffAudit, venue: state.venue, cards: state.cards, cardsById: new Map(state.cards.map((c) => [c.id, c])), seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
+  const { bingo } = state._ownerCache, rows = OWN.withTags(state._ownerCache.rows, O.wineTags, O.wineIds);
+  return { rows, bingo, wineTags: O.wineTags, wineTagsError: O.wineTagsError, checks: OWN.checkCounts(rows), places: O.places, refLists: O.refLists, refListsError: O.refListsError, config: O.config, configError: O.configError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, staff: O.staff, staffError: O.staffError, staffAudit: O.staffAudit, venue: state.venue, cards: state.cards, cardsById: new Map(state.cards.map((c) => [c.id, c])), seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
 }
 // The lens preview: the top picks of one lens for the owner's own profile, or for a brand-new player, using the weights typed on the page.
 function ownerLens() {
@@ -504,6 +504,58 @@ async function loadOwnerConfig() {
   try { state.owner.config = await db.loadAppConfig(state.sb); state.owner.configError = ""; }
   catch (e) { state.owner.configError = "Could not load the settings: " + (e.message || e); }
   if (state.tab === "owner" && state.owner.tab === "config") ownerRedraw();
+}
+// ---------------------------------------------------------------- wine tags and ticked wines on the Wines tab (docs/wine_tags.sql)
+async function loadOwnerWineTags() {
+  const O = state.owner;
+  O.wineTags = null; O.wineTagsError = "";
+  try {
+    const [wt, ids] = await Promise.all([db.loadWineTags(state.sb), O.wineIds ? O.wineIds : db.loadVintageWines(state.sb)]);
+    O.wineIds = ids; O.wineTags = wt;   // null: the update has not been run
+  } catch (e) { O.wineTagsError = "Could not load the tags: " + (e.message || e); }
+  if (state.tab === "owner") renderBody();
+}
+const ownerSel = () => (state.owner.sel = state.owner.sel || new Set());
+async function ownerWines(a, b) {
+  const O = state.owner, sel = ownerSel();
+  try {
+    if (a === "selall") { OWN.shownWineRows(O, ownerData().rows).forEach((r) => sel.add(r.id)); }
+    else if (a === "selnone") sel.clear();
+    else if (a === "bulktag") {
+      const pick = document.querySelector("[data-owner-bulktag]"), tagRow = pick && (O.wineTags.tags || []).find((t) => t.id === pick.value);
+      if (!tagRow || !sel.size) { ownerSay("Tick some wines and pick a tag first."); return; }
+      const wineIds = [...sel].map((v) => O.wineIds && O.wineIds.get(v)).filter(Boolean);
+      const n = await db.tagWines(state.sb, wineIds, tagRow.id, b === "on");
+      ownerSay(`${b === "on" ? "Tagged" : "Took the tag off"} ${n} ${n === 1 ? "wine" : "wines"}: ${tagRow.name}.`);
+      await loadOwnerWineTags(); return;
+    }
+    else if (a === "bulkreach") {
+      const pick = document.querySelector("[data-owner-bulkreach]");
+      if (!pick || !pick.value || !sel.size) { ownerSay("Tick some wines and pick a reach first."); return; }
+      if (!O.wineIds) O.wineIds = await db.loadVintageWines(state.sb);
+      const value = pick.value === "clear" ? null : pick.value, wineIds = [...new Set([...sel].map((v) => O.wineIds.get(v)).filter(Boolean))];
+      let done = 0;
+      for (const w of wineIds) { await db.saveWineReach(state.sb, w, value); done++; }
+      await ownerCardsChanged(); state._ownerFor = null;
+      ownerSay(`Reach ${value === null ? "cleared" : `set to ${value}`} on ${done} ${done === 1 ? "wine" : "wines"}.`);
+    }
+    else if (a === "wtagadd") {
+      const box = document.querySelector("[data-owner-wtagnew]"), name = box ? box.value.trim() : "";
+      if (!name) { ownerSay("Write the tag name first."); return; }
+      const row = await db.addWineTag(state.sb, name); ownerSay(`Added tag: ${row.name}.`); await loadOwnerWineTags(); return;
+    }
+    else if (a === "wtagrename") {
+      const box = document.querySelector(`[data-owner-wtagname="${CSS.escape(b)}"]`), name = box ? box.value.trim() : "";
+      if (!name) { ownerSay("A tag needs a name."); return; }
+      await db.renameWineTag(state.sb, b, name); ownerSay(`Renamed to ${name}.`); await loadOwnerWineTags(); return;
+    }
+    else if (a === "wtagdel") {
+      const t = (O.wineTags.tags || []).find((x) => x.id === b), n = OWN.tagCounts(O.wineTags).get(b) || 0;
+      if (!t || !window.confirm(`Delete the tag "${t.name}"? It comes off ${n} ${n === 1 ? "wine" : "wines"}; the wines stay.`)) return;
+      await db.deleteWineTag(state.sb, b); if (O.tagFilter === b) O.tagFilter = "all"; ownerSay(`Deleted tag: ${t.name}.`); await loadOwnerWineTags(); return;
+    }
+  } catch (e) { ownerSay(e.message || String(e)); }
+  ownerRedraw();
 }
 async function ownerSaveReach(vintageId, value) {
   const card = cardById(vintageId);
@@ -799,6 +851,7 @@ function drawTab(body) {
     else body.innerHTML = OWN.ownerHtml(state.owner, ownerData());
     const vl = document.getElementById("ownerVenueLinks"); if (vl) venueReview.mountLinks(vl);   // Find links / Check links on the list tab too
     if (isOwner() && state.owner.tab === "legend" && !state.owner.legend && !state.owner.legendError) loadOwnerLegend();
+    if (isOwner() && state.owner.tab === "wines" && state.owner.wineTags === undefined) loadOwnerWineTags();
     if (isOwner() && state.owner.tab === "tags" && !state.owner.tags && !state.owner.tagsError) loadOwnerTags();
     if (isOwner() && state.owner.tab === "checks" && state.owner.places === undefined) loadOwnerPlaces();
     if (isOwner() && state.owner.tab === "lists" && state.owner.refLists === undefined) loadOwnerLists();
@@ -1998,6 +2051,7 @@ document.addEventListener("click", async (ev) => {
       else if (a === "saveprice") await ownerSavePrice(b);
       else if (a === "savecfg") await ownerSaveConfig(b);
       else if (a === "addtag") await ownerAddTag();
+      else if (["selall", "selnone", "bulktag", "bulkreach", "wtagadd", "wtagrename", "wtagdel"].includes(a)) await ownerWines(a, b);
       else if (a.startsWith("legend")) await ownerLegend(a, b);
       else if (a.startsWith("ref")) await ownerRef(a, b);
       else if (a === "placefix" || a === "placedismiss") await ownerPlace(a, b, t.dataset.action.split(":").slice(3).join(":"));
@@ -2194,6 +2248,13 @@ document.addEventListener("change", async (ev) => {
   if (!t || !t.dataset || state.tab !== "owner" || !isOwner()) return;
   const O = state.owner;
   if ("ownerIssue" in t.dataset) { O.issue = t.value; ownerRedraw(); }
+  else if ("ownerTagfilter" in t.dataset) { O.tagFilter = t.value; ownerRedraw(); }
+  else if ("ownerSel" in t.dataset) {   // only the row and the count change, so the table keeps its scroll position
+    const sel = ownerSel(); if (t.checked) sel.add(t.dataset.ownerSel); else sel.delete(t.dataset.ownerSel);
+    const tr = t.closest("tr"); if (tr) tr.classList.toggle("osel", t.checked);
+    const bar = document.querySelector(".obulk"), d = ownerData();
+    if (bar) bar.outerHTML = OWN.bulkBar(O, d, OWN.shownWineRows(O, d.rows));
+  }
   else if ("ownerRolefilter" in t.dataset) { O.roleFilter = t.value; ownerRedraw(); }
   else if ("ownerLens" in t.dataset) { O.lens = t.value; renderBody(); }
   else if ("ownerPlayer" in t.dataset) { O.player = t.value; ownerRedraw(); }

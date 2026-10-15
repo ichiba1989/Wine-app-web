@@ -203,3 +203,8 @@ No database script. Check on a phone:
 - [ ] Owner page, Lists tab: the four lists show; "Lemberger" and "Kékfrankos" are Suggested until you tap Use; add a designation rule and it is offered on a wine at that place right away; Remove works.
 - [ ] Edit wine info: type a producer spelled slightly differently from one in the list, tap "Use ...", then type the same spelling on another wine: it is offered again (a producer alias was saved).
 
+## Wine tags and ticked wines (added 2026-10-15; all versions)
+- [ ] Run `docs/wine_tags.sql` once in Supabase (the check at its end counts tags and tagged wines; 0 to start).
+- [ ] Owner page, Wines tab: Manage tags, add a tag, rename it; tick a few wines (the table stays where it is), Add tag: the Tags column and the tag filter show it; Remove tag takes it off; Delete the tag asks first and takes it off every wine.
+- [ ] Tick all N shown ticks every matching wine (not only the first 400 listed); Set reach changes the reach of the ticked wines.
+- [ ] As an Editor (not the owner): tagging wines works through the database, making or renaming a tag is refused.
