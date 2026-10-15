@@ -11,7 +11,7 @@ import { duplicateGroups } from "./catalog.js?v=6";
 import { plainKey, matchKey, caseKey, lookalikes } from "./text.js?v=3";
 
 // ---------------------------------------------------------------- the venue (the one line a new venue branch changes)
-export const VENUE = { id: "vwm", name: "Vintage Wine Merchants" };
+export const VENUE = { id: "vwm", name: "Vintage Wine Merchants", site: "www.vintagewinemerchants.com" };
 export const DECK_LABEL = `${VENUE.name} selection`;
 
 // ---------------------------------------------------------------- matching a file row to a catalog wine
@@ -135,6 +135,36 @@ export function linkSummary(list) {
   return { linked: rows.filter((r) => r.product_url).length, notFound: rows.filter((r) => !r.product_url && r.link_status === "not found").length,
     removed: rows.filter((r) => !r.product_url && r.link_status === "removed").length, unchecked: rows.filter((r) => !r.product_url && !r.link_status).length, total: rows.length };
 }
+// ---------------------------------------------------------------- the Owner's list table: filters and the website address
+export const LIST_FILTERS = [
+  { id: "all", label: "Everything on the list", test: () => true },
+  { id: "deck", label: "In the deck", test: (r) => r.linked && !r.older },
+  { id: "missing", label: "Not in our catalog yet", test: (r) => !r.linked && !r.unpublished },
+  { id: "unpublished", label: "Not published yet", test: (r) => r.unpublished },
+  { id: "older", label: "Older vintages (kept, not shown)", test: (r) => r.older },
+  { id: "web", label: "Linked to the website", test: (r) => !!r.url },
+  { id: "noweb", label: "Not on the website", test: (r) => !r.url && r.linkStatus === "not found" },
+  { id: "removed", label: "Website link removed", test: (r) => !r.url && r.linkStatus === "removed" },
+  { id: "unchecked", label: "Website not looked for yet", test: (r) => !r.url && !r.linkStatus },
+];
+// filter: a LIST_FILTERS id, "tag:<id>" or "tag:none" (rows carry tagIds once the tags are known; a wine not in the catalog has none).
+export function filterListRows(rows, filter = "all") {
+  if (String(filter).startsWith("tag:")) { const id = filter.slice(4); return rows.filter((r) => (id === "none" ? r.linked && !r.tagIds.length : r.tagIds.includes(id))); }
+  const f = LIST_FILTERS.find((x) => x.id === filter) || LIST_FILTERS[0];
+  return rows.filter(f.test);
+}
+// A website address typed by hand: only a page on the venue's own site (the database refuses others too). "" = clear the link; null = not allowed.
+export function siteUrl(text) {
+  const t = String(text || "").trim();
+  if (!t) return "";
+  let u;
+  try { u = new URL(/^https?:\/\//i.test(t) ? t : `https://${t}`); } catch (_) { return null; }
+  const host = u.hostname.toLowerCase(), site = VENUE.site.replace(/^www\./, "");
+  if (host !== site && host !== `www.${site}`) return null;
+  if (u.pathname === "/" || !u.pathname) return null;   // the home page is not a wine's page
+  return `https://${VENUE.site}${u.pathname}${u.search}`;
+}
+
 // Catalog wines that could be added by hand: matching the search, not on the list yet.
 export function addable(cards, list, q, limit = 20) {
   const t = norm(q), ids = listIds(list);
@@ -149,7 +179,7 @@ export function listRows(list, cardsById, q = "") {
   return (list || []).map((r) => {
     const c = r.wine_vintage_id ? cardsById.get(r.wine_vintage_id) : null;
     const name = c ? [c.vintage, c.producer, c.cuvee].filter(Boolean).join(" ") : [r.vintage, r.producer, r.wine_name].filter(Boolean).join(" ");
-    return { id: r.id, name, linked: !!c, older: !!c && older.has(c.id), unpublished: !!r.wine_vintage_id && !c, source: r.source || "file", url: r.product_url || "", linkStatus: r.link_status || "" };
+    return { id: r.id, name, linked: !!c, older: !!c && older.has(c.id), unpublished: !!r.wine_vintage_id && !c, source: r.source || "file", url: r.product_url || "", linkStatus: r.link_status || "", vintageId: r.wine_vintage_id || "", tagIds: [], tags: "" };
   }).filter((x) => !t || norm(x.name).includes(t)).sort((a, b) => (b.linked - a.linked) || a.name.localeCompare(b.name));
 }
 

@@ -27,3 +27,16 @@ Run **Find links** after each new upload of the shop's list, and **Check links**
 The function tries the two common shop systems: a Shopify product list (`/products.json`) and a WooCommerce product list (`/wp-json/wc/store/products`). If the website is built differently, Find links says the website did not list its products; tell the developer, and a reader for that system can be added in `docs/venue_links_function.js` (re-deploy after any change).
 
 **Not tested against the live website:** while this was built, vintagewinemerchants.com could not be reached from the development environment, so the first real run is the test. The matching rules were tested against the shop's own titles (every title found its own page and none linked to a different wine).
+
+## If Check links removed good links (fixed 2026-10-15)
+
+The first version of the function sometimes read the wrong title from a page (the payment-card icons at the bottom of every page are labelled "American Express", "Visa" ...), so Check links removed links that were right. Now:
+
+1. Re-deploy the function from `docs/venue_links_function.js` (Edge Functions → venue-links → Code → paste → Deploy updates). It now reads the title from the shop's product data, or from the top of the page only.
+2. Tap **Find links**: wines whose link was removed are looked for again and get their link back.
+3. Check links stops, and removes nothing, if several pages seem to show the same title.
+
+## Managing the list by hand
+
+On the Owner page, the list tab shows every wine with its website link. Paste a page from the shop's website into a wine's box and tap Save to set it, or empty the box and Save to mark the wine as not on the website. Tick wines to Find or Check only those, mark them not on the website, clear their links, tag them or take them off the list.
+

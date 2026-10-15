@@ -686,8 +686,26 @@ export async function venueLinks(sb, action, rows) {
 // Saves what was found or checked for one row: { product_url (null = no link), link_status }. Editors and the owner only; online only.
 export async function saveVenueLink(sb, id, fields) {
   const { data, error } = await sb.from("venue_wines").update({ ...fields, link_checked_at: new Date().toISOString() }).eq("id", id).select("id");
-  if (error) throw new Error(/product_url|link_status|42703/.test(`${error.code} ${error.message}`) ? "Links need a database update first (docs/venue_links.sql)." : (error.message || String(error)));
+  if (error) throw new Error(/product_url|link_status|42703/.test(`${error.code} ${error.message}`) ? "Links need a database update first (docs/venue_links.sql)." : /23514|venue_wines_product_url_site/.test(`${error.code} ${error.message}`) ? "Only a page on the shop's own website can be a link." : (error.message || String(error)));
   if (!data || !data.length) throw new Error("Not saved. Your access may not allow changing the list.");
+}
+// The same change on many list rows at once (the owner's ticked rows): fields as saveVenueLink. Sent 200 at a time. Returns how many changed.
+export async function saveVenueLinks(sb, ids, fields) {
+  let n = 0;
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await sb.from("venue_wines").update({ ...fields, link_checked_at: new Date().toISOString() }).in("id", ids.slice(i, i + 200)).select("id");
+    if (error) throw new Error(/product_url|link_status|42703/.test(`${error.code} ${error.message}`) ? "Links need a database update first (docs/venue_links.sql)." : /23514|venue_wines_product_url_site/.test(`${error.code} ${error.message}`) ? "Only a page on the shop's own website can be a link." : (error.message || String(error)));
+    n += (data || []).length;
+  }
+  if (ids.length && !n) throw new Error("Not saved. Your access may not allow changing the list.");
+  return n;
+}
+// Takes many rows off the venue's list (owner only). The catalog wines stay; only the list rows go.
+export async function removeVenueRows(sb, ids) {
+  let n = 0;
+  for (let i = 0; i < ids.length; i += 200) n += (must(await sb.from("venue_wines").delete().in("id", ids.slice(i, i + 200)).select("id")) || []).length;
+  if (ids.length && !n) throw new Error("Not removed. Your access may not allow changing the list.");
+  return n;
 }
 // Saves rows read from the venue's file. Wines already on the list are skipped by the app before this is called. rows: [{ producer, wine_name, vintage, wine_vintage_id }]
 export async function addVenueRows(sb, venueId, rows, source = "file") {

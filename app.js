@@ -6,8 +6,8 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete, styleLabel,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=17";
-import * as db from "./data.js?v=44";
-import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=19";
+import * as db from "./data.js?v=45";
+import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=20";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=8";
 import { shrinkImage } from "./photos.js?v=5";
 import {
@@ -40,25 +40,25 @@ import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=10";
 import { createProfile } from "./profile.js?v=26";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=15";
 import { createFeedback } from "./feedback.js?v=9";
-import { createEditor } from "./editor.js?v=48";
+import { createEditor } from "./editor.js?v=49";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=12";
 import { gamesHtml } from "./games.js?v=19";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
 import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=4";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=5";
 import * as GG from "./blindgame.js?v=6";
-import { createVenueReview } from "./venuereview.js?v=20";
-import { VENUE, venueCardsOf, readList, recheck as venueRecheck, listIds, linkMap } from "./venue.js?v=14";
+import { createVenueReview } from "./venuereview.js?v=22";
+import { VENUE, venueCardsOf, readList, recheck as venueRecheck, listIds, linkMap, siteUrl } from "./venue.js?v=15";
 import { recommendMix, recommend } from "./recommend.js?v=9";
 import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=1";
 import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
 import { setOffline, setCardLookup } from "./overlay.js?v=1";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=30"));
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=32"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=9"));
 const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=13"));
-import { createWineInfo } from "./wineinfo.js?v=31";
+import { createWineInfo } from "./wineinfo.js?v=32";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -476,7 +476,7 @@ function ownerData() {
   const O = state.owner;
   if (state._ownerFor !== state.cards) { state._ownerFor = state.cards; state._ownerCache = { rows: OWN.wineRows(state.cards), bingo: OWN.bingoCoverage(state.cards) }; }
   const { bingo } = state._ownerCache, rows = OWN.withTags(state._ownerCache.rows, O.wineTags, O.wineIds);
-  return { rows, bingo, wineTags: O.wineTags, wineTagsError: O.wineTagsError, checks: OWN.checkCounts(rows), places: O.places, refLists: O.refLists, refListsError: O.refListsError, config: O.config, configError: O.configError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, staff: O.staff, staffError: O.staffError, staffAudit: O.staffAudit, venue: state.venue, cards: state.cards, cardsById: new Map(state.cards.map((c) => [c.id, c])), seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
+  return { rows, bingo, wineTags: O.wineTags, wineTagsError: O.wineTagsError, checks: OWN.checkCounts(rows), places: O.places, refLists: O.refLists, refListsError: O.refListsError, config: O.config, configError: O.configError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, staff: O.staff, staffError: O.staffError, staffAudit: O.staffAudit, venue: state.venue, wineIds: O.wineIds, cards: state.cards, cardsById: new Map(state.cards.map((c) => [c.id, c])), seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
 }
 // The lens preview: the top picks of one lens for the owner's own profile, or for a brand-new player, using the weights typed on the page.
 function ownerLens() {
@@ -491,7 +491,11 @@ function ownerLens() {
   out.lensRows = picks.map((p) => ({ name: wineName(p.card), style: p.card.style || "", grapes: [...(p.card.grapes || []), ...(p.card.ruleGrapes || [])].join(", "), place: p.card.appellation || p.card.region || p.card.country || "", score: p.score, reason: p.reason }));
   return out;
 }
-const ownerRedraw = () => { const el = $("#ownerTable"); if (el && state.tab === "owner") el.innerHTML = OWN.ownerTableHtml(state.owner, ownerData()); };
+const ownerRedraw = () => {
+  const el = $("#ownerTable"); if (!el || state.tab !== "owner") return;
+  el.innerHTML = OWN.ownerTableHtml(state.owner, ownerData());
+  const vl = document.getElementById("ownerVenueLinks"); if (vl) venueReview.mountLinks(vl);   // the links box lives inside the table area
+};
 function ownerSay(text) { state.owner.msg = text; const el = $("#ownerMsg"); if (el) el.textContent = text; }
 async function ownerWineId(vintageId) {
   if (!state.owner.wineIds) state.owner.wineIds = await db.loadVintageWines(state.sb);
@@ -674,8 +678,46 @@ function venueFile(text) {
 async function venueChanged(msg) {
   await loadVenue(); rebuildDeck(); ownerSay(msg); ownerRedraw();
 }
+// The list table: one row (website link, edit the catalog wine, review it) or all ticked rows (vbulk:...).
+const ownerVsel = () => (state.owner.vsel = state.owner.vsel || new Set());
+async function ownerVenueRows(a, b) {
+  const O = state.owner, sel = ownerVsel(), ids = [...sel], V = state.venue;
+  const rowsOf = () => (V.list || []).filter((r) => sel.has(r.id));
+  if (a === "vurl") {
+    const box = document.querySelector(`[data-owner-vurl="${CSS.escape(b)}"]`), url = siteUrl(box ? box.value : "");
+    if (url === null) { ownerSay(`Only a wine's page on ${VENUE.site} can be its link.`); return; }
+    await db.saveVenueLink(state.sb, b, url ? { product_url: url, link_status: "found" } : { product_url: null, link_status: "not found" });
+    await venueChanged(url ? "Link saved." : "Link taken off: marked not on the website."); return;
+  }
+  if (a === "vedit") { const card = cardById(b); if (card) await ownerWineInfo.open(card, ""); return; }
+  if (a === "vreview") { venueReview.openRow(b); editorTab.state.section = "venue"; state.tab = "editor"; render(); return; }
+  if (b === "all") { OWN.venueListRows(O, ownerData()).forEach((r) => sel.add(r.id)); ownerRedraw(); return; }
+  if (b === "none") { sel.clear(); ownerRedraw(); return; }
+  if (!ids.length) { ownerSay("Tick some wines first."); return; }
+  if (b === "find" || b === "check") { await venueReview.runLinks(b, ids); ownerRedraw(); return; }
+  if (b === "noweb" || b === "clear") {
+    const n = await db.saveVenueLinks(state.sb, ids, b === "noweb" ? { product_url: null, link_status: "not found" } : { product_url: null, link_status: "" });
+    await venueChanged(b === "noweb" ? `${n} marked not on the website (no link).` : `Links taken off ${n} ${n === 1 ? "wine" : "wines"}; Find links will look for them again.`); return;
+  }
+  if (b === "tagon" || b === "tagoff") {
+    const pick = document.querySelector("[data-owner-vbulktag]"), tagRow = pick && O.wineTags && O.wineTags.tags.find((t) => t.id === pick.value);
+    if (!tagRow) { ownerSay("Pick a tag first."); return; }
+    if (!O.wineIds) O.wineIds = await db.loadVintageWines(state.sb);
+    const wineIds = rowsOf().map((r) => r.wine_vintage_id && O.wineIds.get(r.wine_vintage_id)).filter(Boolean);
+    if (!wineIds.length) { ownerSay("None of the ticked wines is in our catalog yet, so they cannot be tagged."); return; }
+    const n = await db.tagWines(state.sb, wineIds, tagRow.id, b === "tagon");
+    ownerSay(`${b === "tagon" ? "Tagged" : "Took the tag off"} ${n} ${n === 1 ? "wine" : "wines"}: ${tagRow.name}.${n < ids.length ? ` ${ids.length - n} not in our catalog yet were left out.` : ""}`);
+    await loadOwnerWineTags(); return;
+  }
+  if (b === "remove") {
+    if (!window.confirm(`Take ${ids.length} ${ids.length === 1 ? "wine" : "wines"} off the ${VENUE.name} list? They leave this version's deck; our catalog keeps them.`)) return;
+    const n = await db.removeVenueRows(state.sb, ids); sel.clear();
+    await venueChanged(`Removed ${n} ${n === 1 ? "wine" : "wines"} from the list.`);
+  }
+}
 async function ownerVenue(a, b) {
   const V = state.venue;
+  if (a === "vbulk" || a === "vurl" || a === "vedit" || a === "vreview") { try { await ownerVenueRows(a, b); } catch (e) { ownerSay("Not changed: " + (e.message || e)); } return; }
   try {
     if (a === "venueread") { await loadImportModule(); const box = document.querySelector("[data-owner-venuepaste]"); V.paste = box ? box.value : ""; venueFile(V.paste); }
     else if (a === "venuecancel") { V.preview = null; ownerRedraw(); }
@@ -851,7 +893,7 @@ function drawTab(body) {
     else body.innerHTML = OWN.ownerHtml(state.owner, ownerData());
     const vl = document.getElementById("ownerVenueLinks"); if (vl) venueReview.mountLinks(vl);   // Find links / Check links on the list tab too
     if (isOwner() && state.owner.tab === "legend" && !state.owner.legend && !state.owner.legendError) loadOwnerLegend();
-    if (isOwner() && state.owner.tab === "wines" && state.owner.wineTags === undefined) loadOwnerWineTags();
+    if (isOwner() && (state.owner.tab === "wines" || state.owner.tab === "venue") && state.owner.wineTags === undefined) loadOwnerWineTags();
     if (isOwner() && state.owner.tab === "tags" && !state.owner.tags && !state.owner.tagsError) loadOwnerTags();
     if (isOwner() && state.owner.tab === "checks" && state.owner.places === undefined) loadOwnerPlaces();
     if (isOwner() && state.owner.tab === "lists" && state.owner.refLists === undefined) loadOwnerLists();
@@ -2056,7 +2098,7 @@ document.addEventListener("click", async (ev) => {
       else if (a.startsWith("ref")) await ownerRef(a, b);
       else if (a === "placefix" || a === "placedismiss") await ownerPlace(a, b, t.dataset.action.split(":").slice(3).join(":"));
       else if (a.startsWith("staff")) await ownerStaff(a, b, c);
-      else if (a.startsWith("venue")) await ownerVenue(a, b);
+      else if (a.startsWith("venue") || ["vbulk", "vurl", "vedit", "vreview"].includes(a)) await ownerVenue(a, b);
     }
     else if (action === "settings" || action === "syncinfo") openSettings();
     else if (action === "setclose") closeSettings();
@@ -2249,6 +2291,13 @@ document.addEventListener("change", async (ev) => {
   const O = state.owner;
   if ("ownerIssue" in t.dataset) { O.issue = t.value; ownerRedraw(); }
   else if ("ownerTagfilter" in t.dataset) { O.tagFilter = t.value; ownerRedraw(); }
+  else if ("ownerVfilter" in t.dataset) { O.vfilter = t.value; ownerRedraw(); }
+  else if ("ownerVsel" in t.dataset) {   // only the row and the count change, so the table keeps its scroll position
+    const sel = ownerVsel(); if (t.checked) sel.add(t.dataset.ownerVsel); else sel.delete(t.dataset.ownerVsel);
+    const tr = t.closest("tr"); if (tr) tr.classList.toggle("osel", t.checked);
+    const bar = document.querySelector(".ovbulk"), d = ownerData();
+    if (bar) bar.outerHTML = OWN.venueBulkBar(O, d, OWN.venueListRows(O, d));
+  }
   else if ("ownerSel" in t.dataset) {   // only the row and the count change, so the table keeps its scroll position
     const sel = ownerSel(); if (t.checked) sel.add(t.dataset.ownerSel); else sel.delete(t.dataset.ownerSel);
     const tr = t.closest("tr"); if (tr) tr.classList.toggle("osel", t.checked);

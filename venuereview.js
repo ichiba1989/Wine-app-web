@@ -7,10 +7,10 @@
 // The place is chosen by searching the place list; a place that is not in it yet is typed in and created when the wine is added (geo.js savePlace).
 // Everything fits on one phone screen. Editor writes are online only. The rules are in venue.js (pure); this file draws the screen and handles the taps.
 import { esc, WINE_STYLES } from "./logic.js?v=17";
-import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf, placeLookalikes, linkSummary, rowTitle } from "./venue.js?v=14";
-import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=31";
+import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf, placeLookalikes, linkSummary, rowTitle } from "./venue.js?v=15";
+import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=32";
 import { placeFromArea, savePlace, designationPlan, broadPlace } from "./geo.js?v=8";
-import * as db from "./data.js?v=44";
+import * as db from "./data.js?v=45";
 import { caseKey, lookalikes } from "./text.js?v=3";
 
 const fold = caseKey;   // text.js: accents and capitals ignored, punctuation still counts
@@ -158,6 +158,10 @@ export function createVenueReview(ctx) {
   const queue = () => reviewQueue(ctx.list() || [], R.skipped, R.prep ? sortKey : null);
   function pickNext() {
     const q = queue();
+    if (R.want && R.lists) {   // the owner tapped Review on one wine of the list: open that one
+      const row = q.find((r) => r.id === R.want); R.want = null;
+      if (row) { R.form = formFor(row, R.lists, R.prep); R.err = ""; return; }
+    }
     const cur = R.form && q.find((r) => r.id === R.form.rowId && !R.skipped.has(r.id));
     if (cur) return;
     R.form = q.length && R.lists ? formFor(q[0], R.lists, R.prep) : null;
@@ -276,11 +280,13 @@ export function createVenueReview(ctx) {
     try {
       if (kind === "find") {
         const rows = list.filter((r) => !r.product_url).map((r) => ({ id: r.id, title: rowTitle(r), vintage: r.vintage || "" }));
+        if (!rows.length) { L.msg = "Every wine here already has a link: use Check links to see that they still work."; L.busy = false; draw(); return; }
         const res = await db.venueLinks(ctx.sb(), "find", rows);
         for (const x of res.results || []) { if (x.url) await save(x.id, { product_url: x.url, link_status: "found" }); else { none++; await save(x.id, { product_url: null, link_status: "not found" }); } }
         L.msg = `Looked for ${rows.length} wines on the website${res.count ? ` (${res.count} products there)` : ""}: ${rows.length - none} linked, ${none} not on the website.`;
       } else {
         const rows = list.filter((r) => r.product_url).map((r) => ({ id: r.id, title: rowTitle(r), vintage: r.vintage || "", url: r.product_url }));
+        if (!rows.length) { L.msg = "None of these wines has a link to check yet: use Find links first."; L.busy = false; draw(); return; }
         for (let i = 0; i < rows.length; i += 50) {
           L.msg = `Checking links ${i + 1}–${Math.min(i + 50, rows.length)} of ${rows.length}…`; draw();
           const res = await db.venueLinks(ctx.sb(), "check", rows.slice(i, i + 50));
@@ -309,6 +315,10 @@ export function createVenueReview(ctx) {
     mount(el) { root = el; R.linksOnly = false; if (!R.lists && !R.loading) load(); draw(); },
     // Only the website links part, on the Owner page's list tab (it needs no editor lists).
     mountLinks(el) { root = el; R.linksOnly = true; draw(); },
+    // Opens one row of the list for review the next time the section is shown (Owner page, Review).
+    openRow(id) { R.view = "add"; R.skipped.delete(id); R.want = id; },
+    // Find or check links for some rows only (the owner's ticked rows); the progress shows where the links box is mounted.
+    runLinks: (kind, ids) => runLinks(kind, ids),
     leave() { root = null; },
     redraw: draw,
   };

@@ -208,3 +208,9 @@ No database script. Check on a phone:
 - [ ] Owner page, Wines tab: Manage tags, add a tag, rename it; tick a few wines (the table stays where it is), Add tag: the Tags column and the tag filter show it; Remove tag takes it off; Delete the tag asks first and takes it off every wine.
 - [ ] Tick all N shown ticks every matching wine (not only the first 400 listed); Set reach changes the reach of the ticked wines.
 - [ ] As an Editor (not the owner): tagging wines works through the database, making or renaming a tag is refused.
+
+## Vintage Wine Merchants list tab (added 2026-10-15; branch `vwm`)
+- [ ] Re-deploy the venue-links function, then Find links: wines whose links were removed by the first Check get them back; Check links keeps good links (no "American Express").
+- [ ] Owner page, list tab: the Show filter (in the deck, not in our catalog, not on the website, link removed, a tag) lists the right wines; paste a page from the shop's site into one wine's box, Save, and the card links to it; a page from another site is refused; an emptied box marks it not on the website.
+- [ ] Tick a few wines: Find links / Check links run for those only; Not on the website, Clear link, Add tag, Remove from list (asks first) change only the ticked ones; Edit wine opens the full editor; Review opens the Editor on that wine.
+

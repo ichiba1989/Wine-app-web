@@ -3,14 +3,14 @@
 // still decides what anyone may change. The rules at the top (rows, search, sort, checks, coverage) are pure: no page, no network.
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
 import { esc } from "./logic.js?v=17";
-import { REACH_CHOICES } from "./wineinfo.js?v=31";
+import { REACH_CHOICES } from "./wineinfo.js?v=32";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=5";
 import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=9";
 import { TAG_KINDS } from "./tags.js?v=5";
 import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=12";
 import { centsToField } from "./pricing.js?v=4";
 import { ASSIGNABLE_ROLES, ROLES, PERMISSIONS, staffRows, filterStaff, rowActions } from "./access.js?v=4";
-import { VENUE, listRows, addable, summary } from "./venue.js?v=14";
+import { VENUE, listRows, addable, summary, LIST_FILTERS, filterListRows } from "./venue.js?v=15";
 import { plainKey } from "./text.js?v=3";
 import { placeChecks } from "./geo.js?v=8";
 export { placeChecks };   // used by app.js through the lazily loaded Owner module
@@ -78,11 +78,11 @@ export const shownConfigValue = (row) => (row && row.value !== null && typeof ro
 
 // ---------------------------------------------------------------- wine tags (docs/wine_tags.sql): the owner's labels, on the wine (every vintage)
 // wt: { tags: [{ id, name }], links: [{ wine_id, tag_id }] }; wineOf: Map vintage id -> wine id. Labels only: nothing else reads them yet.
-export function withTags(rows, wt, wineOf) {
+export function withTags(rows, wt, wineOf, vintageOf = (r) => r.id) {
   if (!wt || !wineOf) return rows;
   const name = new Map(wt.tags.map((t) => [t.id, t.name])), byWine = new Map();
   for (const l of wt.links) { if (!byWine.has(l.wine_id)) byWine.set(l.wine_id, []); byWine.get(l.wine_id).push(l.tag_id); }
-  return rows.map((r) => { const ids = (byWine.get(wineOf.get(r.id)) || []).filter((id) => name.has(id)); return { ...r, tagIds: ids, tags: ids.map((id) => name.get(id)).sort().join(", ") }; });
+  return rows.map((r) => { const ids = (byWine.get(wineOf.get(vintageOf(r))) || []).filter((id) => name.has(id)); return { ...r, tagIds: ids, tags: ids.map((id) => name.get(id)).sort().join(", ") }; });
 }
 export const tagCounts = (wt) => { const n = new Map(); for (const l of (wt && wt.links) || []) n.set(l.tag_id, (n.get(l.tag_id) || 0) + 1); return n; };
 // The rows the Wines tab shows (search, problem filter, tag filter: "all", "none" or a tag id), sorted. Select all ticks exactly these.
@@ -260,34 +260,66 @@ function rolesTable(O, d) {
 }
 // The venue's list (venue.js): upload or paste the venue's file, check what matched, save; add or remove wines by hand; re-check rows that were not in the catalog.
 // Only wines on this list appear in the venue version's deck, games and suggestions. Rows not in the catalog wait for an editor to add the wine.
+// The venue's list: what is on it, the website link of each wine, its tags, and changes to one row or to all ticked rows.
+const STATUS_TEXT = (r) => (r.older ? "Older vintage: kept on record, not in the deck" : r.linked ? "In the deck" : r.unpublished ? "Not published yet" : "Not in our catalog yet");
+const WEB_TEXT = (r) => (r.url ? (r.linkStatus === "ok" ? "Checked" : "Found") : r.linkStatus === "not found" ? "Not on the website" : r.linkStatus === "removed" ? "Link removed" : "Not looked for yet");
+export function venueListRows(O, d) {
+  const v = d.venue || {};
+  const rows = withTags(listRows(v.list, d.cardsById, O.q), d.wineTags, d.wineIds, (r) => r.vintageId);
+  return filterListRows(rows, O.vfilter || "all");
+}
+export function venueBulkBar(O, d, shown) {
+  const sel = O.vsel || new Set(), n = sel.size, dis = n ? "" : " disabled", wt = d.wineTags;
+  const tagPick = wt && wt.tags.length ? `<select class="ofield" data-owner-vbulktag aria-label="Tag">${wt.tags.map((t) => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join("")}</select>
+      <button class="opill" data-action="owner:vbulk:tagon"${dis}>Add tag</button><button class="opill" data-action="owner:vbulk:tagoff"${dis}>Remove tag</button>` : "";
+  return `<div class="obulk ovbulk" role="group" aria-label="Change the ticked wines">
+    <span class="small"><b>${n}</b> ticked</span>
+    <button class="opill" data-action="owner:vbulk:all">Tick all ${shown.length} shown</button><button class="opill" data-action="owner:vbulk:none"${dis}>Untick all</button>
+    <span class="small muted">Website:</span><button class="opill" data-action="owner:vbulk:find"${dis}>Find links</button><button class="opill" data-action="owner:vbulk:check"${dis}>Check links</button>
+    <button class="opill" data-action="owner:vbulk:noweb"${dis}>Not on the website</button><button class="opill" data-action="owner:vbulk:clear"${dis}>Clear link</button>
+    ${tagPick}
+    <button class="opill odanger" data-action="owner:vbulk:remove"${dis}>Remove from list</button>
+  </div>`;
+}
 function venueTable(O, d) {
   const v = d.venue || {};
   if (v.error) return `<p class="muted">${esc(v.error)}</p>`;
   if (!v.list) return `<p class="muted">Loading…</p>`;
-  const all = listRows(v.list, d.cardsById), rows = listRows(v.list, d.cardsById, O.q), sum = summary(v.list);
+  const all = listRows(v.list, d.cardsById), sum = summary(v.list), sel = O.vsel || new Set();
+  const shown = venueListRows(O, d), rows = shown.slice(0, 300);
   const pv = v.preview;
   const preview = pv ? `<h3 class="serif osub">From the file: ${pv.rows.length} ${pv.rows.length === 1 ? "wine" : "wines"}</h3>
     <div class="muted small onote">${pv.fresh.length} new to the list (${pv.fresh.filter((r) => r.wine_vintage_id).length} in our catalog, ${pv.fresh.filter((r) => !r.wine_vintage_id).length} not yet)${pv.rows.length - pv.fresh.length ? `; ${pv.rows.length - pv.fresh.length} already on the list` : ""}.${pv.skipped ? ` ${pv.skipped} ${pv.skipped === 1 ? "item that is" : "items that are"} not wine (spirits, sake, glasses, books, non-alcoholic) left out.` : ""} Wines not in our catalog are kept on the list and appear once an editor adds them and you tap Re-check.</div>
     ${table("<th>Wine</th><th>Status</th>", pv.rows.slice(0, 300).map((r) => `<tr><td>${esc([r.vintage, r.producer, r.wine_name].filter(Boolean).join(" "))}</td><td>${r.onList ? "Already on the list" : r.wine_vintage_id ? "In our catalog" : r.status === "several" ? "Several vintages: add by hand" : "Not in our catalog yet"}</td></tr>`).join(""))}
     <div class="ocontrols"><button class="opill" data-action="owner:venuesave"${pv.fresh.length ? "" : " disabled"}>Add ${pv.fresh.length} to the list</button><button class="opill" data-action="owner:venuecancel">Cancel</button></div>` : "";
   const finds = addable(d.cards, v.list, v.q || "", 15).map((c) => `<tr><td>${esc([c.vintage, c.producer, c.cuvee].filter(Boolean).join(" "))}</td><td class="small">${esc([c.appellation || c.region, c.country].filter(Boolean).join(", "))}</td><td><button class="opill" data-action="owner:venueadd:${esc(c.id)}">Add</button></td></tr>`).join("");
-  const body = rows.map((r) => `<tr><td>${esc(r.name)}</td><td>${r.older ? "Older vintage: kept on record, not in the deck" : r.linked ? "In the deck" : r.unpublished ? "Not published" : "Not in our catalog yet"}</td><td class="small">${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">Website</a>` : r.linkStatus === "not found" ? "Not on the website" : r.linkStatus === "removed" ? "Link removed" : "Not checked"}</td><td class="small">${r.source === "hand" ? "Added by hand" : "From the file"}</td><td><button class="opill" data-action="owner:venueremove:${esc(r.id)}">Remove</button></td></tr>`).join("");
-  return `<div class="muted small onote">Only these wines appear in this version's deck, games and suggestions. Columns the file needs: Producer, Wine name, Vintage. A wine matches when all three are exactly a catalog wine's (accents and case ignored); nothing else is guessed.</div>
+  const body = rows.map((r) => `<tr${sel.has(r.id) ? ' class="osel"' : ""}>
+    <td><input type="checkbox" data-owner-vsel="${esc(r.id)}"${sel.has(r.id) ? " checked" : ""} aria-label="Tick ${esc(r.name)}"></td>
+    <td class="ovname">${esc(r.name)}</td><td class="small ovstat">${esc(STATUS_TEXT(r))}</td>
+    <td class="ourlcell"><input class="ofield ourl" data-owner-vurl="${esc(r.id)}" value="${esc(r.url)}" placeholder="No link" aria-label="Website page of ${esc(r.name)}" autocomplete="off" inputmode="url">
+      <button class="opill" data-action="owner:vurl:${esc(r.id)}">Save</button>${r.url ? `<a class="small" href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">Open</a>` : ""}<div class="small muted">${esc(WEB_TEXT(r))}</div></td>
+    <td class="small">${esc(r.tags)}</td><td class="small">${r.source === "hand" ? "By hand" : "File"}</td>
+    <td>${r.linked ? `<button class="opill" data-action="owner:vedit:${esc(r.vintageId)}">Edit wine</button>` : `<button class="opill" data-action="owner:vreview:${esc(r.id)}">Review</button>`}<button class="opill" data-action="owner:venueremove:${esc(r.id)}">Remove</button></td></tr>`).join("");
+  const filterPick = `<select class="ofield" data-owner-vfilter aria-label="Show">${LIST_FILTERS.map((f) => `<option value="${f.id}"${(O.vfilter || "all") === f.id ? " selected" : ""}>${esc(f.label)}</option>`).join("")}${d.wineTags ? `<option value="tag:none"${O.vfilter === "tag:none" ? " selected" : ""}>No tag</option>${d.wineTags.tags.map((t) => `<option value="tag:${esc(t.id)}"${O.vfilter === "tag:" + t.id ? " selected" : ""}>Tag: ${esc(t.name)}</option>`).join("")}` : ""}</select>`;
+  return `<div class="muted small onote">Only these wines appear in this version's deck, games and suggestions.</div>
     <h3 class="serif osub">Website links</h3>
     <div id="ownerVenueLinks"></div>
-    <h3 class="serif osub">Upload the list</h3>
-    <div class="ocontrols"><input type="file" accept=".csv,.txt,text/csv,text/plain" data-owner-venuefile aria-label="Choose the venue's file"></div>
-    <textarea class="field" rows="4" data-owner-venuepaste placeholder="Or paste the rows here, with the header row first">${esc(v.paste || "")}</textarea>
-    <div class="ocontrols"><button class="opill" data-action="owner:venueread">Read the pasted rows</button></div>
-    ${preview}
+    <h3 class="serif osub">On the list: ${sum.matched - all.filter((r) => r.older).length} in the deck, ${sum.missing} not in our catalog yet</h3>
+    ${all.some((r) => r.older) ? `<div class="muted small onote">${all.filter((r) => r.older).length} older ${all.filter((r) => r.older).length === 1 ? "vintage is" : "vintages are"} kept on the list for the record but not shown: only the most recent vintage of a wine is in the deck.</div>` : ""}
+    ${sum.missing ? `<div class="muted small onote">Editors add the ones not in our catalog yet in the Editor tab, section “${esc(VENUE.name)}” (Review opens it on that wine); each joins the deck when it is published.</div>` : ""}
+    <div class="ocontrols">${filterPick}<button class="opill" data-action="owner:venuerecheck"${sum.missing ? "" : " disabled"}>Re-check the ones not in our catalog</button></div>
+    ${venueBulkBar(O, d, shown)}
+    <div class="muted small onote">${shown.length} of ${all.length} on the list${shown.length > rows.length ? ` (the first ${rows.length} are listed; ticking all ticks every one of the ${shown.length})` : ""}. Website: paste the wine's page on ${esc(VENUE.site)} and tap Save, or empty the box and Save to take the link off. Edit wine opens the full editor for our catalog wine (it changes the wine in every version of the app).</div>
+    ${table("<th></th><th>Wine</th><th>Status</th><th>Website</th><th>Tags</th><th>Added</th><th></th>", body, all.length ? "Nothing matches." : "The list is empty: the deck shows nothing until wines are added.")}
     <h3 class="serif osub">Add a catalog wine by hand</h3>
     <input class="ofield osearch" type="search" data-owner-venueq placeholder="Search our catalog" value="${esc(v.q || "")}" aria-label="Search the catalog to add a wine">
     ${v.q && v.q.trim().length >= 2 ? table("<th>Wine</th><th>Place</th><th></th>", finds, "No catalog wine matches (or it is already on the list).") : ""}
-    <h3 class="serif osub">On the list: ${sum.matched - all.filter((r) => r.older).length} in the deck, ${sum.missing} not in our catalog yet</h3>
-    ${all.some((r) => r.older) ? `<div class="muted small onote">${all.filter((r) => r.older).length} older ${all.filter((r) => r.older).length === 1 ? "vintage is" : "vintages are"} kept on the list for the record but not shown: only the most recent vintage of a wine is in the deck.</div>` : ""}
-    ${sum.missing ? `<div class="muted small onote">Editors add the ones not in our catalog yet in the Editor tab, section “${esc(VENUE.name)}”, one at a time; each joins the deck when it is published.</div>` : ""}
-    <div class="ocontrols"><button class="opill" data-action="owner:venuerecheck"${sum.missing ? "" : " disabled"}>Re-check the ones not in our catalog</button></div>
-    ${table("<th>Wine</th><th>Status</th><th>Website</th><th>Added</th><th></th>", body, all.length ? "Nothing matches." : "The list is empty: the deck shows nothing until wines are added.")}`;
+    <h3 class="serif osub">Upload the list</h3>
+    <div class="muted small onote">Columns the file needs: Producer, Wine name, Vintage (or the shop's one-column Title export). A wine matches when it is exactly a catalog wine (accents and case ignored); nothing else is guessed.</div>
+    <div class="ocontrols"><input type="file" accept=".csv,.txt,text/csv,text/plain" data-owner-venuefile aria-label="Choose the venue's file"></div>
+    <textarea class="field" rows="4" data-owner-venuepaste placeholder="Or paste the rows here, with the header row first">${esc(v.paste || "")}</textarea>
+    <div class="ocontrols"><button class="opill" data-action="owner:venueread">Read the pasted rows</button></div>
+    ${preview}`;
 }
 // ---------------------------------------------------------------- the reference lists (docs/reference_lists.sql; data.js loadReferenceLists)
 // Four lists that used to live only in the code. Rows 'suggested' are not used until you tap Use; "Mark checked" records that a source was read.
