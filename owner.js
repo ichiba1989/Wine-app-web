@@ -2,19 +2,20 @@
 // Every table can be searched and sorted (tap a heading). It is reached from the gear (Settings) and only offered to the owner; the database
 // still decides what anyone may change. The rules at the top (rows, search, sort, checks, coverage) are pure: no page, no network.
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
-import { esc } from "./logic.js?v=14";
-import { REACH_CHOICES } from "./wineinfo.js?v=26";
-import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=2";
-import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=7";
-import { TAG_KINDS } from "./tags.js?v=2";
-import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=9";
-import { centsToField } from "./pricing.js?v=1";
+import { esc } from "./logic.js?v=16";
+import { REACH_CHOICES } from "./wineinfo.js?v=27";
+import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=4";
+import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=8";
+import { TAG_KINDS } from "./tags.js?v=4";
+import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=11";
+import { centsToField } from "./pricing.js?v=3";
 import { ASSIGNABLE_ROLES, ROLES, PERMISSIONS, staffRows, filterStaff, rowActions } from "./access.js?v=4";
-import { VENUE, listRows, addable, summary } from "./venue.js?v=11";
+import { VENUE, listRows, addable, summary } from "./venue.js?v=12";
+import { plainKey } from "./text.js?v=1";
 
 export const OWNER_TABS = [{ id: "wines", label: "Wines" }, { id: "lenses", label: "Lenses" }, { id: "bingo", label: "Bingo" }, { id: "checks", label: "Checks" }, { id: "tags", label: "Tags" }, { id: "legend", label: "Legend" }, { id: "roles", label: "Roles" }, { id: "config", label: "Config" }, { id: "venue", label: `${VENUE.name} list` }];
 
-const fold = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const fold = plainKey;   // text.js: the shared lookup key
 const isLive = (c) => !c.archived && (!c.wineStatus || c.wineStatus === "verified");
 
 // ---------------------------------------------------------------- the wines table

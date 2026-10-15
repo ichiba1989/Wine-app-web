@@ -1,8 +1,9 @@
 // Everything that talks to Supabase. Each function takes the client and throws on an error.
-import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=14";
+import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=16";
 import { BUCKET, newPhotoPath } from "./photos.js?v=5";
 import { LEGACY_OF } from "./reactions.js?v=3";
 import { overlayStates, overlayJournal, overlayCounts, overlayPerceptions, entryRowOf, isOffline } from "./overlay.js?v=1";
+import { sameWine } from "./catalog.js?v=5";
 
 const must = ({ data, error }) => { if (error) throw error; return data; };
 // Marks a write as one that may wait in the outbox when there is no connection (offline.js), with a description of what it did (overlay.js). Without the offline layer it changes nothing.
@@ -628,7 +629,7 @@ export async function addVenueCatalogWine(sb, userId, plan) {
     const want = (plan.grapes || []).map((g) => g.id || `new:${g.name}`).sort().join("|");
     for (const w of found.filter((x) => x.style === plan.style && (x.appellation_id || null) === (plan.areaId || null))) {
       const have = must(await sb.from("wine_grapes").select("grape_id").eq("wine_id", w.id)).map((x) => x.grape_id).sort().join("|");
-      if (have === want || (wname && (!have || !want))) return w.id;
+      if (sameWine({ producer: pname, name: wname, style: plan.style, placeId: plan.areaId || null, grapeKey: want }, { producer: pname, name: wname, style: w.style, placeId: w.appellation_id || null, grapeKey: have })) return w.id;   // catalog.js: the one same-wine rule
     }
     return must(await sb.from("wines").insert({ producer_id: producerId, name: wname || null, style: plan.style, style_basis: "editor", appellation_id: plan.areaId || null, status: plan.publish ? "verified" : "pending_review" }).select("id").single()).id;
   });

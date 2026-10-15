@@ -1,6 +1,6 @@
 // The card's drawings, all made by code (no photos, labels or logos): four bottle silhouettes tinted by the type of wine, and 42 flat flavor icons.
 // Pure: they return SVG text.
-import { LABEL } from "./flavordata.js?v=1";
+import { LABEL } from "./flavordata.js?v=3";
 
 // ---------------------------------------------------------------- bottles
 // Each shape is one path in a 100 x 300 box; the capsule is the foil at the top. The glass and capsule colours come from the type of wine.

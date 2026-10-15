@@ -1,8 +1,8 @@
 // Learn tab: quiz modes, difficulty, the review archive, timed rounds and feedback on answers.
 // The rules at the top are pure (no browser, no network) so they can be tested on their own.
 // The controller at the bottom loads questions from Supabase, saves answers and draws the tab.
-import { esc, shuffle } from "./logic.js?v=14";
-import { weave, boostFor, refOf, focusOptions, fold } from "./tags.js?v=2";
+import { esc, shuffle } from "./logic.js?v=16";
+import { weave, boostFor, refOf, focusOptions, fold } from "./tags.js?v=4";
 import { proToolsOn } from "./words.js?v=1";
 import { overlayQuiz } from "./overlay.js?v=1";
 // Marks a write as one that may wait in the outbox when there is no connection (offline.js), with what it did (overlay.js).

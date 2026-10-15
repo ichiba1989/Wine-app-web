@@ -6,13 +6,14 @@
 // so it joins the venue's deck as soon as it is published. The queue keeps one country, region and producer together.
 // The place is chosen by searching the place list; a place that is not in it yet is typed in and created when the wine is added (geo.js savePlace).
 // Everything fits on one phone screen. Editor writes are online only. The rules are in venue.js (pure); this file draws the screen and handles the taps.
-import { esc, WINE_STYLES } from "./logic.js?v=14";
-import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf } from "./venue.js?v=11";
-import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=26";
-import { placeFromArea, savePlace, designationPlan, broadPlace } from "./geo.js?v=5";
-import * as db from "./data.js?v=39";
+import { esc, WINE_STYLES } from "./logic.js?v=16";
+import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf, placeLookalikes } from "./venue.js?v=12";
+import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=27";
+import { placeFromArea, savePlace, designationPlan, broadPlace } from "./geo.js?v=6";
+import * as db from "./data.js?v=40";
+import { caseKey, lookalikes } from "./text.js?v=1";
 
-const fold = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+const fold = caseKey;   // text.js: accents and capitals ignored, punctuation still counts
 const STYLE_CHOICES = WINE_STYLES.map((s) => ({ id: s.id, label: s.label }));
 
 // The form for one row, filled with the prepared suggestions when there are some, else the app's own.
@@ -56,11 +57,22 @@ export function grapesFrom(text, grapes) {
 }
 
 // The place line: what is chosen, and what adding the wine would create.
+// "Looks like ... already in our list": a name that only looks like one in the list is never swapped; the editor picks (text.js lookalikes).
+const kept = (f, field, typed) => (f.keep || []).includes(`${field}|${caseKey(typed)}`);
+const lookHtml = (field, names) => `<div class="looklike" role="group" aria-label="Similar name already in our list">Looks like ${names.map((n) => `<b>${esc(n)}</b>`).join(" or ")} already in our list.
+  ${names.map((n) => `<button class="link" data-vrlook="${esc(field)}" data-name="${esc(n)}">Use ${esc(n)}</button>`).join(" ")} <button class="link" data-vrkeep="${esc(field)}">Keep mine as new</button></div>`;
+export function producerLookHtml(f, producers) {
+  const typed = String(f.producer || "").trim();
+  if (!typed || kept(f, "producer", typed)) return "";
+  const like = lookalikes(typed, (producers || []).map((p) => p.name));
+  return like.length ? lookHtml("producer", like) : "";
+}
 export function placeNowHtml(f, areas) {
   const text = placeText(f.place), plan = placePlan(areas, f.place);
+  const looks = placeLookalikes(areas, f.place).filter((x) => !kept(f, x.field, x.typed)).map((x) => lookHtml(x.field, x.names)).join("");
   const why = f.placeWhy && text ? ` <span class="muted" title="Suggested from ${esc(f.placeWhy)}">· suggested</span>` : "";   // the reason is in the tooltip, so the line stays short
   const note = plan.error ? `<span class="err">${esc(plan.error)}</span>` : plan.creates.length ? `<span class="vrnew">New: ${esc(plan.creates.join(", "))}</span>` : "";   // short, so the form stays on one screen
-  return `${text ? `<b>${esc(text)}</b>` : `<span class="muted">No place chosen</span>`}${why}${note ? `<br>${note}` : ""}`;
+  return `${text ? `<b>${esc(text)}</b>` : `<span class="muted">No place chosen</span>`}${why}${note ? `<br>${note}` : ""}${looks}`;
 }
 export function hitsHtml(f, options) {
   if (!f.q.trim()) return "";
@@ -96,6 +108,7 @@ export function reviewHtml(R, queue, opts) {
         <label class="vrf">Producer<input class="field" data-vr-f="producer" value="${esc(f.producer)}" autocomplete="off"></label>
         <label class="vrf">Wine name<input class="field" data-vr-f="wine" value="${esc(f.wine)}" autocomplete="off" placeholder="none: grape and place say it"></label>
       </div>
+      <div id="vrProdLook">${producerLookHtml(f, R.lists.producers)}</div>
       <div class="vrstyles" role="group" aria-label="Type of wine">${styles}</div>
       <div class="vrlbl">Place <button class="link" data-vr="type">${f.typing ? "Search instead" : "Type a new place"}</button></div>
       <div class="vrplace" id="vrPlaceNow">${placeNowHtml(f, R.lists.areas)}</div>
@@ -176,6 +189,18 @@ export function createVenueReview(ctx) {
     R.busy = false; draw();
   }
   document.addEventListener("click", async (ev) => {
+    const lk = ev.target.closest("[data-vrlook], [data-vrkeep]");
+    if (lk && root && R.form && !R.busy) {
+      const f = R.form, field = lk.dataset.vrlook || lk.dataset.vrkeep;
+      if (lk.dataset.vrkeep) f.keep = [...(f.keep || []), `${field}|${caseKey(field === "producer" ? f.producer : f.place[field])}`];
+      else if (field === "producer") f.producer = lk.dataset.name;
+      else {
+        const a = R.lists.areas.find((x) => x.level === field && x.name === lk.dataset.name);
+        f.place = a ? broadPlace(placeFromArea(R.lists.areas, a.id)) : { ...f.place, [field]: lk.dataset.name };
+        refreshDesig(f); f.wine = nameFor(f, f.wine);
+      }
+      draw(); return;
+    }
     const d = ev.target.closest("[data-vrdesig]");
     if (d && root && R.form && !R.busy) { R.form.designation = d.dataset.vrdesig; R.form.designationWhy = ""; R.form.desigPicked = true; draw(); return; }
     const t = ev.target.closest("[data-vr]");
@@ -208,6 +233,7 @@ export function createVenueReview(ctx) {
     if (t.dataset.vrP !== undefined) { R.form.place = { ...R.form.place, [t.dataset.vrP]: t.value }; R.form.placeWhy = ""; drawPlace(); return; }
     if (t.dataset.vrF === undefined) return;
     R.form[t.dataset.vrF] = t.value;
+    if (t.dataset.vrF === "producer") { const el = document.getElementById("vrProdLook"); if (el) el.innerHTML = producerLookHtml(R.form, R.lists.producers); }
     if (t.dataset.vrF === "vintage") R.form.vintage = t.value.trim().toUpperCase() === "NV" ? "NV" : t.value.trim();
   });
   return {

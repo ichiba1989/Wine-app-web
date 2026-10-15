@@ -175,6 +175,8 @@
   .wfoot .btn { margin-top: 0; }
   .stylerow { display: flex; gap: 6px; margin: 6px 0 10px; flex-wrap: wrap; }
   .stylerow .chip { flex: 1 1 auto; text-align: center; }
+  .looklike { background: #fff7e6; border: 1px solid #f0d49a; border-radius: 10px; padding: 6px 8px; margin-top: 4px; font-size: calc(13px * var(--ts)); }   /* "Looks like ... already in our list" */
+  .looklike .link { font-size: calc(13px * var(--ts)); margin-right: 8px; }
   .desigchips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }   /* designation (DOC, DOCG, AOC ...) chips, on a place */
   .desigchips .chip { flex: 0 0 auto; padding: 6px 10px; font-size: calc(12px * var(--ts)); }
   .seg.sub { margin-top: 0; } .seg.sub[hidden] { display: none; }
@@ -663,6 +665,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=105" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=106" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>

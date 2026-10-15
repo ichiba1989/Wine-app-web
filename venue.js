@@ -6,8 +6,9 @@
 // The list is kept in the database (venue_wines, docs/venue_decks.sql): the owner uploads the venue's file and adds or removes wines by hand on the Owner page.
 // Pure: no browser, no network. The file reading itself is done by importer.js, loaded on the Owner page.
 import { grapeFor } from "./rules.js?v=4";
-import { planPlace } from "./geo.js?v=5";
-import { duplicateGroups } from "./catalog.js?v=3";
+import { planPlace } from "./geo.js?v=6";
+import { duplicateGroups } from "./catalog.js?v=5";
+import { plainKey, matchKey, caseKey, lookalikes } from "./text.js?v=1";
 
 // ---------------------------------------------------------------- the venue (the one line a new venue branch changes)
 export const VENUE = { id: "vwm", name: "Vintage Wine Merchants" };
@@ -16,7 +17,7 @@ export const DECK_LABEL = `${VENUE.name} selection`;
 // ---------------------------------------------------------------- matching a file row to a catalog wine
 // The same exact rule as the journal import: producer, wine name and vintage, ignoring accents, case and punctuation. Nothing is guessed: a row that does not
 // match exactly stays on the list as "not in our catalog yet" until an editor adds the wine (Editor tab), and Re-check links it.
-const norm = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const norm = plainKey;   // text.js: the shared lookup key
 export function vintageOf(v) {
   const t = String(v == null ? "" : v).trim();
   if (/^\d{4}$/.test(t)) return t;
@@ -219,12 +220,14 @@ export function prepIndex(prep) {
 const placeWhyOf = (w) => (!w ? "" : w === "producer" ? "where the producer is" : w === "shop category" ? "the shop's category" : `"${w}" in the title`);
 export const prepOf = (index, title) => (index && index.get(norm(title))) || null;
 // Place names compared loosely: accents, case and punctuation ignored, and "St." read as "Saint" ("St.-Julien" = "Saint-Julien").
-const placeKey = (s) => norm(s).replace(/\bst\b/g, "saint").replace(/\bste\b/g, "sainte").replace(/\bsta\b/g, "santa");
+const placeKey = matchKey;   // text.js: also reads St./Sta. as Saint/Santa (search and the wine-name rule only; never to rename)
 // A place given by name { country, region, appellation } with each name replaced by the place already in the list when there is one, so nothing is
 // created twice. An appellation filed straight under the country (or under another region of it) is found too, and then its own region is used.
 export function canonPlace(areas, place) {
   const p = { country: String(place.country || "").trim(), region: String(place.region || "").trim(), appellation: String(place.appellation || "").trim() };
-  const find = (name, level, parentIds) => (name ? (areas || []).find((a) => a.level === level && placeKey(a.name) === placeKey(name) && (!parentIds || parentIds.includes(a.parent_id))) : null);
+  // Only the SAME name (accents and capitals aside) is taken from the list. A name that merely looks alike ("Saint-Julien" / "St.-Julien") is not
+  // swapped: placeLookalikes offers it to the editor instead (owner, 2026-10-15).
+  const find = (name, level, parentIds) => (name ? (areas || []).find((a) => a.level === level && caseKey(a.name) === caseKey(name) && (!parentIds || parentIds.includes(a.parent_id))) : null);
   const country = find(p.country, "country");
   if (!country) return p;
   p.country = country.name;
@@ -234,6 +237,18 @@ export function canonPlace(areas, place) {
   if (app) { p.appellation = app.name; if (!region || app.parent_id !== region.id) region = regions.find((r) => r.id === app.parent_id) || null; p.region = region ? region.name : (app.parent_id === country.id ? "" : p.region); }
   else if (region) p.region = region.name;
   return p;
+}
+// Typed or suggested place names that only look like places in the list: [{ field, typed, names }] for the "Looks like ..." question.
+export function placeLookalikes(areas, place) {
+  const out = [];
+  for (const field of ["country", "region", "appellation"]) {
+    const typed = String(place[field] || "").trim();
+    if (!typed) continue;
+    const names = (areas || []).filter((a) => a.level === field).map((a) => a.name);
+    const like = lookalikes(typed, names);
+    if (like.length) out.push({ field, typed, names: like });
+  }
+  return out;
 }
 // "Barolo, Piedmont, Italy" for the screen; "" for no place.
 export const placeText = (place) => [place.appellation, place.region, place.country].filter((x) => String(x || "").trim()).join(", ");

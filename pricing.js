@@ -4,6 +4,7 @@
 //     move the price a little with each new entry, and more as they add up.
 //   * Neither: no price is shown.
 // The rules at the top are pure (no browser, no network). The functions at the bottom talk to Supabase.
+import { caseKey } from "./text.js?v=1";
 
 export const EDITOR_WEIGHT = 4;
 
@@ -36,7 +37,7 @@ export function parsePrice(text) {
 export const centsToField = (c) => (c == null ? "" : (c / 100).toFixed(2).replace(/\.00$/, ""));
 
 // ---------------------------------------------------------------- putting prices on the cards
-const fold = (s) => String(s == null ? "" : s).toLowerCase().replace(/\s+/g, " ").trim();
+const fold = caseKey;   // text.js: repeated lines are found even when only an accent differs
 // Takes the price into the card's facts (the last line, which is the place, so the card does not grow taller) and removes repeated lines
 // (for example "Italy" twice when a wine is placed at country level).
 export function tidyFacts(card) {

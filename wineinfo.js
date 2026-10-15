@@ -1,17 +1,18 @@
 // Wine info (editors only): change a catalog wine's details. Producer, wine name, vineyard, vintage, type of wine,
 // place, the grapes printed on the label, and other grapes in the wine (for blends the label does not list).
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
-import { esc, WINE_STYLES } from "./logic.js?v=14";
+import { esc, WINE_STYLES } from "./logic.js?v=16";
 import { checkGrapeText, grapeProblem, grapeIndex, setExtraGrapes } from "./grapes.js?v=1";
 import { expandBlends, BLEND_NAMES } from "./blends.js?v=1";
-import { infoLine } from "./wineline.js?v=1";
-import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, savePlace, designationChoices, designationFromText, designationPlan, placeDesignation, splitDesignation, BROAD_PLACES, ruleDesignation } from "./geo.js?v=5";
-import { loadWinePrice, saveWinePrice, parsePrice, centsToField, blendPrice, formatPrice } from "./pricing.js?v=1";
-import { archivePlanFor } from "./catalog.js?v=3";
-import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=14";
-import * as db from "./data.js?v=39";
+import { infoLine } from "./wineline.js?v=3";
+import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, savePlace, designationChoices, designationFromText, designationPlan, placeDesignation, splitDesignation, BROAD_PLACES, ruleDesignation } from "./geo.js?v=6";
+import { loadWinePrice, saveWinePrice, parsePrice, centsToField, blendPrice, formatPrice } from "./pricing.js?v=3";
+import { archivePlanFor } from "./catalog.js?v=5";
+import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=15";
+import * as db from "./data.js?v=40";
+import { caseKey, lookalikes } from "./text.js?v=1";
 
-const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+const fold = caseKey;   // text.js: accents and capitals ignored, punctuation still counts
 
 // "Barolo, Piedmont, Italy": a place with the areas above it.
 export function placeLabel(areas, id) {
@@ -77,11 +78,30 @@ export function formFromInfo(info, lists) {
   };
 }
 
-// The line under the place fields: what saving would add.
+// The line under the place fields: what saving would add, and a "Looks like ..." question for a typed name close to one already in the list.
 function placeNoteHtml(W) {
   const plan = planPlace(W.lists.areas, placeOf(W.form));
-  return plan.error ? esc(plan.error) : plan.notes.map(esc).join(" ");
+  const looks = ["country", "region", "appellation"].map((k) => lookalikeHtml(W, k, W.lists.areas.filter((a) => a.level === (k === "country" ? "country" : k === "region" ? "region" : "appellation")).map((a) => a.name))).join("");
+  return (plan.error ? esc(plan.error) : plan.notes.map(esc).join(" ")) + looks;
 }
+// ---------------------------------------------------------------- "Looks like ... already in our list" (text.js lookalikes)
+// A typed name that only LOOKS like one in the list ("Saint-Julien" / "St.-Julien", "Billecart Salmon" / "Billecart-Salmon") is never swapped
+// for it: the editor picks. "Use it" puts the list's name in the field; "Keep mine as new" keeps the typed name (a new one is created on save).
+// Names are kept exactly as written: official spellings and legal abbreviations ("Sta. Rita Hills") are never changed by the app.
+export function lookalikeHtml(W, field, names) {
+  const typed = String(W.form[field] || "").trim();
+  if (!typed || (W.form.keep || []).includes(`${field}|${caseKey(typed)}`)) return "";
+  const like = lookalikes(typed, names);
+  if (!like.length) return "";
+  return `<div class="looklike" role="group" aria-label="Similar name already in our list">Looks like ${like.map((n) => `<b>${esc(n)}</b>`).join(" or ")} already in our list.
+    ${like.map((n) => `<button class="link" data-wilook="${esc(field)}" data-name="${esc(n)}">Use ${esc(n)}</button>`).join(" ")}
+    <button class="link" data-wikeep="${esc(field)}">Keep mine as new</button></div>`;
+}
+const producerNoteHtml = (W) => {
+  const f = W.form;
+  if (!f.producerName.trim() || W.lists.producers.some((p) => fold(p.name) === fold(f.producerName))) return "";
+  return lookalikeHtml(W, "producerName", W.lists.producers.map((p) => p.name)) || `<div class="muted small">A new producer will be created.</div>`;
+};
 const placeOf = (f) => ({ country: f.country, region: f.region, appellation: f.appellation });
 // Germany and Austria: only the broad wine region is a place (geo.js BROAD_PLACES); the village and vineyard stay in the wine name.
 const appPlaceholder = (country) => { const k = String(country || "").trim().toLowerCase(); return BROAD_PLACES[k] ? `Only a wine region (for example ${k === "austria" ? "Kamptal" : "Mosel"}); the vineyard stays in the name` : "For example Barolo or Rutherford"; };
@@ -129,7 +149,6 @@ function priceNoteHtml(W) {
 function sheetHtml(W) {
   const f = W.form, L = W.lists;
   const chips = [...WINE_STYLES, { id: "unknown", label: "Other" }].map((s) => `<button class="chip${f.style === s.id ? " on" : ""}" data-wi="style:${s.id}" aria-pressed="${f.style === s.id}">${esc(s.label)}</button>`).join("");
-  const matchProducer = L.producers.some((p) => fold(p.name) === fold(f.producerName));
   return `<div class="overlay"><div class="sheet" id="wineInfoPanel">
     <div class="sheethead"><div class="sheettitle"><div class="serif big">Wine info</div><div class="muted small">${esc(W.title)}. Changes show for everyone.</div>${W.card && infoLine(W.card) ? `<div class="muted small">${esc(infoLine(W.card))}</div>` : ""}</div>
       <div class="sheetbtns"><button class="pill wine" data-wi="save"${W.saving ? " disabled" : ""}>Save</button><button class="xbtn" data-wi="close" aria-label="Close">&times;</button></div></div>
@@ -138,7 +157,7 @@ function sheetHtml(W) {
         <div class="photobtns"><label class="btn outline slim photobtn${W.photoBusy ? " disabled" : ""}">${W.photoBusy ? "Saving…" : W.card && W.card.image ? "Replace photo" : "Add photo"}<input type="file" accept="image/*" data-wiphoto${W.photoBusy ? " disabled" : ""} hidden></label>${W.card && W.card.image && !W.photoBusy ? `<button class="link" data-wi="photoremove">${W.photoConfirm ? "Tap again to remove" : "Remove"}</button>` : ""}${(() => { const re = W.reuse; return re ? `<button class="link" data-wi="photoreuse:${esc(re.id)}:${esc(re.vintage || "")}">Use the ${esc(re.vintage || "earlier")} photo</button>` : ""; })()}</div>
         ${W.card && W.card.image && photoTag(W.card) ? `<div class="muted tiny">Photo: ${esc(photoTag(W.card))}</div>` : ""}${W.photoNote ? `<div class="muted small">${esc(W.photoNote)}</div>` : ""}${W.photoError ? `<div class="err">${esc(W.photoError)}</div>` : ""}</div></div>
     <div class="qlabel">Producer</div><input class="field" list="dlProducers" data-wif="producerName" value="${esc(f.producerName)}" autocomplete="off">
-    ${f.producerName.trim() && !matchProducer ? `<div class="muted small">A new producer will be created.</div>` : ""}
+    <div id="wiProducerNote">${producerNoteHtml(W)}</div>
     <div class="qlabel">Wine name (leave empty if there is none)</div><input class="field" data-wif="wineName" value="${esc(f.wineName)}">
     <div class="qlabel">Vineyard (optional)</div><input class="field" data-wif="vineyard" value="${esc(f.vineyard)}">
     <div class="two"><div><div class="qlabel">Vintage</div><input class="field" inputmode="numeric" maxlength="4" data-wif="year" value="${esc(f.year)}"${f.nonVintage ? " disabled" : ""}></div>
@@ -358,6 +377,16 @@ export function createWineInfo(ctx) {
   }
 
   document.addEventListener("click", (ev) => {
+    const lk = ev.target.closest("[data-wilook], [data-wikeep]");
+    if (lk && W.open && W.form && !W.del && !W.pub) {
+      const field = lk.dataset.wilook || lk.dataset.wikeep;
+      if (lk.dataset.wilook) {
+        const name = lk.dataset.name;
+        if (field === "producerName") W.form.producerName = name;
+        else { const a = W.lists.areas.find((x) => x.name === name && x.level === field); if (a) Object.assign(W.form, placeFromArea(W.lists.areas, a.id)); else W.form[field] = name; }
+      } else W.form.keep = [...(W.form.keep || []), `${field}|${caseKey(W.form[field])}`];
+      draw(); return;
+    }
     const d = ev.target.closest("[data-widesig]");
     if (d && W.open && W.form && !W.del && !W.pub) { W.form.designation = d.dataset.widesig; W.form.designationWhy = ""; W.form.desigPicked = true; drawDesignation(); return; }
     const t = ev.target.closest("[data-wi]");
@@ -388,6 +417,7 @@ export function createWineInfo(ctx) {
     else {
       W.form[k] = t.value;
       if (k === "country" || k === "region" || k === "appellation") refreshPlace();
+      else if (k === "producerName") { const n = document.getElementById("wiProducerNote"); if (n) n.innerHTML = producerNoteHtml(W); }
       else if (k === "price") { const n = document.querySelector("[data-wif='price']"); const note = n && n.nextElementSibling; if (note) note.innerHTML = priceNoteHtml(W); }
     }
   });

@@ -6,6 +6,7 @@
 // 3. "The same wine, minus the vintage" is checked against the catalog. Only the MOST RECENT vintage is used for the deck;
 //    older vintages of the same wine are archived (kept, with players' swipes and journals intact, but not shown in Discover again).
 import { fold, checkGrapeText, splitGrapeText } from "./grapes.js?v=1";
+import { plainKey } from "./text.js?v=1";
 
 export const DEFAULT_RULES = { minEntries: 10, minPeople: 1 };
 // app_config rows [{ key, value }] -> rules. Anything missing or silly falls back to the default.
@@ -31,7 +32,7 @@ export const isComplete = (w) => missingFields(w).length === 0;
 
 // ---------------------------------------------------------------- "the same wine, minus the vintage"
 // Producers and wine names: no capitals, accents, punctuation or spaces ("Château d'Or" and "chateau d or" are the same name).
-export const nameKey = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/ß/g, "ss").replace(/[^a-z0-9]+/g, "");
+export const nameKey = (s) => plainKey(s).replace(/ /g, "");   // text.js plainKey with the spaces taken out too
 const grapeSet = (names) => [...new Set((names || []).map(fold).filter(Boolean))].sort().join("|");
 export function grapeKeyOfText(text) {
   const r = checkGrapeText(text || "");
@@ -41,6 +42,22 @@ export function grapeKeyOfText(text) {
 export const looseKey = (x) => [nameKey(x.producer), nameKey(x.wine_name ?? x.cuvee ?? ""), x.style || "", x.grapeKey ?? grapeSet(x.grapes)].join("¦");
 // The strict key also needs the same appellation. It decides which catalog vintages are the same wine, because archiving removes a wine from Discover.
 export const strictKey = (x) => looseKey(x) + "¦" + nameKey(x.appellation || "");
+// The one rule for "the same wine, another vintage" (owner, 2026-10-15). Used when a wine is added (another vintage of a wine we have is
+// added to it, data.js addVenueCatalogWine) and, through strictKey, for "Same wine, different vintages" (duplicateGroups).
+//   the same producer and wine name (wineIdentity), the same type and the same place, and the same label grapes;
+//   a NAMED wine whose grapes are not on record on one side still counts (the name says which wine it is). A wine with no name needs the grapes too,
+//   so "Trimbach Riesling" and "Trimbach Pinot Gris" (both unnamed, white, Alsace) stay two wines, and one producer's two "Grand Cru" wines from
+//   different places stay two.
+// a / b: { producer, wine_name | cuvee | name, style, placeId | appellation, grapeKey | grapes (names) }. Places are compared by id when both
+// have one, else by appellation name. This decides only when to ASK or reuse; it never renames anything.
+export const wineIdentity = (x) => `${nameKey(x.producer)}¦${nameKey(x.wine_name ?? x.cuvee ?? x.name ?? "")}`;
+const placeOf = (x) => (x.placeId !== undefined ? x.placeId || "" : nameKey(x.appellation || ""));
+export function sameWine(a, b) {
+  if (wineIdentity(a) !== wineIdentity(b) || (a.style || "") !== (b.style || "") || placeOf(a) !== placeOf(b)) return false;
+  const ga = a.grapeKey ?? grapeSet(a.grapes), gb = b.grapeKey ?? grapeSet(b.grapes);
+  const named = !!nameKey(a.wine_name ?? a.cuvee ?? a.name ?? "");
+  return ga === gb || (named && (!ga || !gb));
+}
 const cardId = (c) => c.id;
 const yearOf = (c) => (/^\d{4}$/.test(String(c.vintage || "")) ? Number(c.vintage) : null);
 const live = (c) => !c.archived && (!c.wineStatus || c.wineStatus === "verified");
