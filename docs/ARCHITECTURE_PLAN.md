@@ -484,3 +484,11 @@ Phases 3–5 ordering is a recommendation; reorder based on what Phase 2 learns.
 Taken out of the app at the owner's request: maintaining researched wine facts for the whole catalog is not realistic yet. Code saved on `backup/tech-sheet-parked`; database objects kept (unused). Revisit when the other improvement ideas are done. Ideas recorded for then:
 - **Players enter tech data themselves** for their own wines (ABV, bottle size and so on from the bottle), instead of the team maintaining it. The parked version already had this for a player's own wines (`my_wine_facts`, "entered by you").
 - The research pack and its open items (provider and billing for an automatic runner, third-party page terms, PDF technical sheets, producer identity, Pro-plan or not) remain as written on the parked branch.
+
+## Parked: Wine glossary ("Wine words") (2026-10-15)
+Not built: the owner chose "not now" to avoid the fact-checking a full glossary needs. Recorded so it can be picked up without redoing the thinking.
+- **The idea:** a dictionary players can read (in Settings first, plus a small "?" beside the professional grid's lines such as Acidity, Tannin, Body), which is also a shared vocabulary: each word a permanent id, definitions stored per language, linked to the existing grapes, places (`geo_areas`), grid fields and aroma tags (`tasting.js` `FIELDS`, `TAG_TREE`) rather than copying them.
+- **Two sizes; start with the lean one when it is revisited:**
+  - **Lean:** about 50 everyday tasting and winemaking words (acidity, tannin, body, finish, malolactic fermentation, decanting, cork taint ...), no legal terms; an Owner tab to search, add, edit and hide; the owner reads them once and shows them to players; translations can be added later without rebuilding.
+  - **Full:** review statuses, sources and citations, translation version tracking, and legal and classification terms (DOCG, AOC, DAC, Grand Cru), which need real checking against official sources.
+- **Rules to keep when it is built:** a definition never becomes a fact about a wine; ambiguous words stay apart ("dry" as sweetness versus a "drying" feel); a missing tasting answer is never stored as low; players never create glossary words from their notes (the existing "Words I could not place" list stays the review path).
