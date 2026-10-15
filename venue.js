@@ -7,6 +7,7 @@
 // Pure: no browser, no network. The file reading itself is done by importer.js, loaded on the Owner page.
 import { grapeFor } from "./rules.js?v=4";
 import { planPlace } from "./geo.js?v=1";
+import { duplicateGroups } from "./catalog.js?v=3";
 
 // ---------------------------------------------------------------- the venue (the one line a new venue branch changes)
 export const VENUE = { id: "vwm", name: "Vintage Wine Merchants" };
@@ -111,10 +112,17 @@ export function recheck(list, cards) {
 
 // ---------------------------------------------------------------- the venue's wines
 // The catalog cards on the list. An archived or unpublished wine (not in the loaded catalog) simply does not appear.
+// Older vintages (owner, 2026-10-15): when the list holds several vintages of the same wine, only the most recent one is shown, in the deck and in
+// everything else built from these cards. The older ones are not removed: they stay on the list (venue_wines) and in the catalog, on record.
+// "The same wine" is the catalog's own rule (catalog.js duplicateGroups: producer, wine name, type, grapes and place, numeric vintages only), the one
+// Editor, Catalog uses for "Same wine, different vintages". Non-vintage wines are never treated as older.
 export const listIds = (list) => new Set((list || []).filter((r) => r.wine_vintage_id).map((r) => r.wine_vintage_id));
+export const olderVintageIds = (cards) => new Set(duplicateGroups(cards).flatMap((g) => g.archive.map((c) => c.id)));
 export function venueCardsOf(cards, list) {
   const ids = listIds(list);
-  return (cards || []).filter((c) => ids.has(c.id) && !c.archived);
+  const listed = (cards || []).filter((c) => ids.has(c.id) && !c.archived);
+  const older = olderVintageIds(listed);
+  return listed.filter((c) => !older.has(c.id));
 }
 // Catalog wines that could be added by hand: matching the search, not on the list yet.
 export function addable(cards, list, q, limit = 20) {
@@ -123,12 +131,14 @@ export function addable(cards, list, q, limit = 20) {
   return (cards || []).filter((c) => !c.archived && !ids.has(c.id) && norm(`${c.vintage} ${c.producer} ${c.cuvee} ${c.appellation} ${c.region}`).includes(t)).slice(0, limit);
 }
 // The Owner page list: matched wines first (A to Z), then the ones not in the catalog yet. Search over producer, wine and vintage.
+// A newer vintage of the same wine on the list puts an older one "on record" (not shown; see venueCardsOf).
 export function listRows(list, cardsById, q = "") {
   const t = norm(q);
+  const older = olderVintageIds((list || []).map((r) => r.wine_vintage_id && cardsById.get(r.wine_vintage_id)).filter((c) => c && !c.archived));
   return (list || []).map((r) => {
     const c = r.wine_vintage_id ? cardsById.get(r.wine_vintage_id) : null;
     const name = c ? [c.vintage, c.producer, c.cuvee].filter(Boolean).join(" ") : [r.vintage, r.producer, r.wine_name].filter(Boolean).join(" ");
-    return { id: r.id, name, linked: !!c, unpublished: !!r.wine_vintage_id && !c, source: r.source || "file" };
+    return { id: r.id, name, linked: !!c, older: !!c && older.has(c.id), unpublished: !!r.wine_vintage_id && !c, source: r.source || "file" };
   }).filter((x) => !t || norm(x.name).includes(t)).sort((a, b) => (b.linked - a.linked) || a.name.localeCompare(b.name));
 }
 

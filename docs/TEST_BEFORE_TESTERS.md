@@ -181,5 +181,6 @@ No database script. Check on a phone:
 - [ ] Discover (as a guest) shows only listed wines; Bingo help, This or That and Guess the Glass suggest only listed wines; a journal entry for an unlisted wine still shows normally.
 - [ ] Editor tab, section Vintage Wine Merchants (as an Editor): the count matches the list (more than 1000 rows are read); on a phone the whole form and its buttons show without scrolling; wines come grouped by country, region and producer; the prepared suggestions for a few titles look right (producer split, type, place, grapes); search a place ("st julien", "barolo") and pick it; type a new place and the screen says what will be created; fix one, Publish now, and it appears in the deck; Add another for review and it shows in Catalog, Waiting to be published; Skip moves on; spirits show the "not wine" hint; an Editor sees no Remove from list.
 - [ ] Re-check on the Owner page links rows for wines that were added to the catalog another way.
+- [ ] A wine on the list in two vintages (e.g. 2018 and 2019, both in the catalog): only the 2019 shows in Discover and the games; the Owner tab lists the 2018 as "Older vintage: kept on record, not in the deck", and it is still in Editor, Catalog.
 - [ ] Nothing on screen says "VWM".
 
