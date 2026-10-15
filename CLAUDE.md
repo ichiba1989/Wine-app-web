@@ -20,7 +20,7 @@ differ, see "Prototype vs. product vision" below. Do not silently "fix" one to m
 - **Config:** `config.js` exports `SUPABASE_URL` and `SUPABASE_KEY`. Both are intentionally public (publishable/anon key, protected by RLS). **Never** put a `service_role`/secret key in this repo or in any client file.
 - **Database schema/migrations are NOT in this repo.** Code references "database update N" in comments (e.g. update 21, 27), meaning SQL applied out of band in Supabase. If you need a table or column that does not exist, say so and describe the SQL; do not assume it exists. The tables/RPCs/views the client uses are visible by grepping `data.js` for `.from("` and `.rpc("`.
 - **Run locally:** serve the directory with any static server (e.g. `python3 -m http.server 8000`) and open it in a phone-width browser. There is no `npm`/`make` command. The app needs network access to Supabase the first time; after that it can open offline (convention 22).
-- **Hosting/deploy** is not defined in the repo (no CI config, no workflow files). Treat it as unknown.
+- **Hosting/deploy:** GitHub Pages, published by `.github/workflows/pages.yml` (kept the same on the main working branch and on `vwm`): the main working branch at the site's address and the `vwm` branch under `/vwm/`, copied as they are (no build). Pages' source must be set to "GitHub Actions". Both versions share one web origin, so they share the phone's saved settings, sign-in and offline copy (same database, so this is intended); their service-worker caches are kept apart by name (`wine-app-` and `vwm-app-` in `sw.js`).
 
 ## Repository layout (flat, all in the root)
 

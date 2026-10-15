@@ -5,7 +5,10 @@
 //   * The page itself (index.html), config.js and privacy.html are asked of the network first (with a short wait), so a new release is found when online; the copy is the fallback.
 //   * A small number of bottle thumbnails from public storage are kept too (a capped set), so the lists still show them offline. Photos of the player's own (private, signed links) are never kept here.
 const VERSION = new URL(self.location).searchParams.get("v") || "0";
-const APP = `wine-app-${VERSION}`, IMAGES = "wine-img";
+// The venue version is published at /vwm/ on the same site as the main app, so its copies have their own name: the main app's worker only clears
+// "wine-app-" copies and this one only clears "vwm-app-" copies, so neither removes the other's files.
+const PREFIX = "vwm-app-";
+const APP = `${PREFIX}${VERSION}`, IMAGES = "wine-img";
 const IMAGE_LIMIT = 60;
 const PAGE_WAIT_MS = 4000;
 
@@ -19,7 +22,7 @@ self.addEventListener("install", (e) => {
 });
 self.addEventListener("activate", (e) => {
   e.waitUntil((async () => {
-    for (const k of await caches.keys()) if (k.startsWith("wine-app-") && k !== APP) await caches.delete(k);
+    for (const k of await caches.keys()) if (k.startsWith(PREFIX) && k !== APP) await caches.delete(k);
     await self.clients.claim();
   })());
 });
