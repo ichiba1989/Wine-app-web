@@ -76,21 +76,44 @@ async function catalogue() {
   return { source: "", products: [] };
 }
 const onSite = (url) => { try { const u = new URL(url); return u.protocol === "https:" && HOSTS.includes(u.hostname); } catch (_) { return false; } };
-const titleOf = (html) => {
-  const og = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i);
-  const t = og ? og[1] : ((html.match(/<title[^>]*>([^<]*)<\/title>/i) || [])[1] || "");
-  return t.replace(/&amp;/g, "&").replace(/&#39;|&rsquo;/g, "'").replace(/&quot;/g, '"').trim();
+// The page's own title, read from the page HEAD only: the body has other <title> tags (the payment-card icons at the bottom of every page
+// carry titles such as "American Express"), which must never be taken for the wine.
+const NAMED = { eacute: "é", egrave: "è", ecirc: "ê", agrave: "à", acirc: "â", ocirc: "ô", ouml: "ö", uuml: "ü", auml: "ä", ccedil: "ç", ntilde: "ñ", iacute: "í", aacute: "á", oacute: "ó", uacute: "ú", nbsp: " " };
+const unescape = (t) => t.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n))).replace(/&([a-z]+);/gi, (m, n) => NAMED[n.toLowerCase()] || m).replace(/&amp;/g, "&").replace(/&#39;|&rsquo;|&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&ndash;|&#8211;/g, "–").replace(/\s+/g, " ").trim();
+export const titleOf = (html) => {
+  const head = (String(html).match(/<head[\s>][\s\S]*?<\/head>/i) || [""])[0];
+  const metas = head.match(/<meta\b[^>]*>/gi) || [];
+  const og = metas.find((m) => /property\s*=\s*["']og:title["']/i.test(m));
+  const content = og && (og.match(/content\s*=\s*"([^"]*)"/i) || og.match(/content\s*=\s*'([^']*)'/i));
+  if (content && content[1].trim()) return unescape(content[1]);
+  return unescape((head.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || "");
 };
+// A Shopify product page also answers as data at <page>.json, which names the product without any page around it.
+async function productTitle(url) {
+  try {
+    const u = new URL(url);
+    if (!/^\/products\/[^/]+\/?$/.test(u.pathname)) return null;
+    const r = await fetch(`${u.origin}${u.pathname.replace(/\/$/, "")}.json`, { headers: { accept: "application/json" } });
+    if (r.status === 404 || r.status === 410) return { gone: r.status };
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j && j.product && j.product.title ? { title: String(j.product.title) } : null;
+  } catch (_) { return null; }
+}
 async function check(row) {
   if (!onSite(row.url)) return { id: row.id, status: "different", reason: "not a page on the venue's website" };
   try {
+    const data = await productTitle(row.url);
+    if (data && data.gone) return { id: row.id, status: "gone", reason: `the page answers ${data.gone}` };
+    if (data && data.title) return pageMatches(row, data.title) ? { id: row.id, status: "ok", reason: data.title } : { id: row.id, status: "different", reason: `the page shows "${data.title}"` };
     const r = await fetch(row.url, { redirect: "follow" });
     if (r.status === 404 || r.status === 410) return { id: row.id, status: "gone", reason: `the page answers ${r.status}` };
     if (!r.ok) return { id: row.id, status: "error", reason: `the page answers ${r.status}` };
     const final = new URL(r.url);
     if (!HOSTS.includes(final.hostname) || final.pathname === "/" || final.pathname.split("/").filter(Boolean).length < 2) return { id: row.id, status: "gone", reason: "the page now sends you elsewhere" };
     const title = titleOf(await r.text());
-    return pageMatches(row, title) ? { id: row.id, status: "ok", reason: title } : { id: row.id, status: "different", reason: title ? `the page shows "${title}"` : "the page has no title" };
+    if (!title) return { id: row.id, status: "error", reason: "the page's title could not be read" };   // never removed for that
+    return pageMatches(row, title) ? { id: row.id, status: "ok", reason: title } : { id: row.id, status: "different", reason: `the page shows "${title}"` };
   } catch (e) { return { id: row.id, status: "error", reason: String(e.message || e) }; }
 }
 

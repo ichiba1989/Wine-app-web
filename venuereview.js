@@ -264,10 +264,13 @@ export function createVenueReview(ctx) {
     if (t.dataset.vrF === "vintage") R.form.vintage = t.value.trim().toUpperCase() === "NV" ? "NV" : t.value.trim();
   });
   // Find or check links in batches, saving each answer as it comes (editor writes are online only). Nothing is linked unless the website shows the wine.
-  async function runLinks(kind) {
+  // ids: only these list rows (the owner's ticked rows), else the whole list.
+  async function runLinks(kind, ids) {
     const L = (R.links = { busy: true, msg: kind === "find" ? "Reading the website…" : "Opening the links…", err: "", removed: [] });
     draw();
-    const list = ctx.list() || [];
+    const pick = ids && ids.length ? new Set(ids) : null;
+    const list = (ctx.list() || []).filter((r) => !pick || pick.has(r.id));
+    let stopped = "";
     let saved = 0, gone = 0, kept = 0, failed = 0, none = 0;
     const save = async (id, fields) => { try { await db.saveVenueLink(ctx.sb(), id, fields); saved++; } catch (e) { failed++; L.err = e.message || String(e); } };
     try {
@@ -281,13 +284,20 @@ export function createVenueReview(ctx) {
         for (let i = 0; i < rows.length; i += 50) {
           L.msg = `Checking links ${i + 1}–${Math.min(i + 50, rows.length)} of ${rows.length}…`; draw();
           const res = await db.venueLinks(ctx.sb(), "check", rows.slice(i, i + 50));
+          // Many pages "showing" the same title means the website was misread (one page part read for every wine), not that all those wines
+          // changed: those links are kept and the check stops, so a reading problem never empties the list.
+          const shown = {};
+          for (const x of res.results || []) if (x.status === "different") shown[x.reason] = (shown[x.reason] || 0) + 1;
+          const misread = Object.keys(shown).find((t) => shown[t] >= 3);
+          if (misread) { stopped = `Stopped: ${shown[misread]} pages all seemed to show ${misread.replace(/^the page shows /, "")}. That looks like a problem reading the website, so no link was removed. Re-deploy the venue-links function (docs/venue_links_function.js) and check again.`; break; }
           for (const x of res.results || []) {
             const row = rows.find((r) => r.id === x.id);
             if (x.status === "ok") { kept++; await save(x.id, { link_status: "ok" }); }
             else if (x.status === "gone" || x.status === "different") { gone++; L.removed.push({ title: row ? row.title : x.id, reason: x.reason || x.status }); await save(x.id, { product_url: null, link_status: "removed" }); }
           }
         }
-        L.msg = `Checked ${rows.length} links: ${kept} fine, ${gone} removed (page gone or a different wine)${rows.length - kept - gone ? `, ${rows.length - kept - gone} could not be opened and were left as they are` : ""}.`;
+        if (stopped) { L.err = stopped; L.msg = kept || gone ? `Before stopping: ${kept} fine, ${gone} removed.` : ""; }
+        else L.msg = `Checked ${rows.length} links: ${kept} fine, ${gone} removed (page gone or a different wine)${rows.length - kept - gone ? `, ${rows.length - kept - gone} could not be opened and were left as they are` : ""}.`;
       }
       if (failed) L.msg += ` ${failed} could not be saved.`;
       await ctx.onChanged();

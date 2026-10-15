@@ -47,7 +47,7 @@ import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v
 import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=4";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=5";
 import * as GG from "./blindgame.js?v=6";
-import { createVenueReview } from "./venuereview.js?v=18";
+import { createVenueReview } from "./venuereview.js?v=19";
 import { VENUE, venueCardsOf, readList, recheck as venueRecheck, listIds, linkMap } from "./venue.js?v=14";
 import { recommendMix, recommend } from "./recommend.js?v=9";
 import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=1";
