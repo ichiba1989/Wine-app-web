@@ -227,6 +227,9 @@ function venueTable(O, d) {
   const finds = addable(d.cards, v.list, v.q || "", 15).map((c) => `<tr><td>${esc([c.vintage, c.producer, c.cuvee].filter(Boolean).join(" "))}</td><td class="small">${esc([c.appellation || c.region, c.country].filter(Boolean).join(", "))}</td><td><button class="opill" data-action="owner:venueadd:${esc(c.id)}">Add</button></td></tr>`).join("");
   const body = rows.map((r) => `<tr><td>${esc(r.name)}</td><td>${r.older ? "Older vintage: kept on record, not in the deck" : r.linked ? "In the deck" : r.unpublished ? "Not published" : "Not in our catalog yet"}</td><td class="small">${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">Website</a>` : r.linkStatus === "not found" ? "Not on the website" : r.linkStatus === "removed" ? "Link removed" : "Not checked"}</td><td class="small">${r.source === "hand" ? "Added by hand" : "From the file"}</td><td><button class="opill" data-action="owner:venueremove:${esc(r.id)}">Remove</button></td></tr>`).join("");
   return `<div class="muted small onote">Only these wines appear in this version's deck, games and suggestions. Columns the file needs: Producer, Wine name, Vintage. A wine matches when all three are exactly a catalog wine's (accents and case ignored); nothing else is guessed.</div>
+    <h3 class="serif osub">Website links</h3>
+    <div id="ownerVenueLinks"></div>
+    <h3 class="serif osub">Upload the list</h3>
     <div class="ocontrols"><input type="file" accept=".csv,.txt,text/csv,text/plain" data-owner-venuefile aria-label="Choose the venue's file"></div>
     <textarea class="field" rows="4" data-owner-venuepaste placeholder="Or paste the rows here, with the header row first">${esc(v.paste || "")}</textarea>
     <div class="ocontrols"><button class="opill" data-action="owner:venueread">Read the pasted rows</button></div>

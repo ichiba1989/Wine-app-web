@@ -47,7 +47,7 @@ import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v
 import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=4";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=5";
 import * as GG from "./blindgame.js?v=6";
-import { createVenueReview } from "./venuereview.js?v=16";
+import { createVenueReview } from "./venuereview.js?v=17";
 import { VENUE, venueCardsOf, readList, recheck as venueRecheck, listIds, linkMap } from "./venue.js?v=14";
 import { recommendMix, recommend } from "./recommend.js?v=9";
 import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=1";
@@ -55,7 +55,7 @@ import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
 import { setOffline, setCardLookup } from "./overlay.js?v=1";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=27"));
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=28"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=9"));
 const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=13"));
 import { createWineInfo } from "./wineinfo.js?v=29";
@@ -797,6 +797,7 @@ function drawTab(body) {
     if (!isOwner()) body.innerHTML = `<p class="muted">The owner page is only for the owner.</p>`;
     else if (!OWN) { body.innerHTML = `<div class="center muted">Loading\u2026</div>`; loadOwnerModule().then(() => { if (state.tab === "owner") renderBody(); }); }
     else body.innerHTML = OWN.ownerHtml(state.owner, ownerData());
+    const vl = document.getElementById("ownerVenueLinks"); if (vl) venueReview.mountLinks(vl);   // Find links / Check links on the list tab too
     if (isOwner() && state.owner.tab === "legend" && !state.owner.legend && !state.owner.legendError) loadOwnerLegend();
     if (isOwner() && state.owner.tab === "tags" && !state.owner.tags && !state.owner.tagsError) loadOwnerTags();
     if (isOwner() && state.owner.tab === "checks" && state.owner.places === undefined) loadOwnerPlaces();

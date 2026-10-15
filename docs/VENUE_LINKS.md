@@ -13,7 +13,7 @@ On the Vintage Wine Merchants version, a wine's name on the Discover card opens 
 
 ## Using it (editors)
 
-Editor tab → **Vintage Wine Merchants** → **Website links** (on the line above the wine being reviewed):
+Owner page → **Vintage Wine Merchants list** → **Website links** (at the top of the tab), or Editor tab → **Vintage Wine Merchants** → **Website links: find and check**:
 
 - **Find links** reads the website's product list and gives each wine on the shop's list its page there, or marks it "not on the website".
 - **Check links** opens every saved link. A page that is gone, that now sends you elsewhere, or that shows a different wine (or another vintage) is **removed**; the screen lists what was removed and why. A page that could not be opened at all (the website was down) is left as it is.

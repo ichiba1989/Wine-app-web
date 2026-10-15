@@ -86,10 +86,10 @@ const desigRow = (f, areas) => designationRowHtml(areas, canonPlace(areas, f.pla
 // ---------------------------------------------------------------- links to the venue's website (owner, 2026-10-15)
 // The server function venue-links (docs/VENUE_LINKS.md) reads the venue's website: "Find links" gives each wine its page there, or none when the
 // wine is not on the website; "Check links" opens each saved link and removes the ones whose page is gone or shows a different wine.
-export function linksHtml(R, list) {
+export function linksHtml(R, list, embedded) {
   const s = linkSummary(list), L = R.links || {};
   const removed = (L.removed || []).map((x) => `<li>${esc(x.title)}: <span class="muted">${esc(x.reason)}</span></li>`).join("");
-  return `<div class="muted small vrcount"><button class="link" data-vr="view:add">← Back to adding wines</button></div>
+  return `${embedded ? "" : `<div class="muted small vrcount"><button class="link" data-vr="view:add">← Back to adding wines</button></div>`}
     <div class="vrcard">
       <div class="serif vrtitle">Links to ${esc(VENUE.name)}’ website</div>
       <div class="muted small">A wine's name on the card opens its page on the website. A wine that is not on the website gets no link.</div>
@@ -106,7 +106,8 @@ export function reviewHtml(R, queue, opts) {
   if (R.error) return `<div class="err">${esc(R.error)}</div><button class="btn outline slim" data-vr="retry">Try again</button>`;
   if (!R.lists) return `<p class="muted">Loading…</p>`;
   const msg = R.msg ? `<div class="notice vrmsg">${esc(R.msg)}</div>` : "";
-  const count = `<div class="muted small vrcount"><b>${queue.length}</b> wines to add · every field is a suggestion · <button class="link" data-vr="view:links">Website links</button></div>`;
+  const count = `<div class="muted small vrcount"><b>${queue.length}</b> wines to add · every field is a suggestion</div>
+    <div class="vrbtns vrlinkbtns"><button class="btn outline slim" data-vr="view:links">Website links: find and check</button></div>`;
   if (!queue.length) return `${count}${msg}<p class="muted">Nothing is waiting. New wines appear here when the owner uploads a new list.</p>`;
   const f = R.form;
   if (!f) return `${count}${msg}`;
@@ -165,7 +166,7 @@ export function createVenueReview(ctx) {
   function draw() {
     if (!root) return;
     if (!ctx.list()) { root.innerHTML = `<p class="muted">${esc(ctx.listError() || "The venue's list has not loaded yet.")}</p>`; return; }
-    if (R.view === "links") { root.innerHTML = `<div class="vrev">${linksHtml(R, ctx.list())}</div>`; return; }
+    if (R.linksOnly || R.view === "links") { root.innerHTML = `<div class="vrev">${linksHtml(R, ctx.list(), R.linksOnly)}</div>`; return; }
     pickNext();
     root.innerHTML = `<div class="vrev">${reviewHtml(R, queue(), { owner: ctx.owner() })}</div>`;
   }
@@ -295,7 +296,9 @@ export function createVenueReview(ctx) {
   }
   return {
     state: R,
-    mount(el) { root = el; if (!R.lists && !R.loading) load(); draw(); },
+    mount(el) { root = el; R.linksOnly = false; if (!R.lists && !R.loading) load(); draw(); },
+    // Only the website links part, on the Owner page's list tab (it needs no editor lists).
+    mountLinks(el) { root = el; R.linksOnly = true; draw(); },
     leave() { root = null; },
     redraw: draw,
   };
