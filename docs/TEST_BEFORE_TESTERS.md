@@ -198,3 +198,9 @@ No database script. Check on a phone:
 - [ ] Owner page, Wines tab: Manage tags, add a tag, rename it; tick a few wines (the table stays where it is), Add tag: the Tags column and the tag filter show it; Remove tag takes it off; Delete the tag asks first and takes it off every wine.
 - [ ] Tick all N shown ticks every matching wine (not only the first 400 listed); Set reach changes the reach of the ticked wines.
 - [ ] As an Editor (not the owner): tagging wines works through the database, making or renaming a tag is refused.
+
+## Designations only on appellations (added 2026-10-16; all versions)
+- [ ] Run `docs/designations_appellation_only.sql` once in Supabase: the first query lists the regions and countries that carry a designation (Bordeaux, Beaujolais, Champagne, Douro, Central Valley, Colchagua Valley, France); after it, the check shows 0 left on regions and the same number kept in the backup.
+- [ ] A wine that names only a region (Domaine du Jaugaret, Bordeaux) shows no AOC on its card; a wine with an appellation (Margaux) still shows AOC.
+- [ ] Edit wine info on a region-only wine: the Designation row explains that a designation belongs to an appellation and offers no chips; adding the appellation "Bordeaux" brings back AOC from the rule list.
+

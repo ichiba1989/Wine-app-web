@@ -23,7 +23,7 @@ begin
   if v is null or length(v) > 30 then
     return false;
   end if;
-  update geo_areas set classification = v where id = p_area and (classification is null or btrim(classification) = '');
+  update geo_areas set classification = v where id = p_area and level::text = 'appellation' and (classification is null or btrim(classification) = '');   -- appellations only (2026-10-16)
   get diagnostics n = row_count;
   return n > 0;
 end;

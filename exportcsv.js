@@ -1,6 +1,6 @@
 // Export of the player's own journal as a spreadsheet file (CSV). Pure: no page, no network (app.js turns the text into a download).
 // Only what the player has in their journal goes into it: their wines, verdicts, prices and notes, in their own words.
-import { entryName, verdictShort, entryIncomplete } from "./logic.js?v=16";
+import { entryName, verdictShort, entryIncomplete } from "./logic.js?v=17";
 
 export const EXPORT_COLUMNS = [
   { id: "date", label: "Date", get: (e) => e.consumed_on || "" },

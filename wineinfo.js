@@ -1,15 +1,15 @@
 // Wine info (editors only): change a catalog wine's details. Producer, wine name, vineyard, vintage, type of wine,
 // place, the grapes printed on the label, and other grapes in the wine (for blends the label does not list).
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
-import { esc, WINE_STYLES } from "./logic.js?v=16";
+import { esc, WINE_STYLES } from "./logic.js?v=17";
 import { checkGrapeText, grapeProblem, grapeIndex, setExtraGrapes } from "./grapes.js?v=2";
 import { expandBlends, BLEND_NAMES } from "./blends.js?v=2";
 import { infoLine } from "./wineline.js?v=3";
-import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, savePlace, designationChoices, designationFromText, designationPlan, placeDesignation, splitDesignation, BROAD_PLACES, ruleDesignation } from "./geo.js?v=7";
+import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, savePlace, designationChoices, designationFromText, designationPlan, placeDesignation, splitDesignation, BROAD_PLACES, ruleDesignation } from "./geo.js?v=8";
 import { loadWinePrice, saveWinePrice, parsePrice, centsToField, blendPrice, formatPrice } from "./pricing.js?v=3";
 import { archivePlanFor } from "./catalog.js?v=5";
-import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=13";
-import * as db from "./data.js?v=38";
+import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=14";
+import * as db from "./data.js?v=39";
 import { caseKey, lookalikes } from "./text.js?v=2";
 
 const fold = caseKey;   // text.js: accents and capitals ignored, punctuation still counts
@@ -112,6 +112,7 @@ const appPlaceholder = (country) => { const k = String(country || "").trim().toL
 export function designationRowHtml(areas, place, chosen, why, attr) {
   if (!designationChoices(place.country).length) return `<div class="muted small">${esc(place.country)} has no place designation: quality words (Kabinett, Grosse Lage …) stay in the wine name.</div>`;
   const plan = designationPlan(areas, place, chosen), have = plan.existing || plan.conflict || "";
+  if (plan.regionOnly) return `<div class="muted small">A designation (AOC, DOC …) belongs to an appellation. This wine names only ${esc(place.region || place.country)}, which holds wines of different designations, so none is kept. If the label names an appellation (for example Bordeaux AOC), add it as the appellation.</div>`;
   const pick = plan.conflict ? chosen : have || chosen || "";
   const choices = [...designationChoices(place.country)];
   [have, pick].forEach((x) => { if (x && !choices.some((c) => c.toLowerCase() === x.toLowerCase())) choices.unshift(x); });
@@ -125,6 +126,7 @@ export function designationRowHtml(areas, place, chosen, why, attr) {
 }
 // The designation the form starts with: the place's own, else one written in the wine's name.
 export function startDesignation(areas, place, text) {
+  if (designationPlan(areas, place, "").regionOnly) return { designation: "", why: "" };
   const have = placeDesignation(areas, place);
   if (have) return { designation: have, why: "" };
   if (!designationChoices(place.country).length) return { designation: "", why: "" };

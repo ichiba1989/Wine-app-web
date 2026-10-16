@@ -7,7 +7,7 @@
 // Pure: no browser, no network.
 import { flavorsForCard, varKeyFor, placeKeysFor, tables, ruleScores, LABEL, CATS } from "./flavors.js?v=3";
 import { climateOf, factsOf, suggestStructure, dimsForStyle, grapeFor, norm } from "./rules.js?v=5";
-import { startingValues } from "./structure.js?v=7";
+import { startingValues } from "./structure.js?v=8";
 
 // ---------------------------------------------------------------- the classics
 // Well-known grape and place pairs, so the game works with any catalog. Each is only a grape and a place that the flavor and structure rules

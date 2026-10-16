@@ -141,7 +141,9 @@ export function cardFromRow(r) {
   if (r.label_grapes && r.label_grapes.length) facts.push({ text: r.label_grapes.join("-"), derived: false });
   if (r.rule_grapes && r.rule_grapes.length) facts.push({ text: r.rule_grapes.join(", "), derived: true });
   if (r.appellation) facts.push({ text: r.appellation, derived: false });
-  if (r.classification) facts.push({ text: r.classification, derived: true });
+  // A designation belongs to an appellation: a wine that only names its region (a Vin de France from Bordeaux) shows none, even if the
+  // region row still carries one from an earlier fill (docs/designations_appellation_only.sql takes those off).
+  if (r.classification && r.appellation) facts.push({ text: r.classification, derived: true });
   const place = [r.region && r.region !== r.appellation ? r.region : null, r.country].filter(Boolean).join(", ");
   if (place) facts.push({ text: place, derived: true });
   return {
