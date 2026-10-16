@@ -4,7 +4,7 @@
 // wine is added as the player's own wine, like "+ Add a wine". Wines already in the journal are skipped. Photos cannot be imported.
 // The rules at the top are pure (no browser, no network). importHtml draws the sheet (it returns an HTML string); app.js holds the clicks and the file reading,
 // and data.js importJournal saves the rows.
-import { esc, outsideRow, styleInfo } from "./logic.js?v=17";
+import { esc, outsideRow, styleInfo } from "./logic.js?v=18";
 import { parsePrice } from "./pricing.js?v=4";
 import { plainKey } from "./text.js?v=3";
 

@@ -214,3 +214,12 @@ No database script. Check on a phone:
 - [ ] Owner page, list tab: the Show filter (in the deck, not in our catalog, not on the website, link removed, a tag) lists the right wines; paste a page from the shop's site into one wine's box, Save, and the card links to it; a page from another site is refused; an emptied box marks it not on the website.
 - [ ] Tick a few wines: Find links / Check links run for those only; Not on the website, Clear link, Add tag, Remove from list (asks first) change only the ticked ones; Edit wine opens the full editor; Review opens the Editor on that wine.
 
+## Designations only on appellations (added 2026-10-16; all versions)
+- [ ] Run `docs/designations_appellation_only.sql` once in Supabase: the first query lists the regions and countries that carry a designation (Bordeaux, Beaujolais, Champagne, Douro, Central Valley, Colchagua Valley, France); after it, the check shows 0 left on regions and the same number kept in the backup.
+- [ ] A wine that names only a region (Domaine du Jaugaret, Bordeaux) shows no AOC on its card; a wine with an appellation (Margaux) still shows AOC.
+- [ ] Edit wine info on a region-only wine: the Designation row explains that a designation belongs to an appellation and offers no chips; adding the appellation "Bordeaux" brings back AOC from the rule list.
+
+## Researched places for Vintage Wine Merchants' wines (added 2026-10-16; branch `vwm`)
+- [ ] Editor tab, Vintage Wine Merchants: a wine whose place was looked up (Sociando-Mallet Cuvée Jean Gautreau, Haut-Médoc) shows "found online"; open the link and check the source says so. A wine left without an appellation on purpose shows the reason (Pierre Gonon Les Îles Feray: sources say IGP Ardèche, the title says Vin de France).
+- [ ] Champagne titles start with the appellation Champagne (AOC from the rule list); German wines keep only their broad region.
+

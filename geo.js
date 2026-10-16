@@ -122,8 +122,10 @@ export function placeClassification(areas, place) {
 }
 
 // ---------------------------------------------------------------- designation (DOC, DOCG, AOC ...), kept on the place (owner, 2026-10-15)
-// A designation belongs to a place, not to one wine: Barolo is DOCG for every Barolo. It is stored in geo_areas.classification of the place a wine
-// points at (an appellation, or a region such as Rioja), and the wine card shows it next to the place (logic.js cardFromRow).
+// A designation belongs to a place, not to one wine: Barolo is DOCG for every Barolo. It is stored in geo_areas.classification of the APPELLATION a
+// wine points at, and the wine card shows it next to the place (logic.js cardFromRow). Never on a region or a country (owner, 2026-10-16): a region
+// holds wines of different designations (Domaine du Jaugaret is a Vin de France from Bordeaux, beside AOC Bordeaux wines), so a wine that only
+// names its region carries no designation. Bordeaux AOC is the appellation "Bordeaux" (inside the region Bordeaux).
 // The choices offered follow the place's country; any other country gets the general set.
 export const DESIGNATIONS = {
   france: ["AOC", "AOP", "IGP", "Vin de France"],
@@ -157,7 +159,7 @@ export const KNOWN_DESIGNATIONS = {
   },
   france: {
     AOC: [
-      // regions used for the generic wine of the same name
+      // the generic appellations named like their region: they apply only when the wine's APPELLATION is this name, never to the region
       "Alsace", "Beaujolais", "Bordeaux", "Champagne",
       // Bordeaux
       "Bordeaux Supérieur", "Côtes de Bordeaux", "Francs Côtes de Bordeaux", "Fronsac", "Haut-Médoc", "Margaux", "Pauillac", "Pessac-Léognan", "Pomerol",
@@ -215,7 +217,8 @@ export const KNOWN_DESIGNATIONS = {
   greece: { PDO: ["Archanes"] },
 };
 KNOWN_DESIGNATIONS["united states"] = KNOWN_DESIGNATIONS.usa;
-// The designation the rule list gives a place: its most specific part that is listed (the appellation, else the region). null when none is.
+// The designation the rule list gives a place: only its appellation decides (never the region: a region holds wines of different designations).
+// null when the place has no appellation or it is not listed.
 let KNOWN = KNOWN_DESIGNATIONS;
 // Replaces the built-in lists with the database's (only rows in use). broad: { country: [names] }; designations: { country: { designation: [names] } }.
 // An empty or missing list keeps the built-in one, so the app works before the update is run and offline.
@@ -226,10 +229,9 @@ export function setPlaceLists({ broad, designations } = {}) {
 export function ruleDesignation(place) {
   const list = KNOWN[fold((place && place.country) || "")];
   if (!list) return null;
-  for (const name of [place.appellation, place.region].map((x) => splitDesignation(x).name).filter(Boolean)) {
-    for (const [d, names] of Object.entries(list)) if (names.some((n) => key(n) === key(name))) return { designation: d, name };
-    return null;   // the most specific part decides: a region's designation never stands in for an unlisted appellation inside it
-  }
+  const name = splitDesignation(place.appellation).name;
+  if (!name) return null;
+  for (const [d, names] of Object.entries(list)) if (names.some((n) => key(n) === key(name))) return { designation: d, name };
   return null;
 }
 export const designationChoices = (country) => DESIGNATIONS[fold(country)] || GENERAL;
@@ -249,12 +251,23 @@ export function designationFromText(text) {
 }
 // The place a wine will point at, once saving has created what is missing: the existing area, or null for one still to be made.
 const targetArea = (areas, place) => { const p = planPlace(areas, place); return p.error || p.creates.length ? null : (areas.find((a) => a.id === p.areaId) || null); };
+// The level of that place ("appellation", "region", "country"), or "" with no place. A designation is only ever kept on an appellation.
+export function targetLevel(areas, place) {
+  const p = planPlace(areas, place);
+  if (p.error) return "";
+  if (p.creates.length) return p.creates[p.creates.length - 1].level;
+  const a = areas.find((x) => x.id === p.areaId);
+  return a ? String(a.level) : "";
+}
 // What saving a designation would do for this place:
 //   { existing }       the place already has this designation (or has one and none was picked): nothing to write
 //   { set }            write it (on a place still to be created, or one with none yet)
 //   { conflict }       the place already has a DIFFERENT one: nothing is written; a place's designation is changed for every wine, never from one wine's form
+//   { regionOnly }     the wine names a region or a country, not an appellation: nothing is written (a region holds wines of different designations)
 //   {}                 no place, or nothing picked
 export function designationPlan(areas, place, chosen) {
+  const level = targetLevel(areas, place);
+  if (level === "region" || level === "country") return { regionOnly: true };
   const a = targetArea(areas, place), have = (a && a.classification) || "";
   const want = designationChoices(place.country).length ? String(chosen || "").trim() : "";   // a country with no place designations (Germany) never gets one
   if (!a && planPlace(areas, place).error) return {};
@@ -264,7 +277,7 @@ export function designationPlan(areas, place, chosen) {
   return want ? { set: want } : {};
 }
 // The designation a place already has ("" for none or a place still to be created).
-export const placeDesignation = (areas, place) => { const a = targetArea(areas, place); return (a && a.classification) || ""; };
+export const placeDesignation = (areas, place) => { const a = targetArea(areas, place); return a && String(a.level) === "appellation" ? (a.classification || "") : ""; };
 
 // Creates what is missing (a place an editor adds is verified straight away, so players see it) and returns the id the wine should point at.
 // opts.classification: the designation to write on the most specific place created (savePlaceDesignation in data.js fills an existing place).
@@ -276,7 +289,7 @@ export async function savePlace(sb, areas, place, opts = {}) {
   for (const [i, c] of plan.creates.entries()) {
     const parent_id = c.parent == null ? null : typeof c.parent === "string" ? c.parent : made[c.parent.index];
     const row = { name: c.name, level: c.level, parent_id, status: "verified" };
-    if (opts.classification && i === plan.creates.length - 1 && c.level !== "country") row.classification = opts.classification;
+    if (opts.classification && i === plan.creates.length - 1 && c.level === "appellation") row.classification = opts.classification;
     const { data, error } = await sb.from("geo_areas").insert(row).select("id").single();
     if (error) throw new Error(`Could not add the ${c.level} ${c.name}: ${error.message || error}`);
     made.push(data.id);

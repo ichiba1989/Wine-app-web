@@ -6,11 +6,11 @@
 // so it joins the venue's deck as soon as it is published. The queue keeps one country, region and producer together.
 // The place is chosen by searching the place list; a place that is not in it yet is typed in and created when the wine is added (geo.js savePlace).
 // Everything fits on one phone screen. Editor writes are online only. The rules are in venue.js (pure); this file draws the screen and handles the taps.
-import { esc, WINE_STYLES } from "./logic.js?v=17";
-import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf, placeLookalikes, linkSummary, rowTitle } from "./venue.js?v=15";
-import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=32";
-import { placeFromArea, savePlace, designationPlan, broadPlace } from "./geo.js?v=8";
-import * as db from "./data.js?v=45";
+import { esc, WINE_STYLES } from "./logic.js?v=18";
+import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf, placeLookalikes, linkSummary, rowTitle } from "./venue.js?v=17";
+import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=33";
+import { placeFromArea, savePlace, designationPlan, broadPlace } from "./geo.js?v=9";
+import * as db from "./data.js?v=46";
 import { caseKey, lookalikes } from "./text.js?v=3";
 
 const fold = caseKey;   // text.js: accents and capitals ignored, punctuation still counts
@@ -25,7 +25,7 @@ export function formFor(row, lists, prep = null) {
     const sp = split ? splitTitle(row.wine_name, split) : { producer: p.producer, wine: p.wine };
     const place = canonPlace(lists.areas, broadPlace(p.place));   // Germany and Austria: only the broad wine region (geo.js)
     return {
-      ...base, ...desigFor(lists, place, row.wine_name), split, producer: sp.producer, wine: wineNameOf(p.wine || sp.wine, { grapes: p.grapes, place: { ...p.place, ...place } }), style: p.style, styleWhy: p.styleWhy, place, placeWhy: p.placeWhy,
+      ...base, ...desigFor(lists, place, row.wine_name), split, producer: sp.producer, wine: wineNameOf(p.wine || sp.wine, { grapes: p.grapes, place: { ...p.place, ...place } }), style: p.style, styleWhy: p.styleWhy, place, placeWhy: p.placeWhy, placeSource: p.placeSource || "", placeNote: p.placeNote || "",
       grapes: p.grapes.join(", "), notWine: p.notWine, knownProducer: lists.producers.some((x) => fold(x.name) === fold(sp.producer)),
     };
   }
@@ -70,9 +70,12 @@ export function producerLookHtml(f, producers) {
 export function placeNowHtml(f, areas) {
   const text = placeText(f.place), plan = placePlan(areas, f.place);
   const looks = placeLookalikes(areas, f.place).filter((x) => !kept(f, x.field, x.typed)).map((x) => lookHtml(x.field, x.names)).join("");
-  const why = f.placeWhy && text ? ` <span class="muted" title="Suggested from ${esc(f.placeWhy)}">· suggested</span>` : "";   // the reason is in the tooltip, so the line stays short
+  // A place looked up on the web links to its source (an editor checks it); otherwise the reason is in the tooltip, so the line stays short.
+  const why = !f.placeSource ? (f.placeWhy && text ? ` <span class="muted" title="Suggested from ${esc(f.placeWhy)}">· suggested</span>` : "")
+    : ` <a class="small" href="${esc(f.placeSource)}" target="_blank" rel="noopener noreferrer">· found online</a>`;
+  const said = f.placeNote ? `<br><span class="muted small">${esc(f.placeNote)}</span>` : "";
   const note = plan.error ? `<span class="err">${esc(plan.error)}</span>` : plan.creates.length ? `<span class="vrnew">New: ${esc(plan.creates.join(", "))}</span>` : "";   // short, so the form stays on one screen
-  return `${text ? `<b>${esc(text)}</b>` : `<span class="muted">No place chosen</span>`}${why}${note ? `<br>${note}` : ""}${looks}`;
+  return `${text ? `<b>${esc(text)}</b>` : `<span class="muted">No place chosen</span>`}${why}${said}${note ? `<br>${note}` : ""}${looks}`;
 }
 export function hitsHtml(f, options) {
   if (!f.q.trim()) return "";
@@ -185,7 +188,7 @@ export function createVenueReview(ctx) {
   async function load() {
     R.loading = true; R.error = "";
     // The prepared suggestions are a large file, read only here; without them the app's own suggestions are used.
-    const prep = import("./vwmprep.js?v=1").then((m) => prepIndex(m.PREP)).catch(() => null);
+    const prep = import("./vwmprep.js?v=2").then((m) => prepIndex(m.PREP)).catch(() => null);
     try { await loadLists(); R.prep = await prep; }
     catch (e) { R.error = "Could not load the producer, grape and place lists: " + (e.message || e); }
     R.loading = false; draw();
@@ -241,7 +244,7 @@ export function createVenueReview(ctx) {
     else if (action === "links") await runLinks(a);
     else if (action === "split" && f) { f.split = Number(a) === f.split ? 0 : Number(a); const sp = splitTitle(f.title, f.split); f.producer = sp.producer; f.wine = nameFor(f, sp.wine); draw(); }
     else if (action === "style" && f) { f.style = a; f.styleWhy = ""; draw(); }
-    else if (action === "place" && f) { f.place = broadPlace(placeFromArea(R.lists.areas, a)); refreshDesig(f); f.wine = nameFor(f, f.wine); f.placeWhy = ""; f.q = ""; f.typing = false; draw(); }   // the chosen place's words leave the name
+    else if (action === "place" && f) { f.place = broadPlace(placeFromArea(R.lists.areas, a)); refreshDesig(f); f.wine = nameFor(f, f.wine); f.placeWhy = ""; f.placeSource = ""; f.placeNote = ""; f.q = ""; f.typing = false; draw(); }   // the chosen place's words leave the name
     else if (action === "type" && f) {
       f.typing = !f.typing;
       if (f.typing && f.q.trim() && !placeText(f.place)) f.place = { country: "", region: "", appellation: f.q.trim() };   // start from what was searched
@@ -261,7 +264,7 @@ export function createVenueReview(ctx) {
     const t = ev.target;
     if (!t || !t.dataset || !R.form || !root || !root.contains(t)) return;
     if (t.dataset.vrQ !== undefined) { R.form.q = t.value; drawHits(); return; }
-    if (t.dataset.vrP !== undefined) { R.form.place = { ...R.form.place, [t.dataset.vrP]: t.value }; R.form.placeWhy = ""; drawPlace(); return; }
+    if (t.dataset.vrP !== undefined) { R.form.place = { ...R.form.place, [t.dataset.vrP]: t.value }; R.form.placeWhy = ""; R.form.placeSource = ""; R.form.placeNote = ""; drawPlace(); return; }
     if (t.dataset.vrF === undefined) return;
     R.form[t.dataset.vrF] = t.value;
     if (t.dataset.vrF === "producer") { const el = document.getElementById("vrProdLook"); if (el) el.innerHTML = producerLookHtml(R.form, R.lists.producers); }

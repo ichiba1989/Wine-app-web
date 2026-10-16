@@ -6,7 +6,7 @@
 // The list is kept in the database (venue_wines, docs/venue_decks.sql): the owner uploads the venue's file and adds or removes wines by hand on the Owner page.
 // Pure: no browser, no network. The file reading itself is done by importer.js, loaded on the Owner page.
 import { grapeFor } from "./rules.js?v=6";
-import { planPlace } from "./geo.js?v=8";
+import { planPlace } from "./geo.js?v=9";
 import { duplicateGroups } from "./catalog.js?v=6";
 import { plainKey, matchKey, caseKey, lookalikes } from "./text.js?v=3";
 
@@ -253,11 +253,20 @@ export function prepIndex(prep) {
   const m = new Map();
   (prep || []).forEach((r) => m.set(norm(r[0]), {
     producer: r[1] || "", wine: r[2] || "", style: r[3] || "", place: { appellation: r[4] || "", region: r[5] || "", country: r[6] || "" },
-    grapes: r[7] ? String(r[7]).split("|") : [], notWine: !!r[8], styleWhy: r[9] ? `${r[9]} in the title` : "", placeWhy: placeWhyOf(r[10]),
+    grapes: r[7] ? String(r[7]).split("|") : [], notWine: !!r[8], styleWhy: r[9] ? `${r[9]} in the title` : "", ...placeWhyOf(r[10]),
   }));
   return m;
 }
-const placeWhyOf = (w) => (!w ? "" : w === "producer" ? "where the producer is" : w === "shop category" ? "the shop's category" : `"${w}" in the title`);
+// Why the place was suggested. "research|<address>|<note>": looked up on the web on 2026-10-16 (a source that states it), with a note when
+// something was left out on purpose; "research|label|<note>": the designation printed in the shop's title.
+function placeWhyOf(w) {
+  if (!w) return { placeWhy: "" };
+  if (String(w).startsWith("research|")) {
+    const [, src, note] = String(w).split("|");
+    return /^https?:\/\//.test(src || "") ? { placeWhy: "a web source (looked up 2026-10-16)", placeSource: src, placeNote: note || "" } : { placeWhy: note || "the shop's title", placeNote: note || "" };
+  }
+  return { placeWhy: w === "producer" ? "where the producer is" : w === "shop category" ? "the shop's category" : `"${w}" in the title` };
+}
 export const prepOf = (index, title) => (index && index.get(norm(title))) || null;
 // Place names compared loosely: accents, case and punctuation ignored, and "St." read as "Saint" ("St.-Julien" = "Saint-Julien").
 const placeKey = matchKey;   // text.js: also reads St./Sta. as Saint/Santa (search and the wine-name rule only; never to rename)
@@ -316,24 +325,35 @@ export function searchPlaces(options, q, limit = 8) {
 // and grapes (a catalog wine's name can be empty; adding one reuses an existing wine only when those all agree, data.js addVenueCatalogWine).
 const PLACE_TERMS = ["doc", "docg", "doca", "docq", "aoc", "aop", "ac", "do", "dop", "igt", "igp", "ava", "dac"];   // VDP and QbA are not place terms: "VDP.Grosse Lage" stays whole
 const JOINERS = new Set(["de", "di", "du", "des", "del", "della", "dei", "da", "la", "le", "les", "el", "of", "from", "and", "et", "e", "y", "und"]);
+// Wine categories named after a country ("Vin de France") are kept whole: they are the wine's category, not its place, and are never cut down to "Vin".
+const CATEGORIES = ["vin de france", "vino d italia", "vino de espana", "vinho de portugal", "wein aus deutschland"];
 export function wineNameOf(text, { grapes = [], place = {} } = {}) {
   let words = String(text || "").trim().split(/\s+/).filter(Boolean);
   const placeNames = [place.appellation, place.region, place.country].map((x) => String(x || "").trim()).filter(Boolean);
   const phrases = [...(grapes || []), ...placeNames].map((x) => placeKey(x)).filter(Boolean).sort((a, b) => b.length - a.length);
-  let placeOut = false;
+  // Words that belong to a category name are never taken out.
+  let keep = new Set();
+  for (let i = 0; i < words.length; i++) for (let j = i + 2; j <= Math.min(words.length, i + 4); j++) if (CATEGORIES.includes(placeKey(words.slice(i, j).join(" ")))) for (let k = i; k < j; k++) keep.add(k);
+  const isJoiner = (w) => JOINERS.has(norm(w)) || !norm(w);
+  let placeOut = false, cutStart = false, cutEnd = false;
   for (const ph of phrases) {
     for (let i = 0; i < words.length; i++) {
       for (let j = i + 1; j <= Math.min(words.length, i + 6); j++) {
-        if (placeKey(words.slice(i, j).join(" ")) === ph) {
+        if (placeKey(words.slice(i, j).join(" ")) === ph && ![...Array(j - i).keys()].some((k) => keep.has(i + k))) {
           if (placeNames.some((n) => placeKey(n) === ph)) placeOut = true;
-          words = [...words.slice(0, i), ...words.slice(j)]; i--; break;
+          if (words.slice(0, i).every(isJoiner)) cutStart = true;   // only joiners are left before it: they go too ("di" in "di Barolo X")
+          if (words.slice(j).every(isJoiner)) cutEnd = true;
+          words = [...words.slice(0, i), ...words.slice(j)];
+          keep = new Set([...keep].map((k) => (k >= j ? k - (j - i) : k)));
+          i--; break;
         }
       }
     }
   }
-  if (placeOut) words = words.filter((w) => !PLACE_TERMS.includes(norm(w)));
-  while (words.length && (JOINERS.has(norm(words[0])) || !norm(words[0]))) words.shift();
-  while (words.length && (JOINERS.has(norm(words[words.length - 1])) || !norm(words[words.length - 1]))) words.pop();
+  if (placeOut) { const kept = words.filter((w, k) => keep.has(k) || !PLACE_TERMS.includes(norm(w))); words = kept; }
+  // A joining word is trimmed only where a word next to it was taken out; "Les Iles Feray" keeps its "Les".
+  while (cutStart && words.length && isJoiner(words[0])) words.shift();
+  while (cutEnd && words.length && isJoiner(words[words.length - 1])) words.pop();
   return words.join(" ");
 }
 // How many title words make up the producer's name (for the word chips).

@@ -2,6 +2,7 @@
 -- Run once in the Supabase SQL editor (owner, 2026-10-15); safe to run again. It only fills EMPTY designations: a place that already has one is never changed.
 -- The list was prepared 2026-10-15 and must be checked by an editor (docs/TEST_BEFORE_TESTERS.md). It is generated from geo.js: when the list changes,
 -- regenerate this file rather than editing it by hand, so the app and the database follow the same rule.
+-- Only APPELLATIONS are filled (owner, 2026-10-16): a region holds wines of different designations (a Vin de France from Bordeaux).
 -- A name is matched within its country (accents and capitals as spelled in the place list; "USA" and "United States" both count).
 
 with recursive up as (
@@ -304,7 +305,7 @@ update geo_areas a
 set classification = r.designation
 from rule r, country_of c
 where c.start = a.id
-  and a.level::text <> 'country'
+  and a.level::text = 'appellation'   -- a designation belongs to an appellation, never to a region (docs/designations_appellation_only.sql)
   and (a.classification is null or btrim(a.classification) = '')
   and lower(a.name) = lower(r.name)
   and (lower(c.country) = lower(r.country) or (r.country = 'USA' and lower(c.country) in ('usa', 'united states')))
