@@ -608,10 +608,69 @@
   .oth { border: 0; background: transparent; font: inherit; font-weight: 600; color: var(--ink); padding: 0; text-align: left; }
   .osq { display: inline-block; margin: 2px 6px 2px 0; padding: 2px 8px; border-radius: 999px; background: #e4e9e1; font-size: calc(12px * min(var(--ts), 1.2)); }
   .osq.none { background: #f3d6d6; color: #8a1f1f; }
+  /* ---- the Atlas (atlasview.js): a full screen under the rating sheet (.overlay is above it, so a wine opened from the map shows on top) */
+  #atlas[hidden] { display: none; }
+  body.atlasopen { overflow: hidden; }
+  .atlas { position: fixed; inset: 0; z-index: 25; background: var(--bg); display: flex; flex-direction: column; max-width: 720px; margin: 0 auto; }
+  .atop { display: flex; align-items: center; gap: 10px; padding: 10px 16px 0; }
+  .atop .xbtn { flex: 0 0 auto; }
+  .asearch { flex: 1 1 auto; min-width: 0; margin: 0; }
+  .afind { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 16px; }
+  .afind:empty { display: none; }
+  .afind .chip { flex: 0 0 auto; font-size: calc(12px * var(--ts)); padding: 6px 10px; }
+  .achips { flex-wrap: nowrap !important; overflow-x: auto; padding: 0 16px; margin-top: 6px; scrollbar-width: none; }
+  .achips .chip { flex: 0 0 auto; font-size: calc(12px * var(--ts)); padding: 6px 10px; }
+  .astage { position: relative; flex: 1 1 auto; min-height: 0; margin-top: 8px; overflow: hidden; touch-action: none; background: #d6e4ea; user-select: none; -webkit-user-select: none; }
+  .astage svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .abase path { vector-effect: non-scaling-stroke; }
+  .abase .aland path { stroke-width: .8; }
+  .abase .aland path.wine { stroke-width: 1.1; }
+  .abase .aprov path { stroke-width: .6; stroke-dasharray: 3 2; }
+  .abase .aareas path { stroke-width: .9; }
+  .abase .asel { stroke-width: 2.2; }
+  .abase[data-level="world"] .aprov, .abase[data-level="world"] .aareas, .abase[data-level="country"] .aareas { display: none; }
+  .aover { pointer-events: none; }
+  .aover.moving { opacity: 0; }
+  .aover [data-atlas] { pointer-events: auto; cursor: pointer; }
+  .aover .ahit { fill: transparent; }
+  .aover .adot { fill: #5f7a66; stroke: #fff; stroke-width: 1.4; }
+  .aover .adot.untried { fill: #fff; stroke: var(--wine); stroke-width: 2; }
+  .aover text { paint-order: stroke; stroke: #f6f3e8; stroke-width: 3px; stroke-linejoin: round; fill: #1c2a24; }
+  .aover text.lc { font-weight: 700; letter-spacing: .04em; text-transform: uppercase; fill: #4b5a50; }
+  .aover text.lc.dim { font-weight: 500; fill: #8a958c; }
+  .aover text.la { font-style: italic; fill: #6b2438; }
+  .aover text.lp.reg { font-weight: 600; }
+  .aover text.lp.strong { font-weight: 700; }
+  .aover text.lv { fill: #5f6b63; }
+  .actl { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .actl button { width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--line); background: #fff; font-size: calc(20px * var(--ts)); line-height: 1; box-shadow: 0 1px 4px #0002; }
+  .ascale { position: absolute; left: 12px; bottom: 10px; display: flex; flex-direction: column; gap: 2px; font-size: calc(11px * var(--ts)); color: #33443a; pointer-events: none; }
+  .ascale i { display: block; height: 6px; border: 1.5px solid #33443a; border-top: 0; }
+  .asrc { position: absolute; right: 8px; bottom: 6px; font-size: calc(9.5px * var(--ts)); color: #5a6a5f; background: #ffffffb0; padding: 1px 6px; border-radius: 6px; }
+  .asrc a { color: inherit; }
+  .anote { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); background: #fffffff0; border-radius: 999px; padding: 4px 12px; font-size: calc(12px * var(--ts)); color: var(--muted); pointer-events: none; max-width: 70%; text-align: center; }
+  .anote:empty { display: none; }
+  .apage { position: absolute; left: 0; right: 0; bottom: 0; max-height: 50%; overflow-y: auto; background: var(--panel); border-radius: 20px 20px 0 0; padding: 4px 16px 20px; box-shadow: 0 -6px 24px #0003; }
+  .apage[hidden] { display: none; }
+  .apagehead { position: sticky; top: 0; background: var(--panel); display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; padding: 12px 0 6px; }
+  .apagehead .pill { vertical-align: middle; font-size: calc(11px * var(--ts)); }
+  .alink { border: 0; background: none; padding: 0; color: var(--slate); text-decoration: underline; font: inherit; }
+  .asec { margin-top: 12px; }
+  .asect { font-weight: 600; font-size: calc(13px * var(--ts)); margin-bottom: 4px; }
+  .asec .chip { flex: 0 0 auto; display: inline-block; margin: 0 4px 4px 0; font-size: calc(12px * var(--ts)); padding: 5px 10px; }
+  .asec .chip.still { background: #e9eee7; }
+  .apage .jrow { justify-content: flex-start; }
+  .apage .jrow .jl { flex: 1 1 auto; min-width: 0; }
+  .apage .jrow.still { cursor: default; }
+  .apage .btn { margin-top: 14px; }
+  .adotc { flex: 0 0 auto; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #0002; }
+  .atlasbtn { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; border: 1px solid var(--line); background: #fff; border-radius: 14px; padding: 10px 14px; margin-bottom: 10px; font-size: calc(16px * var(--ts)); }
+  .zatlas { display: block; margin: 8px auto 0; }
 </style>
 </head>
 <body>
 <div id="app"></div>
+<div id="atlas" hidden></div>
 <div id="overlay"></div>
 <div id="confirm"></div>
 <div id="zoom"></div>
@@ -638,6 +697,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=103" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=104" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>

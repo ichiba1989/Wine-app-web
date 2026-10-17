@@ -165,7 +165,8 @@ function controlsHtml(L) {
   const focus = focusList.length ? `<select class="sortsel" data-learn-focus aria-label="Focus the round on one topic"><option value="">Focus: anything</option>${focusList.map((o) => `<option value="${esc(o.ref)}"${s.focus === o.ref ? " selected" : ""}>${esc(o.name)} (${kindWord[o.kind] || o.kind}, ${o.count})</option>`).join("")}</select>` : "";
   // A round opened from a game keeps to that game's topic until "Show all" (every kind of player sees this, not only Enthusiast and Professional).
   const only = s.only ? `<div class="chips left lonly"><span class="chip on">Topic: ${esc(s.onlyLabel || "from the game")}</span><button class="chip" data-learn="unfocus">Show all</button></div>` : "";
-  return `<div class="modes">${tiles}</div>${only}<div class="chips" role="group" aria-label="Difficulty">${diffs}</div>${focus}${extra}`;
+  const atlas = `<button class="atlasbtn" data-action="atlas:open"><span class="serif">Atlas</span><span class="muted small">Explore wine places on the map</span></button>`;   // app.js opens it (atlasview.js)
+  return `${atlas}<div class="modes">${tiles}</div>${only}<div class="chips" role="group" aria-label="Difficulty">${diffs}</div>${focus}${extra}`;
 }
 
 function questionHtml(L, run, q) {

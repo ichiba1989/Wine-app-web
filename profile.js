@@ -2,7 +2,7 @@
 // The rules at the top are pure (no browser, no network) so they can be tested on their own.
 // The controller at the bottom loads what it needs from Supabase and draws the tab.
 import { DIMS, dimRange, VERDICTS, FLAGS, esc, styleLabel, verdictShort, entryCard, entryName } from "./logic.js?v=20";
-import { marksHtml } from "./views.js?v=43";
+import { marksHtml } from "./views.js?v=44";
 import { accountCardHtml } from "./account.js?v=18";
 import { feedbackCardHtml } from "./feedback.js?v=12";
 import { worldOf } from "./thisorthat.js?v=4";
@@ -352,7 +352,7 @@ function exploredHtml(P) {
   return `<h2 class="serif ph">What you've explored</h2>
     ${card("Your swipes", `<p class="ptext">${x.liked} liked, ${x.disliked} disliked, ${x.unknown} didn't know, ${x.had} had this bottle</p>${x.recognized ? `<p class="ptext">${x.recognized} recognized (earlier answers)</p>` : ""}`)}
     ${card("Wines you've had", verdicts)}
-    ${card("Countries", `<p class="ptext">${x.countries.length ? x.countries.map(flagName).join(", ") : "None yet"}</p>${x.notYet.length ? `<div class="muted small" style="margin-top:10px">Not yet explored</div><p class="ptext">${x.notYet.map(flagName).join(", ")}</p>` : ""}`)}
+    ${card("Countries", `<p class="ptext">${x.countries.length ? x.countries.map(flagName).join(", ") : "None yet"}</p>${x.notYet.length ? `<div class="muted small" style="margin-top:10px">Not yet explored</div><p class="ptext">${x.notYet.map(flagName).join(", ")}</p>` : ""}<button class="link small" data-action="atlas:open:journal">See them on the map</button>`)}
     ${card("Grapes you've had", `<p class="ptext">${x.grapes.length ? esc(x.grapes.join(", ")) : "None yet"}</p>`)}`;
 }
 
