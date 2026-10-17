@@ -12,7 +12,7 @@ import { SW_TABS, SW_KINDS, SW_GROUPS, SW_SORTS, entriesFor, tabCounts, filtersO
 import { infoLine, entryInfoLine } from "./wineline.js?v=4";
 import { flavorsForCard, placeFor } from "./flavors.js?v=4";
 import { bottleSilhouette, flavorRowHtml, tintFor } from "./visuals.js?v=5";
-import { countryMapSvg, zoomPlan } from "./maps.js?v=6";
+import { countryMapSvg, zoomPlan } from "./maps.js?v=7";
 import { imageSearchUrl } from "./winelinks.js?v=4";
 
 // The grape and place inputs shared by the two forms. The form keeps one grape text and one place text; these show them as

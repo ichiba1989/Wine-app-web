@@ -1,41 +1,48 @@
 // The Atlas screen: the map the player moves around in (one finger pans, two fingers pinch, a double-tap or + zooms in, - zooms out, the house goes
 // back to the world), their wines pinned on it, and a page for each place. Opened from Learn, the Journal, a journal entry, the card's map and Profile.
-// Loaded on first use (app.js loadAtlasModule) with its map data, so it costs nothing at start-up. The rules are in atlas.js; this file draws and listens.
-// While a finger moves only the map's viewBox changes; pins and labels are drawn again when the finger lifts.
-import * as A from "./atlas.js?v=3";
-import * as DATA from "./atlasdata.js?v=2";
+// The same screen is the Discover card's map ("card" mode): a box over the card with the wine's place and its outline, the same moves within
+// tighter limits (atlas.js CARD: a continent down to about 60 km), no pins or pages, and "Open in the Atlas". Each mode is handed its map data:
+// atlasdata.js for the Atlas, the lighter atlaslite.js for the card (app.js loads them on first use, so neither costs anything at start-up).
+// The rules are in atlas.js; this file draws and listens. While a finger moves only the map's viewBox changes; pins and labels are drawn again when
+// the finger lifts.
+import * as A from "./atlas.js?v=4";
 import { esc } from "./logic.js?v=21";
 
 const SEA = "#d6e4ea", LAND = "#efeadb", WINE_LAND = "#f6f1e1", BORDER = "#9aa893", PROVINCE = "#c4bfa8", AREA = "#7b2d43";
 const STYLE_WORD = { red: "Red", white: "White", sparkling: "Sparkling", rose: "Rosé", fortified: "Fortified" };
 const KIND_WORD = { country: "Country", region: "Region", appellation: "Wine area" };
-let SHAPES = null;   // built once, the first time the Atlas opens
+const SHAPES_OF = new Map();   // the shapes worked out once for each data file
 // A French AOC wider than about 60 km (Bordeaux, Crémant de Bourgogne, Languedoc ...) would blanket the map with its scattered vineyard pieces.
 const wide = (a) => Math.max(a.bbox[2] - a.bbox[0], a.bbox[3] - a.bbox[1]) > 0.8;
 
 // ctx: { cards(), pool(), journal(), states(), cardsById(), nameOf(card), entryName(entry), suggest(place) -> [{ card, reason }],
-//        quizFor(topics) -> number of questions, learnAbout(topics, label), textScale() }
+//        quizFor(topics) -> number of questions, learnAbout(topics, label), textScale(), close(), openFull(placeKey) (card mode) }
 export function createAtlas(ctx) {
-  let root = null, st = null;
+  let root = null, st = null, SHAPES = null;
 
   // ---------------------------------------------------------------- opening and closing
-  // opts: { show: "journal" | "liked" | "catalog" | "untried", place: key, fit: "pins" }
+  // opts: { data: the map data module, show: "journal" | "liked" | "catalog" | "untried", place: key, fit: "pins",
+  //         card: { place: key, color } for the Discover card's map }
   function open(el, opts = {}) {
-    if (!SHAPES) SHAPES = A.buildShapes(DATA);
+    if (!SHAPES_OF.has(opts.data)) SHAPES_OF.set(opts.data, A.buildShapes(opts.data));
+    SHAPES = SHAPES_OF.get(opts.data);
     if (root) close();   // opened again (Show on map from a sheet over the map): start afresh
     root = el;
-    st = { show: opts.show || "journal", style: "", view: A.WORLD_VIEW, page: null, search: "", pointers: new Map(), gesture: null, lastTap: 0 };
-    root.innerHTML = shellHtml();
+    const card = opts.card ? places().find((p) => p.key === opts.card.place) : null;
+    st = { show: opts.show || "journal", style: "", view: A.WORLD_VIEW, page: null, search: "", pointers: new Map(), gesture: null, lastTap: 0,
+      card: card ? { place: card, color: opts.card.color || AREA } : null, lim: card ? A.CARD : A.FULL, openedAt: Date.now() };
+    root.innerHTML = st.card ? cardShellHtml() : shellHtml();
     root.hidden = false;
     document.body.classList.add("atlasopen");
     bind();
     const aspect = aspectOf();
-    st.view = A.clampView(A.WORLD_VIEW, aspect);
+    st.view = A.clampView(A.WORLD_VIEW, aspect, st.lim);
     drawBase();
     const place = opts.place && places().find((p) => p.key === opts.place);
-    if (place) { flyTo(place, false); openPage({ kind: "place", key: place.key }); }
+    if (st.card) cardHome();
+    else if (place) { flyTo(place, false); openPage({ kind: "place", key: place.key }); }
     else if (opts.fit === "pins") fitPins();
-    else st.view = A.fitView([-125, -45, 150, 55], aspect, 0.02, 3);
+    else st.view = A.fitView([-125, -45, 150, 55], aspect, 0.02, 3, st.lim);
     setViewBox(); drawOver();
     const x = root.querySelector("[data-atlas=close]"); if (x) x.focus();
   }
@@ -53,6 +60,7 @@ export function createAtlas(ctx) {
   let COUNTRIES_OF = { cards: null, set: new Set() };
   const catalogCountries = () => { const c = ctx.cards(); if (COUNTRIES_OF.cards !== c) COUNTRIES_OF = { cards: c, set: new Set(c.map((x) => x.country).filter(Boolean)) }; return COUNTRIES_OF.set; };
   const pinSet = () => {
+    if (st.card) return { pins: [{ id: "card", place: st.card.place, color: st.card.color }], unplaced: 0 };   // the card's map shows only its wine
     const show = st.show === "untried" ? "journal" : st.show;
     return A.pinsOf({ show, style: st.style, journal: ctx.journal(), states: ctx.states(), cards: ctx.pool(), cardsById: ctx.cardsById(), nameOf: ctx.nameOf, entryName: ctx.entryName });
   };
@@ -82,6 +90,35 @@ export function createAtlas(ctx) {
       </div>
       <div class="apage" data-atlas-page hidden></div>
     </div>`;
+  }
+  // The card's map: a box over the Discover card, the wine's place named at the top.
+  function cardShellHtml() {
+    const p = st.card.place, area = A.areaFor(SHAPES, p);
+    const note = area ? A.AREA_SOURCE[area.source] || "" : "No outline on file: the dot marks roughly where it is.";
+    return `<div class="atlas acard" role="dialog" aria-modal="true" aria-label="Where this wine is from" data-atlas="back">
+      <div class="acardbox">
+        <div class="atop"><div class="acardt"><div class="serif big">${esc(p.name)}</div><div class="muted small">${esc(p.kind === "region" ? p.country : [regionOf(p), p.country].filter(Boolean).join(", "))}</div></div>
+          <button class="xbtn" data-atlas="close" aria-label="Close the map">&times;</button></div>
+        <div class="astage" data-atlas-stage>
+          <svg class="abase" data-atlas-base preserveAspectRatio="none" aria-hidden="true"></svg>
+          <svg class="aover" data-atlas-over role="group" aria-label="Places"></svg>
+          <div class="actl">
+            <button data-atlas="zin" aria-label="Zoom in">+</button><button data-atlas="zout" aria-label="Zoom out">&minus;</button><button data-atlas="world" aria-label="Back to this wine's place">&#8962;</button>
+          </div>
+          <div class="ascale" data-atlas-scale></div>
+          <div class="asrc">Map data: Natural Earth, UC Davis AVA project, INAO</div>
+          <div class="anote" data-atlas-note></div>
+        </div>
+        <div class="acardfoot"><span class="muted tiny">${esc(note)}</span><button class="pill dark" data-atlas="full">Open in the Atlas</button></div>
+      </div></div>`;
+  }
+  // The region a place's wines are filed under in the catalog (for the card map's second line), else nothing.
+  const regionOf = (p) => { const f = A.placeFacts(p.key, { places: places(), cards: ctx.cards() }); const r = f && f.chain.find((s) => s.kind === "region"); return r ? r.name : ""; };
+  // The card map's starting view: the wine's outline when there is one, else its place; the outline is marked.
+  function cardHome() {
+    const p = st.card.place, area = A.areaFor(SHAPES, p), aspect = aspectOf();
+    st.view = area ? A.fitView(area.bbox, aspect, 0.8, 4, st.lim) : A.viewAt(p.lon, p.lat, p.kind === "region" ? 40 : 12, aspect, st.lim);   // wide enough to see where in the country it is
+    $("[data-atlas-sel]").setAttribute("d", area ? area.d : "");
   }
   const $ = (sel) => root.querySelector(sel);
   const stageBox = () => { const s = $("[data-atlas-stage]"); return { w: s.clientWidth || 360, h: s.clientHeight || 420 }; };
@@ -169,25 +206,25 @@ export function createAtlas(ctx) {
     // Scale bar and a line on what is shown.
     const sc = A.scaleFor(v, w);
     $("[data-atlas-scale]").innerHTML = `<i style="width:${Math.round(sc.px)}px"></i><span>${sc.km} km</span>`;
-    const note = st.show === "untried" ? "Places you have not had a wine from yet" : pinData.pins.length ? "" : st.show === "journal" ? "No wines from your journal on the map yet" : st.show === "liked" ? "No liked swipes on the map yet" : "No wines to show";
+    const note = st.card ? "" : st.show === "untried" ? "Places you have not had a wine from yet" : pinData.pins.length ? "" : st.show === "journal" ? "No wines from your journal on the map yet" : st.show === "liked" ? "No liked swipes on the map yet" : "No wines to show";
     $("[data-atlas-note]").textContent = note;
   }
 
   // ---------------------------------------------------------------- moving the map
-  function setView(v, redraw = true) { st.view = A.clampView(v, aspectOf()); setViewBox(); if (redraw) drawOver(); }
+  function setView(v, redraw = true) { st.view = A.clampView(v, aspectOf(), st.lim); setViewBox(); if (redraw) drawOver(); }
   function flyTo(place, redraw = true) {
     const area = A.areaFor(SHAPES, place), aspect = aspectOf();
-    const v = area ? A.fitView(area.bbox, aspect, 0.35, 1.2) : A.viewAt(place.lon, place.lat, place.kind === "region" ? 14 : 4, aspect);
+    const v = area ? A.fitView(area.bbox, aspect, 0.35, 1.2, st.lim) : A.viewAt(place.lon, place.lat, place.kind === "region" ? 14 : 4, aspect, st.lim);
     // Leave room for the page sheet, which covers the lower part of the map: the place sits in the upper half.
     setView({ ...v, y: v.y + v.h * 0.25 }, redraw);
   }
   function fitPins() {
     const pins = pinSet().pins;
-    if (!pins.length) { st.view = A.fitView([-125, -45, 150, 55], aspectOf(), 0.02, 3); return; }
+    if (!pins.length) { st.view = A.fitView([-125, -45, 150, 55], aspectOf(), 0.02, 3, st.lim); return; }
     const lons = pins.map((p) => p.place.lon), lats = pins.map((p) => p.place.lat);
-    st.view = A.fitView([Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats)], aspectOf(), 0.25, 6);
+    st.view = A.fitView([Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats)], aspectOf(), 0.25, 6, st.lim);
   }
-  function zoomBy(f, fx = 0.5, fy = 0.5) { setView(A.zoomView(st.view, f, fx, fy, aspectOf())); }
+  function zoomBy(f, fx = 0.5, fy = 0.5) { setView(A.zoomView(st.view, f, fx, fy, aspectOf(), st.lim)); }
 
   // Fingers: one pans, two pinch; a quick second tap zooms in on that point.
   function bind() {
@@ -208,13 +245,13 @@ export function createAtlas(ctx) {
         const d0 = Math.hypot(a0[0] - b0[0], (a0[1] - b0[1]) * aspect), d1 = Math.hypot(a1[0] - b1[0], (a1[1] - b1[1]) * aspect);
         if (d0 > 0.01) {
           const m0 = [(a0[0] + b0[0]) / 2, (a0[1] + b0[1]) / 2], m1 = [(a1[0] + b1[0]) / 2, (a1[1] + b1[1]) / 2];
-          let v = A.zoomView(g.view, d1 / d0, m0[0], m0[1], aspect);
-          v = A.panView(v, m1[0] - m0[0], m1[1] - m0[1], aspect);
+          let v = A.zoomView(g.view, d1 / d0, m0[0], m0[1], aspect, st.lim);
+          v = A.panView(v, m1[0] - m0[0], m1[1] - m0[1], aspect, st.lim);
           st.view = v; g.moved = true;
         }
       } else if (ids.length === 1) {
         const s = g.start.get(ids[0]), p = st.pointers.get(ids[0]), dx = p[0] - s[0], dy = p[1] - s[1];
-        if (g.moved || Math.hypot(dx, dy * aspect) > 0.015) { st.view = A.panView(g.view, dx, dy, aspect); g.moved = true; }
+        if (g.moved || Math.hypot(dx, dy * aspect) > 0.015) { st.view = A.panView(g.view, dx, dy, aspect, st.lim); g.moved = true; }
       }
       if (g.moved) { over.classList.add("moving"); setViewBox(); }
     });
@@ -242,7 +279,7 @@ export function createAtlas(ctx) {
   // Escape closes the page, then the Atlas; + and - zoom (not while typing in the search). A rating sheet opened from the map takes its own keys.
   function onKey(e) {
     if (!st || document.querySelector("#overlay .overlay")) return;
-    if (e.key === "Escape") { e.preventDefault(); if (st.page) closePage(); else ctx.close(); }
+    if (e.key === "Escape") { e.preventDefault(); if (st.page) closePage(); else ctx.close(); }   // the card's map has no page: it closes
     else if (e.target.matches("input, textarea, select")) return;
     else if (e.key === "+" || e.key === "=") zoomBy(2);
     else if (e.key === "-") zoomBy(0.5);
@@ -252,20 +289,29 @@ export function createAtlas(ctx) {
     const t = e.target.closest("[data-atlas]");
     if (!t || !st) return;
     if (Date.now() - (st.movedAt || 0) < 350 && t.closest("[data-atlas-stage]")) return;   // the click that ends a drag is not a tap
+    if (st.card && Date.now() - st.openedAt < 400) return;   // the click that trails the tap which opened the card's map must not close it
     const [a, ...rest] = t.dataset.atlas.split(":"), b = rest.join(":");
+    if (st.card) {   // the card's map: close (the button, or a tap outside the box), zoom, home, or the full Atlas; its places are only to look at
+      if (a === "close" || (a === "back" && e.target === t)) ctx.close();
+      else if (a === "zin") zoomBy(2);
+      else if (a === "zout") zoomBy(0.5);
+      else if (a === "world") { cardHome(); setView(st.view); }
+      else if (a === "full") ctx.openFull(st.card.place.key);
+      return;
+    }
     if (a === "close") ctx.close();
     else if (a === "zin") zoomBy(2);
     else if (a === "zout") zoomBy(0.5);
-    else if (a === "world") setView(A.fitView([-125, -45, 150, 55], aspectOf(), 0.02, 3));
+    else if (a === "world") setView(A.fitView([-125, -45, 150, 55], aspectOf(), 0.02, 3, st.lim));
     else if (a === "show") { st.show = b; refreshChips(); if (b !== "untried") fitPins(); setView(st.view); }
     else if (a === "style") { st.style = st.style === b ? "" : b; refreshChips(); drawOver(); }
     else if (a === "place") { const p = places().find((x) => x.key === b); if (p) { st.search = ""; showFound(); openPage({ kind: "place", key: p.key }); flyTo(p); } }
-    else if (a === "country") { const c = SHAPES.countries.find((x) => x.name === b); if (c) { openPage({ kind: "country", name: b }); setView(A.fitView(c.bbox, aspectOf(), 0.08, 3)); } }
+    else if (a === "country") { const c = SHAPES.countries.find((x) => x.name === b); if (c) { openPage({ kind: "country", name: b }); setView(A.fitView(c.bbox, aspectOf(), 0.08, 3, st.lim)); } }
     else if (a === "cluster") {
       const c = st.clusters[Number(b)]; if (!c) return;
       if (c.groups.length === 1) { openPage({ kind: "place", key: c.groups[0].place.key }); flyTo(c.groups[0].place); return; }
       const lons = c.groups.map((g) => g.place.lon), lats = c.groups.map((g) => g.place.lat);
-      setView(A.fitView([Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats)], aspectOf(), 0.4, A.MIN_W * 2));
+      setView(A.fitView([Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats)], aspectOf(), 0.4, A.MIN_W * 2, st.lim));
     }
     else if (a === "pageclose") closePage();
     else if (a === "learn") { const f = st.page && st.page.facts; if (f) ctx.learnAbout(A.topicsOf(f), f.place.name); }

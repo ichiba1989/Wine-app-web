@@ -11,7 +11,7 @@ import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=26";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=12";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=46";
+  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=47";
 import { createLearn } from "./learn.js?v=18";
 import { setMode } from "./words.js?v=1";
 import { journalCsv, exportName } from "./exportcsv.js?v=8";
@@ -29,7 +29,7 @@ import { setPlaceLists } from "./geo.js?v=9";
 import { setNameAliases } from "./text.js?v=3";
 import { loadPrices, applyPrices, tidyFacts, parsePrice, saveWinePrice } from "./pricing.js?v=4";
 import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=17";
-import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=14";
+import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=15";
 import { applyVisualTables } from "./visualdata.js?v=4";
 import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=11";
 import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=16";
@@ -37,12 +37,13 @@ import { infoLine, entryInfoLine } from "./wineline.js?v=4";
 import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, paintNoteMarks, teachHtml, autoCount } from "./tasting.js?v=16";
 import { gridFromNotes, mergeFromNotes, touched, legendEntry, compileWith } from "./notegrid.js?v=9";
 import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=10";
-import { createProfile } from "./profile.js?v=31";
+import { createProfile } from "./profile.js?v=32";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=19";
 import { createFeedback } from "./feedback.js?v=13";
-import { createEditor } from "./editor.js?v=58";
+import { createEditor } from "./editor.js?v=59";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=16";
 import { gamesHtml } from "./games.js?v=23";
+import { tintFor } from "./visuals.js?v=4";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
 import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=4";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=5";
@@ -54,11 +55,13 @@ import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=3";
 import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
 import { setOffline, setCardLookup } from "./overlay.js?v=1";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
-let OWN = null, DEMO = null, IMP = null, ATL = null;
+let OWN = null, DEMO = null, IMP = null, ATL = null, ATLD = null, ATLL = null;
 const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=40"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=13"));
-const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=18"));
-const loadAtlasModule = async () => (ATL = ATL || await import("./atlasview.js?v=3"));   // the Atlas and its map data (about 290 KB compressed), on first use
+const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=19"));
+const loadAtlasModule = async () => (ATL = ATL || await import("./atlasview.js?v=4"));   // the Atlas screen, on first use
+const loadAtlasData = async () => (ATLD = ATLD || await import("./atlasdata.js?v=2"));   // the Atlas's map data (about 290 KB compressed), when the Atlas opens
+const loadAtlasLite = async () => (ATLL = ATLL || await import("./atlaslite.js?v=1"));   // the card map's lighter data (about 80 KB compressed), when a card's map is tapped
 import { createWineInfo } from "./wineinfo.js?v=38";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
@@ -1967,10 +1970,11 @@ document.addEventListener("pointercancel", () => { pageSwipe = null; });
 let atlas = null, atlasById = { cards: null, map: new Map() };
 async function openAtlas(opts = {}) {
   try {
-    const M = await loadAtlasModule();
+    const [M, D] = await Promise.all([loadAtlasModule(), loadAtlasData()]);
     atlas = atlas || M.createAtlas(atlasCtx());
     if (state.zoom) closeZoom();
-    atlas.open($("#atlas"), opts);
+    closeCardMap();
+    atlas.open($("#atlas"), { ...opts, data: D });
     learn.ensureLoaded().then(() => { if (atlas && atlas.isOpen()) atlas.redraw(); }).catch(() => { /* the page simply has no Learn button */ });
   } catch (e) { console.warn("Atlas", e); setBanner("The map could not be opened. Check the connection and try again."); }
 }
@@ -2008,11 +2012,25 @@ function sheetPlaceKey(sheet) {
   return plan ? plan.place.key : null;
 }
 
-// ---------------------------------------------------------------- the map overlay (zoommap.js)
-function openZoom(wineVintageId) {
+// ---------------------------------------------------------------- the card's map
+// A tap on the card's map opens the Atlas screen in card mode (atlasview.js with the lighter atlaslite.js): the wine's place and outline, moved
+// and zoomed like the Atlas within tighter limits, with "Open in the Atlas". If those files cannot be loaded (offline before they were ever
+// fetched), the older step-through map opens instead (zoommap.js: country, region, vineyard).
+let cardMap = null;
+const closeCardMap = () => { if (cardMap && cardMap.isOpen()) cardMap.close(); };
+async function openZoom(wineVintageId) {
   const card = cardById(wineVintageId), plan = card && zoomPlan(card);
-  if (!plan || state.zoom) return;
+  if (!plan || state.zoom || (cardMap && cardMap.isOpen())) return;
+  try {
+    const [M, D] = await Promise.all([loadAtlasModule(), loadAtlasLite()]);
+    cardMap = cardMap || M.createAtlas({ ...atlasCtx(), close: closeCardMap, openFull: (key) => { closeCardMap(); openAtlas({ place: key }); } });
+    cardMap.open($("#zoom"), { data: D, card: { place: plan.place.key, color: tintFor(visualFor(card).type).pin } });
+  } catch (e) { console.warn("Card map: the simple map instead", e && e.message); openSimpleZoom(card, plan); }
+}
+function openSimpleZoom(card, plan) {
+  if (state.zoom) return;
   const html = zoomHtml(plan, visualFor(card).type, 0);   // built first: if drawing fails, nothing is left half open
+  $("#zoom").hidden = false;
   state.zoom = { plan, step: 0, at: performance.now() };
   $("#zoom").innerHTML = html;
   const x = document.querySelector("[data-zoomclose]"); if (x) x.focus();

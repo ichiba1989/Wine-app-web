@@ -10,7 +10,7 @@
 // Every change is logged by the database.
 import { dimsFor, dimMeta, defaultFor, esc, wineName, placeLine, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel, barDims, choiceDims, styleInfo } from "./logic.js?v=21";
 import * as db from "./data.js?v=51";
-import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=46";
+import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=47";
 import { createReview } from "./review.js?v=29";
 import { createWineInfo, publishSummary } from "./wineinfo.js?v=38";
 import { groupSubmissions, planPromotion, duplicateGroups, rulesFrom } from "./catalog.js?v=7";

@@ -71,28 +71,32 @@ export const AREA_SOURCE = {
 export const MIN_W = 0.4;    // about a village (a few km across)
 export const MAX_W = W;      // the whole world
 export const WORLD_VIEW = { x: 0, y: 120, w: W, h: W };
+// How far the view may zoom: the Atlas goes from the world to a village; the card's map (CARD) from a continent to about 60 km across, which is
+// what its lighter data (atlaslite.js) is drawn for.
+export const FULL = { min: MIN_W, max: MAX_W };
+export const CARD = { min: 2, max: 140 };
 // Keeps the view inside the world and its zoom within the limits. aspect = screen height / width.
-export function clampView(v, aspect = 1) {
-  const w = clamp(v.w, MIN_W, MAX_W), h = w * aspect, cx = v.x + v.w / 2, cy = v.y + v.h / 2;
+export function clampView(v, aspect = 1, lim = FULL) {
+  const w = clamp(v.w, lim.min, lim.max), h = w * aspect, cx = v.x + v.w / 2, cy = v.y + v.h / 2;
   const x = clamp(cx - w / 2, -w / 2, W - w / 2), y = clamp(cy - h / 2, -h / 2, W - h / 2);
   return { x, y, w, h };
 }
 // Zoom by f (2 = twice as close) keeping the point at screen fraction (fx, fy) where it is.
-export function zoomView(v, f, fx = 0.5, fy = 0.5, aspect = 1) {
-  const w = clamp(v.w / f, MIN_W, MAX_W), k = w / v.w, px = v.x + fx * v.w, py = v.y + fy * v.h;
-  return clampView({ x: px - fx * w, y: py - fy * v.h * k, w, h: v.h * k }, aspect);
+export function zoomView(v, f, fx = 0.5, fy = 0.5, aspect = 1, lim = FULL) {
+  const w = clamp(v.w / f, lim.min, lim.max), k = w / v.w, px = v.x + fx * v.w, py = v.y + fy * v.h;
+  return clampView({ x: px - fx * w, y: py - fy * v.h * k, w, h: v.h * k }, aspect, lim);
 }
 // Move by a fraction of the screen (dragging a finger right by half the screen: dx = 0.5).
-export const panView = (v, dx, dy, aspect = 1) => clampView({ ...v, x: v.x - dx * v.w, y: v.y - dy * v.h }, aspect);
+export const panView = (v, dx, dy, aspect = 1, lim = FULL) => clampView({ ...v, x: v.x - dx * v.w, y: v.y - dy * v.h }, aspect, lim);
 // A view that shows a box of [lonMin, latMin, lonMax, latMax] with a margin around it, at least minW wide.
-export function fitView(bbox, aspect = 1, pad = 0.2, minW = 3) {
+export function fitView(bbox, aspect = 1, pad = 0.2, minW = 3, lim = FULL) {
   const [x0, y1] = project(bbox[0], bbox[1]), [x1, y0] = project(bbox[2], bbox[3]);
   const bw = Math.max(x1 - x0, 1e-6), bh = Math.max(y1 - y0, 1e-6);
   const w = Math.max(minW, bw * (1 + 2 * pad), (bh * (1 + 2 * pad)) / aspect), h = w * aspect;
-  return clampView({ x: (x0 + x1) / 2 - w / 2, y: (y0 + y1) / 2 - h / 2, w, h }, aspect);
+  return clampView({ x: (x0 + x1) / 2 - w / 2, y: (y0 + y1) / 2 - h / 2, w, h }, aspect, lim);
 }
 // A view centred on a point at a width.
-export const viewAt = (lon, lat, w, aspect = 1) => { const [x, y] = project(lon, lat); return clampView({ x: x - w / 2, y: y - (w * aspect) / 2, w, h: w * aspect }, aspect); };
+export const viewAt = (lon, lat, w, aspect = 1, lim = FULL) => { const [x, y] = project(lon, lat); return clampView({ x: x - w / 2, y: y - (w * aspect) / 2, w, h: w * aspect }, aspect, lim); };
 // How close the view is, for which layers and labels show.
 export const levelOf = (v) => (v.w > 220 ? "world" : v.w > 30 ? "country" : v.w > 5 ? "region" : "local");
 // Screen pixels of a point in a view drawn into a box of width px.
