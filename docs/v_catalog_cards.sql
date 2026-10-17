@@ -1,7 +1,7 @@
 -- v_catalog_cards: the catalog as the app reads it, one row per wine vintage (data.js loadCards). Kept here for the record (2026-10-17);
--- it is changed by hand in Supabase (docs/catalog_speed.sql made this version). Region and country come from public.geo_place_lines(), read once
+-- it is changed by hand in Supabase (docs/catalog_speed.sql made this version). Region and country come from public.catalog_place_lines(), read once
 -- per query. The view keeps security_invoker, so each visitor only sees what they may (players: published wines).
-create or replace view public.v_catalog_cards as
+create view public.v_catalog_cards with (security_invoker = true) as   -- swapped in by docs/catalog_speed.sql (drop and create in one transaction)
  SELECT wv.id AS wine_vintage_id,
     wv.vintage_year,
     wv.is_non_vintage,
@@ -10,8 +10,8 @@ create or replace view public.v_catalog_cards as
     w.style,
     a.name AS appellation,
     a.classification,
-    gl.region::text AS region,
-    gl.country::text AS country,
+    gl.region,
+    gl.country,
     COALESCE(( SELECT array_agg(g.name ORDER BY wg."position", g.name) AS array_agg
            FROM wine_grapes wg
              JOIN grapes g ON g.id = wg.grape_id
@@ -32,7 +32,7 @@ create or replace view public.v_catalog_cards as
      JOIN wines w ON w.id = wv.wine_id
      JOIN producers p ON p.id = w.producer_id
      LEFT JOIN geo_areas a ON a.id = w.appellation_id
-     LEFT JOIN public.geo_place_lines() gl(id, region, country) ON gl.id = w.appellation_id
+     LEFT JOIN public.catalog_place_lines() gl(id, region, country) ON gl.id = w.appellation_id
      LEFT JOIN LATERAL ( SELECT wi.storage_path,
             wi.kind::text AS kind,
             wi.license_note AS note
