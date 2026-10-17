@@ -607,6 +607,9 @@
   .vrlinks { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: calc(13px * var(--ts)); margin: 6px 0; }
   .vrlinkbtns { grid-template-columns: 1fr 1fr; }
   .vrremoved { margin: 4px 0 0 18px; padding: 0; }
+  .vrsurelist { margin-top: 8px; border-top: 1px solid var(--line); }
+  .vrsure { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: calc(13px * var(--ts)); overflow-wrap: anywhere; }
+  .vrsure input { margin-top: 3px; flex: none; }
   .vrhit { text-align: left; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: calc(13px * var(--ts)); }
   .vrbtns { display: grid; grid-template-columns: 1.25fr 1.25fr 0.7fr; gap: 6px; margin-top: 2px; }
   .vrbtns .btn.slim { margin: 0; padding: 9px 4px; font-size: calc(13px * var(--ts)); }
@@ -676,6 +679,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=117" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=118" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>

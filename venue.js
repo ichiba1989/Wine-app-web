@@ -6,7 +6,7 @@
 // The list is kept in the database (venue_wines, docs/venue_decks.sql): the owner uploads the venue's file and adds or removes wines by hand on the Owner page.
 // Pure: no browser, no network. The file reading itself is done by importer.js, loaded on the Owner page.
 import { grapeFor } from "./rules.js?v=6";
-import { planPlace } from "./geo.js?v=9";
+import { planPlace, designationPlan } from "./geo.js?v=9";
 import { duplicateGroups } from "./catalog.js?v=6";
 import { plainKey, matchKey, caseKey, lookalikes } from "./text.js?v=3";
 
@@ -341,7 +341,7 @@ export function wineNameOf(text, { grapes = [], place = {} } = {}) {
       for (let j = i + 1; j <= Math.min(words.length, i + 6); j++) {
         if (placeKey(words.slice(i, j).join(" ")) === ph && ![...Array(j - i).keys()].some((k) => keep.has(i + k))) {
           if (placeNames.some((n) => placeKey(n) === ph)) placeOut = true;
-          if (words.slice(0, i).every(isJoiner)) cutStart = true;   // only joiners are left before it: they go too ("di" in "di Barolo X")
+          if (i > 0 && words.slice(0, i).every(isJoiner)) cutStart = true;   // only joiners are left before it: they go too ("di" in "di Barolo X"); "Fleurie Les Deduits" keeps "Les"
           if (words.slice(j).every(isJoiner)) cutEnd = true;
           words = [...words.slice(0, i), ...words.slice(j)];
           keep = new Set([...keep].map((k) => (k >= j ? k - (j - i) : k)));
@@ -367,3 +367,103 @@ export function checkReview(f) {
   return { ok: true, why: "" };
 }
 
+
+// ---------------------------------------------------------------- "Publish the sure ones" (owner, 2026-10-17)
+// Which rows of the review queue are sure enough to publish in one go, and which stay for an editor. A row is sure only when EVERY field comes from the
+// shop's title, a stored rule or a cited source, the fields agree with each other, and nothing new or doubtful would be created. Anything else stays in
+// the queue, one at a time, with the reason. Pure; the forms come from venuereview.js formFor. Returns { ok, why }.
+// ctx (sureContext): { areas, grapes, placeWords (every place name we know), producerNames (every producer in the forms and catalog), catalogNames and
+// spellings (the catalog's producers and the list's, grouped by length for the look-alike check) }
+const HOUSE_WORDS = new Set(["chateau", "domaine", "domaines", "tenuta", "weingut", "bodega", "bodegas", "maison", "cantina", "cantine", "castello", "fattoria", "podere", "azienda", "quinta", "famille", "weinbau", "vignobles", "agricola", "clos"]);
+const FAMILY_START = new Set(["fils", "pere", "peres", "freres", "et", "and", "e", "y", "und", "family", "estate", "estates", "vineyard", "vineyards", "winery", "wines", "cellar", "cellars"]);
+// Words that say what is in the bottle, never part of a producer's name here ("Bodegas Ordonez Zerran Tinto", "Sandeman Old", "Quinta de Roriz Vintage").
+const NOT_PRODUCER = new Set(["red", "white", "rose", "rouge", "blanc", "rosso", "bianco", "tinto", "blanco", "brut", "vintage", "old", "tawny", "ruby", "reserve", "reserva", "riserva", "cuvee", "grand", "cru", "doc", "docg", "aoc", "igt", "igp", "selection", "selections", "imports", "importer", "crianza", "joven", "roble", "vigna", "vigne", "vigneto", "vecchie", "vieilles"]);
+const PLACE_TAILS = new Set(["county", "valley", "hills", "coast", "mountain", "mountains", "district", "highlands", "bench", "ridge"]);   // "Intercept County": a place cut in two
+const ARTICLES = new Set(["le", "la", "les", "il", "lo", "i", "gli", "el", "los", "las"]);
+// Broad categories whose wines are nearly always known by a name of their own: with no name left, the name probably went into the producer ("Le Macchiole Paleo").
+const BROAD_TERMS = ["igt", "igp", "vdp", "vin de france", "vino d italia", "vino de espana"];
+const RED_WORDS = ["rouge", "rosso", "tinto", "red wine", "rotwein"], WHITE_WORDS = ["blanc", "bianco", "blanco", "branco", "white wine", "weisswein"];
+export function sureContext(lists, forms) {
+  const placeWords = new Set();
+  (lists.areas || []).forEach((a) => placeWords.add(placeKey(a.name)));
+  (forms || []).forEach((f) => ["appellation", "region"].forEach((k) => f.place && f.place[k] && placeWords.add(placeKey(f.place[k]))));
+  const producerNames = new Set([...(lists.producers || []).map((p) => norm(p.name)), ...(forms || []).map((f) => norm(f.producer))].filter(Boolean));
+  const spellings = [...new Map((forms || []).map((f) => [caseKey(f.producer), String(f.producer || "").trim()])).values()].filter(Boolean);   // each new producer once
+  // Names grouped by the length of their match key: a look-alike differs by at most one letter, so only names of about the same length are compared.
+  const byLength = (names) => { const m = new Map(); names.forEach((n) => { const k = matchKey(n).length; if (!m.has(k)) m.set(k, []); m.get(k).push(n); }); return m; };
+  return { areas: lists.areas || [], grapes: lists.grapes || [], placeWords, producerNames, catalogNames: byLength((lists.producers || []).map((p) => p.name)), spellings: byLength(spellings) };
+}
+const near = (byLen, name) => { const k = matchKey(name).length; return [k - 1, k, k + 1].flatMap((n) => byLen.get(n) || []); };
+// Every run of one to six words of a name, as place keys (to look each up in a set).
+function phrasesOf(text) {
+  const w = placeKey(text).split(" ").filter(Boolean), out = [];
+  for (let i = 0; i < w.length; i++) for (let j = i + 1; j <= Math.min(w.length, i + 6); j++) out.push(w.slice(i, j).join(" "));
+  return out;
+}
+const hasPhrase = (text, phrase) => ` ${placeKey(text)} `.includes(` ${phrase} `);
+export function sureOf(f, ctx) {
+  const no = (why) => ({ ok: false, why });
+  if (!f || !f.prepared) return no("no prepared suggestion");
+  if (f.notWine) return no("may not be a wine");
+  const chk = checkReview(f);
+  if (!chk.ok) return no(chk.why);
+  // vintage: a real year, or NV only for the kinds of wine that are usually blended across years
+  if (f.vintage === "NV" ? !["sparkling", "fortified"].includes(f.style) : !(Number(f.vintage) >= 1900 && Number(f.vintage) <= new Date().getFullYear())) return no("vintage to check");
+  // producer: the title starts with it, it is not cut short ("Domaine de", "Pavillon"), and no other producer name is a longer or shorter version of it
+  const prod = norm(f.producer), words = prod.split(" ");
+  if (!f.split || splitOf(f.title, f.producer) !== f.split) return no("producer does not start the title");
+  if (HOUSE_WORDS.has(words[words.length - 1]) || JOINERS.has(words[words.length - 1])) return no("producer name cut short");
+  const rest = norm(splitTitle(f.title, f.split).wine), restWords = rest.split(" ").filter(Boolean);
+  if (restWords.length && FAMILY_START.has(restWords[0])) return no("producer name may go on");
+  if (JOINERS.has(norm(String(f.wine || "").split(/\s+/)[0])) && !ARTICLES.has(norm(String(f.wine || "").split(/\s+/)[0]))) return no("wine name to check");   // "del Comune di Monforte d'Alba"
+  if (restWords.some((w) => HOUSE_WORDS.has(w) && w !== "clos")) return no("the name holds another house's name");
+  if (rest && ` ${rest} `.includes(` ${prod} `)) return no("producer named twice");
+  if (!f.knownProducer && [...ctx.producerNames].some((n) => n !== prod && (n.startsWith(prod + " ") || prod.startsWith(n + " ")))) return no("another producer name is similar");
+  if (!f.knownProducer && lookalikes(f.producer, near(ctx.catalogNames, f.producer)).length) return no("looks like a producer we have");
+  if (!f.knownProducer && lookalikes(f.producer, near(ctx.spellings, f.producer).filter((n) => caseKey(n) !== caseKey(f.producer))).length) return no("spelled two ways on the list");   // "Billecart Salmon" / "Billecart-Salmon"
+  if (/[|/]/.test(f.title) || words.some((w) => NOT_PRODUCER.has(w))) return no("producer name to check");
+  if (!f.knownProducer && (words.slice(0, -1).some((w) => FAMILY_START.has(w) && !JOINERS.has(w)) || (words.length > 4 && !HOUSE_WORDS.has(words[0])) || words.slice(1).some((w) => HOUSE_WORDS.has(w)) || (!HOUSE_WORDS.has(words[0]) && words.slice(1).some((w) => ARTICLES.has(w))))) return no("producer name may hold the wine's name");
+  // type: from a word in the title, and no colour word or grape colour against it
+  if (!f.styleWhy || /shop/.test(f.styleWhy)) return no("type not in the title");
+  const t = suggestRow(f.title).style;   // the sparkling, fortified and rosé words of the title
+  if (t && t !== f.style) return no("type to check");
+  if (f.style === "sparkling" && !STYLE_WORDS[0].words.some((w) => !/^blanc de/.test(w) && has(f.title, w))) return no("type to check");   // "Blanc de Noirs" alone can be a still wine
+  if (f.style === "white" && RED_WORDS.some((w) => has(f.title, w))) return no("type to check");
+  if (f.style === "red" && WHITE_WORDS.some((w) => has(f.title, w))) return no("type to check");
+  const grapes = String(f.grapes || "").split(/[,;]/).map((x) => x.trim()).filter(Boolean);
+  const colours = grapes.map((g) => (grapeFor(g) || {}).color).filter(Boolean);
+  if (["red", "white"].includes(f.style) && colours.length && colours.every((c) => c === colours[0]) && colours[0] !== f.style) return no("type and grape disagree");
+  if (grapes.some((g) => !ctx.grapes.some((x) => caseKey(x.name) === caseKey(g)))) return no("a grape not in our list yet");
+  // place: named in the title after the producer, a label rule, or a cited source with nothing left open; complete; no look-alike; nothing doubtful created
+  const p = f.place || {};
+  if (!p.country) return no("no place");
+  const why = String(f.placeWhy || "");
+  const fromTitle = why.startsWith('"') && hasPhrase(splitTitle(f.title, f.split).wine, placeKey(why.replace(/^"|" in the title$/g, "")));
+  const fromSource = !!f.placeSource && !f.placeNote;
+  const fromLabel = !f.placeSource && /^The shop's title names /.test(why);
+  if (!fromTitle && !fromSource && !fromLabel) return no(why.startsWith('"') ? "place word is in the producer's name" : f.placeNote ? "source left something open" : "place not from the title or a source");
+  const broad = ["germany", "austria"].includes(norm(p.country));
+  if (!p.appellation && !(broad && p.region) && !(fromTitle && p.region)) return no("place not complete");
+  if (placeLookalikes(ctx.areas, p).length) return no("place looks like one we have");
+  const plan = planPlace(ctx.areas, canonPlace(ctx.areas, p));
+  if (plan.error) return no(plan.error);
+  if (plan.creates.some((c) => c.level !== "appellation")) return no("a new region or country");
+  const d = designationPlan(ctx.areas, canonPlace(ctx.areas, p), f.designation);
+  if (d.conflict) return no("designation to check");
+  // the wine name: no other place left in it (a title naming two places)
+  const name = placeKey(f.wine || "");
+  const titleWord = fromTitle && !broad ? placeKey(why.replace(/^"|" in the title$/g, "")) : "";
+  if (name && phrasesOf(name).some((w) => w.length >= 4 && (ctx.placeWords.has(w) || w === titleWord))) return no("the name holds another place");
+  const placeParts = new Set([p.appellation, p.region].flatMap((x) => placeKey(x || "").split(" ")).filter((w) => w.length >= 4));
+  if (name.split(" ").some((w) => placeParts.has(w) || PLACE_TAILS.has(w))) return no("the name holds part of the place");
+  if (!name && !f.knownProducer && (words.length >= 4 || new Set(words).size < words.length)) return no("wine name to check");   // "Chateau Pichon Baron Les Tourelles de Longueville"
+  if (!name && BROAD_TERMS.some((w) => has(f.title, w) || norm(f.designation) === w)) return no("wine name to check");
+  // a producer new to us ends where the place, a label grape or a type word starts, so the split is not a guess ("Caroline | Morey Santenay")
+  if (!f.knownProducer && restWords.length) {
+    const next = splitTitle(f.title, f.split).wine;
+    const starts = (phrase) => phrase && ` ${placeKey(next)} `.startsWith(` ${placeKey(phrase)} `);
+    const typeWords = [...STYLE_WORDS.flatMap((s) => s.words).filter((w) => !/brut|blanc de|sparkling|pet|^ros/.test(w))];   // "Brut" or "Blanc" can follow a name of its own ("Chateau Cheval | Blanc")
+    if (![p.appellation, p.region, fromTitle ? why.replace(/^"|" in the title$/g, "") : "", ...grapes, ...typeWords].some(starts)) return no("where the producer's name ends");
+  }
+  return { ok: true, why: "" };
+}

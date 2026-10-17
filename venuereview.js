@@ -6,10 +6,12 @@
 // so it joins the venue's deck as soon as it is published. The queue keeps one country, region and producer together.
 // The place is chosen by searching the place list; a place that is not in it yet is typed in and created when the wine is added (geo.js savePlace).
 // Everything fits on one phone screen. Editor writes are online only. The rules are in venue.js (pure); this file draws the screen and handles the taps.
+// "Publish the sure ones" (owner, 2026-10-17): the rows whose every field comes from the title, a stored rule or a cited source and agrees with the
+// others (venue.js sureOf) are listed together; the editor looks through the list, unticks any, and publishes them with one tap. The rest stay here.
 import { esc, WINE_STYLES } from "./logic.js?v=18";
-import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf, placeLookalikes, linkSummary, rowTitle } from "./venue.js?v=17";
+import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf, placeLookalikes, linkSummary, rowTitle, sureContext, sureOf } from "./venue.js?v=18";
 import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=33";
-import { placeFromArea, savePlace, designationPlan, broadPlace } from "./geo.js?v=9";
+import { placeFromArea, savePlace, designationPlan, broadPlace, planPlace } from "./geo.js?v=9";
 import * as db from "./data.js?v=46";
 import { caseKey, lookalikes } from "./text.js?v=3";
 
@@ -105,12 +107,47 @@ export function linksHtml(R, list, embedded) {
       ${removed ? `<div class="vrlbl">Removed in this check</div><ul class="small vrremoved">${removed}</ul>` : ""}
     </div>`;
 }
+// ---------------------------------------------------------------- publish the sure ones (owner, 2026-10-17)
+const STYLE_LABEL = Object.fromEntries(STYLE_CHOICES.map((s) => [s.id, s.label]));
+export function sureLine(f) {
+  return [f.producer, f.wine || "(no name)", STYLE_LABEL[f.style] || f.style, placeText(f.place), f.vintage, f.grapes, f.designation].filter(Boolean).join(" · ");
+}
+export function sureHtml(S) {
+  const back = `<div class="muted small vrcount"><button class="link" data-vr="view:add"${S && S.busy ? " disabled" : ""}>← Back to adding wines one at a time</button></div>`;
+  if (!S || !S.rows) return `${back}<div class="vrcard"><p class="muted">Working out which wines are sure… ${S && S.seen ? `${S.seen} looked at` : ""}</p></div>`;
+  const sure = S.rows.filter((x) => x.ok), left = S.rows.length - sure.length, picked = sure.filter((x) => S.picked.has(x.f.rowId)).length;
+  const why = {};
+  S.rows.filter((x) => !x.ok).forEach((x) => { why[x.why] = (why[x.why] || 0) + 1; });
+  const whyList = Object.entries(why).sort((a, b) => b[1] - a[1]).map(([w, n]) => `<li>${esc(w)}: ${n}</li>`).join("");
+  const dis = S.busy ? " disabled" : "";
+  const rows = sure.map((x) => `<label class="vrsure"><input type="checkbox" data-vrsure="${esc(x.f.rowId)}"${S.picked.has(x.f.rowId) ? " checked" : ""}${dis}><span><b>${esc(x.f.title)}</b><br><span class="muted small">${esc(sureLine(x.f))}</span></span></label>`).join("");
+  const failed = (S.failed || []).map((x) => `<li>${esc(x.title)}: <span class="muted">${esc(x.why)}</span></li>`).join("");
+  return `${back}
+    <div class="vrcard">
+      <div class="serif vrtitle">Publish the sure ones</div>
+      <div class="muted small">Every field of these wines comes from the shop's title, a place rule or a cited source, and the fields agree with each other. Look through them and untick any you want to check one at a time. Publishing puts them in the deck. The others stay in the review for editors.</div>
+      <div class="vrlinks"><span><b>${sure.length}</b> sure</span><span><b>${left}</b> left for editors</span></div>
+      <div id="vrSureMsg">${sureMsgHtml(S)}</div>
+      <div class="vrbtns">
+        ${S.busy ? `<button class="btn outline slim" data-vr="sure:stop"${S.stop ? " disabled" : ""}>${S.stop ? "Stopping…" : "Stop"}</button>`
+          : `<button class="btn primary slim" data-vr="sure:go"${picked ? "" : " disabled"}>Publish ${picked} wine${picked === 1 ? "" : "s"}</button>
+             <button class="btn outline slim" data-vr="sure:all">${picked === sure.length ? "Untick all" : "Tick all"}</button>`}
+      </div>
+      ${failed ? `<div class="vrlbl">Not added</div><ul class="small vrremoved">${failed}</ul>` : ""}
+      <div class="vrsurelist">${rows || `<p class="muted">None of the wines waiting is sure enough: they need an editor.</p>`}</div>
+      ${whyList ? `<details class="small"><summary>Why the others are left for editors</summary><ul>${whyList}</ul></details>` : ""}
+    </div>`;
+}
+function sureMsgHtml(S) {
+  const bar = S.busy && S.total ? `<div class="muted small">${S.done} of ${S.total} published so far${S.failed && S.failed.length ? `, ${S.failed.length} not added` : ""}. Keep this page open.</div>` : "";
+  return `${S.msg ? `<div class="notice vrmsg" role="status">${esc(S.msg)}</div>` : ""}${S.err ? `<div class="err">${esc(S.err)}</div>` : ""}${bar}`;
+}
 export function reviewHtml(R, queue, opts) {
   if (R.error) return `<div class="err">${esc(R.error)}</div><button class="btn outline slim" data-vr="retry">Try again</button>`;
   if (!R.lists) return `<p class="muted">Loading…</p>`;
   const msg = R.msg ? `<div class="notice vrmsg">${esc(R.msg)}</div>` : "";
   const count = `<div class="muted small vrcount"><b>${queue.length}</b> wines to add · every field is a suggestion</div>
-    <div class="vrbtns vrlinkbtns"><button class="btn outline slim" data-vr="view:links">Website links: find and check</button></div>`;
+    <div class="vrbtns vrlinkbtns"><button class="btn outline slim" data-vr="view:links">Website links: find and check</button>${queue.length ? `<button class="btn outline slim" data-vr="view:sure">Publish the sure ones</button>` : ""}</div>`;
   if (!queue.length) return `${count}${msg}<p class="muted">Nothing is waiting. New wines appear here when the owner uploads a new list.</p>`;
   const f = R.form;
   if (!f) return `${count}${msg}`;
@@ -174,6 +211,7 @@ export function createVenueReview(ctx) {
     if (!root) return;
     if (!ctx.list()) { root.innerHTML = `<p class="muted">${esc(ctx.listError() || "The venue's list has not loaded yet.")}</p>`; return; }
     if (R.linksOnly || R.view === "links") { root.innerHTML = `<div class="vrev">${linksHtml(R, ctx.list(), R.linksOnly)}</div>`; return; }
+    if (R.view === "sure" && R.lists) { if (!R.sure) workOutSure(); root.innerHTML = `<div class="vrev">${sureHtml(R.sure)}</div>`; return; }
     pickNext();
     root.innerHTML = `<div class="vrev">${reviewHtml(R, queue(), { owner: ctx.owner() })}</div>`;
   }
@@ -240,7 +278,8 @@ export function createVenueReview(ctx) {
     const i = t.dataset.vr.indexOf(":"), action = i < 0 ? t.dataset.vr : t.dataset.vr.slice(0, i), a = i < 0 ? "" : t.dataset.vr.slice(i + 1);
     const f = R.form;
     if (action === "retry") load();
-    else if (action === "view") { R.view = a; draw(); }
+    else if (action === "view") { if (a === "sure" && !(R.sure && R.sure.busy)) R.sure = null; R.view = a; draw(); }   // worked out afresh each time it is opened
+    else if (action === "sure") await sureAction(a);
     else if (action === "links") await runLinks(a);
     else if (action === "split" && f) { f.split = Number(a) === f.split ? 0 : Number(a); const sp = splitTitle(f.title, f.split); f.producer = sp.producer; f.wine = nameFor(f, sp.wine); draw(); }
     else if (action === "style" && f) { f.style = a; f.styleWhy = ""; draw(); }
@@ -259,6 +298,99 @@ export function createVenueReview(ctx) {
       R.busy = false; draw();
     }
   });
+  // A tick only changes the count on the button, so the long list keeps its place.
+  document.addEventListener("change", (ev) => {
+    const t = ev.target;
+    if (!t || !t.dataset || t.dataset.vrsure === undefined || !R.sure || !root || !root.contains(t)) return;
+    if (t.checked) R.sure.picked.add(t.dataset.vrsure); else R.sure.picked.delete(t.dataset.vrsure);
+    const n = R.sure.picked.size, b = root.querySelector('[data-vr="sure:go"]');
+    if (b) { b.textContent = `Publish ${n} wine${n === 1 ? "" : "s"}`; b.disabled = !n; }
+    const all = root.querySelector('[data-vr="sure:all"]');
+    if (all) all.textContent = n === R.sure.rows.filter((x) => x.ok).length ? "Untick all" : "Tick all";
+  });
+  // Works out which waiting rows are sure (venue.js sureOf), a hundred at a time so the screen stays responsive.
+  async function workOutSure() {
+    const last = R.sureLast || {};   // what the last run said stays on screen
+    const S = (R.sure = { rows: null, seen: 0, picked: new Set(), busy: false, msg: last.msg || "", err: last.err || "", failed: last.failed || [] });
+    R.sureLast = null;
+    const forms = [];
+    for (const row of queue()) {
+      forms.push(formFor(row, R.lists, R.prep));
+      if (forms.length % 100 === 0) { S.seen = forms.length; await new Promise((r) => setTimeout(r)); if (R.sure !== S) return; if (R.view === "sure") draw(); }
+    }
+    const sctx = sureContext(R.lists, forms), rows = [];
+    for (const [i, f] of forms.entries()) {
+      rows.push({ f, ...sureOf(f, sctx) });
+      if (i % 200 === 199) await new Promise((r) => setTimeout(r));
+      if (R.sure !== S) return;
+    }
+    S.rows = rows; rows.filter((x) => x.ok).forEach((x) => S.picked.add(x.f.rowId));
+    if (R.view === "sure") draw();
+  }
+  const sureProgress = () => { const el = document.getElementById("vrSureMsg"); if (el && R.sure) el.innerHTML = sureMsgHtml(R.sure); };
+  async function sureAction(a) {
+    const S = R.sure; if (!S || !S.rows) return;
+    if (a === "stop") { S.stop = true; draw(); return; }
+    if (a === "all" && !S.busy) { const sure = S.rows.filter((x) => x.ok); if (S.picked.size === sure.length) S.picked.clear(); else sure.forEach((x) => S.picked.add(x.f.rowId)); draw(); return; }
+    if (a === "go" && !S.busy) await publishSure(S);
+  }
+  // Publishes the ticked wines the same way as "Publish now", without the form. New places are made first, one at a time, so two wines never make the
+  // same place twice; then the wines go a few producers at a time (one producer's wines one after another, so a producer is never made twice).
+  // Each wine is linked to its list row as it is added; a wine that fails stays in the review, and five failures stop the run.
+  async function publishSure(S) {
+    const forms = S.rows.filter((x) => x.ok && S.picked.has(x.f.rowId)).map((x) => x.f);
+    if (!forms.length) return;
+    Object.assign(S, { busy: true, stop: false, err: "", msg: "Adding the new places…", failed: [], done: 0, total: forms.length });
+    draw();
+    const sb = ctx.sb(), areas = R.lists.areas, notes = new Set();
+    try {
+      for (const f of forms) {
+        if (S.stop) break;
+        const place = canonPlace(areas, f.place), plan = planPlace(areas, place), d = designationPlan(areas, place, f.designation);
+        if (plan.error) continue;   // left for the wine's own step, which reports it
+        if (plan.creates.length) {
+          const id = await savePlace(sb, areas, place, { classification: d.set || "" });
+          const c = plan.creates[plan.creates.length - 1];   // sureOf allows only a new appellation under a place we have
+          areas.push({ id, name: c.name, level: c.level, parent_id: c.parent, classification: d.set || null });
+        } else if (d.set && plan.areaId) {
+          try { await db.savePlaceDesignation(sb, plan.areaId, d.set); const a = areas.find((x) => x.id === plan.areaId); if (a) a.classification = d.set; }
+          catch (e) { notes.add(e.message || String(e)); }
+        }
+      }
+      R.places = placeOptions(areas);
+      S.msg = "Publishing…"; draw();
+      const groups = new Map();
+      forms.forEach((f) => { const k = fold(f.producer); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); });
+      const todo = [...groups.values()];
+      const one = async (f) => {
+        const place = canonPlace(areas, f.place), plan = planPlace(areas, place);
+        if (plan.error || plan.creates.length || !plan.areaId) throw new Error(plan.error || "its place is not in the list yet");
+        await db.addVenueCatalogWine(sb, ctx.userId(), {
+          producerName: f.producer, wineName: f.wine, style: f.style, areaId: plan.areaId, vintage: f.vintage === "NV" ? "NV" : f.vintage,
+          grapes: grapesFrom(f.grapes, R.lists.grapes), publish: true, rowId: f.rowId, listedAs: f.title, sourceName: `${VENUE.name} list`,
+        });
+      };
+      const worker = async () => {
+        while (todo.length && !S.stop) {
+          for (const f of todo.shift()) {
+            if (S.stop) return;
+            try { await one(f); S.done++; S.picked.delete(f.rowId); }
+            catch (e) {
+              S.failed.push({ title: f.title, why: e.message || String(e) });
+              if (S.failed.length >= 5) { S.stop = true; S.err = "Stopped: five wines could not be added (see below). Nothing else was changed; try again later."; }
+            }
+            sureProgress();
+          }
+        }
+      };
+      await Promise.all([1, 2, 3, 4].map(worker));
+      S.msg = `Published ${S.done} of ${S.total} wines${S.stop && !S.err ? " (stopped)" : ""}. They are in the deck now.${notes.size ? " " + [...notes][0] : ""}`;
+    } catch (e) { S.err = `Stopped: ${e.message || e}. ${S.done} wines were published before that.`; }
+    S.busy = false; S.stop = false;
+    try { await loadLists(); await ctx.onChanged(); } catch (_) { /* the list is reloaded next time */ }
+    R.sure = null; R.sureLast = { msg: S.msg, err: S.err, failed: S.failed };
+    draw();
+  }
   // Typing changes the form without redrawing, so the box keeps its focus; only the place line and the search results are redrawn.
   document.addEventListener("input", (ev) => {
     const t = ev.target;

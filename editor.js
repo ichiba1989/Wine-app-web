@@ -19,7 +19,7 @@ import { communityHtml, loadSubmissionState, approvalPlan } from "./sharing.js?v
 import { infoLine } from "./wineline.js?v=4";
 import { sortWines, sortSelectHtml, STRUCTURE_SORTS, PHOTO_SORTS } from "./sorting.js?v=8";
 import { suggestStructure, values as ruleValues, goldInfo, GOLD, GROUPS, evaluateRules, reportText, TARGETS, RULES_VERSION } from "./rules.js?v=6";
-import { VENUE } from "./venue.js?v=17";
+import { VENUE } from "./venue.js?v=18";
 
 // "venue" (this venue branch only): the venue's wines that are not in our catalog yet, reviewed one at a time (venuereview.js).
 const SECTIONS = [{ id: "venue", label: VENUE.name }, { id: "structure", label: "Structure" }, { id: "catalog", label: "Catalog" }, { id: "photos", label: "Photos" }, { id: "flags", label: "Flags" }, { id: "quiz", label: "Quiz" }, { id: "feedback", label: "Feedback" }];

@@ -10,7 +10,7 @@ import { TAG_KINDS } from "./tags.js?v=5";
 import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=13";
 import { centsToField } from "./pricing.js?v=4";
 import { ASSIGNABLE_ROLES, ROLES, PERMISSIONS, staffRows, filterStaff, rowActions } from "./access.js?v=4";
-import { VENUE, listRows, addable, summary, LIST_FILTERS, filterListRows } from "./venue.js?v=17";
+import { VENUE, listRows, addable, summary, LIST_FILTERS, filterListRows } from "./venue.js?v=18";
 import { plainKey } from "./text.js?v=3";
 import { placeChecks } from "./geo.js?v=9";
 export { placeChecks };   // used by app.js through the lazily loaded Owner module
