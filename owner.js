@@ -2,15 +2,15 @@
 // Every table can be searched and sorted (tap a heading). It is reached from the gear (Settings) and only offered to the owner; the database
 // still decides what anyone may change. The rules at the top (rows, search, sort, checks, coverage) are pure: no page, no network.
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
-import { esc } from "./logic.js?v=20";
-import { REACH_CHOICES } from "./wineinfo.js?v=37";
+import { esc } from "./logic.js?v=21";
+import { REACH_CHOICES } from "./wineinfo.js?v=38";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=5";
-import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=12";
+import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=13";
 import { TAG_KINDS } from "./tags.js?v=5";
-import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=15";
+import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=16";
 import { centsToField } from "./pricing.js?v=4";
 import { ASSIGNABLE_ROLES, ROLES, PERMISSIONS, staffRows, filterStaff, rowActions } from "./access.js?v=4";
-import { VENUE, listRows, addable, summary, LIST_FILTERS, filterListRows } from "./venue.js?v=21";
+import { VENUE, listRows, addable, summary, LIST_FILTERS, filterListRows } from "./venue.js?v=22";
 import { plainKey } from "./text.js?v=3";
 import { placeChecks } from "./geo.js?v=9";
 export { placeChecks };   // used by app.js through the lazily loaded Owner module

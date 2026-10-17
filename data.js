@@ -1,5 +1,5 @@
 // Everything that talks to Supabase. Each function takes the client and throws on an error.
-import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=20";
+import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=21";
 import { BUCKET, newPhotoPath } from "./photos.js?v=5";
 import { LEGACY_OF } from "./reactions.js?v=3";
 import { overlayStates, overlayJournal, overlayCounts, overlayPerceptions, entryRowOf, isOffline } from "./overlay.js?v=1";
@@ -113,13 +113,6 @@ export async function loadPerceptions(sb, consumptionId) {
   if (String(consumptionId).startsWith("tmp_")) return overlayPerceptions(consumptionId, []);   // an entry made offline and not uploaded yet
   return overlayPerceptions(consumptionId, must(await sb.from("perceptions").select("dimension_key, value, default_value, adjusted").eq("consumption_id", consumptionId)));
 }
-export async function countRows(sb) {
-  const [s, j] = await Promise.all([
-    active((on) => onlyActive(sb.from("encounters").select("id", { count: "exact", head: true }), on)),
-    active((on) => onlyActive(sb.from("consumptions").select("id", { count: "exact", head: true }), on)),
-  ]);
-  return { swipes: s.count || 0, journal: j.count || 0 };
-}
 
 // ---------------------------------------------------------------- swiping
 // One answer to a wine card: "like", "dislike", "dont_know" or "had" (docs/reactions.sql). "had" also adds the wine to the journal, done together on the server.
@@ -134,14 +127,6 @@ export async function recordReaction(sb, wineVintageId, reaction, context = null
     if (error.code === "PGRST202" || /record_reaction/.test(String(error.message || ""))) throw new Error("The database needs one more update (docs/reactions.sql) before swipes can be saved.");
     throw error;
   }
-}
-// The old model's swipe, kept so the first version of the deck can still be restored. Not used by the current app.
-export async function recordSwipe(sb, wineVintageId, familiarity, interest) {
-  const { error } = await sb.rpc("record_swipe", { p_wine_vintage_id: wineVintageId, p_familiarity: familiarity, p_interest: interest });
-  if (error) throw error;
-}
-export async function changeInterest(sb, userId, wineVintageId, interest) {
-  must(await sb.from("encounters").insert({ user_id: userId, wine_vintage_id: wineVintageId, event: "interest_change", interest }));
 }
 
 // ---------------------------------------------------------------- the journal

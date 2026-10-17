@@ -50,7 +50,7 @@ A role is only a named bundle of permissions; **code asks about permissions, nev
 | `catalog_edit` | Editor tab: Structure, Catalog, Photos, Flags; wine details; catalog photos |
 | `quiz_verify` | Editor: Quiz, Flags; tagging quiz questions; reviewing the note legend |
 | `feedback_read` | Editor: Feedback |
-| `found_online_photos` | adding photos found online; the photo finder |
+| `found_online_photos` | adding photos found online (the photo finder was taken out on 2026-10-04) |
 | `remove_content` | deleting a wine |
 | `settings_edit` | changing app settings and plans; adding quiz tags; Owner page writes |
 | `owner_page` | the Owner page and Settings' Owner button |
