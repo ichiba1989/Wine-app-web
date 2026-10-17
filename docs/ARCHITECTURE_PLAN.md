@@ -17,7 +17,7 @@ The current repo is a phone-first web prototype (vanilla ES modules, Supabase ba
 |---|---|
 | Accounts | Anonymous guest → attach email, same user id; 21+ gate; consent versioning; account deletion; guest merge |
 | Wine DB | producers / wines / vintages / grapes / geo tree / sources / source records, editor tab, candidate pipeline from player-added wines |
-| Real bottle images | `wine_images` table + storage bucket, editor upload, a "found online" candidate review flow (Edge Function `find-photos`), verified user submissions |
+| Real bottle images | `wine_images` table + storage bucket, editor upload, photos marked "found online" added by the owner (the automatic finder, Edge Function `find-photos`, was taken out of the app on 2026-10-04), verified user submissions |
 | Swipe | Gesture + buttons. Records *familiarity* (recognize / don't know / had) + separate *interest* (try / nope) |
 | Encountered vs consumed | Separate `encounters` and `consumptions` tables |
 | 5 verdicts | Implemented as `buy / drink / none / respect / no`, with `respect` weighted weakly negative |
@@ -213,7 +213,7 @@ Rules:
 1. Preferred real photographs, ranked: licensed image provider **[Dependency: licensing terms, coverage by vintage, cost]** → producer-provided with written permission **[Dependency]** → own photography → verified user submissions (explicit opt-in, as the prototype does).
 2. Store: original, plus generated card-size renditions. Record license, source, vintage-specificity, verification status.
 3. Vintage-specific image if available; otherwise fall back to a *wine-level* image, marked as non-vintage-specific **[Open: is a wrong-vintage label acceptable on a card, or should the wine be held out of the deck?]**.
-4. **Caution:** the prototype's `find-photos` flow finds web images as *pending candidates* and requires editor approval. Whether that is legally usable for public display is **unverified**; licensing of images found online must be reviewed before production use.
+4. **Caution:** the prototype's `find-photos` flow (taken out of the app on 2026-10-04; photos found online are now only added by hand by the owner) found web images as *pending candidates* and required editor approval. Whether that is legally usable for public display is **unverified**; licensing of images found online must be reviewed before production use.
 5. No AI-generated bottle images for real wines (spec §18).
 6. User photos stay private journal items unless submitted and approved.
 7. **Launch decision (owner):** the Discover card shows no bottle photo. For "what does this bottle look like", the native app opens an in-app browser sheet with a Google image search (mock-up in `docs/mockups/`). The app itself neither frames, scrapes nor stores Google's results. Legal review is listed in `docs/PRE_TEST_REVIEW.md` (Launch notes).

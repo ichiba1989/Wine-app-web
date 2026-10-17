@@ -6,16 +6,12 @@ import { isComplete, missingFields } from "./catalog.js?v=6";
 
 export const COLORS = { ink: "#16261D", muted: "#5A6A5F", wine: "#7B1E3A", slate: "#3E5C76", moss: "#3A4B40", line: "#C3CFC1" };
 
-// OLD MODEL (kept so earlier answers still read): a swipe recorded how familiar the wine was, and the switch under the card recorded interest.
+// OLD MODEL (kept so earlier answers still read): a swipe recorded how familiar the wine was (the "interest" it also stored is read by reactions.js).
 // The current answers (like, dislike, I don't know it, I've had this bottle) are in reactions.js.
 export const FAMILIARITY = {
   recognize: { label: "I recognize it", color: COLORS.slate },
   unknown: { label: "I don't know it", color: COLORS.moss },
   had: { label: "I've had this bottle", color: COLORS.wine },
-};
-export const INTEREST = {
-  try: { label: "Interested", color: COLORS.wine },
-  nope: { label: "Not interested", color: COLORS.moss },
 };
 
 export const FLAGS = {

@@ -2,7 +2,7 @@
 import {
   FAMILIARITY, FLAGS, VERDICTS, isChoice, GROUPS, GROUP_PAGE, SORTS, YEARS,
   esc, wineName, entryCard, entryName, entryIncomplete, entryMissing, verdictShort, groupEntries, filterEntries, sortCards,
-  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims, dosageLabel } from "./logic.js?v=19";
+  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims, dosageLabel } from "./logic.js?v=20";
 import { splitGrapeParts, splitPlace } from "./blends.js?v=2";
 import { REACTIONS, iconHtml, SKIP_LIMIT } from "./reactions.js?v=3";
 import { say, proToolsOn } from "./words.js?v=1";

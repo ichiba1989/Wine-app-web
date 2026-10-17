@@ -5,16 +5,16 @@ import {
   wineName, esc, clamp01, filterEntries, groupEntries, swipeLists,
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete, styleLabel,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
-  dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=19";
-import * as db from "./data.js?v=42";
-import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=17";
-import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=10";
+  dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=20";
+import * as db from "./data.js?v=43";
+import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=18";
+import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=11";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=42";
-import { createLearn } from "./learn.js?v=15";
+  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=43";
+import { createLearn } from "./learn.js?v=16";
 import { setMode } from "./words.js?v=1";
-import { journalCsv, exportName } from "./exportcsv.js?v=6";
+import { journalCsv, exportName } from "./exportcsv.js?v=7";
 import { newBlind, cleanPending, hasGuess, scoreGuess, summarize, resultLine, notesAfterReveal, actualOfCard, actualOfForm } from "./blind.js?v=2";
 import { composeNote, stampOf, noteProblem } from "./notes.js?v=1";
 import { createDictation, dictationSupported } from "./dictation.js?v=5";
@@ -28,35 +28,35 @@ import { buildVocab, fixTerms } from "./termfix.js?v=2";
 import { WINE_TERMS, setSpeechLang, speechCodeOf } from "./winewords.js?v=1";
 import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=2";
 import { loadPrices, applyPrices, tidyFacts, parsePrice, saveWinePrice } from "./pricing.js?v=3";
-import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=15";
-import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=11";
+import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=16";
+import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=12";
 import { applyVisualTables } from "./visualdata.js?v=3";
-import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=9";
-import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=14";
+import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=10";
+import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=15";
 import { infoLine, entryInfoLine } from "./wineline.js?v=3";
-import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, paintNoteMarks, teachHtml, autoCount } from "./tasting.js?v=14";
-import { gridFromNotes, mergeFromNotes, touched, legendEntry, compileWith } from "./notegrid.js?v=7";
+import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, paintNoteMarks, teachHtml, autoCount } from "./tasting.js?v=15";
+import { gridFromNotes, mergeFromNotes, touched, legendEntry, compileWith } from "./notegrid.js?v=8";
 import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=9";
-import { createProfile } from "./profile.js?v=27";
-import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=17";
-import { createFeedback } from "./feedback.js?v=11";
-import { createEditor } from "./editor.js?v=42";
-import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=14";
-import { gamesHtml } from "./games.js?v=21";
+import { createProfile } from "./profile.js?v=28";
+import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=18";
+import { createFeedback } from "./feedback.js?v=12";
+import { createEditor } from "./editor.js?v=43";
+import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=15";
+import { gamesHtml } from "./games.js?v=22";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
 import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=4";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=4";
-import * as GG from "./blindgame.js?v=8";
-import { recommendMix, recommend } from "./recommend.js?v=11";
+import * as GG from "./blindgame.js?v=9";
+import { recommendMix, recommend } from "./recommend.js?v=12";
 import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=2";
 import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
 import { setOffline, setCardLookup } from "./overlay.js?v=1";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=23"));
-const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=11"));
-const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=14"));
-import { createWineInfo } from "./wineinfo.js?v=29";
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=24"));
+const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=12"));
+const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=15"));
+import { createWineInfo } from "./wineinfo.js?v=30";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -2125,12 +2125,6 @@ document.addEventListener("click", async (ev) => {
     else if (action === "swmore") { state.sw.more = !state.sw.more; renderBody(); }
     else if (action === "swg") { const key = decodeURIComponent(a), cur = state.sw.open[key]; state.sw.open[key] = cur === undefined ? false : !cur; renderBody(); }
     else if (action === "delswipe") askDeleteSwipe(a);
-    else if (action === "setint") {
-      await db.changeInterest(state.sb, state.user.id, a, b);
-      const s = state.states.find((x) => x.wine_vintage_id === a);
-      if (s) s.interest = b;
-      renderBody();
-    }
     else if (action === "review") {
       const entry = state.journal.find((j) => j.wine_vintage_id === a);
       if (entry) await openEntry(entry);

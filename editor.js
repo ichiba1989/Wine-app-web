@@ -8,16 +8,16 @@
 //   Quiz:      edit, source and verify quiz questions.
 //   Feedback:  read what testers sent from the app and mark it handled.
 // Every change is logged by the database.
-import { dimsFor, dimMeta, defaultFor, esc, wineName, placeLine, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel, barDims, choiceDims, styleInfo } from "./logic.js?v=19";
-import * as db from "./data.js?v=42";
-import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=42";
-import { createReview } from "./review.js?v=20";
-import { createWineInfo, publishSummary } from "./wineinfo.js?v=29";
+import { dimsFor, dimMeta, defaultFor, esc, wineName, placeLine, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel, barDims, choiceDims, styleInfo } from "./logic.js?v=20";
+import * as db from "./data.js?v=43";
+import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=43";
+import { createReview } from "./review.js?v=21";
+import { createWineInfo, publishSummary } from "./wineinfo.js?v=30";
 import { groupSubmissions, planPromotion, duplicateGroups, rulesFrom } from "./catalog.js?v=6";
-import { visibleKinds, FOUND_ONLINE_PERMISSION, photoSummary, photoList, photoTag, pullSource, shareWinePhoto, shareNote, uploadWinePhoto, removeWinePhoto, reuseWinePhoto } from "./winephotos.js?v=17";
-import { communityHtml, loadSubmissionState, approvalPlan } from "./sharing.js?v=17";
+import { visibleKinds, FOUND_ONLINE_PERMISSION, photoSummary, photoList, photoTag, pullSource, shareWinePhoto, shareNote, uploadWinePhoto, removeWinePhoto, reuseWinePhoto } from "./winephotos.js?v=18";
+import { communityHtml, loadSubmissionState, approvalPlan } from "./sharing.js?v=18";
 import { infoLine } from "./wineline.js?v=3";
-import { sortWines, sortSelectHtml, STRUCTURE_SORTS, PHOTO_SORTS } from "./sorting.js?v=9";
+import { sortWines, sortSelectHtml, STRUCTURE_SORTS, PHOTO_SORTS } from "./sorting.js?v=10";
 import { suggestStructure, values as ruleValues, goldInfo, GOLD, GROUPS, evaluateRules, reportText, TARGETS, RULES_VERSION } from "./rules.js?v=5";
 
 const SECTIONS = [{ id: "structure", label: "Structure" }, { id: "catalog", label: "Catalog" }, { id: "photos", label: "Photos" }, { id: "flags", label: "Flags" }, { id: "quiz", label: "Quiz" }, { id: "feedback", label: "Feedback" }];
