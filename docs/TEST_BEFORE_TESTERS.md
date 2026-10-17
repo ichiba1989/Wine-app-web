@@ -233,3 +233,11 @@ No database script. Check on a phone:
 - [ ] (branch `vwm`) Editor tab, Vintage Wine Merchants: a sparkling title shows **How sweet** with its term picked (from the title, or "found online" for Laurent-Perrier Grand Siècle, Bisol Cartizze, J Cuvée 20, Roederer Estate Clark Road, the two Cerdons) and the term is not in the wine name; Publish the sure ones leaves out sparkling wines with no term.
 - [ ] Run the second `docs/catalog_speed.sql` (2026-10-17): its one result line shows the wines and milliseconds (well under 1000). On a phone that never opened the app (or after clearing the site's data), the first Discover card shows within a second or two and does not change while the rest of the catalog arrives; swipe a few cards straight away. Open the app again: the first card shows at once.
 
+
+## The Atlas (added 2026-10-17; all versions)
+- [ ] On a phone: Learn, Atlas. The world shows with your journal's pins; pinch, drag, + / - and the house button work, and the page does not scroll or zoom behind the map.
+- [ ] Tap a pin (a number zooms into the cluster), open a place: the chain (country › region), the climate line, grapes, notes, "Your wines from here" (tap one: the rating sheet opens over the map) and "Wines to try from here". On `vwm` the wines to try are only the shop's.
+- [ ] Find a place by name; a US wine area (Napa Valley, Los Carneros via "Carneros") shows its outline. A European one says "No outline on file".
+- [ ] Journal, "Map of my wines"; a rating sheet's "Show on map"; Profile, Explored, "See them on the map"; the card's map, "Open in the Atlas".
+- [ ] "Learn about ..." on a place opens Learn on those questions (needs tagged or naming questions).
+- [ ] Offline after the Atlas was opened once: it opens again with no connection.

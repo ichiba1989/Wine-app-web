@@ -2,7 +2,7 @@
 // Rules are in logic.js, database calls in data.js, and HTML in views.js.
 // The two Supabase values come from config.js. If that file is missing or still has placeholders, the page asks for them and remembers them in this browser.
 import {
-  wineName, esc, clamp01, filterEntries, groupEntries, swipeLists,
+  wineName, entryName, esc, clamp01, filterEntries, groupEntries, swipeLists,
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete, styleLabel,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=21";
@@ -11,8 +11,8 @@ import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=26";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=12";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=45";
-import { createLearn } from "./learn.js?v=17";
+  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=46";
+import { createLearn } from "./learn.js?v=18";
 import { setMode } from "./words.js?v=1";
 import { journalCsv, exportName } from "./exportcsv.js?v=8";
 import { newBlind, cleanPending, hasGuess, scoreGuess, summarize, resultLine, notesAfterReveal, actualOfCard, actualOfForm } from "./blind.js?v=3";
@@ -29,7 +29,7 @@ import { setPlaceLists } from "./geo.js?v=9";
 import { setNameAliases } from "./text.js?v=3";
 import { loadPrices, applyPrices, tidyFacts, parsePrice, saveWinePrice } from "./pricing.js?v=4";
 import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=17";
-import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=13";
+import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=14";
 import { applyVisualTables } from "./visualdata.js?v=4";
 import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=11";
 import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=16";
@@ -37,10 +37,10 @@ import { infoLine, entryInfoLine } from "./wineline.js?v=4";
 import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, paintNoteMarks, teachHtml, autoCount } from "./tasting.js?v=16";
 import { gridFromNotes, mergeFromNotes, touched, legendEntry, compileWith } from "./notegrid.js?v=9";
 import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=10";
-import { createProfile } from "./profile.js?v=30";
+import { createProfile } from "./profile.js?v=31";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=19";
 import { createFeedback } from "./feedback.js?v=13";
-import { createEditor } from "./editor.js?v=57";
+import { createEditor } from "./editor.js?v=58";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=16";
 import { gamesHtml } from "./games.js?v=23";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
@@ -54,10 +54,11 @@ import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=3";
 import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
 import { setOffline, setCardLookup } from "./overlay.js?v=1";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
-let OWN = null, DEMO = null, IMP = null;
+let OWN = null, DEMO = null, IMP = null, ATL = null;
 const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=40"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=13"));
-const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=17"));
+const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=18"));
+const loadAtlasModule = async () => (ATL = ATL || await import("./atlasview.js?v=2"));   // the Atlas and its map data (about 150 KB), on first use
 import { createWineInfo } from "./wineinfo.js?v=38";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
@@ -1542,7 +1543,7 @@ function syncFoot() {
 }
 function openSheet() {
   state.sheetUi = { ...state.sheetUi, saving: false, error: "", page: 0 };
-  $("#overlay").innerHTML = sheetHtml(state.sheet, state.sheetUi);
+  $("#overlay").innerHTML = sheetHtml(state.sheet, { ...state.sheetUi, onMap: !!sheetPlaceKey(state.sheet) });
   showPhotos();   // the photos block (sharing.js)
   showExtras(); showWineLine();
 }
@@ -1961,6 +1962,52 @@ document.addEventListener("pointerup", (ev) => {
 document.addEventListener("pointercancel", () => { pageSwipe = null; });
 
 // ---------------------------------------------------------------- clicks and typing
+// ---------------------------------------------------------------- the Atlas (atlasview.js, loaded the first time it opens)
+// opts: { show: "journal" | "liked" | "catalog" | "untried", place: a place key, fit: "pins" }
+let atlas = null, atlasById = { cards: null, map: new Map() };
+async function openAtlas(opts = {}) {
+  try {
+    const M = await loadAtlasModule();
+    atlas = atlas || M.createAtlas(atlasCtx());
+    if (state.zoom) closeZoom();
+    atlas.open($("#atlas"), opts);
+    learn.ensureLoaded().then(() => { if (atlas && atlas.isOpen()) atlas.redraw(); }).catch(() => { /* the page simply has no Learn button */ });
+  } catch (e) { console.warn("Atlas", e); setBanner("The map could not be opened. Check the connection and try again."); }
+}
+const closeAtlas = () => { if (atlas) atlas.close(); };
+// The catalog wines the Atlas pins and suggests ("All wines", "Wines to try from here"): on the venue version only the venue's list.
+const atlasPool = () => venueCards().filter((c) => !c.archived);
+function atlasCtx() {
+  return {
+    cards: () => state.cards, pool: atlasPool, journal: () => state.journal, states: () => state.states,
+    cardsById: () => { if (atlasById.cards !== state.cards) atlasById = { cards: state.cards, map: new Map(state.cards.map((c) => [c.id, c])) }; return atlasById.map; },
+    nameOf: wineName, entryName,
+    suggest: atlasWines,
+    quizFor: (topics) => (learn.ready() ? learn.about(topics, 1).length : 0),
+    learnAbout: (topics, label) => { closeAtlas(); learn.focusOn(learn.about(topics, 500), label); state.tab = "learn"; render(); },
+    close: closeAtlas,
+    textScale: () => textScale(state.settings),
+  };
+}
+// Up to 3 wines from a place, picked by the player's taste model (recommend.js "Safe bet"), never one they have rated or turned down.
+function atlasWines(place) {
+  try {
+    const refs = structureMap(state.cards, state.refs);
+    const model = userModel({ cards: state.cards, states: state.states, journal: state.journal, quiz: state.quiz, refs });
+    const leaveOut = new Set([...state.journal.filter((e) => e.verdict && e.wine_vintage_id).map((e) => e.wine_vintage_id), ...state.states.filter((x) => reactionOf(x) === "dislike").map((x) => x.wine_vintage_id)]);
+    const topic = { kind: "region", name: place.name }, country = { kind: "country", name: place.country };
+    return recommend({ cards: atlasPool(), model, refs, crowd: state.crowd, journal: state.journal, states: state.states, lens: "confident", exclude: leaveOut, accept: (c) => GG.cardFitsTopic(c, topic) && GG.cardFitsTopic(c, country), limit: 3 });
+  } catch (e) { console.warn("Atlas: no wines to suggest", e && e.message); return []; }
+}
+// The place key for "Show on map" on a rating sheet: the catalog wine's place, or the place the player typed in.
+function sheetPlaceKey(sheet) {
+  if (!sheet) return null;
+  const entry = sheet.entryId && state.journal.find((e) => e.id === sheet.entryId);
+  const card = sheet.target.wineVintageId ? cardById(sheet.target.wineVintageId) : entry ? { country: entry.country || "", region: entry.region || "", appellation: "" } : null;
+  const plan = card && zoomPlan(card);   // the card map's own rule (flavors.js placeFor)
+  return plan ? plan.place.key : null;
+}
+
 // ---------------------------------------------------------------- the map overlay (zoommap.js)
 function openZoom(wineVintageId) {
   const card = cardById(wineVintageId), plan = card && zoomPlan(card);
@@ -1986,7 +2033,8 @@ document.addEventListener("click", (ev) => {
   if (keyboardOpen && ev.detail === 0) { openZoom(keyboardOpen.dataset.zoom); return; }   // Enter or Space on the focused map; a finger or mouse goes through the card's own tap handling
   if (!state.zoom) return;
   if (performance.now() - state.zoom.at < 400) return;   // the click that trails the tap which opened the map must not move it on or close it
-  if (ev.target.closest("[data-zoomclose]")) closeZoom();
+  if (ev.target.closest("[data-zoomatlas]")) { const key = state.zoom.plan.place.key; closeZoom(); openAtlas({ place: key }); }
+  else if (ev.target.closest("[data-zoomclose]")) closeZoom();
   else if (ev.target.closest("[data-zoomstage]")) zoomTap();
   else if (ev.target.matches("[data-zoomback]")) closeZoom();   // a tap outside the box
 });
@@ -2224,6 +2272,10 @@ document.addEventListener("click", async (ev) => {
       else { state.sheet = sheetForCard(cardById(a), today(), startFor(cardById(a))); openSheet(); }
     }
     else if (action === "entry") { const entry = state.journal.find((j) => j.id === a); if (entry) await openEntry(entry); }
+    else if (action === "atlas") {   // atlas:open[:journal|liked|catalog|untried], atlas:sheet (the wine on the rating sheet)
+      if (a === "sheet") { const key = sheetPlaceKey(state.sheet); closeOverlay(); await openAtlas({ place: key, show: "journal" }); }
+      else await openAtlas(b ? { show: b, fit: "pins" } : {});
+    }
     else if (action === "jtoggle") {
       const key = decodeURIComponent(a);
       const open = state.j.by === "flat" || state.j.q.trim() !== "" || (key in state.j.open ? state.j.open[key] : state.journal.length <= 10);

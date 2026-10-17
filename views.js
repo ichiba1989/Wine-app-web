@@ -192,7 +192,7 @@ export function journalShellHtml(j, pending = 0) {
         <select class="sortsel" data-jby aria-label="Group by">${GROUPS.map((g) => opt(g.id, "Group: " + g.label, j.by)).join("")}</select>
         <select class="sortsel" data-jverdict aria-label="Filter by verdict">${opt("all", "All verdicts", j.verdict)}${VERDICTS.map((v) => opt(v.code, v.short, j.verdict)).join("")}${opt("none", "No verdict yet", j.verdict)}</select>
       </div>
-      <div class="jimp"><button class="link small" data-action="qnote">${esc(say("note_title"))}</button>${proToolsOn() ? ` <button class="link small" data-action="blind:open">${esc(say("blind_title"))}${pending ? ` (${pending} waiting)` : ""}</button> <button class="link small" data-action="export:notes">Export my notes</button>` : ""} <button class="link small" data-action="import:open">Import wines from a file</button></div></div>
+      <div class="jimp"><button class="link small" data-action="atlas:open:journal">Map of my wines</button> <button class="link small" data-action="qnote">${esc(say("note_title"))}</button>${proToolsOn() ? ` <button class="link small" data-action="blind:open">${esc(say("blind_title"))}${pending ? ` (${pending} waiting)` : ""}</button> <button class="link small" data-action="export:notes">Export my notes</button>` : ""} <button class="link small" data-action="import:open">Import wines from a file</button></div></div>
     <div id="jmeta" class="jmeta"></div><div id="jlist"></div>`;
 }
 export function journalMetaHtml(entries, filtered, j, groups) {
@@ -326,7 +326,7 @@ export function footState(page, verdict, saving) {
   if (page < last) return { action: "next", label: "Next", disabled: page === 0 && !verdict };
   return { action: "save", label: "Save to journal", disabled: !verdict || !!saving };
 }
-export function sheetHtml(sheet, { saving = false, error = "", page = 0 } = {}) {
+export function sheetHtml(sheet, { saving = false, error = "", page = 0, onMap = false } = {}) {
   const verdicts = VERDICTS.map((v) => `<button class="vbtn${sheet.verdict === v.code ? " on" : ""}" data-sheet="verdict:${v.code}">${esc(v.label)}</button>`).join("");
   const canSave = !!sheet.verdict && !saving;
   const n = SHEET_PAGES.length;
@@ -347,7 +347,7 @@ export function sheetHtml(sheet, { saving = false, error = "", page = 0 } = {}) 
   return `<div class="overlay"><div class="sheet" id="sheetPanel" data-page="${page}">
     <div class="wtop">
       <div class="wnav"><button class="wcorner" data-sheet="prev" aria-label="Back">&lsaquo;</button><div class="wsteps" role="group" aria-label="Steps">${steps}</div><button class="wcorner" data-sheet="next" aria-label="Next">&rsaquo;</button></div>
-      <div class="sheethead"><div class="sheettitle"><div class="serif big">${esc(sheet.target.name)}</div><div class="muted small" id="wtitle">Step ${page + 1} of ${n}: ${esc(SHEET_PAGES[page].title)}</div></div>
+      <div class="sheethead"><div class="sheettitle"><div class="serif big">${esc(sheet.target.name)}</div><div class="muted small" id="wtitle">Step ${page + 1} of ${n}: ${esc(SHEET_PAGES[page].title)}</div>${onMap ? `<button class="link small" data-action="atlas:sheet">Show on map</button>` : ""}</div>
         <div class="sheetbtns"><button class="pill wine" data-sheet="save"${canSave ? "" : " disabled"}>Save</button><button class="xbtn" data-sheet="close" aria-label="Close">&times;</button></div></div>
     </div>
     <div class="wpages" id="wpages">${pages.map((h, i) => `<section class="wpage" data-wpage="${i}"${i === page ? "" : " hidden"}>${h}</section>`).join("")}</div>

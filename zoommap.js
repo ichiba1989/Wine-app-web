@@ -21,6 +21,7 @@ export function zoomHtml(plan, type = "red", step = 0) {
       </div>
       <div class="zcap" data-zoomcap>${esc(captionFor(plan, plan.steps[step]))}</div>
       ${dots}<div class="zhint" data-zoomhint>${esc(hintFor(plan, step))}</div>
+      <button class="pill zatlas" data-zoomatlas>Open in the Atlas</button>
     </div></div>`;
 }
 // Moves an open overlay to a step without redrawing it, so the layers can animate.
