@@ -8,8 +8,9 @@
 //      unzipped and merged into one outline per AOC with mapshaper (npm package, version 0.6; each AOC on its own, because AOCs overlap: Margaux
 //      lies inside Bordeaux and a merge of all of them together would give each piece of land to one AOC only):
 //        npx mapshaper@0.6 <the .shp> -filter 'type_prod === "Vins" && type_denom === "appellation"' -proj wgs84 -split app \
-//          -dissolve2 target=* gap-fill-area=1km2 -merge-layers target=* force -o <that folder>/aoc_france.geojson format=geojson precision=0.00001
-//      (needs a lot of memory: NODE_OPTIONS=--max-old-space-size=14000; a few minutes). The named sub-areas ("dénominations géographiques
+//          -dissolve2 target=* gap-fill-area=1km2 -merge-layers target=* force -o perapp.json format=geojson precision=0.00001
+//        npx mapshaper@0.6 perapp.json -simplify interval=120 keep-shapes -o <that folder>/aoc_france.geojson format=geojson precision=0.0001
+//      (needs a lot of memory: NODE_OPTIONS=--max-old-space-size=14000; the first step takes about 20 minutes and writes about 700 MB). The named sub-areas ("dénominations géographiques
 //      complémentaires") are left out; only appellations are kept. Without the file the French AOCs are simply left out.
 //   2. node docs/atlas_data.mjs <that folder>          (writes atlasdata.js in the repository root)
 //   3. Bump atlasdata.js?v= where it is imported (atlasview.js).
@@ -61,7 +62,8 @@ function dp(pts, tol) {   // Douglas-Peucker on [lon, lat], x scaled by the cosi
 }
 const rings = (geom) => (geom.type === "Polygon" ? [geom.coordinates[0]] : geom.type === "MultiPolygon" ? geom.coordinates.map((p) => p[0]) : []);
 // A ring as a flat list of integers: lon and lat times `scale` (100 = about 1 km, 1000 = about 100 m). Rings smaller than the tolerance are dropped.
-function pack(geom, tol, scale) {
+// keepOne: a wine area whose pieces are all small (Château-Grillet is a few hectares) keeps its biggest piece, drawn ten times finer, so it never vanishes.
+function pack(geom, tol, scale, keepOne = false) {
   const out = [];
   for (const r of rings(geom)) {
     const lons = r.map((p) => p[0]), lats = r.map((p) => p[1]);
@@ -76,6 +78,11 @@ function pack(geom, tol, scale) {
       flat.push(x - px, y - py); px = x; py = y;
     }
     if (flat.length >= 8) out.push(flat);
+  }
+  if (!out.length && keepOne) {
+    const all = rings(geom), size = (r) => { const xs = r.map((p) => p[0]), ys = r.map((p) => p[1]); return (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys)); };
+    const big = all.sort((a, b) => size(b) - size(a))[0];
+    if (big) return pack({ type: "Polygon", coordinates: [big] }, tol / 10, scale);
   }
   return out;
 }
@@ -105,7 +112,7 @@ const areas = [];
 for (const f of read("avas.geojson").features) {
   const p = f.properties;
   if (p.valid_end || p.removed) continue;   // only areas still in force
-  const polys = pack(f.geometry, 0.006, 1000);
+  const polys = pack(f.geometry, 0.006, 1000, true);
   // Other names the source gives (Los Carneros: "Carneros"); only short names, not the notes some rows carry there.
   const aka = String(p.aka || "").split(",").map((x) => x.trim()).filter((x) => x && x.split(/\s+/).length <= 4 && !/["“”]/.test(x));
   if (polys.length) areas.push({ name: p.name.trim(), ...(aka.length ? { aka } : {}), country: "USA", kind: "ava", source: "ava", polys });
@@ -119,7 +126,7 @@ if (existsSync(join(dir, "aoc_france.geojson"))) {
     // INAO writes the allowed alternatives into one name ("Alsace ou Vin d'Alsace", "Hermitage ou Ermitage ..."): the name stays whole, the
     // alternatives are kept as other names to match on.
     const aka = name.includes(" ou ") ? name.split(" ou ").map((x) => x.trim()).filter(Boolean) : [];
-    const polys = pack(f.geometry, 0.004, 1000);
+    const polys = pack(f.geometry, 0.004, 1000, true);
     if (polys.length) { areas.push({ name, ...(aka.length ? { aka } : {}), country: "France", kind: "aoc", source: "inao", polys }); n += 1; }
   }
   console.log(`French AOCs: ${n}`);
