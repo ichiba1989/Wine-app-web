@@ -1,5 +1,5 @@
 // Everything that talks to Supabase. Each function takes the client and throws on an error.
-import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=17";
+import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=18";
 import { BUCKET, newPhotoPath } from "./photos.js?v=5";
 import { LEGACY_OF } from "./reactions.js?v=3";
 import { overlayStates, overlayJournal, overlayCounts, overlayPerceptions, entryRowOf, isOffline } from "./overlay.js?v=1";
@@ -293,6 +293,21 @@ export async function flagWine(sb, userId, wineVintageId, reason, note) {
 }
 
 // ---------------------------------------------------------------- reference structure profiles
+// The sweetness term of sparkling wines (wines.dosage, docs/sparkling_dosage.sql), as a Map wine vintage id -> term; null before that script is run.
+// Read beside the catalog view because the view's own source is not in the repository yet (docs/catalog_speed.sql step 3); once it is, the
+// column belongs in the view. Only the few wines that have a term are read, then their vintages, 100 at a time.
+export async function loadDosages(sb) {
+  try {
+    const wines = await allRows(() => sb.from("wines").select("id, dosage").not("dosage", "is", null));
+    const byWine = new Map(wines.map((r) => [r.id, r.dosage])), ids = [...byWine.keys()], out = new Map();
+    const parts = await Promise.all(Array.from({ length: Math.ceil(ids.length / 100) }, (_, i) => sb.from("wine_vintages").select("id, wine_id").in("wine_id", ids.slice(i * 100, i * 100 + 100))));
+    parts.forEach((res) => must(res).forEach((v) => out.set(v.id, byWine.get(v.wine_id))));
+    return out;
+  } catch (e) {
+    if (/dosage|42703|PGRST204/.test(`${e.code || ""} ${e.message || e}`)) return null;
+    throw e;
+  }
+}
 export async function loadVintageWines(sb) {
   const rows = await allRows(() => sb.from("wine_vintages").select("id, wine_id"));
   return new Map(rows.map((r) => [r.id, r.wine_id]));
@@ -441,10 +456,18 @@ export async function loadWineInfo(sb, wineVintageId) {
   try { wine = must(await sb.from("wines").select("id, producer_id, name, vineyard, style, appellation_id, reach, status").eq("id", vintage.wine_id).single()); }
   catch (_) { wine = must(await sb.from("wines").select("id, producer_id, name, vineyard, style, appellation_id").eq("id", vintage.wine_id).single()); }   // before update 15
   const grapes = must(await sb.from("wine_grapes").select("grape_id, basis, position").eq("wine_id", wine.id).order("position", { ascending: true }));
+  try { wine.dosage = must(await sb.from("wines").select("dosage").eq("id", wine.id).single()).dosage || ""; } catch (_) { /* before docs/sparkling_dosage.sql: wine.dosage stays undefined */ }
   return { vintage, wine, grapes };
 }
+// The sweetness term to write (docs/sparkling_dosage.sql): only when the column exists and the term changed. Only sparkling wines keep one.
+// An editor's pick is marked as theirs; the source of an earlier term is cleared with it.
+function dosageChange(wine, values) {
+  if (wine.dosage === undefined) return {};
+  const want = values.style === "sparkling" ? values.dosage || "" : "";
+  return want === (wine.dosage || "") ? {} : { dosage: want || null, dosage_basis: want ? "editor" : null, dosage_source: null };
+}
 // Saves the form. Steps run in order; if one fails the message says which, and what was saved before it stays saved.
-// values: { producerName, wineName, vineyard, year, nonVintage, style, areaId, labelGrapes: [id], otherGrapes: [id], newGrapes: [name] }
+// values: { producerName, wineName, vineyard, year, nonVintage, style, dosage, areaId, labelGrapes: [id], otherGrapes: [id], newGrapes: [name] }
 export async function saveWineInfo(sb, userId, info, values, lists) {
   const step = async (label, fn) => { try { return await fn(); } catch (e) { throw new Error(`${label}: ${e.message || e}`); } };
   let producerId = info.wine.producer_id;
@@ -461,6 +484,7 @@ export async function saveWineInfo(sb, userId, info, values, lists) {
     producer_id: producerId, name: values.wineName.trim() || null, vineyard: values.vineyard.trim() || null,
     style: values.style, style_basis: "editor", appellation_id: values.areaId || null,
     ...(values.reach && info.wine.reach !== undefined ? { reach: Number(values.reach) } : {}),   // "how easy to find" exists after update 15
+    ...dosageChange(info.wine, values),
   }).eq("id", info.wine.id)));
   await step("Vintage", async () => must(await sb.from("wine_vintages").update({
     vintage_year: values.nonVintage ? null : Number(values.year), is_non_vintage: !!values.nonVintage,

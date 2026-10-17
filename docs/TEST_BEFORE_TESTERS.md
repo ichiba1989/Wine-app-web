@@ -204,3 +204,8 @@ No database script. Check on a phone:
 - [ ] A wine that names only a region (Domaine du Jaugaret, Bordeaux) shows no AOC on its card; a wine with an appellation (Margaux) still shows AOC.
 - [ ] Edit wine info on a region-only wine: the Designation row explains that a designation belongs to an appellation and offers no chips; adding the appellation "Bordeaux" brings back AOC from the rule list.
 
+## Catalog speed and sparkling sweetness terms (added 2026-10-17; all versions)
+- [ ] Run `docs/catalog_speed.sql` (step 0 should show geo_ancestor as "v" before and the explain should end well under 3000 ms after). The app's wine list loads (Discover shows cards) on a fresh phone with no saved copy.
+- [ ] Run `docs/sparkling_dosage.sql`, then `docs/sparkling_dosage_fill.sql`. The last query shows sparkling wines by basis: about 217 label, 10 source, 10 none / waiting for review. Open a few Champagne cards: the line reads "Sparkling · Brut · Champagne" and the wine name no longer repeats the term. Open a source-filled one in Edit wine info (Piper-Heidsieck Cuvée 1785: Brut) and check the page in the script still says so.
+- [ ] Editor, Catalog, waiting for review: the 10 unpublished sparkling wines (La Marca, Mionetto and Zonin Prosecco, Saracco Moscato d'Asti, Riunite Lambrusco, Monts Fournois Montagne Verzy, Gimonnet Special Club Cramant, Lancelot Perceval Chouilly Montaigu, La Caudrina Asti). Pick the term from the bottle (or "Not on the label") and publish each again.
+

@@ -1,6 +1,6 @@
 import { fold, splitGrapeText, checkGrapeText, grapeProblem } from "./grapes.js?v=2";
 import { reactionOf, skipsOf } from "./reactions.js?v=3";
-import { isComplete, missingFields } from "./catalog.js?v=5";
+import { isComplete, missingFields } from "./catalog.js?v=6";
 // Pure logic for the wine app web page. No browser and no network in this file,
 // so every rule here can be tested on its own.
 
@@ -57,6 +57,33 @@ export const WINE_STYLES = [
   { id: "fortified", label: "Fortified", dims: ["acidity", "body", "tannin", "sweetness", "oak"] },
 ];
 export const styleInfo = (id) => WINE_STYLES.find((x) => x.id === id) || null;
+
+// ---------------------------------------------------------------- how sweet a sparkling wine is, as its label says (owner, 2026-10-17)
+// Sparkling wines carry one of these terms on the label (EU rules for sparkling wine, Regulation (EU) 2019/33, Annex III part B, which also lists
+// the other-language words that mean the same: "pas dosé" and "dosage zéro" are Brut Nature, "trocken" and "secco" are Sec ...). It is kept in its
+// own field (wines.dosage, docs/sparkling_dosage.sql), not in the wine's name. Driest first. A term is only ever read from the label (or a source
+// that quotes it); it is never worked out from taste or price.
+export const DOSAGES = [
+  { id: "brut_nature", label: "Brut Nature", words: ["brut nature", "pas dose", "dosage zero", "zero dosage", "dosaggio zero", "non dose", "naturherb", "brut natur"] },
+  { id: "extra_brut", label: "Extra Brut", words: ["extra brut", "extra herb"] },
+  { id: "brut", label: "Brut", words: ["brut", "herb"] },
+  { id: "extra_dry", label: "Extra Dry", words: ["extra dry", "extra sec", "extra seco", "extra trocken", "extra secco"] },
+  { id: "sec", label: "Sec", words: ["sec", "dry", "secco", "asciutto", "seco", "trocken"] },
+  { id: "demi_sec", label: "Demi-Sec", words: ["demi sec", "demi-sec", "halbtrocken", "semi secco", "abboccato", "semi seco", "medium dry"] },
+  { id: "doux", label: "Doux", words: ["doux", "dolce", "dulce", "mild"] },
+];
+export const dosageLabel = (id) => (DOSAGES.find((d) => d.id === id) || {}).label || "";
+const dosageWords = DOSAGES.flatMap((d) => d.words.map((w) => ({ id: d.id, w: w.replace(/-/g, " ") }))).sort((a, b) => b.w.length - a.w.length);
+const plainWords = (s) => ` ${String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `;
+// Words that look like a term but are part of a name ("Dry Creek Valley", "Herbst"): taken out before looking.
+const NOT_DOSAGE = [" dry creek ", " dry river ", " dry farm ", " dry farmed ", " dry stack "];
+// The term written in a sparkling wine's name or title: { id, word } or null. Longest words first, so "Extra Brut" is never read as "Brut".
+export function dosageFromText(text) {
+  let t = plainWords(text);
+  NOT_DOSAGE.forEach((w) => { t = t.split(w).join(" "); });
+  for (const x of dosageWords) if (t.includes(` ${x.w} `)) return { id: x.id, word: x.w };
+  return null;
+}
 export const DEFAULT_STRUCTURE = 3;   // scale sliders start in the middle until a wine has a reference profile
 export const dimMeta = (key) => DIMS.find((d) => d.key === key);
 // The structure lines that apply to a wine of this style. An unknown style is treated as red.

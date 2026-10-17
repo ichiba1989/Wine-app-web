@@ -41,19 +41,20 @@ export function grapeKeyOfText(text) {
 // The loose key (producer, wine name, type, grapes) is how a submission is matched with the catalog.
 export const looseKey = (x) => [nameKey(x.producer), nameKey(x.wine_name ?? x.cuvee ?? ""), x.style || "", x.grapeKey ?? grapeSet(x.grapes)].join("¦");
 // The strict key also needs the same appellation. It decides which catalog vintages are the same wine, because archiving removes a wine from Discover.
-export const strictKey = (x) => looseKey(x) + "¦" + nameKey(x.appellation || "");
+export const strictKey = (x) => looseKey(x) + "¦" + nameKey(x.appellation || "") + (x.dosage ? "¦" + x.dosage : "");
 // The one rule for "the same wine, another vintage" (owner, 2026-10-15). Used when a wine is added (another vintage of a wine we have is
 // added to it, data.js addVenueCatalogWine) and, through strictKey, for "Same wine, different vintages" (duplicateGroups).
-//   the same producer and wine name (wineIdentity), the same type and the same place, and the same label grapes;
-//   a NAMED wine whose grapes are not on record on one side still counts (the name says which wine it is). A wine with no name needs the grapes too,
+//   the same producer and wine name (wineIdentity), the same type and the same place, and the same label grapes, and for a sparkling wine the same
+//   sweetness term (dosage) when both sides have one; a NAMED wine whose grapes are not on record on one side still counts (the name says which wine it is). A wine with no name needs the grapes too,
 //   so "Trimbach Riesling" and "Trimbach Pinot Gris" (both unnamed, white, Alsace) stay two wines, and one producer's two "Grand Cru" wines from
 //   different places stay two.
-// a / b: { producer, wine_name | cuvee | name, style, placeId | appellation, grapeKey | grapes (names) }. Places are compared by id when both
+// a / b: { producer, wine_name | cuvee | name, style, placeId | appellation, grapeKey | grapes (names), dosage }. Places are compared by id when both
 // have one, else by appellation name. This decides only when to ASK or reuse; it never renames anything.
 export const wineIdentity = (x) => `${nameKey(x.producer)}¦${nameKey(x.wine_name ?? x.cuvee ?? x.name ?? "")}`;
 const placeOf = (x) => (x.placeId !== undefined ? x.placeId || "" : nameKey(x.appellation || ""));
 export function sameWine(a, b) {
   if (wineIdentity(a) !== wineIdentity(b) || (a.style || "") !== (b.style || "") || placeOf(a) !== placeOf(b)) return false;
+  if (a.dosage && b.dosage && a.dosage !== b.dosage) return false;   // a producer's unnamed Brut and Extra Brut are two wines (the term is not in the name)
   const ga = a.grapeKey ?? grapeSet(a.grapes), gb = b.grapeKey ?? grapeSet(b.grapes);
   const named = !!nameKey(a.wine_name ?? a.cuvee ?? a.name ?? "");
   return ga === gb || (named && (!ga || !gb));
@@ -140,7 +141,7 @@ export function planPromotion(cand, lists = { producers: [], grapes: [] }) {
 export function duplicateGroups(cards) {
   const map = new Map();
   (cards || []).filter((c) => live(c) && yearOf(c) != null).forEach((c) => {
-    const k = strictKey({ producer: c.producer, cuvee: c.cuvee, style: c.style, grapes: c.grapes, appellation: c.appellation });
+    const k = strictKey({ producer: c.producer, cuvee: c.cuvee, style: c.style, grapes: c.grapes, appellation: c.appellation, dosage: c.dosage });
     if (!map.has(k)) map.set(k, []);
     map.get(k).push(c);
   });

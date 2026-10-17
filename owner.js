@@ -2,12 +2,12 @@
 // Every table can be searched and sorted (tap a heading). It is reached from the gear (Settings) and only offered to the owner; the database
 // still decides what anyone may change. The rules at the top (rows, search, sort, checks, coverage) are pure: no page, no network.
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
-import { esc } from "./logic.js?v=17";
-import { REACH_CHOICES } from "./wineinfo.js?v=27";
+import { esc } from "./logic.js?v=18";
+import { REACH_CHOICES } from "./wineinfo.js?v=28";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=4";
-import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=9";
+import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=10";
 import { TAG_KINDS } from "./tags.js?v=4";
-import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=12";
+import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=13";
 import { centsToField } from "./pricing.js?v=3";
 import { ASSIGNABLE_ROLES, ROLES, PERMISSIONS, staffRows, filterStaff, rowActions } from "./access.js?v=4";
 import { plainKey } from "./text.js?v=2";
@@ -32,7 +32,7 @@ export function wineRows(cards) {
       id: c.id, producer: c.producer || "", wine: c.cuvee || "", year: c.vintage === "NV" ? null : (Number(raw.vintage_year) || Number(c.vintage) || null), yearText: c.vintage || "",
       style: c.style || "", country: c.country || "", place: [c.appellation, c.region].filter((x, i, a) => x && a.indexOf(x) === i).join(" · "),
       grapes: [...(c.grapes || []), ...(c.ruleGrapes || [])].join(", "), reach: c.reach == null ? null : Number(c.reach), price: typeof c.price === "number" ? c.price : null,
-      photo: c.photo ? (c.imageKind || "photo") : "", hasPhoto: !!c.photo, photoKind: c.imageKind || "", tags: "", tagIds: [],
+      photo: c.photo ? (c.imageKind || "photo") : "", hasPhoto: !!c.photo, photoKind: c.imageKind || "", tags: "", tagIds: [], dosage: c.dosage || "",
     };
   });
 }
@@ -44,6 +44,7 @@ export const ISSUES = [
   { id: "nograpes", label: "No grape listed", test: (r) => !r.grapes },
   { id: "noregion", label: "No region or appellation", test: (r) => !r.place },
   { id: "nostyle", label: "Type unknown", test: (r) => !r.style || r.style === "unknown" },
+  { id: "nodosage", label: "Sparkling with no sweetness term (Brut, Extra Brut ...)", test: (r) => r.style === "sparkling" && !r.dosage },
 ];
 export const issueById = (id) => ISSUES.find((i) => i.id === id) || null;
 export function checkCounts(rows) { return ISSUES.map((i) => ({ id: i.id, label: i.label, count: rows.filter(i.test).length })); }

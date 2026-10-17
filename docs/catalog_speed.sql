@@ -4,6 +4,18 @@
 -- allows a visitor's read, so the app could not load the wine list. The app now reads it in 16 pieces (data.js loadCards), which works but takes
 -- about 5 seconds. Measured from outside: the view's region and country columns cost about 1.5 milliseconds per wine each, everything else is cheap.
 --
+-- 0. The likely cause. The views find a wine's region and country with "where geo_areas.id = geo_ancestor(w.appellation_id, 'region')" (see the
+--    view text kept in docs/soft_delete.sql). Unless geo_ancestor is marked STABLE, Postgres calls it once for EVERY place in geo_areas, for every
+--    wine, twice (about 290 x 1,900 x 2 walks up the place tree). It only reads the place list, so STABLE is true of it, and Postgres can then
+--    call it once per wine and use the primary key. First look at what it is now (provolatile: v = volatile, the slow case; s = stable; i = immutable):
+select p.oid::regprocedure as function, p.provolatile, l.lanname as language from pg_proc p join pg_language l on l.oid = p.prolang where p.proname = 'geo_ancestor';
+--    then mark it stable (does nothing if it already is):
+do $$ declare f regprocedure; begin
+  for f in select p.oid::regprocedure from pg_proc p join pg_namespace n on n.oid = p.pronamespace where p.proname = 'geo_ancestor' and n.nspname = 'public' and p.provolatile = 'v' loop
+    execute format('alter function %s stable', f);
+  end loop;
+end $$;
+
 -- 1. Indexes on the columns the view joins on. Postgres does not make these by itself for foreign keys. Each is skipped if it is already there.
 create index if not exists geo_areas_parent_idx       on public.geo_areas (parent_id);
 create index if not exists wines_appellation_idx      on public.wines (appellation_id);

@@ -2,7 +2,7 @@
 import {
   FAMILIARITY, FLAGS, VERDICTS, isChoice, GROUPS, GROUP_PAGE, SORTS, YEARS,
   esc, wineName, entryCard, entryName, entryIncomplete, entryMissing, verdictShort, groupEntries, filterEntries, sortCards,
-  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims } from "./logic.js?v=17";
+  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims, dosageLabel } from "./logic.js?v=18";
 import { splitGrapeParts, splitPlace } from "./blends.js?v=2";
 import { REACTIONS, iconHtml, SKIP_LIMIT } from "./reactions.js?v=3";
 import { say, proToolsOn } from "./words.js?v=1";
@@ -75,7 +75,8 @@ export function cardHtml(c, { mapHint = false } = {}) {
   const map = v.map ? `<${v.zoomable ? "button" : "div"} class="mapbtn${v.zoomable ? "" : " still"}"${v.zoomable ? ` data-zoom="${esc(c.id)}" aria-label="Show where this wine is from"` : ""}>${v.map}${v.zoomable ? mapZoomIconHtml(mapHint) : ""}</${v.zoomable ? "button" : "div"}>` : "";
   const place = c.appellation || c.region || c.country || "";
   const flag = FLAGS[c.country];
-  const summary = [t.label !== "Other" ? esc(t.label) : "", place ? `${flag ? `<span class="flag">${flag}</span> ` : ""}${esc(place)}` : ""].filter(Boolean).join(" · ");
+  const dosage = c.style === "sparkling" && c.dosage ? dosageLabel(c.dosage) : "";   // how sweet, as the label says (logic.js DOSAGES)
+  const summary = [t.label !== "Other" ? esc(t.label) : "", dosage ? esc(dosage) : "", place ? `${flag ? `<span class="flag">${flag}</span> ` : ""}${esc(place)}` : ""].filter(Boolean).join(" · ");
   const facts = c.facts.filter((f) => f.text !== place);   // the place is already in the summary line
   return `<div class="card" id="card">${labels}<button class="zreset" data-zreset hidden aria-label="Reset zoom">Reset zoom</button>
     <div class="body">
