@@ -237,7 +237,7 @@ No database script. Check on a phone:
 ## The Atlas (added 2026-10-17; all versions)
 - [ ] On a phone: Learn, Atlas. The world shows with your journal's pins; pinch, drag, + / - and the house button work, and the page does not scroll or zoom behind the map.
 - [ ] Tap a pin (a number zooms into the cluster), open a place: the chain (country › region), the climate line, grapes, notes, "Your wines from here" (tap one: the rating sheet opens over the map) and "Wines to try from here". On `vwm` the wines to try are only the shop's.
-- [ ] Find a place by name; a US wine area (Napa Valley, Los Carneros via "Carneros") shows its outline. A European one says "No outline on file".
+- [ ] Find a place by name; a US wine area (Napa Valley, Los Carneros via "Carneros") and a French AOC (Margaux, St.-Julien, Chablis) show their outline, with INAO named under the French ones. The region Bordeaux and an Italian place say "No outline on file".
 - [ ] Journal, "Map of my wines"; a rating sheet's "Show on map"; Profile, Explored, "See them on the map"; the card's map, "Open in the Atlas".
 - [ ] "Learn about ..." on a place opens Learn on those questions (needs tagged or naming questions).
 - [ ] Offline after the Atlas was opened once: it opens again with no connection.

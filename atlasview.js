@@ -2,14 +2,16 @@
 // back to the world), their wines pinned on it, and a page for each place. Opened from Learn, the Journal, a journal entry, the card's map and Profile.
 // Loaded on first use (app.js loadAtlasModule) with its map data, so it costs nothing at start-up. The rules are in atlas.js; this file draws and listens.
 // While a finger moves only the map's viewBox changes; pins and labels are drawn again when the finger lifts.
-import * as A from "./atlas.js?v=2";
-import * as DATA from "./atlasdata.js?v=1";
+import * as A from "./atlas.js?v=3";
+import * as DATA from "./atlasdata.js?v=2";
 import { esc } from "./logic.js?v=21";
 
 const SEA = "#d6e4ea", LAND = "#efeadb", WINE_LAND = "#f6f1e1", BORDER = "#9aa893", PROVINCE = "#c4bfa8", AREA = "#7b2d43";
 const STYLE_WORD = { red: "Red", white: "White", sparkling: "Sparkling", rose: "Rosé", fortified: "Fortified" };
 const KIND_WORD = { country: "Country", region: "Region", appellation: "Wine area" };
 let SHAPES = null;   // built once, the first time the Atlas opens
+// A French AOC wider than about 60 km (Bordeaux, Crémant de Bourgogne, Languedoc ...) would blanket the map with its scattered vineyard pieces.
+const wide = (a) => Math.max(a.bbox[2] - a.bbox[0], a.bbox[3] - a.bbox[1]) > 0.8;
 
 // ctx: { cards(), pool(), journal(), states(), cardsById(), nameOf(card), entryName(entry), suggest(place) -> [{ card, reason }],
 //        quizFor(topics) -> number of questions, learnAbout(topics, label), textScale() }
@@ -75,7 +77,7 @@ export function createAtlas(ctx) {
           <button data-atlas="zin" aria-label="Zoom in">+</button><button data-atlas="zout" aria-label="Zoom out">&minus;</button><button data-atlas="world" aria-label="Back to the whole world">&#8962;</button>
         </div>
         <div class="ascale" data-atlas-scale></div>
-        <div class="asrc">Map data: <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a>, <a href="https://github.com/UCDavisLibrary/ava" target="_blank" rel="noopener">UC Davis AVA project</a></div>
+        <div class="asrc">Map data: <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a>, <a href="https://github.com/UCDavisLibrary/ava" target="_blank" rel="noopener">UC Davis AVA project</a>, <a href="https://www.data.gouv.fr/datasets/delimitation-parcellaire-des-aoc-viticoles-de-linao" target="_blank" rel="noopener">INAO</a></div>
         <div class="anote" data-atlas-note></div>
       </div>
       <div class="apage" data-atlas-page hidden></div>
@@ -92,8 +94,11 @@ export function createAtlas(ctx) {
     if (!svg.dataset.drawn) {
       const countries = SHAPES.countries.map((c) => `<path class="acountry${c.wine ? " wine" : ""}" d="${c.d}" fill="${c.wine ? WINE_LAND : LAND}" stroke="${BORDER}"/>`).join("");
       const provinces = SHAPES.provinces.map((p) => `<path d="${p.d}"/>`).join("");
-      const areas = SHAPES.areas.map((a, i) => `<path data-area="${i}" d="${a.d}"/>`).join("");
-      svg.innerHTML = `<rect x="-2000" y="-2000" width="5000" height="5000" fill="${SEA}"/><g class="aland">${countries}</g><g class="aprov" fill="none" stroke="${PROVINCE}">${provinces}</g><g class="aareas" fill="${AREA}" fill-opacity=".08" stroke="${AREA}" stroke-opacity=".55">${areas}</g><path class="asel" data-atlas-sel d="" fill="${AREA}" fill-opacity=".18" stroke="${AREA}"/>`;
+      // US wine areas are solid shapes and get a light fill. French AOCs are the vineyard land itself (patchy, and they overlap: Margaux lies inside
+      // Bordeaux), so they are thin lines only, and the very wide ones (Bordeaux, Bourgogne, Côtes du Rhône ...) are drawn only when their page is open.
+      const areas = SHAPES.areas.map((a, i) => (a.kind === "aoc" ? "" : `<path data-area="${i}" d="${a.d}"/>`)).join("");
+      const aocs = SHAPES.areas.map((a, i) => (a.kind === "aoc" && !wide(a) ? `<path data-area="${i}" d="${a.d}"/>` : "")).join("");
+      svg.innerHTML = `<rect x="-2000" y="-2000" width="5000" height="5000" fill="${SEA}"/><g class="aland">${countries}</g><g class="aprov" fill="none" stroke="${PROVINCE}">${provinces}</g><g class="aareas" fill="${AREA}" fill-opacity=".08" stroke="${AREA}" stroke-opacity=".55">${areas}</g><g class="aareas aaoc" fill="none" stroke="${AREA}" stroke-opacity=".4">${aocs}</g><path class="asel" data-atlas-sel d="" fill="${AREA}" fill-opacity=".22" stroke="${AREA}"/>`;
       svg.dataset.drawn = "1";
     }
     setViewBox();
@@ -119,7 +124,7 @@ export function createAtlas(ctx) {
       SHAPES.countries.filter((c) => c.label && (hasWines.has(c.name) || level === "country")).forEach((c) => { const xy = P(c.label[0], c.label[1]); if (inside(xy)) labels.push({ x: xy[0], y: xy[1], text: c.name, size: (hasWines.has(c.name) ? 12 : 10) * k, cls: hasWines.has(c.name) ? "lc" : "lc dim", dot: false, caps: true, act: `country:${c.name}` }); });
     // Wine areas with a boundary (the region view and closer): their names on the shape.
     if (level === "region" || level === "local")
-      SHAPES.areas.forEach((a) => { const xy = P(a.label[0], a.label[1]); if (inside(xy)) labels.push({ x: xy[0], y: xy[1], text: a.name, size: 9.5 * k, cls: "la", dot: false }); });
+      SHAPES.areas.forEach((a) => { if (a.kind === "aoc" && wide(a)) return; const xy = P(a.label[0], a.label[1]); if (inside(xy)) labels.push({ x: xy[0], y: xy[1], text: a.name, size: 9.5 * k, cls: "la", dot: false }); });
     // Places: tappable dots.
     const pinData = pinSet(), groups = A.byPlace(pinData.pins), pinned = new Set(groups.map((g) => g.place.key));
     const untried = st.show === "untried" ? new Set(A.untriedPlaces(places(), pinData.pins).map((p) => p.key)) : null;
@@ -305,7 +310,7 @@ export function createAtlas(ctx) {
   function placeHtml(f) {
     const p = f.place;
     const chain = f.chain.map((s, i) => (i === f.chain.length - 1 ? `<b>${esc(s.name)}</b>` : s.kind === "country" ? `<button class="alink" data-atlas="country:${esc(s.name)}">${esc(s.name)}</button>` : s.key ? `<button class="alink" data-atlas="place:${esc(s.key)}">${esc(s.name)}</button>` : esc(s.name))).join(" › ");
-    const boundary = f.area ? `Outline: the official American Viticultural Area (UC Davis AVA project).` : `No outline on file: the dot marks roughly where it is.`;
+    const boundary = f.area ? A.AREA_SOURCE[f.area.source] || "" : `No outline on file: the dot marks roughly where it is.`;
     const mine = myWinesHere(p);
     const tries = ctx.suggest(p) || [];
     const tryRows = tries.map((r) => `<div class="jrow still"><span class="jl"><span class="serif trunc">${esc(ctx.nameOf(r.card))}</span>${r.reason ? `<span class="meta">${esc(r.reason)}</span>` : ""}</span><button class="pill" data-action="review:${esc(r.card.id)}">I've had it: rate it</button></div>`).join("");

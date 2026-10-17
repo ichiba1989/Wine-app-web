@@ -58,7 +58,7 @@ let OWN = null, DEMO = null, IMP = null, ATL = null;
 const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=40"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=13"));
 const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=18"));
-const loadAtlasModule = async () => (ATL = ATL || await import("./atlasview.js?v=2"));   // the Atlas and its map data (about 150 KB), on first use
+const loadAtlasModule = async () => (ATL = ATL || await import("./atlasview.js?v=3"));   // the Atlas and its map data (about 290 KB compressed), on first use
 import { createWineInfo } from "./wineinfo.js?v=38";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
