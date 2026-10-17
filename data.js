@@ -1,5 +1,5 @@
 // Everything that talks to Supabase. Each function takes the client and throws on an error.
-import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=19";
+import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=20";
 import { BUCKET, newPhotoPath } from "./photos.js?v=5";
 import { LEGACY_OF } from "./reactions.js?v=3";
 import { overlayStates, overlayJournal, overlayCounts, overlayPerceptions, entryRowOf, isOffline } from "./overlay.js?v=1";
@@ -52,30 +52,46 @@ export async function attestAge(sb, userId) {
 // ---------------------------------------------------------------- reading
 export const PHOTO_BUCKET = "wine-images";   // real bottle photos, public to read, editors only to change
 export const photoUrl = (sb, path) => (path ? sb.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl : null);
-// The catalog view takes a few milliseconds per wine and the database stops any read after 3 seconds, so since the catalog passed about 1,500
-// wines (2026-10-17) it is read in 16 pieces by id, three at a time (more at once only slows each piece down). A piece that is still too slow is
-// split in two and read again. docs/catalog_speed.sql makes the view itself faster.
+// The catalog is read in pieces by id, small ones first, so the first card can be shown as soon as the first piece arrives (owner, 2026-10-17):
+// 1/64 of the ids (about 30 wines), 1/64, 1/32, 1/16, then 1/16 at a time, three at once (more at once only slows each piece down). Ids are random,
+// so every piece is a fair sample of the catalog. A piece that is too slow for the database's 3-second limit is split in two and read again
+// (docs/catalog_speed.sql made the view itself fast). Pure; exported for a test: [from, to) ranges of the first 8 hex digits, covering all ids once.
+const ID_SPACE = 0x100000000;
+export function cardPieces() {
+  const out = []; let lo = 0;
+  for (const f of [64, 64, 32, 16]) { out.push([lo, lo + ID_SPACE / f]); lo += ID_SPACE / f; }
+  while (lo < ID_SPACE) { out.push([lo, Math.min(ID_SPACE, lo + ID_SPACE / 16)]); lo += ID_SPACE / 16; }
+  return out;
+}
 const ID_TAIL = "-0000-0000-0000-000000000000";
 const idAt = (n) => n.toString(16).padStart(8, "0") + ID_TAIL;   // the first id whose leading 8 hex digits are n
-async function cardRows(sb) {
-  const pieces = Array.from({ length: 16 }, (_, i) => [i * 0x10000000, (i + 1) * 0x10000000]);
+// opts.onPiece(rows): called as each piece arrives. opts.saved: read only this phone's saved copy (offline.js), never the network; a piece that
+// was never saved makes the whole read fail, so the caller falls back to the network.
+async function cardRows(sb, { onPiece = null, saved = false } = {}) {
   const read = async ([lo, hi], depth = 0) => {
     let q = sb.from("v_catalog_cards").select("*").gte("wine_vintage_id", idAt(lo));
-    if (hi < 0x100000000) q = q.lt("wine_vintage_id", idAt(hi));
+    if (hi < ID_SPACE) q = q.lt("wine_vintage_id", idAt(hi));
+    if (saved) q = q.saved();
     const res = await q;
     if (!res.error) return res.data || [];
-    if (res.error.code !== "57014" || depth >= 4) throw new Error(res.error.message || String(res.error));   // 57014: the read took too long
+    if (saved || res.error.code !== "57014" || depth >= 4) throw new Error(res.error.message || String(res.error));   // 57014: the read took too long
     const mid = Math.floor((lo + hi) / 2);
     return [...await read([lo, mid], depth + 1), ...await read([mid, hi], depth + 1)];
   };
-  const out = [];
-  const worker = async () => { while (pieces.length) out.push(...await read(pieces.shift())); };
+  const pieces = cardPieces(), out = [];
+  const take = (rows) => { out.push(...rows); if (onPiece) onPiece(rows); };
+  take(await read(pieces.shift()));   // the first, smallest piece alone, so it comes back fastest
+  const worker = async () => { while (pieces.length) take(await read(pieces.shift())); };
   await Promise.all([worker(), worker(), worker()]);
   return out;
 }
-export async function loadCards(sb) {
-  return (await cardRows(sb)).map((r) => { const c = cardFromRow(r); c.photo = photoUrl(sb, c.image); c.imageKind = r.image_kind || null; c.imageNote = r.image_note || null; return { ...c, raw: r }; });   // raw: the full catalog row, used by the structure editor
-}   // raw: the full catalog row, used by the structure rules
+const toCard = (sb, r) => { const c = cardFromRow(r); c.photo = photoUrl(sb, c.image); c.imageKind = r.image_kind || null; c.imageNote = r.image_note || null; return { ...c, raw: r }; };   // raw: the full catalog row, used by the structure editor
+// The whole catalog as cards. opts.onPiece(cards) gets each piece's cards as they arrive; opts.saved reads the phone's copy only (see cardRows).
+export async function loadCards(sb, { onPiece = null, saved = false } = {}) {
+  const cards = [];
+  await cardRows(sb, { saved, onPiece: (rs) => { const made = rs.map((r) => toCard(sb, r)); cards.push(...made); if (onPiece) onPiece(made); } });
+  return cards;
+}
 export async function loadStates(sb) {
   const r = await sb.from("v_user_wine_state").select("wine_vintage_id, familiarity, interest, reaction, skip_count, last_swiped_at");
   if (!r.error) return overlayStates(r.data);   // plus what this phone has done that the server has not heard yet (offline.js)
@@ -701,7 +717,16 @@ const venueMissing = (error) => (error && (error.code === "42P01" || /venue_wine
 export async function loadVenueList(sb, venueId) {
   // A shop's list can be longer than the 1000 rows one read returns, so it is read 1000 at a time (in a fixed order, so no row is missed or read twice).
   // The website links (docs/venue_links.sql) are read too; before that update the list is read without them.
-  const read = (cols) => allRows(() => sb.from("venue_wines").select(cols).eq("venue_id", venueId).order("id"));
+  // The first page also says how many rows there are; the other pages are then read at the same time (2026-10-17: it was one after another).
+  const read = async (cols) => {
+    const q = (counted) => sb.from("venue_wines").select(cols, counted ? { count: "exact" } : undefined).eq("venue_id", venueId).order("id");
+    const first = await q(true).range(0, 999), rows = must(first);
+    if (rows.length < 1000) return rows;
+    if (typeof first.count !== "number") return [...rows, ...(await allRows(() => q(false))).slice(1000)];   // no count (a saved copy): one page after another
+    const froms = []; for (let from = 1000; from < first.count; from += 1000) froms.push(from);
+    const rest = await Promise.all(froms.map(async (from) => must(await q(false).range(from, from + 999))));
+    return [...rows, ...rest.flat()];
+  };
   const base = "id, wine_vintage_id, producer, wine_name, vintage, shop_type, source, added_at";
   try { return await read(`${base}, product_url, link_status, link_checked_at`); }
   catch (e) {

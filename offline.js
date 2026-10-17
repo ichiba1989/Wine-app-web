@@ -81,12 +81,12 @@ export function createOffline({ store, online = () => (typeof navigator === "und
   function wrap(sb) {
     const recorder = (spec) => {
       const calls = [];
-      let marked = false, effect = null;
+      let marked = false, effect = null, savedOnly = false;
       const exec = () => { let q = spec.rpc ? sb.rpc(spec.rpc, spec.args, spec.opts) : sb.from(spec.table); for (const [m, a] of calls) q = q[m](...a); return q; };
       const run = async () => {
         await load();
         const isWrite = spec.rpc ? !CACHEABLE_RPC.has(spec.rpc) : calls.some(([m]) => WRITE.has(m));
-        if (!isWrite) return read();
+        if (!isWrite) return savedOnly ? fromCache(cacheKey(), { data: null, count: null, status: 0, error: { message: "Not saved on this phone yet.", code: "NOT_SAVED" } }) : read();
         return marked ? queued() : direct();
       };
       const direct = async () => {
@@ -130,6 +130,8 @@ export function createOffline({ store, online = () => (typeof navigator === "und
           if (prop === "catch") return (rej) => run().catch(rej);
           if (prop === "finally") return (f) => run().finally(f);
           if (prop === "queue") return (eff) => { marked = true; if (eff) effect = eff; return proxy; };
+          // .saved(): a read answered from this phone's saved copy only, never the network (to open at once, then refresh behind it).
+          if (prop === "saved") return () => { savedOnly = true; return proxy; };
           if (typeof prop === "symbol") return undefined;
           return (...args) => { calls.push([prop, args]); return proxy; };
         },

@@ -1,15 +1,15 @@
 // Wine info (editors only): change a catalog wine's details. Producer, wine name, vineyard, vintage, type of wine,
 // place, the grapes printed on the label, and other grapes in the wine (for blends the label does not list).
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
-import { esc, WINE_STYLES, DOSAGES, dosageFromText } from "./logic.js?v=19";
+import { esc, WINE_STYLES, DOSAGES, dosageFromText } from "./logic.js?v=20";
 import { checkGrapeText, grapeProblem, grapeIndex, setExtraGrapes } from "./grapes.js?v=3";
 import { expandBlends, BLEND_NAMES } from "./blends.js?v=3";
 import { infoLine } from "./wineline.js?v=4";
 import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, savePlace, designationChoices, designationFromText, designationPlan, placeDesignation, splitDesignation, BROAD_PLACES, ruleDesignation } from "./geo.js?v=9";
 import { loadWinePrice, saveWinePrice, parsePrice, centsToField, blendPrice, formatPrice } from "./pricing.js?v=4";
 import { archivePlanFor } from "./catalog.js?v=7";
-import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=24";
-import * as db from "./data.js?v=49";
+import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=25";
+import * as db from "./data.js?v=50";
 import { caseKey, lookalikes } from "./text.js?v=3";
 
 // ---------------------------------------------------------------- how sweet a sparkling wine is (owner, 2026-10-17; logic.js DOSAGES)

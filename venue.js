@@ -6,7 +6,7 @@
 // The list is kept in the database (venue_wines, docs/venue_decks.sql): the owner uploads the venue's file and adds or removes wines by hand on the Owner page.
 // Pure: no browser, no network. The file reading itself is done by importer.js, loaded on the Owner page.
 import { grapeFor } from "./rules.js?v=6";
-import { DOSAGES } from "./logic.js?v=19";
+import { DOSAGES } from "./logic.js?v=20";
 import { planPlace, designationPlan } from "./geo.js?v=9";
 import { duplicateGroups } from "./catalog.js?v=7";
 import { plainKey, matchKey, caseKey, lookalikes } from "./text.js?v=3";

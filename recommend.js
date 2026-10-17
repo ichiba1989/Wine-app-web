@@ -14,7 +14,7 @@ import { prefOf, famOf, cardKeys, isLive, reachOf, VERDICT_WEIGHT, UNRATED_WEIGH
 import { flavorsForCard } from "./flavors.js?v=4";
 import { splitGrapeText } from "./grapes.js?v=3";
 import { splitPlace } from "./blends.js?v=3";
-import { wineName } from "./logic.js?v=19";
+import { wineName } from "./logic.js?v=20";
 import { plainKey } from "./text.js?v=3";
 
 const fold = plainKey;   // text.js: the shared lookup key
