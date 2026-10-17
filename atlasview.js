@@ -2,7 +2,7 @@
 // back to the world), their wines pinned on it, and a page for each place. Opened from Learn, the Journal, a journal entry, the card's map and Profile.
 // Loaded on first use (app.js loadAtlasModule) with its map data, so it costs nothing at start-up. The rules are in atlas.js; this file draws and listens.
 // While a finger moves only the map's viewBox changes; pins and labels are drawn again when the finger lifts.
-import * as A from "./atlas.js?v=1";
+import * as A from "./atlas.js?v=2";
 import * as DATA from "./atlasdata.js?v=1";
 import { esc } from "./logic.js?v=20";
 
@@ -75,7 +75,7 @@ export function createAtlas(ctx) {
           <button data-atlas="zin" aria-label="Zoom in">+</button><button data-atlas="zout" aria-label="Zoom out">&minus;</button><button data-atlas="world" aria-label="Back to the whole world">&#8962;</button>
         </div>
         <div class="ascale" data-atlas-scale></div>
-        <div class="asrc">Map data: <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a>, <a href="https://github.com/UCDavisLibrary/ava" target="_blank" rel="noopener">UC Davis AVA project</a></div>
+        <div class="asrc">Map data: <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a>, <a href="https://github.com/UCDavisLibrary/ava" target="_blank" rel="noopener">UC Davis AVA project</a>, <a href="https://www.data.gouv.fr/datasets/delimitation-parcellaire-des-aoc-viticoles-de-linao" target="_blank" rel="noopener">INAO</a></div>
         <div class="anote" data-atlas-note></div>
       </div>
       <div class="apage" data-atlas-page hidden></div>
@@ -305,7 +305,7 @@ export function createAtlas(ctx) {
   function placeHtml(f) {
     const p = f.place;
     const chain = f.chain.map((s, i) => (i === f.chain.length - 1 ? `<b>${esc(s.name)}</b>` : s.kind === "country" ? `<button class="alink" data-atlas="country:${esc(s.name)}">${esc(s.name)}</button>` : s.key ? `<button class="alink" data-atlas="place:${esc(s.key)}">${esc(s.name)}</button>` : esc(s.name))).join(" › ");
-    const boundary = f.area ? `Outline: the official American Viticultural Area (UC Davis AVA project).` : `No outline on file: the dot marks roughly where it is.`;
+    const boundary = f.area ? A.AREA_SOURCE[f.area.source] || "" : `No outline on file: the dot marks roughly where it is.`;
     const mine = myWinesHere(p);
     const tries = ctx.suggest(p) || [];
     const tryRows = tries.map((r) => `<div class="jrow still"><span class="jl"><span class="serif trunc">${esc(ctx.nameOf(r.card))}</span>${r.reason ? `<span class="meta">${esc(r.reason)}</span>` : ""}</span><button class="pill" data-action="review:${esc(r.card.id)}">I've had it: rate it</button></div>`).join("");

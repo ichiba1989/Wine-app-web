@@ -2,13 +2,14 @@
 //   Projection: Web Mercator, the world 1000 units wide (W). The map is one SVG whose viewBox is the view { x, y, w, h } in those units, so zooming and
 //   panning only change four numbers; lines keep their width (vector-effect in the CSS) and labels and pins are drawn in screen pixels on top.
 //   Borders come from open map data (atlasdata.js, built by docs/atlas_data.mjs: Natural Earth, public domain; US wine areas from the UC Davis AVA
-//   project, CC0). Places are the ones the app already knows with a position (flavors.js tables, flavordata.js PLACES); village names are geodata.js VILLAGES.
+//   project, CC0; French AOCs from INAO's published parcel delimitation, Licence Ouverte). Places are the ones the app already knows with a position (flavors.js tables, flavordata.js PLACES); village names are geodata.js VILLAGES.
 //   A place page holds only what is stored: the catalog's wines from there, the grapes its rule names (rule_grapes), its designation (appellations only),
 //   the climate rule (rules.js climateOf) and the flavour notes the place adds (flavordata.js). Nothing is guessed about a wine or a place.
 // Pure: no browser, no network. atlasview.js draws it and handles the fingers.
 import { tables, placeFor } from "./flavors.js?v=3";
 import { LABEL, fold, placeKey } from "./flavordata.js?v=3";
 import { VILLAGES } from "./geodata.js?v=1";
+import { matchKey } from "./text.js?v=2";
 import { climateOf, norm } from "./rules.js?v=5";
 import { reactionOf } from "./reactions.js?v=3";
 
@@ -48,16 +49,23 @@ export function buildShapes(data) {
   const provinces = Object.entries(data.PROVINCES).flatMap(([country, list]) => list.map((p) => ({ country, name: p.name, d: p.polys.map((q) => ringD(unpack(q, data.SCALE))).join("") })));
   const areas = data.AREAS.map((a) => {
     const rings = a.polys.map((p) => unpack(p, data.AREA_SCALE));
-    return { name: a.name, aka: a.aka || [], country: a.country, kind: a.kind, d: rings.map(ringD).join(""), bbox: bboxOf(rings), label: labelPoint(rings) };
+    return { name: a.name, aka: a.aka || [], country: a.country, kind: a.kind, source: a.source || a.kind, d: rings.map(ringD).join(""), bbox: bboxOf(rings), label: labelPoint(rings) };
   });
   return { countries, provinces, areas };
 }
-// The boundary on file for a place: an area with the same name (or one of its other names) in the same country.
+// The boundary on file for a place: an area with the same name (or one of its other names) in the same country. Names are compared with text.js
+// matchKey, so our "St.-Julien" finds INAO's "Saint-Julien" (nothing is renamed). A French AOC outline goes only to an appellation, never to a
+// region: the region Bordeaux holds wines of other designations, and its outline is not the AOC Bordeaux's.
 export function areaFor(shapes, place) {
   if (!shapes || !place) return null;
-  const n = fold(place.name), c = fold(place.country);
-  return shapes.areas.find((a) => fold(a.country) === c && (fold(a.name) === n || a.aka.some((k) => fold(k) === n))) || null;
+  const n = matchKey(place.name), c = fold(place.country);
+  return shapes.areas.find((a) => fold(a.country) === c && !(a.kind === "aoc" && place.kind === "region") && (matchKey(a.name) === n || a.aka.some((k) => matchKey(k) === n))) || null;
 }
+// What the page says about an outline's source.
+export const AREA_SOURCE = {
+  ava: "Outline: the official American Viticultural Area (UC Davis AVA project).",
+  inao: "Outline: the AOC's vineyard land as published by INAO, simplified. For information only: the legal plans are INAO's.",
+};
 
 // ---------------------------------------------------------------- the view
 export const MIN_W = 0.4;    // about a village (a few km across)
@@ -218,7 +226,7 @@ export function placeFacts(key, { places, cards = [], shapes = null }) {
   const nearby = places.filter((p) => p.key !== key && sameName(p.country, place.country)).map((p) => ({ ...p, km: Math.hypot(p.lat - place.lat, (p.lon - place.lon) * c0) * 111 }))
     .filter((p) => p.km < (place.kind === "region" ? 400 : 120)).sort((a, b) => a.km - b.km).slice(0, 6);
   const area = areaFor(shapes, place);
-  return { place, chain, designation, ruleGrapes, labelGrapes, styles, climate, flavors, nearby, area: area ? { name: area.name, kind: area.kind } : null, wineCount: here.length };
+  return { place, chain, designation, ruleGrapes, labelGrapes, styles, climate, flavors, nearby, area: area ? { name: area.name, kind: area.kind, source: area.source } : null, wineCount: here.length };
 }
 // The topics a place page can send to Learn (learn.js questionsAbout): the place, then its region.
 export const topicsOf = (facts) => (facts ? [{ kind: "region", name: facts.place.name }, ...facts.chain.filter((s) => s.kind === "region" && s.name !== facts.place.name).map((s) => ({ kind: "region", name: s.name }))] : []);
