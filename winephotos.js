@@ -2,7 +2,7 @@
 // The rules here (what counts as missing, what the choices are) are pure, so they can be tested on their own.
 // The upload step shrinks the picture in the browser first, then saves it through data.js.
 import { shrinkImage } from "./photos.js?v=5";
-import * as db from "./data.js?v=39";
+import * as db from "./data.js?v=40";
 import { looseKey } from "./catalog.js?v=5";
 import { caseKey } from "./text.js?v=2";
 

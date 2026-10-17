@@ -51,8 +51,29 @@ export async function attestAge(sb, userId) {
 // ---------------------------------------------------------------- reading
 export const PHOTO_BUCKET = "wine-images";   // real bottle photos, public to read, editors only to change
 export const photoUrl = (sb, path) => (path ? sb.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl : null);
+// The catalog view takes a few milliseconds per wine and the database stops any read after 3 seconds, so since the catalog passed about 1,500
+// wines (2026-10-17) it is read in 16 pieces by id, three at a time (more at once only slows each piece down). A piece that is still too slow is
+// split in two and read again. docs/catalog_speed.sql makes the view itself faster.
+const ID_TAIL = "-0000-0000-0000-000000000000";
+const idAt = (n) => n.toString(16).padStart(8, "0") + ID_TAIL;   // the first id whose leading 8 hex digits are n
+async function cardRows(sb) {
+  const pieces = Array.from({ length: 16 }, (_, i) => [i * 0x10000000, (i + 1) * 0x10000000]);
+  const read = async ([lo, hi], depth = 0) => {
+    let q = sb.from("v_catalog_cards").select("*").gte("wine_vintage_id", idAt(lo));
+    if (hi < 0x100000000) q = q.lt("wine_vintage_id", idAt(hi));
+    const res = await q;
+    if (!res.error) return res.data || [];
+    if (res.error.code !== "57014" || depth >= 4) throw new Error(res.error.message || String(res.error));   // 57014: the read took too long
+    const mid = Math.floor((lo + hi) / 2);
+    return [...await read([lo, mid], depth + 1), ...await read([mid, hi], depth + 1)];
+  };
+  const out = [];
+  const worker = async () => { while (pieces.length) out.push(...await read(pieces.shift())); };
+  await Promise.all([worker(), worker(), worker()]);
+  return out;
+}
 export async function loadCards(sb) {
-  return must(await sb.from("v_catalog_cards").select("*")).map((r) => { const c = cardFromRow(r); c.photo = photoUrl(sb, c.image); c.imageKind = r.image_kind || null; c.imageNote = r.image_note || null; return { ...c, raw: r }; });   // raw: the full catalog row, used by the structure editor
+  return (await cardRows(sb)).map((r) => { const c = cardFromRow(r); c.photo = photoUrl(sb, c.image); c.imageKind = r.image_kind || null; c.imageNote = r.image_note || null; return { ...c, raw: r }; });   // raw: the full catalog row, used by the structure editor
 }   // raw: the full catalog row, used by the structure rules
 export async function loadStates(sb) {
   const r = await sb.from("v_user_wine_state").select("wine_vintage_id, familiarity, interest, reaction, skip_count, last_swiped_at");
