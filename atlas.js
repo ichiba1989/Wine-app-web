@@ -113,6 +113,30 @@ export function scaleFor(v, px) {
 export function atlasPlaces() {
   return [...tables().REGION.entries()].filter(([, p]) => Number.isFinite(p.lat) && Number.isFinite(p.lon)).map(([key, p]) => ({ key, name: p.name, kind: p.kind || "appellation", country: p.country, lat: p.lat, lon: p.lon }));
 }
+// The catalog's own appellations that have an outline in the loaded map data (atlasdata.js or atlaslite.js) but no position in PLACES: Morgon,
+// Meursault, Pomerol ... Each becomes a place at the middle of its outline's biggest piece, so nothing is placed by hand. The name is the catalog's
+// own spelling; a place already in PLACES (same country, same name by text.js matchKey) is not repeated.
+export function catalogPlaces(shapes, cards = [], known = atlasPlaces()) {
+  if (!shapes) return [];
+  const have = new Set(known.map((p) => fold(p.country) + "|" + matchKey(p.name))), out = [], seen = new Set();
+  for (const c of cards) {
+    if (!c || !c.appellation || !c.country) continue;
+    const k = fold(c.country) + "|" + matchKey(c.appellation);
+    if (have.has(k) || seen.has(k)) continue;
+    seen.add(k);
+    const area = areaFor(shapes, { name: c.appellation, country: c.country, kind: "appellation" });
+    if (area && area.label) out.push({ key: placeKey(c.country, c.appellation), name: c.appellation, kind: "appellation", country: c.country, lat: area.label[1], lon: area.label[0], fromOutline: true });
+  }
+  return out;
+}
+// The place a wine is from on the map: its appellation first, then its region (each looked up in `places`, same country, by matchKey), else null.
+// Where no map data is loaded (the 64 px map on the card), flavors.js placeFor is used instead.
+export function placeOfCard(card, places) {
+  if (!card || !card.country) return null;
+  const c = fold(card.country), find = (name, kinds) => name && places.find((p) => fold(p.country) === c && kinds.includes(p.kind) && matchKey(p.name) === matchKey(name));
+  return find(card.appellation, ["appellation", "region"]) || find(card.region, ["region", "appellation"]) || null;
+}
+
 // Village names for the close views (geodata.js VILLAGES): only names and positions, for orientation; they are not places with a page.
 export const villages = () => Object.entries(VILLAGES).flatMap(([key, v]) => v.villages.map(([name, lat, lon]) => ({ key: key + "|" + fold(name), name, lat, lon })));
 // Which places show at a level: regions from the country view on, appellations from the region view on.
@@ -132,12 +156,12 @@ export const PIN_COLOR = { buy: "#2f6b45", drink: "#5f8f4e", none: "#8a8f86", re
 // The card-like facts of a journal entry, for finding its place: the catalog wine when there is one, else what the player typed in.
 const entryCard = (e, cardsById) => (e.wine_vintage_id && cardsById.get(e.wine_vintage_id)) || { country: e.country || "", region: e.region || "", appellation: e.appellation || "", style: e.catalog_style || e.style || "" };
 // Every wine to pin: { id, kind ("entry" | "card"), cardId, name, style, color, place }. Wines with no known place are left off (and counted in `unplaced`).
-// opts: { show, style, journal, states, cards, cardsById, nameOf(card), entryName(entry) }
-export function pinsOf({ show = "journal", style = "", journal = [], states = [], cards = [], cardsById = new Map(), nameOf = (c) => c.producer || "", entryName = (e) => e.wine_name || "" }) {
+// opts: { show, style, journal, states, cards, cardsById, nameOf(card), entryName(entry), placeOf(card) (default flavors.js placeFor) }
+export function pinsOf({ show = "journal", style = "", journal = [], states = [], cards = [], cardsById = new Map(), nameOf = (c) => c.producer || "", entryName = (e) => e.wine_name || "", placeOf = placeFor }) {
   const out = [];
   let unplaced = 0;
   const add = (card, pin) => {
-    const place = placeFor(card);
+    const place = placeOf(card);
     if (style && card.style !== style) return;
     if (!place) { unplaced += 1; return; }
     out.push({ ...pin, style: card.style || "", place });

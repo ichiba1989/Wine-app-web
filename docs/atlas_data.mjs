@@ -170,6 +170,22 @@ write("atlasdata.js", "The Atlas's borders and wine-area boundaries.", "Pure dat
 // The card's map: coarser borders, and only the outlines of places the app knows (flavordata.js PLACES, matched like atlas.js areaFor: the name or
 // one of its other names, with text.js matchKey; a French AOC never for a region). Its zoom stops at about 60 km across (atlas.js CARD), so it
 // needs less detail. Loaded only when a card's map is tapped.
+// It also holds every appellation the catalog uses (the database's public place list, geo_areas, read with the public key in config.js), so a
+// card's map can show its own appellation's outline (Morgon, Meursault ...); run this again when the catalog gains appellations.
 const PLACE_KEYS = new Set(PLACES.map((p) => `${p.country}|${p.kind}|${matchKey(p.name)}`));
+try {
+  const { SUPABASE_URL, SUPABASE_KEY } = await import("../config.js");
+  const rows = [];
+  for (let from = 0; ; from += 1000) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/geo_areas?select=id,name,level,parent_id`, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, Range: `${from}-${from + 999}` } });
+    if (!r.ok) throw new Error(`geo_areas: ${r.status}`);
+    const j = await r.json(); rows.push(...j); if (j.length < 1000) break;
+  }
+  const byId = new Map(rows.map((g) => [g.id, g]));
+  const countryOf = (g) => { for (let x = g, i = 0; x && i < 6; x = byId.get(x.parent_id), i++) if (x.level === "country") return x.name; return ""; };
+  let n = 0;
+  for (const g of rows) if (g.level === "appellation") { const c = countryOf(g); if (c) { PLACE_KEYS.add(`${c}|appellation|${matchKey(g.name)}`); n += 1; } }
+  console.log(`catalog appellations read: ${n}`);
+} catch (e) { console.log(`catalog appellations not read (${e.message}): the card map keeps only the PLACES outlines`); }
 const known = (name, aka, country, kind) => [name, ...aka].some((n) => ["appellation", ...(kind === "aoc" ? [] : ["region"])].some((k) => PLACE_KEYS.has(`${country}|${k}|${matchKey(n)}`)));
 write("atlaslite.js", "The card map's borders and wine-area boundaries (a lighter copy of atlasdata.js).", "Pure data: loaded only when a card's map is tapped (app.js openZoom).", build({ wine: 0.05, other: 0.25, province: 0.08, ava: 0.008, aoc: 0.004, aocWide: 0.02 }, known));

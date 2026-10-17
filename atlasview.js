@@ -5,8 +5,8 @@
 // atlasdata.js for the Atlas, the lighter atlaslite.js for the card (app.js loads them on first use, so neither costs anything at start-up).
 // The rules are in atlas.js; this file draws and listens. While a finger moves only the map's viewBox changes; pins and labels are drawn again when
 // the finger lifts.
-import * as A from "./atlas.js?v=4";
-import { esc } from "./logic.js?v=20";
+import * as A from "./atlas.js?v=5";
+import { esc } from "./logic.js?v=21";
 
 const SEA = "#d6e4ea", LAND = "#efeadb", WINE_LAND = "#f6f1e1", BORDER = "#9aa893", PROVINCE = "#c4bfa8", AREA = "#7b2d43";
 const STYLE_WORD = { red: "Red", white: "White", sparkling: "Sparkling", rose: "Rosé", fortified: "Fortified" };
@@ -28,7 +28,8 @@ export function createAtlas(ctx) {
     SHAPES = SHAPES_OF.get(opts.data);
     if (root) close();   // opened again (Show on map from a sheet over the map): start afresh
     root = el;
-    const card = opts.card ? places().find((p) => p.key === opts.card.place) : null;
+    // The card's map: the wine's own appellation (or region) on this data, else its country.
+    const card = opts.card ? A.placeOfCard(opts.card, places()) || countryPlace(opts.card.country) : null;
     st = { show: opts.show || "journal", style: "", view: A.WORLD_VIEW, page: null, search: "", pointers: new Map(), gesture: null, lastTap: 0,
       card: card ? { place: card, color: opts.card.color || AREA } : null, lim: card ? A.CARD : A.FULL, openedAt: Date.now() };
     root.innerHTML = st.card ? cardShellHtml() : shellHtml();
@@ -55,14 +56,22 @@ export function createAtlas(ctx) {
   const isOpen = () => !!root;
 
   // ---------------------------------------------------------------- data
-  let PLACES = null;
-  const places = () => (PLACES = PLACES || A.atlasPlaces());
+  // The places on the map: PLACES, and the catalog's appellations that have an outline in this data (atlas.js catalogPlaces).
+  let PL = { shapes: null, cards: null, list: [] };
+  const places = () => {
+    const cards = ctx.cards();
+    if (PL.shapes !== SHAPES || PL.cards !== cards) { const known = A.atlasPlaces(); PL = { shapes: SHAPES, cards, list: [...known, ...A.catalogPlaces(SHAPES, cards, known)] }; }
+    return PL.list;
+  };
+  const placeOf = (c) => A.placeOfCard(c, places());
+  // A wine that names no place we have: its country, shown whole.
+  const countryPlace = (name) => { const c = name && SHAPES.countries.find((x) => x.name === name); return c ? { key: null, name: c.name, kind: "country", country: c.name, bbox: c.bbox } : null; };
   let COUNTRIES_OF = { cards: null, set: new Set() };
   const catalogCountries = () => { const c = ctx.cards(); if (COUNTRIES_OF.cards !== c) COUNTRIES_OF = { cards: c, set: new Set(c.map((x) => x.country).filter(Boolean)) }; return COUNTRIES_OF.set; };
   const pinSet = () => {
-    if (st.card) return { pins: [{ id: "card", place: st.card.place, color: st.card.color }], unplaced: 0 };   // the card's map shows only its wine
+    if (st.card) return { pins: st.card.place.kind === "country" ? [] : [{ id: "card", place: st.card.place, color: st.card.color }], unplaced: 0 };   // the card's map shows only its wine
     const show = st.show === "untried" ? "journal" : st.show;
-    return A.pinsOf({ show, style: st.style, journal: ctx.journal(), states: ctx.states(), cards: ctx.pool(), cardsById: ctx.cardsById(), nameOf: ctx.nameOf, entryName: ctx.entryName });
+    return A.pinsOf({ show, style: st.style, journal: ctx.journal(), states: ctx.states(), cards: ctx.pool(), cardsById: ctx.cardsById(), nameOf: ctx.nameOf, entryName: ctx.entryName, placeOf });
   };
 
   // ---------------------------------------------------------------- the screen
@@ -93,11 +102,11 @@ export function createAtlas(ctx) {
   }
   // The card's map: a box over the Discover card, the wine's place named at the top.
   function cardShellHtml() {
-    const p = st.card.place, area = A.areaFor(SHAPES, p);
-    const note = area ? A.AREA_SOURCE[area.source] || "" : "No outline on file: the dot marks roughly where it is.";
+    const p = st.card.place, area = p.kind === "country" ? null : A.areaFor(SHAPES, p);
+    const note = p.kind === "country" ? "This wine names no place we have on the map, so its country is shown." : area ? A.AREA_SOURCE[area.source] || "" : "No outline on file: the dot marks roughly where it is.";
     return `<div class="atlas acard" role="dialog" aria-modal="true" aria-label="Where this wine is from" data-atlas="back">
       <div class="acardbox">
-        <div class="atop"><div class="acardt"><div class="serif big">${esc(p.name)}</div><div class="muted small">${esc(p.kind === "region" ? p.country : [regionOf(p), p.country].filter(Boolean).join(", "))}</div></div>
+        <div class="atop"><div class="acardt"><div class="serif big">${esc(p.name)}</div><div class="muted small">${esc(p.kind === "country" ? "" : p.kind === "region" ? p.country : [regionOf(p), p.country].filter(Boolean).join(", "))}</div></div>
           <button class="xbtn" data-atlas="close" aria-label="Close the map">&times;</button></div>
         <div class="astage" data-atlas-stage>
           <svg class="abase" data-atlas-base preserveAspectRatio="none" aria-hidden="true"></svg>
@@ -116,8 +125,10 @@ export function createAtlas(ctx) {
   const regionOf = (p) => { const f = A.placeFacts(p.key, { places: places(), cards: ctx.cards() }); const r = f && f.chain.find((s) => s.kind === "region"); return r ? r.name : ""; };
   // The card map's starting view: the wine's outline when there is one, else its place; the outline is marked.
   function cardHome() {
-    const p = st.card.place, area = A.areaFor(SHAPES, p), aspect = aspectOf();
-    st.view = area ? A.fitView(area.bbox, aspect, 0.8, 4, st.lim) : A.viewAt(p.lon, p.lat, p.kind === "region" ? 40 : 12, aspect, st.lim);   // wide enough to see where in the country it is
+    const p = st.card.place, area = p.kind === "country" ? null : A.areaFor(SHAPES, p), aspect = aspectOf();
+    if (p.kind === "country") { st.view = A.fitView(p.bbox, aspect, 0.06, 3, st.lim); $("[data-atlas-sel]").setAttribute("d", ""); return; }
+    // A small appellation opens as close as the card's map goes; a place with no outline wide enough to see where in the country it is.
+    st.view = area ? A.fitView(area.bbox, aspect, 0.8, A.CARD.min, st.lim) : A.viewAt(p.lon, p.lat, p.kind === "region" ? 40 : 12, aspect, st.lim);
     $("[data-atlas-sel]").setAttribute("d", area ? area.d : "");
   }
   const $ = (sel) => root.querySelector(sel);
@@ -296,7 +307,7 @@ export function createAtlas(ctx) {
       else if (a === "zin") zoomBy(2);
       else if (a === "zout") zoomBy(0.5);
       else if (a === "world") { cardHome(); setView(st.view); }
-      else if (a === "full") ctx.openFull(st.card.place.key);
+      else if (a === "full") ctx.openFull(st.card.place.key);   // a country has no key: the Atlas opens on the world
       return;
     }
     if (a === "close") ctx.close();
@@ -347,8 +358,8 @@ export function createAtlas(ctx) {
   const chipList = (names) => names.map((n) => `<span class="chip still">${esc(n)}</span>`).join("");
   const section = (title, body, note = "") => (body ? `<div class="asec"><div class="asect">${esc(title)}</div>${body}${note ? `<div class="muted tiny">${esc(note)}</div>` : ""}</div>` : "");
   function myWinesHere(place) {
-    const journal = A.pinsOf({ show: "journal", journal: ctx.journal(), cardsById: ctx.cardsById(), entryName: ctx.entryName }).pins.filter((p) => p.place.key === place.key);
-    const liked = A.pinsOf({ show: "liked", states: ctx.states(), cardsById: ctx.cardsById(), nameOf: ctx.nameOf }).pins.filter((p) => p.place.key === place.key && !journal.some((j) => j.cardId === p.cardId));
+    const journal = A.pinsOf({ show: "journal", journal: ctx.journal(), cardsById: ctx.cardsById(), entryName: ctx.entryName, placeOf }).pins.filter((p) => p.place.key === place.key);
+    const liked = A.pinsOf({ show: "liked", states: ctx.states(), cardsById: ctx.cardsById(), nameOf: ctx.nameOf, placeOf }).pins.filter((p) => p.place.key === place.key && !journal.some((j) => j.cardId === p.cardId));
     const rows = [...journal.map((p) => `<button class="jrow" data-action="entry:${esc(p.id)}"><span class="adotc" style="background:${p.color}"></span><span class="jl"><span class="serif trunc">${esc(p.name)}</span><span class="meta">${esc(STYLE_WORD[p.style] || "")}</span></span></button>`),
       ...liked.map((p) => `<div class="jrow still"><span class="adotc" style="background:${p.color}"></span><span class="jl"><span class="serif trunc">${esc(p.name)}</span><span class="meta">Liked swipe</span></span><button class="pill" data-action="review:${esc(p.cardId)}">I've had it: rate it</button></div>`)];
     return rows.join("");
