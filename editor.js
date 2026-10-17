@@ -8,18 +8,18 @@
 //   Quiz:      edit, source and verify quiz questions.
 //   Feedback:  read what testers sent from the app and mark it handled.
 // Every change is logged by the database.
-import { dimsFor, dimMeta, defaultFor, esc, wineName, placeLine, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel, barDims, choiceDims, styleInfo } from "./logic.js?v=18";
-import * as db from "./data.js?v=47";
-import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=42";
-import { createReview } from "./review.js?v=25";
-import { createWineInfo, publishSummary } from "./wineinfo.js?v=34";
-import { groupSubmissions, planPromotion, duplicateGroups, rulesFrom } from "./catalog.js?v=6";
-import { visibleKinds, FOUND_ONLINE_PERMISSION, photoSummary, photoList, photoTag, pullSource, shareWinePhoto, shareNote, uploadWinePhoto, removeWinePhoto, reuseWinePhoto } from "./winephotos.js?v=22";
-import { communityHtml, loadSubmissionState, approvalPlan } from "./sharing.js?v=22";
+import { dimsFor, dimMeta, defaultFor, esc, wineName, placeLine, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel, barDims, choiceDims, styleInfo } from "./logic.js?v=19";
+import * as db from "./data.js?v=48";
+import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=43";
+import { createReview } from "./review.js?v=26";
+import { createWineInfo, publishSummary } from "./wineinfo.js?v=35";
+import { groupSubmissions, planPromotion, duplicateGroups, rulesFrom } from "./catalog.js?v=7";
+import { visibleKinds, FOUND_ONLINE_PERMISSION, photoSummary, photoList, photoTag, pullSource, shareWinePhoto, shareNote, uploadWinePhoto, removeWinePhoto, reuseWinePhoto } from "./winephotos.js?v=23";
+import { communityHtml, loadSubmissionState, approvalPlan } from "./sharing.js?v=23";
 import { infoLine } from "./wineline.js?v=4";
-import { sortWines, sortSelectHtml, STRUCTURE_SORTS, PHOTO_SORTS } from "./sorting.js?v=8";
+import { sortWines, sortSelectHtml, STRUCTURE_SORTS, PHOTO_SORTS } from "./sorting.js?v=9";
 import { suggestStructure, values as ruleValues, goldInfo, GOLD, GROUPS, evaluateRules, reportText, TARGETS, RULES_VERSION } from "./rules.js?v=6";
-import { VENUE } from "./venue.js?v=18";
+import { VENUE } from "./venue.js?v=19";
 
 // "venue" (this venue branch only): the venue's wines that are not in our catalog yet, reviewed one at a time (venuereview.js).
 const SECTIONS = [{ id: "venue", label: VENUE.name }, { id: "structure", label: "Structure" }, { id: "catalog", label: "Catalog" }, { id: "photos", label: "Photos" }, { id: "flags", label: "Flags" }, { id: "quiz", label: "Quiz" }, { id: "feedback", label: "Feedback" }];

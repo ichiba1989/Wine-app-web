@@ -225,3 +225,9 @@ No database script. Check on a phone:
 
 ## Publish the sure ones (added 2026-10-17; branch `vwm`)
 - [ ] Editor tab, Vintage Wine Merchants, **Publish the sure ones** (as an Editor or the Owner): the list shows about 1,500 wines and "left for editors" the rest; read through a good sample of lines (producer, name, type, place, vintage); untick any that look wrong. Publish a small batch first (untick all, tick ten), check those ten in the deck and in Editor, Catalog (place, designation, type, name), then publish the rest. Keep the page open while it runs (it can take a while for 1,500 wines); Stop stops after the wine in hand. Afterwards the one-at-a-time review shows only the wines left for editors, and the Owner list tab shows the published ones as in the deck.
+
+## Catalog speed and sparkling sweetness terms (added 2026-10-17; all versions)
+- [ ] Run `docs/catalog_speed.sql` (step 0 should show geo_ancestor as "v" before and the explain should end well under 3000 ms after). The app's wine list loads (Discover shows cards) on a fresh phone with no saved copy.
+- [ ] Run `docs/sparkling_dosage.sql`, then `docs/sparkling_dosage_fill.sql`. The last query shows sparkling wines by basis: about 217 label, 10 source, 10 none / waiting for review. Open a few Champagne cards: the line reads "Sparkling · Brut · Champagne" and the wine name no longer repeats the term. Open a source-filled one in Edit wine info (Piper-Heidsieck Cuvée 1785: Brut) and check the page in the script still says so.
+- [ ] Editor, Catalog, waiting for review: the 10 unpublished sparkling wines (La Marca, Mionetto and Zonin Prosecco, Saracco Moscato d'Asti, Riunite Lambrusco, Monts Fournois Montagne Verzy, Gimonnet Special Club Cramant, Lancelot Perceval Chouilly Montaigu, La Caudrina Asti). Pick the term from the bottle (or "Not on the label") and publish each again.
+

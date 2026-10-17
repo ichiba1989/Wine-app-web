@@ -7,7 +7,7 @@
 // Pure: no browser, no network. The file reading itself is done by importer.js, loaded on the Owner page.
 import { grapeFor } from "./rules.js?v=6";
 import { planPlace, designationPlan } from "./geo.js?v=9";
-import { duplicateGroups } from "./catalog.js?v=6";
+import { duplicateGroups } from "./catalog.js?v=7";
 import { plainKey, matchKey, caseKey, lookalikes } from "./text.js?v=3";
 
 // ---------------------------------------------------------------- the venue (the one line a new venue branch changes)

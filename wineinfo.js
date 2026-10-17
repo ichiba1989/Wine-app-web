@@ -1,16 +1,32 @@
 // Wine info (editors only): change a catalog wine's details. Producer, wine name, vineyard, vintage, type of wine,
 // place, the grapes printed on the label, and other grapes in the wine (for blends the label does not list).
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
-import { esc, WINE_STYLES } from "./logic.js?v=18";
+import { esc, WINE_STYLES, DOSAGES, dosageFromText } from "./logic.js?v=19";
 import { checkGrapeText, grapeProblem, grapeIndex, setExtraGrapes } from "./grapes.js?v=3";
 import { expandBlends, BLEND_NAMES } from "./blends.js?v=3";
 import { infoLine } from "./wineline.js?v=4";
 import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, savePlace, designationChoices, designationFromText, designationPlan, placeDesignation, splitDesignation, BROAD_PLACES, ruleDesignation } from "./geo.js?v=9";
 import { loadWinePrice, saveWinePrice, parsePrice, centsToField, blendPrice, formatPrice } from "./pricing.js?v=4";
-import { archivePlanFor } from "./catalog.js?v=6";
-import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=22";
-import * as db from "./data.js?v=47";
+import { archivePlanFor } from "./catalog.js?v=7";
+import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=23";
+import * as db from "./data.js?v=48";
 import { caseKey, lookalikes } from "./text.js?v=3";
+
+// ---------------------------------------------------------------- how sweet a sparkling wine is (owner, 2026-10-17; logic.js DOSAGES)
+// The term the form starts with: the wine's own, else the one written in its name (it is on the label, so it is a fact; the editor still saves it).
+// dosageReady is false until docs/sparkling_dosage.sql has been run: the row then says so instead of offering chips that could not be saved.
+function startDosage(wine) {
+  if (wine.dosage === undefined) return { dosage: "", dosageWhy: "", dosageReady: false };
+  if (wine.dosage) return { dosage: wine.dosage, dosageWhy: "", dosageReady: true };
+  const found = wine.style === "sparkling" ? dosageFromText(wine.name) : null;
+  return { dosage: found ? found.id : "", dosageWhy: found ? `"${found.word}" in the name` : "", dosageReady: true };
+}
+export function dosageRowHtml(f, attr = "data-wi") {
+  if (f.style !== "sparkling") return "";
+  if (f.dosageReady === false) return `<div class="qlabel">How sweet (as on the label)</div><div class="muted small">Needs a database update first (docs/sparkling_dosage.sql).</div>`;
+  const chips = [...DOSAGES, { id: "", label: "Not on the label" }].map((d) => `<button class="chip${(f.dosage || "") === d.id ? " on" : ""}" ${attr}="dosage:${d.id}" aria-pressed="${(f.dosage || "") === d.id}">${esc(d.label)}</button>`).join("");
+  return `<div class="qlabel">How sweet (as on the label)</div><div class="stylerow">${chips}</div>${f.dosageWhy ? `<div class="muted small">From the name: ${esc(f.dosageWhy)}</div>` : ""}`;
+}
 
 const fold = caseKey;   // text.js: accents and capitals ignored, punctuation still counts
 
@@ -73,7 +89,7 @@ export function formFromInfo(info, lists) {
     producerName: producer ? producer.name : "", wineName: info.wine.name || "", vineyard: info.wine.vineyard || "",
     year: info.vintage.vintage_year ? String(info.vintage.vintage_year) : "", nonVintage: !!info.vintage.is_non_vintage,
     reach: info.wine.reach != null ? String(info.wine.reach) : "",   // empty before database update 15
-    style: info.wine.style || "unknown", price: "", ...placeFromArea(lists.areas, info.wine.appellation_id), designation: "", designationWhy: "",
+    style: info.wine.style || "unknown", ...startDosage(info.wine), price: "", ...placeFromArea(lists.areas, info.wine.appellation_id), designation: "", designationWhy: "",
     labelGrapes: label.map(nameOf).filter(Boolean).join(", "), otherGrapes: other.map(nameOf).filter(Boolean).join(", "),
   };
 }
@@ -167,6 +183,7 @@ function sheetHtml(W) {
     <div class="qlabel">Typical price in US dollars (optional)</div><input class="field" inputmode="decimal" data-wif="price" value="${esc(f.price)}" placeholder="For example 24.99" autocomplete="off">
     <div class="muted small">${priceNoteHtml(W)}</div>
     <div class="qlabel">Type of wine</div><div class="stylerow">${chips}</div>
+    ${dosageRowHtml(f)}
     ${f.reach ? `<div class="qlabel">How easy to find (helps decide who is likely to recognize it)</div><select class="field" data-wif="reach" aria-label="How easy to find">${REACH_CHOICES.map(([v, l]) => `<option value="${v}"${f.reach === v ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>` : ""}
     <div class="qlabel">Country</div><input class="field" list="dlCountries" data-wif="country" value="${esc(f.country)}" placeholder="Start typing, then pick from the list" autocomplete="off">
     <div class="qlabel">Region</div><input class="field" list="dlRegions" data-wif="region" value="${esc(f.region)}" placeholder="For example Piedmont or Napa Valley" autocomplete="off">
@@ -361,7 +378,7 @@ export function createWineInfo(ctx) {
       const areaId = await savePlace(ctx.sb(), W.lists.areas, f, { classification: dPlan.set || "" });   // creates a country, region or appellation that is new (with its designation)
       if (dPlan.set && !placePlan.creates.length && areaId) { try { await db.savePlaceDesignation(ctx.sb(), areaId, dPlan.set); } catch (e) { W.desigProblem = String(e.message || e); } }
       await db.saveWineInfo(ctx.sb(), ctx.userId(), W.info, {
-        producerName: f.producerName, wineName: f.wineName, vineyard: f.vineyard, year: f.year, nonVintage: f.nonVintage, style: f.style, areaId, reach: f.reach,
+        producerName: f.producerName, wineName: f.wineName, vineyard: f.vineyard, year: f.year, nonVintage: f.nonVintage, style: f.style, dosage: f.dosage, areaId, reach: f.reach,
         labelGrapes: label.ids, otherGrapes: other.ids, newGrapes: W.unknown,
       }, W.lists);
     } catch (e) { W.saving = false; draw(); return setError("Could not save. " + (e.message || e)); }
@@ -408,6 +425,7 @@ export function createWineInfo(ctx) {
     else if (action === "delcancel") { W.del = null; draw(); }
     else if (W.del || W.pub) return;
     else if (action === "style") { W.form.style = arg; draw(); }
+    else if (action === "dosage") { W.form.dosage = arg; W.form.dosageWhy = ""; draw(); }
     else if (action === "save") save();
     else if (action === "close") close();
   });

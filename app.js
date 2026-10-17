@@ -5,16 +5,16 @@ import {
   wineName, esc, clamp01, filterEntries, groupEntries, swipeLists,
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete, styleLabel,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
-  dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=18";
-import * as db from "./data.js?v=47";
-import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=22";
-import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=9";
+  dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=19";
+import * as db from "./data.js?v=48";
+import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=23";
+import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=10";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=42";
-import { createLearn } from "./learn.js?v=14";
+  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=43";
+import { createLearn } from "./learn.js?v=15";
 import { setMode } from "./words.js?v=1";
-import { journalCsv, exportName } from "./exportcsv.js?v=5";
+import { journalCsv, exportName } from "./exportcsv.js?v=6";
 import { newBlind, cleanPending, hasGuess, scoreGuess, summarize, resultLine, notesAfterReveal, actualOfCard, actualOfForm } from "./blind.js?v=3";
 import { composeNote, stampOf, noteProblem } from "./notes.js?v=1";
 import { createDictation, dictationSupported } from "./dictation.js?v=5";
@@ -28,37 +28,37 @@ import { addGrapeSynonyms } from "./rules.js?v=6";
 import { setPlaceLists } from "./geo.js?v=9";
 import { setNameAliases } from "./text.js?v=3";
 import { loadPrices, applyPrices, tidyFacts, parsePrice, saveWinePrice } from "./pricing.js?v=4";
-import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=14";
-import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=10";
+import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=15";
+import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=11";
 import { applyVisualTables } from "./visualdata.js?v=4";
-import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=8";
-import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=13";
+import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=9";
+import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=14";
 import { infoLine, entryInfoLine } from "./wineline.js?v=4";
-import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, paintNoteMarks, teachHtml, autoCount } from "./tasting.js?v=13";
-import { gridFromNotes, mergeFromNotes, touched, legendEntry, compileWith } from "./notegrid.js?v=6";
+import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, paintNoteMarks, teachHtml, autoCount } from "./tasting.js?v=14";
+import { gridFromNotes, mergeFromNotes, touched, legendEntry, compileWith } from "./notegrid.js?v=7";
 import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=10";
-import { createProfile } from "./profile.js?v=27";
-import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=16";
-import { createFeedback } from "./feedback.js?v=10";
-import { createEditor } from "./editor.js?v=53";
-import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=13";
-import { gamesHtml } from "./games.js?v=20";
+import { createProfile } from "./profile.js?v=28";
+import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=17";
+import { createFeedback } from "./feedback.js?v=11";
+import { createEditor } from "./editor.js?v=54";
+import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=14";
+import { gamesHtml } from "./games.js?v=21";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
 import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=4";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=5";
-import * as GG from "./blindgame.js?v=7";
-import { createVenueReview } from "./venuereview.js?v=26";
-import { VENUE, venueCardsOf, readList, recheck as venueRecheck, listIds, linkMap, siteUrl } from "./venue.js?v=18";
-import { recommendMix, recommend } from "./recommend.js?v=10";
+import * as GG from "./blindgame.js?v=8";
+import { createVenueReview } from "./venuereview.js?v=27";
+import { VENUE, venueCardsOf, readList, recheck as venueRecheck, listIds, linkMap, siteUrl } from "./venue.js?v=19";
+import { recommendMix, recommend } from "./recommend.js?v=11";
 import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=1";
 import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
 import { setOffline, setCardLookup } from "./overlay.js?v=1";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=36"));
-const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=10"));
-const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=14"));
-import { createWineInfo } from "./wineinfo.js?v=34";
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=37"));
+const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=11"));
+const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=15"));
+import { createWineInfo } from "./wineinfo.js?v=35";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -213,13 +213,15 @@ const once = (key, fn) => {
 };
 async function loadAllCards() {
   // The flavor tables, the player's private wine changes, the catalog and the prices are separate requests that do not need each other: ask for them together.
-  const [, mine, rawCards, prices, lists] = await Promise.all([
+  const [, mine, rawCards, prices, lists, dosages] = await Promise.all([
     once("visual", () => applyVisualTables(state.sb)),   // flavor weights and place nudges the Owner or an editor tuned in the database (the built-in set is used if there are none)
     loadMyInfo(state.sb).catch(() => new Map()),          // before database update 24 nobody has private changes
     once("cards", () => db.loadCards(state.sb)),
     loadPrices(state.sb).then((p) => ({ p }), () => null),
     once("lists", () => db.loadReferenceLists(state.sb)).catch(() => null),   // grape and producer aliases, designation rules, broad regions (built-in lists if none)
+    db.loadDosages(state.sb).catch(() => null),            // how sweet a sparkling wine's label says it is (docs/sparkling_dosage.sql)
   ]);
+  if (dosages) rawCards.forEach((c) => { const d = dosages.get(c.id); if (d) c.dosage = d; });
   applyReferenceLists(lists);
   state.mine = mine;
   const cards = [];
