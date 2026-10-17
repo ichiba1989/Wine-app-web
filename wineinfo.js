@@ -8,8 +8,8 @@ import { infoLine } from "./wineline.js?v=4";
 import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, savePlace, designationChoices, designationFromText, designationPlan, placeDesignation, splitDesignation, BROAD_PLACES, ruleDesignation } from "./geo.js?v=9";
 import { loadWinePrice, saveWinePrice, parsePrice, centsToField, blendPrice, formatPrice } from "./pricing.js?v=4";
 import { archivePlanFor } from "./catalog.js?v=6";
-import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=21";
-import * as db from "./data.js?v=46";
+import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=22";
+import * as db from "./data.js?v=47";
 import { caseKey, lookalikes } from "./text.js?v=3";
 
 const fold = caseKey;   // text.js: accents and capitals ignored, punctuation still counts

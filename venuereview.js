@@ -10,9 +10,9 @@
 // others (venue.js sureOf) are listed together; the editor looks through the list, unticks any, and publishes them with one tap. The rest stay here.
 import { esc, WINE_STYLES } from "./logic.js?v=18";
 import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf, placeLookalikes, linkSummary, rowTitle, sureContext, sureOf } from "./venue.js?v=18";
-import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=33";
+import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=34";
 import { placeFromArea, savePlace, designationPlan, broadPlace, planPlace } from "./geo.js?v=9";
-import * as db from "./data.js?v=46";
+import * as db from "./data.js?v=47";
 import { caseKey, lookalikes } from "./text.js?v=3";
 
 const fold = caseKey;   // text.js: accents and capitals ignored, punctuation still counts
