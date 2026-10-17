@@ -21,4 +21,6 @@ run the script). Then:
 - Note how big the file got (it was about 290 KB compressed in October 2026).
 - Write the new dates in the table above.
 
+**Also run it when the catalog gains new appellations:** the card map's lighter file (`atlaslite.js`) holds the outlines of the appellations the catalog uses, read from the place list when the script runs. A new appellation shows on the card's map as a dot until then (the full Atlas shows its outline straight away).
+
 When a new open source is chosen for another country (see the open item in `docs/ARCHITECTURE_PLAN.md`), add it to the table.

@@ -1,6 +1,7 @@
 import { fold, splitGrapeText, checkGrapeText, grapeProblem } from "./grapes.js?v=3";
 import { reactionOf, skipsOf } from "./reactions.js?v=3";
 import { isComplete, missingFields } from "./catalog.js?v=7";
+import { ruleGrapesFor } from "./aocgrapes.js?v=2";
 // Pure logic for the wine app web page. No browser and no network in this file,
 // so every rule here can be tested on its own.
 
@@ -158,22 +159,30 @@ export function flyPlan(kind, dx, dy, vx, vy, W, H) {
 }
 
 // ---------------------------------------------------------------- cards and names
-export function cardFromRow(r) {
+export function cardFromRow(row) {
+  // A wine whose place is its country itself (the view then reports the country as its appellation, "France") names no appellation: the card
+  // says the country, and the Owner page lists it under "No region or appellation".
+  const r = row.appellation && row.country && row.appellation === row.country ? { ...row, appellation: null, classification: null } : row;
   const vintage = r.is_non_vintage ? "NV" : r.vintage_year ? String(r.vintage_year) : "";
   const facts = [];
+  // With no grape on the label and none stored from a rule, the appellation's own rules may name it (aocgrapes.js, checked lines only:
+  // Morgon red -> Gamay). docs/appellation_grapes_fill.sql stores the same in the catalog; this shows it before that has been run.
+  const ruleGrapes = r.rule_grapes && r.rule_grapes.length ? [...r.rule_grapes]
+    : (r.label_grapes && r.label_grapes.length ? [] : ruleGrapesFor({ country: r.country, appellation: r.appellation, style: r.style }));
   if (r.label_grapes && r.label_grapes.length) facts.push({ text: r.label_grapes.join("-"), derived: false });
-  if (r.rule_grapes && r.rule_grapes.length) facts.push({ text: r.rule_grapes.join(", "), derived: true });
+  if (ruleGrapes.length) facts.push({ text: ruleGrapes.join(", "), derived: true });
   if (r.appellation) facts.push({ text: r.appellation, derived: false });
   // A designation belongs to an appellation: a wine that only names its region (a Vin de France from Bordeaux) shows none, even if the
-  // region row still carries one from an earlier fill (docs/designations_appellation_only.sql takes those off).
-  if (r.classification && r.appellation) facts.push({ text: r.classification, derived: true });
+  // region row still carries one from an earlier fill (docs/designations_appellation_only.sql takes those off). It is shown beside the
+  // appellation in the card's summary line ("Morgon AOC", views.js cardHtml), not as a chip of its own.
+  const designation = r.classification && r.appellation ? r.classification : "";
   const place = [r.region && r.region !== r.appellation ? r.region : null, r.country].filter(Boolean).join(", ");
   if (place) facts.push({ text: place, derived: true });
   return {
     id: r.wine_vintage_id, vintage, producer: r.producer, cuvee: r.wine_name || "", style: r.style, country: r.country,
-    region: r.region || "", appellation: r.appellation || "",
-    grape: (r.label_grapes && r.label_grapes.length ? r.label_grapes.join("-") : (r.rule_grapes || []).join(", ")),
-    grapes: [...(r.label_grapes || [])], ruleGrapes: [...(r.rule_grapes || [])],
+    region: r.region || "", appellation: r.appellation || "", designation,
+    grape: (r.label_grapes && r.label_grapes.length ? r.label_grapes.join("-") : ruleGrapes.join(", ")),
+    grapes: [...(r.label_grapes || [])], ruleGrapes,
     reach: r.reach == null ? null : Number(r.reach), archived: !!r.archived_at, wineStatus: r.wine_status || "",   // set by update 15; empty before it
     image: r.image_path || null,   // the bottle photo's path in storage (update 16); empty when the wine has no photo
     ...(r.dosage ? { dosage: r.dosage } : {}),   // a sparkling wine's sweetness term, once the view carries it (docs/catalog_speed.sql)

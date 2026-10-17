@@ -1,16 +1,17 @@
 // Wine info (editors only): change a catalog wine's details. Producer, wine name, vineyard, vintage, type of wine,
 // place, the grapes printed on the label, and other grapes in the wine (for blends the label does not list).
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
-import { esc, WINE_STYLES, DOSAGES, dosageFromText } from "./logic.js?v=21";
+import { esc, WINE_STYLES, DOSAGES, dosageFromText } from "./logic.js?v=23";
 import { checkGrapeText, grapeProblem, grapeIndex, setExtraGrapes } from "./grapes.js?v=3";
 import { expandBlends, BLEND_NAMES } from "./blends.js?v=3";
 import { infoLine } from "./wineline.js?v=4";
 import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, savePlace, designationChoices, designationFromText, designationPlan, placeDesignation, splitDesignation, BROAD_PLACES, ruleDesignation } from "./geo.js?v=9";
 import { loadWinePrice, saveWinePrice, parsePrice, centsToField, blendPrice, formatPrice } from "./pricing.js?v=4";
 import { archivePlanFor } from "./catalog.js?v=7";
-import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=26";
-import * as db from "./data.js?v=51";
+import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=28";
+import * as db from "./data.js?v=53";
 import { caseKey, lookalikes } from "./text.js?v=3";
+import { ruleLineFor } from "./aocgrapes.js?v=2";
 
 // ---------------------------------------------------------------- how sweet a sparkling wine is (owner, 2026-10-17; logic.js DOSAGES)
 // The term the form starts with: the wine's own, else the one written in its name (it is on the label, so it is a fact; the editor still saves it).
@@ -119,6 +120,15 @@ const producerNoteHtml = (W) => {
   return lookalikeHtml(W, "producerName", W.lists.producers.map((p) => p.name)) || `<div class="muted small">A new producer will be created.</div>`;
 };
 const placeOf = (f) => ({ country: f.country, region: f.region, appellation: f.appellation });
+// The grape the appellation's own rules name for this type of wine (aocgrapes.js), as a note under the label's grape box when the label names none.
+// A line still to check says so: the editor reads the official rules before relying on it. It is only shown, never saved from here.
+function ruleGrapeNoteHtml(f) {
+  if (String(f.labelGrapes || "").trim()) return "";
+  const r = ruleLineFor({ country: f.country, appellation: f.appellation, style: f.style }, { checkedOnly: false });
+  if (!r) return "";
+  const what = r.rule === "only" ? `allow only ${r.grape}` : `name ${r.grape} as the main grape`;
+  return `<div class="muted tiny wirule">The ${esc(r.appellation)} rules ${esc(what)} for this type of wine${r.checked ? `${r.source ? ` (<a href="${esc(r.source)}" target="_blank" rel="noopener">source</a>)` : ""}. With no grape on the label, the card shows ${esc(r.grape)} from this rule.` : `: still to check against the official rules (aocgrapes.js). Until it is checked, the card shows no grape from it.`}</div>`;
+}
 // Germany and Austria: only the broad wine region is a place (geo.js BROAD_PLACES); the village and vineyard stay in the wine name.
 const appPlaceholder = (country) => { const k = String(country || "").trim().toLowerCase(); return BROAD_PLACES[k] ? `Only a wine region (for example ${k === "austria" ? "Kamptal" : "Mosel"}); the vineyard stays in the name` : "For example Barolo or Rutherford"; };
 
@@ -190,7 +200,7 @@ function sheetHtml(W) {
     <div class="qlabel">Appellation (optional)</div><input class="field" list="dlApps" data-wif="appellation" value="${esc(f.appellation)}" placeholder="${esc(appPlaceholder(f.country))}" autocomplete="off">
     <div id="wiPlaceNote" class="muted small">${placeNoteHtml(W)}</div>
     <div class="qlabel">Designation (DOC, DOCG, AOC …)</div><div id="wiDesig">${designationRowHtml(L.areas, placeOf(f), f.designation, f.designationWhy, "data-widesig")}</div>
-    <div class="qlabel">Main varietal</div><div class="muted tiny">The grape named on the label. If the label names more than one, separate them with commas. GSM is accepted.</div><input class="field" data-grapes="multi" data-wif="labelGrapes" value="${esc(f.labelGrapes)}" placeholder="Start typing, then pick from the list" autocomplete="off" autocapitalize="words" spellcheck="false">
+    <div class="qlabel">Main varietal</div><div class="muted tiny">The grape named on the label. If the label names more than one, separate them with commas. GSM is accepted.</div><input class="field" data-grapes="multi" data-wif="labelGrapes" value="${esc(f.labelGrapes)}" placeholder="Start typing, then pick from the list" autocomplete="off" autocapitalize="words" spellcheck="false">${ruleGrapeNoteHtml(f)}
     <div class="qlabel">Other varietals (if blended)</div><div class="muted tiny">Other grapes in the blend that are not named on the label.</div><input class="field" data-grapes="multi" data-wif="otherGrapes" value="${esc(f.otherGrapes)}" placeholder="Start typing, then pick from the list" autocomplete="off" autocapitalize="words" spellcheck="false">
     <div id="wiErr" class="err">${esc(W.error)}</div>
     <button class="btn primary" data-wi="save"${W.saving ? " disabled" : ""}>Save wine info</button>

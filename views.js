@@ -2,7 +2,7 @@
 import {
   FAMILIARITY, FLAGS, VERDICTS, isChoice, GROUPS, GROUP_PAGE, SORTS, YEARS,
   esc, wineName, entryCard, entryName, entryIncomplete, entryMissing, verdictShort, groupEntries, filterEntries, sortCards,
-  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims, dosageLabel } from "./logic.js?v=21";
+  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims, dosageLabel } from "./logic.js?v=23";
 import { splitGrapeParts, splitPlace } from "./blends.js?v=3";
 import { REACTIONS, iconHtml, SKIP_LIMIT } from "./reactions.js?v=3";
 import { say, proToolsOn } from "./words.js?v=1";
@@ -12,7 +12,7 @@ import { SW_TABS, SW_KINDS, SW_GROUPS, SW_SORTS, entriesFor, tabCounts, filtersO
 import { infoLine, entryInfoLine } from "./wineline.js?v=4";
 import { flavorsForCard, placeFor } from "./flavors.js?v=4";
 import { bottleSilhouette, flavorRowHtml, tintFor } from "./visuals.js?v=5";
-import { countryMapSvg, zoomPlan } from "./maps.js?v=7";
+import { countryMapSvg, zoomPlan, hasCountry } from "./maps.js?v=7";
 import { imageSearchUrl } from "./winelinks.js?v=4";
 
 // The grape and place inputs shared by the two forms. The form keeps one grape text and one place text; these show them as
@@ -60,7 +60,8 @@ export const bottleThumbHtml = (card, size = 40) => (card && card.photo ? `<img 
 export function visualFor(c, stats = null) {
   try {
     const fl = flavorsForCard(c, stats), place = placeFor(c), plan = zoomPlan(c);
-    return { shape: fl.shape, type: fl.type, flavors: fl.picks, map: countryMapSvg(c.country, place, fl.type, 64), zoomable: !!plan };
+    // The map can be opened whenever the country is drawn: the card's map then finds the appellation, or shows the country (atlas.js placeOfCard).
+    return { shape: fl.shape, type: fl.type, flavors: fl.picks, map: countryMapSvg(c.country, place, fl.type, 64), zoomable: !!plan || hasCountry(c.country) };
   } catch (e) { return { shape: "bordeaux", type: c.style, flavors: [], map: "", zoomable: false }; }   // a card that cannot be read still shows its name and facts
 }
 // The card, top to bottom: the producer and the wine's name at the same large size (the producer matters as much as the wine) with the year beside
@@ -77,7 +78,9 @@ export function cardHtml(c, { mapHint = false } = {}) {
   const place = c.appellation || c.region || c.country || "";
   const flag = FLAGS[c.country];
   const dosage = c.style === "sparkling" && c.dosage ? dosageLabel(c.dosage) : "";   // how sweet, as the label says (logic.js DOSAGES)
-  const summary = [t.label !== "Other" ? esc(t.label) : "", dosage ? esc(dosage) : "", place ? `${flag ? `<span class="flag">${flag}</span> ` : ""}${esc(place)}` : ""].filter(Boolean).join(" · ");
+  // The appellation and its designation read together ("Morgon AOC"), so the card says plainly what the label says.
+  const placeText = c.appellation && c.designation ? `${c.appellation} ${c.designation}` : place;
+  const summary = [t.label !== "Other" ? esc(t.label) : "", dosage ? esc(dosage) : "", place ? `${flag ? `<span class="flag">${flag}</span> ` : ""}${esc(placeText)}` : ""].filter(Boolean).join(" · ");
   const facts = c.facts.filter((f) => f.text !== place);   // the place is already in the summary line
   return `<div class="card" id="card">${labels}<button class="zreset" data-zreset hidden aria-label="Reset zoom">Reset zoom</button>
     <div class="body">

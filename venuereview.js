@@ -8,12 +8,13 @@
 // Everything fits on one phone screen. Editor writes are online only. The rules are in venue.js (pure); this file draws the screen and handles the taps.
 // "Publish the sure ones" (owner, 2026-10-17): the rows whose every field comes from the title, a stored rule or a cited source and agrees with the
 // others (venue.js sureOf) are listed together; the editor looks through the list, unticks any, and publishes them with one tap. The rest stay here.
-import { esc, WINE_STYLES, DOSAGES, dosageFromText, dosageLabel } from "./logic.js?v=21";
-import { VENUE, withoutDosage, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf, placeLookalikes, linkSummary, rowTitle, sureContext, sureOf } from "./venue.js?v=22";
-import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=38";
+import { esc, WINE_STYLES, DOSAGES, dosageFromText, dosageLabel } from "./logic.js?v=23";
+import { VENUE, withoutDosage, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf, placeLookalikes, linkSummary, rowTitle, sureContext, sureOf } from "./venue.js?v=24";
+import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=40";
 import { placeFromArea, savePlace, designationPlan, broadPlace, planPlace } from "./geo.js?v=9";
-import * as db from "./data.js?v=51";
+import * as db from "./data.js?v=53";
 import { caseKey, lookalikes } from "./text.js?v=3";
+import { ruleLineFor } from "./aocgrapes.js?v=2";
 
 const fold = caseKey;   // text.js: accents and capitals ignored, punctuation still counts
 const STYLE_CHOICES = WINE_STYLES.map((s) => ({ id: s.id, label: s.label }));
@@ -63,6 +64,13 @@ export function dosageHtml(f) {
 function desigFor(lists, place, title) {
   const d = startDesignation(lists.areas, place, title);
   return { designation: d.designation, designationWhy: d.why ? d.why.replace("in the name", "in the title") : "", desigPicked: false };
+}
+// With no grape on the label, the grape the appellation's own rules name (aocgrapes.js), as a note: shown only, never saved from here.
+function ruleNoteHtml(f) {
+  if (String(f.grapes || "").trim() || !f.place) return "";
+  const r = ruleLineFor({ country: f.place.country, appellation: f.place.appellation, style: f.style }, { checkedOnly: false });
+  if (!r) return "";
+  return `<div class="muted tiny">The ${esc(r.appellation)} rules ${r.rule === "only" ? `allow only ${esc(r.grape)}` : `name ${esc(r.grape)} as the main grape`} for this type of wine${r.checked ? `: the card shows ${esc(r.grape)} from this rule.` : ": still to check against the official rules."}</div>`;
 }
 // The wine name for the form's current grapes and place (venue.js wineNameOf), from the title words after the producer.
 const nameFor = (f, rest) => wineNameOf(rest, { grapes: String(f.grapes || "").split(/[,;]/).map((x) => x.trim()).filter(Boolean), place: f.place });
@@ -198,7 +206,7 @@ export function reviewHtml(R, queue, opts) {
       <div class="vrdesig" id="vrDesig"><span class="vrlbl">Designation</span>${desigRow(f, R.lists.areas)}</div>
       <div class="vrrow2 vrvg">
         <label class="vrf">Vintage<input class="field" data-vr-f="vintage" value="${esc(f.vintage)}" autocomplete="off" placeholder="year or NV"></label>
-        <label class="vrf">Grapes on the label<input class="field" data-vr-f="grapes" value="${esc(f.grapes)}" autocomplete="off" placeholder="comma between"></label>
+        <label class="vrf">Grapes on the label<input class="field" data-vr-f="grapes" value="${esc(f.grapes)}" autocomplete="off" placeholder="comma between"></label>${ruleNoteHtml(f)}
       </div>
       <div class="err" id="vrErr">${esc(R.err || "")}</div>
       <div class="vrbtns">
