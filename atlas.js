@@ -48,7 +48,7 @@ export function buildShapes(data) {
   });
   const provinces = Object.entries(data.PROVINCES).flatMap(([country, list]) => list.map((p) => ({ country, name: p.name, d: p.polys.map((q) => ringD(unpack(q, data.SCALE))).join("") })));
   const areas = data.AREAS.map((a) => {
-    const rings = a.polys.map((p) => unpack(p, data.AREA_SCALE));
+    const rings = a.polys.map((p) => unpack(p, a.scale || data.AREA_SCALE));   // a tiny area carries its own finer grid
     return { name: a.name, aka: a.aka || [], country: a.country, kind: a.kind, source: a.source || a.kind, d: rings.map(ringD).join(""), bbox: bboxOf(rings), label: labelPoint(rings) };
   });
   return { countries, provinces, areas };
