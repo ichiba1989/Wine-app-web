@@ -169,6 +169,7 @@ Include only as thin slices: rule-based "next wine" selection (deck.js-style) pl
 | Matching, image-identification and blind-tasting game formats; timed formats beyond what exists | After core quiz formats |
 | Social features, sharing | Not specified **[Open]** |
 | Monetization of any kind | Out of scope by your instruction |
+| Upkeep timers and reminders | For the real app's launch (owner, 2026-10-17); see "Deferred to launch: upkeep timers and reminders" below |
 
 ---
 
@@ -506,3 +507,16 @@ The Atlas draws country borders and states/provinces from Natural Earth (public 
 - **Austria:** riedenkarten.at (all ~5,000 vineyard sites) is free to view, licence not stated; only the broad regions are places in the app anyway.
 - **Germany:** no published wine-area layer found.
 Never draw an outline by hand or from an image. The generator is `docs/atlas_data.mjs` (steps in its header).
+
+## Deferred to launch: upkeep timers and reminders (owner, 2026-10-17)
+**Not built now; build it when the real app is made.** The owner wants the app to remind the team, on a timer, of the upkeep that keeps it running smoothly and its information correct. Until then the reminders are files only (`docs/DATA_REFRESH.md`, `docs/TEST_BEFORE_TESTERS.md`) and nothing nudges anyone.
+
+What it should cover (gathered from the prototype; add to it as things come up):
+- **Outside data that goes stale:** the Atlas's map data every six months (INAO's French AOCs, the US AVA list; Natural Earth yearly), with the licence of each source checked again (`docs/DATA_REFRESH.md`).
+- **The venue's website links:** run Check links on each venue's list regularly, since shop pages move and disappear (convention 26 on `vwm`).
+- **Catalog checks:** the Owner page's Checks tab (sparkling wines with no sweetness term, place findings, incomplete rows) looked at on a schedule, not only when someone remembers.
+- **Lists an editor must confirm:** the designation rule list (`KNOWN_DESIGNATIONS`), suggested reference-list rows, Bingo tier 4 vineyards and growths, place spellings marked "To check".
+- **Software that ages:** the pinned database library (`vendor/supabase.js`, update steps in its header) and anything else kept in the repository.
+- **Before-launch switches:** the Plan row (`app_config.plan_switch_open` back to 0) and the open `privacy.html` lines for the owner and lawyers.
+
+How (to decide then): a scheduled job with an owner-facing list on the Owner page ("due", "done on", "next"), and a push or email when something falls due. Each item names its checklist; the job only reminds and never changes data on its own.

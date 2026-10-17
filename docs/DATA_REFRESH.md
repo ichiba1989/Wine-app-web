@@ -1,7 +1,7 @@
 # Data to refresh
 
 Outside data the app keeps a copy of, which goes out of date on its own. Check each line when it is due, refresh it with the steps given, and write
-the new dates here. Nothing in the app reminds anyone: this file is the reminder.
+the new dates here. Nothing in the app reminds anyone yet: this file is the reminder. Timed reminders are planned for the real app's launch (see "Deferred to launch: upkeep timers and reminders" in `docs/ARCHITECTURE_PLAN.md`).
 
 ## The Atlas's map data (`atlasdata.js`)
 
