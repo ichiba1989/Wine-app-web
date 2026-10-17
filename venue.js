@@ -6,6 +6,7 @@
 // The list is kept in the database (venue_wines, docs/venue_decks.sql): the owner uploads the venue's file and adds or removes wines by hand on the Owner page.
 // Pure: no browser, no network. The file reading itself is done by importer.js, loaded on the Owner page.
 import { grapeFor } from "./rules.js?v=6";
+import { DOSAGES } from "./logic.js?v=19";
 import { planPlace, designationPlan } from "./geo.js?v=9";
 import { duplicateGroups } from "./catalog.js?v=7";
 import { plainKey, matchKey, caseKey, lookalikes } from "./text.js?v=3";
@@ -249,11 +250,13 @@ export function reviewQueue(list, skipped = new Set(), sortKey = null) {
 
 // ---------------------------------------------------------------- prepared suggestions (vwmprep.js) and places
 // vwmprep.js holds suggestions worked out once from the shop's titles (unverified; see its header). They are read here row by row; an editor still checks them.
-export function prepIndex(prep) {
+// dosage: vwmprep.js PREP_DOSAGE, the sweetness terms looked up for sparkling titles that name none ({ title: [term, page, what it says] }).
+export function prepIndex(prep, dosage = {}) {
   const m = new Map();
   (prep || []).forEach((r) => m.set(norm(r[0]), {
     producer: r[1] || "", wine: r[2] || "", style: r[3] || "", place: { appellation: r[4] || "", region: r[5] || "", country: r[6] || "" },
     grapes: r[7] ? String(r[7]).split("|") : [], notWine: !!r[8], styleWhy: r[9] ? `${r[9]} in the title` : "", ...placeWhyOf(r[10]),
+    researchDosage: (dosage || {})[r[0]] || null,
   }));
   return m;
 }
@@ -356,6 +359,20 @@ export function wineNameOf(text, { grapes = [], place = {} } = {}) {
   while (cutEnd && words.length && isJoiner(words[words.length - 1])) words.pop();
   return words.join(" ");
 }
+// The wine name without its sweetness term (owner, 2026-10-17): "Extra Brut Prisme Grand Cru" with Extra Brut -> "Prisme Grand Cru". The term has its
+// own field (wines.dosage); only the term's own words go (accents, capitals and hyphens aside), the first time they appear.
+export function withoutDosage(name, id) {
+  const d = DOSAGES.find((x) => x.id === id);
+  if (!d) return String(name || "");
+  const toks = String(name || "").trim().split(/\s+/).filter(Boolean);
+  for (const w of [...d.words].sort((a, b) => b.length - a.length)) {
+    const want = norm(w), n = want.split(" ").length;
+    for (let i = 0; i < toks.length; i++) for (let k = 1; k <= n && i + k <= toks.length; k++) {   // "Extra-Brut" is one word, "Extra Brut" two
+      if (norm(toks.slice(i, i + k).join(" ")) === want) return [...toks.slice(0, i), ...toks.slice(i + k)].join(" ");
+    }
+  }
+  return toks.join(" ");
+}
 // How many title words make up the producer's name (for the word chips).
 export const splitOf = (title, producer) => prefixWords(String(title || "").trim().split(/\s+/).filter(Boolean), producer);
 
@@ -391,7 +408,7 @@ export function sureContext(lists, forms) {
   const spellings = [...new Map((forms || []).map((f) => [caseKey(f.producer), String(f.producer || "").trim()])).values()].filter(Boolean);   // each new producer once
   // Names grouped by the length of their match key: a look-alike differs by at most one letter, so only names of about the same length are compared.
   const byLength = (names) => { const m = new Map(); names.forEach((n) => { const k = matchKey(n).length; if (!m.has(k)) m.set(k, []); m.get(k).push(n); }); return m; };
-  return { areas: lists.areas || [], grapes: lists.grapes || [], placeWords, producerNames, catalogNames: byLength((lists.producers || []).map((p) => p.name)), spellings: byLength(spellings) };
+  return { areas: lists.areas || [], grapes: lists.grapes || [], placeWords, producerNames, catalogNames: byLength((lists.producers || []).map((p) => p.name)), spellings: byLength(spellings), dosageReady: !!lists.dosageReady };
 }
 const near = (byLen, name) => { const k = matchKey(name).length; return [k - 1, k, k + 1].flatMap((n) => byLen.get(n) || []); };
 // Every run of one to six words of a name, as place keys (to look each up in a set).
@@ -430,6 +447,9 @@ export function sureOf(f, ctx) {
   if (f.style === "sparkling" && !STYLE_WORDS[0].words.some((w) => !/^blanc de/.test(w) && has(f.title, w))) return no("type to check");   // "Blanc de Noirs" alone can be a still wine
   if (f.style === "white" && RED_WORDS.some((w) => has(f.title, w))) return no("type to check");
   if (f.style === "red" && WHITE_WORDS.some((w) => has(f.title, w))) return no("type to check");
+  // a sparkling wine needs its sweetness term from the title or a page that states it (owner, 2026-10-17), and the database update to keep it
+  if (f.style === "sparkling" && !f.dosage) return no("sparkling with no sweetness term");
+  if (f.style === "sparkling" && !ctx.dosageReady) return no("needs docs/sparkling_dosage.sql");
   const grapes = String(f.grapes || "").split(/[,;]/).map((x) => x.trim()).filter(Boolean);
   const colours = grapes.map((g) => (grapeFor(g) || {}).color).filter(Boolean);
   if (["red", "white"].includes(f.style) && colours.length && colours.every((c) => c === colours[0]) && colours[0] !== f.style) return no("type and grape disagree");

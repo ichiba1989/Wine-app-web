@@ -13,6 +13,19 @@
 //   [title, producer, wine name, type, appellation, region, country, grapes ("|" between), 1 when it is probably not a wine, why the type, why the place]
 // Titles from a later list are not here; they get the app's own suggestions (venue.js suggestRow).
 export const PREP_DATE = "2026-10-15";
+// SWEETNESS TERMS LOOKED UP ON 2026-10-17 (owner's request) for sparkling wines whose title names none (Brut, Extra Brut ...; logic.js DOSAGES).
+// Kept only where a page states the term for that wine: [term, the page, what it says]. The review shows "found online" with the link; an editor
+// still checks it. Sparkling titles not here and with no term in the title stay for an editor (the "sure" list leaves them out).
+export const PREP_DOSAGE = {
+  "Bisol Prosecco Valdobbiadene Superiore di Cartizze DOCG": ["sec", "https://images.salsify.com/images/z0btnzhzpxxi6k3gtej7/Bisol_2025_Cartizze_Superiore_FS.pdf", "Dosage: Dry (the producer's sheet)"],
+  "Laurent Perrier Champagne Grand Siecle No 24": ["brut", "https://us.bbr.com/collections/magnums-large-formats/products/champagne-laurent-perrier-grand-siecle-no-24-brut", "Grand Siècle No. 24, Brut"],
+  "Laurent Perrier Champagne Grand Siecle No 27": ["brut", "https://lbv.kork.ca/qc/en/our-wineries/champagne-laurent-perrier/cuvee-grand-siecle-iteration-27/0/15248826", "Brut"],
+  "Laurent Perrier Champagne Grand Siecle No 23": ["brut", "https://www.gute-weine.de/produkt/laurent-perrier-champagne-grand-siecle-grande-cuvee-no-23-57056h", "Grand Siècle Grande Cuvée No. 23 Brut"],
+  "J Vineyards Sparkling Wine Cuvee 20": ["brut", "https://www.decanter.com/wine-reviews/usa/california/j-vineyards-j-cuvee-20-brut-sonoma-county-russian-river-64552/", "J Cuvée 20 Brut"],
+  "Roederer Estate Sparkling Wine Clark Road Anderson Valley": ["brut", "https://www.winehouse.com/product/2021-roederer-estate-brut-clark-road-vineyard-anderson-valley-z19a4mprbs3v1", "Roederer Estate Brut Clark Road Vineyard"],
+  "Domaine Renardat-Fache Cerdon de Bugey": ["demi_sec", "https://en.lespassionnesduvin.com/domaine-renardat-fache-cerdon-du-bugey-methode-ancestrale-demi-sec-cuvee-initiale.html", "Cerdon du Bugey méthode ancestrale demi-sec, cuvée Initiale"],
+  "Patrick Bottex Vin du Bugey Cerdon": ["demi_sec", "https://sf.vervewine.com/products/patrick-bottex-bugey-cerdon-la-cueille-nv", "Bugey Cerdon La Cueille, demi-sec"],
+};
 export const PREP = [
 ["00 Wines Beaune Cent Vignes", "00 Wines", "Beaune Cent Vignes", "red", "Beaune", "Burgundy", "France", "", 0, "\"beaune\"", "beaune"],
 ["00 Wines Chambertin Grand Cru", "00 Wines", "Chambertin Grand Cru", "red", "Chambertin", "Burgundy", "France", "", 0, "\"chambertin\"", "chambertin"],

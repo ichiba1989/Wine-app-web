@@ -790,8 +790,11 @@ export async function addVenueCatalogWine(sb, userId, plan) {
     const found = must(await sb.from("producers").select("id, name").ilike("name", like(pname)).limit(1));
     return found.length ? found[0].id : must(await sb.from("producers").insert({ name: pname }).select("id").single()).id;
   });
+  // plan.dosage: a sparkling wine's sweetness term (docs/sparkling_dosage.sql), with dosageBasis and dosageSource; undefined before that update.
+  const withDosage = plan.dosage !== undefined, dosage = withDosage && plan.style === "sparkling" ? plan.dosage || null : null;
+  const dosageFields = dosage ? { dosage, dosage_basis: plan.dosageBasis || "editor", dosage_source: plan.dosageSource || null } : {};
   const wineId = await step("Wine", async () => {
-    let q = sb.from("wines").select("id, style, appellation_id").eq("producer_id", producerId);
+    let q = sb.from("wines").select(withDosage ? "id, style, appellation_id, dosage" : "id, style, appellation_id").eq("producer_id", producerId);
     q = wname ? q.ilike("name", like(wname)) : q.is("name", null);
     const found = must(await q.limit(50));
     // The same wine (another vintage of it) only when the type and place agree too: once grape and place words go to their own fields, names repeat
@@ -800,9 +803,12 @@ export async function addVenueCatalogWine(sb, userId, plan) {
     const want = (plan.grapes || []).map((g) => g.id || `new:${g.name}`).sort().join("|");
     for (const w of found.filter((x) => x.style === plan.style && (x.appellation_id || null) === (plan.areaId || null))) {
       const have = must(await sb.from("wine_grapes").select("grape_id").eq("wine_id", w.id)).map((x) => x.grape_id).sort().join("|");
-      if (sameWine({ producer: pname, name: wname, style: plan.style, placeId: plan.areaId || null, grapeKey: want }, { producer: pname, name: wname, style: w.style, placeId: w.appellation_id || null, grapeKey: have })) return w.id;   // catalog.js: the one same-wine rule
+      if (sameWine({ producer: pname, name: wname, style: plan.style, placeId: plan.areaId || null, grapeKey: want, dosage }, { producer: pname, name: wname, style: w.style, placeId: w.appellation_id || null, grapeKey: have, dosage: w.dosage || null })) {   // catalog.js: the one same-wine rule
+        if (dosage && !w.dosage) must(await sb.from("wines").update(dosageFields).eq("id", w.id));   // the wine we have gets the term it was missing
+        return w.id;
+      }
     }
-    return must(await sb.from("wines").insert({ producer_id: producerId, name: wname || null, style: plan.style, style_basis: "editor", appellation_id: plan.areaId || null, status: plan.publish ? "verified" : "pending_review" }).select("id").single()).id;
+    return must(await sb.from("wines").insert({ producer_id: producerId, name: wname || null, style: plan.style, style_basis: "editor", appellation_id: plan.areaId || null, status: plan.publish ? "verified" : "pending_review", ...dosageFields }).select("id").single()).id;
   });
   const vintageId = await step("Vintage", async () => {
     let q = sb.from("wine_vintages").select("id").eq("wine_id", wineId);

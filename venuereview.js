@@ -8,11 +8,11 @@
 // Everything fits on one phone screen. Editor writes are online only. The rules are in venue.js (pure); this file draws the screen and handles the taps.
 // "Publish the sure ones" (owner, 2026-10-17): the rows whose every field comes from the title, a stored rule or a cited source and agrees with the
 // others (venue.js sureOf) are listed together; the editor looks through the list, unticks any, and publishes them with one tap. The rest stay here.
-import { esc, WINE_STYLES } from "./logic.js?v=19";
-import { VENUE, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf, placeLookalikes, linkSummary, rowTitle, sureContext, sureOf } from "./venue.js?v=19";
-import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=35";
+import { esc, WINE_STYLES, DOSAGES, dosageFromText, dosageLabel } from "./logic.js?v=19";
+import { VENUE, withoutDosage, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf, placeLookalikes, linkSummary, rowTitle, sureContext, sureOf } from "./venue.js?v=20";
+import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=36";
 import { placeFromArea, savePlace, designationPlan, broadPlace, planPlace } from "./geo.js?v=9";
-import * as db from "./data.js?v=48";
+import * as db from "./data.js?v=49";
 import { caseKey, lookalikes } from "./text.js?v=3";
 
 const fold = caseKey;   // text.js: accents and capitals ignored, punctuation still counts
@@ -26,18 +26,37 @@ export function formFor(row, lists, prep = null) {
     const split = splitOf(row.wine_name, p.producer);
     const sp = split ? splitTitle(row.wine_name, split) : { producer: p.producer, wine: p.wine };
     const place = canonPlace(lists.areas, broadPlace(p.place));   // Germany and Austria: only the broad wine region (geo.js)
+    const d = dosageFor(p.style, row.wine_name, p, lists);
     return {
-      ...base, ...desigFor(lists, place, row.wine_name), split, producer: sp.producer, wine: wineNameOf(p.wine || sp.wine, { grapes: p.grapes, place: { ...p.place, ...place } }), style: p.style, styleWhy: p.styleWhy, place, placeWhy: p.placeWhy, placeSource: p.placeSource || "", placeNote: p.placeNote || "",
+      ...base, ...desigFor(lists, place, row.wine_name), ...d, split, producer: sp.producer, wine: withoutDosage(wineNameOf(p.wine || sp.wine, { grapes: p.grapes, place: { ...p.place, ...place } }), d.dosage), style: p.style, styleWhy: p.styleWhy, place, placeWhy: p.placeWhy, placeSource: p.placeSource || "", placeNote: p.placeNote || "",
       grapes: p.grapes.join(", "), notWine: p.notWine, knownProducer: lists.producers.some((x) => fold(x.name) === fold(sp.producer)),
     };
   }
   const s = suggestRow(row.wine_name, { producers: lists.producers, areas: lists.areas, shopType: row.shop_type || "" });
   const sp = splitTitle(row.wine_name, s.split);
   const place = broadPlace(s.areaId ? placeFromArea(lists.areas, s.areaId) : { country: "", region: "", appellation: "" });
+  const d = dosageFor(s.style, row.wine_name, null, lists);
   return {
-    ...base, ...desigFor(lists, place, row.wine_name), split: s.split, producer: sp.producer, wine: wineNameOf(sp.wine, { grapes: s.grapes, place }), style: s.style, styleWhy: s.styleWhy, place,
+    ...base, ...desigFor(lists, place, row.wine_name), ...d, split: s.split, producer: sp.producer, wine: withoutDosage(wineNameOf(sp.wine, { grapes: s.grapes, place }), d.dosage), style: s.style, styleWhy: s.styleWhy, place,
     placeWhy: s.areaWhy, grapes: s.grapes.join(", "), notWine: false, knownProducer: !!s.producerId,
   };
+}
+// A sparkling wine's sweetness term (owner, 2026-10-17; logic.js DOSAGES): the one looked up for this title (vwmprep.js PREP_DOSAGE, with its page),
+// else the one written in the title (the label). The term has its own field and leaves the wine name. dosageReady: docs/sparkling_dosage.sql is run.
+function dosageFor(style, title, p, lists) {
+  const none = { dosage: "", dosageWhy: "", dosageSource: "", dosageBasis: "", dosageReady: !!lists.dosageReady };
+  if (style !== "sparkling") return none;
+  const r = p && p.researchDosage;
+  if (r) return { ...none, dosage: r[0], dosageWhy: r[2], dosageSource: r[1], dosageBasis: "source" };
+  const t = dosageFromText(title);
+  return t ? { ...none, dosage: t.id, dosageWhy: `"${t.word}" in the title`, dosageBasis: "label" } : none;
+}
+export function dosageHtml(f) {
+  if (f.style !== "sparkling") return "";
+  if (!f.dosageReady) return `<div class="vrlbl">How sweet <span class="muted">(needs docs/sparkling_dosage.sql)</span></div>`;
+  const chips = [...DOSAGES, { id: "", label: "Not on the label" }].map((d) => `<button class="chip${(f.dosage || "") === d.id ? " on" : ""}" data-vr="dosage:${d.id}" aria-pressed="${(f.dosage || "") === d.id}">${esc(d.label)}</button>`).join("");
+  const why = f.dosageSource ? ` <a class="small" href="${esc(f.dosageSource)}" target="_blank" rel="noopener noreferrer" title="${esc(f.dosageWhy)}">· found online</a>` : f.dosageWhy ? ` <span class="muted small">· ${esc(f.dosageWhy)}</span>` : "";
+  return `<div class="vrlbl">How sweet (as on the label)${why}</div><div class="vrstyles" role="group" aria-label="How sweet">${chips}</div>`;
 }
 // The designation (DOC, DOCG, AOC ...) the form starts with: the place's own, else the one in the shop's title (wineinfo.js startDesignation).
 // It is kept on the place, never on the wine (geo.js); the title keeps "DOCG" even though the wine name leaves it out.
@@ -110,7 +129,7 @@ export function linksHtml(R, list, embedded) {
 // ---------------------------------------------------------------- publish the sure ones (owner, 2026-10-17)
 const STYLE_LABEL = Object.fromEntries(STYLE_CHOICES.map((s) => [s.id, s.label]));
 export function sureLine(f) {
-  return [f.producer, f.wine || "(no name)", STYLE_LABEL[f.style] || f.style, placeText(f.place), f.vintage, f.grapes, f.designation].filter(Boolean).join(" · ");
+  return [f.producer, f.wine || "(no name)", STYLE_LABEL[f.style] || f.style, f.style === "sparkling" ? dosageLabel(f.dosage) : "", placeText(f.place), f.vintage, f.grapes, f.designation].filter(Boolean).join(" · ");
 }
 export function sureHtml(S) {
   const back = `<div class="muted small vrcount"><button class="link" data-vr="view:add"${S && S.busy ? " disabled" : ""}>← Back to adding wines one at a time</button></div>`;
@@ -170,6 +189,7 @@ export function reviewHtml(R, queue, opts) {
       </div>
       <div id="vrProdLook">${producerLookHtml(f, R.lists.producers)}</div>
       <div class="vrstyles" role="group" aria-label="Type of wine">${styles}</div>
+      ${dosageHtml(f)}
       <div class="vrlbl">Place <button class="link" data-vr="type">${f.typing ? "Search instead" : "Type a new place"}</button></div>
       <div class="vrplace" id="vrPlaceNow">${placeNowHtml(f, R.lists.areas)}</div>
       ${typed}
@@ -222,11 +242,15 @@ export function createVenueReview(ctx) {
     const d = document.getElementById("vrDesig"); if (d && R.form) { refreshDesig(R.form); d.innerHTML = `<span class="vrlbl">Designation</span>${desigRow(R.form, R.lists.areas)}`; }
   };
   const drawHits = () => { const el = document.getElementById("vrHits"); if (el && R.form) el.innerHTML = hitsHtml(R.form, R.places); };
-  async function loadLists() { R.lists = await db.loadEditorLists(ctx.sb()); R.places = placeOptions(R.lists.areas); }
+  async function loadLists() {
+    const [lists, dosages] = await Promise.all([db.loadEditorLists(ctx.sb()), db.loadDosages(ctx.sb()).catch(() => null)]);
+    R.lists = { ...lists, dosageReady: !!dosages };   // the sweetness term can be saved once docs/sparkling_dosage.sql is run
+    R.places = placeOptions(R.lists.areas);
+  }
   async function load() {
     R.loading = true; R.error = "";
     // The prepared suggestions are a large file, read only here; without them the app's own suggestions are used.
-    const prep = import("./vwmprep.js?v=2").then((m) => prepIndex(m.PREP)).catch(() => null);
+    const prep = import("./vwmprep.js?v=3").then((m) => prepIndex(m.PREP, m.PREP_DOSAGE)).catch(() => null);
     try { await loadLists(); R.prep = await prep; }
     catch (e) { R.error = "Could not load the producer, grape and place lists: " + (e.message || e); }
     R.loading = false; draw();
@@ -245,7 +269,7 @@ export function createVenueReview(ctx) {
       if (plan.notes.length || dPlan.set) await loadLists();   // new places, and new designations, show at once
       await db.addVenueCatalogWine(ctx.sb(), ctx.userId(), {
         producerName: f.producer, wineName: f.wine, style: f.style, areaId: areaId || null, vintage: f.vintage === "NV" ? "NV" : f.vintage,
-        grapes: grapesFrom(f.grapes, R.lists.grapes), publish, rowId: f.rowId, listedAs: f.title, sourceName: `${VENUE.name} list`,
+        grapes: grapesFrom(f.grapes, R.lists.grapes), dosage: R.lists.dosageReady ? f.dosage || "" : undefined, dosageBasis: f.dosageBasis || "editor", dosageSource: f.dosageSource || null, publish, rowId: f.rowId, listedAs: f.title, sourceName: `${VENUE.name} list`,
       });
       R.msg = `Added: ${f.producer}${f.wine ? " " + f.wine : ""} ${f.vintage}${publish ? ", published" : ", waiting for review in Catalog"}.${desigNote}`;
       R.form = null;
@@ -282,7 +306,8 @@ export function createVenueReview(ctx) {
     else if (action === "sure") await sureAction(a);
     else if (action === "links") await runLinks(a);
     else if (action === "split" && f) { f.split = Number(a) === f.split ? 0 : Number(a); const sp = splitTitle(f.title, f.split); f.producer = sp.producer; f.wine = nameFor(f, sp.wine); draw(); }
-    else if (action === "style" && f) { f.style = a; f.styleWhy = ""; draw(); }
+    else if (action === "style" && f) { f.style = a; f.styleWhy = ""; if (a === "sparkling" && !f.dosage) Object.assign(f, dosageFor(a, f.title, prepOf(R.prep, f.title), R.lists)); draw(); }
+    else if (action === "dosage" && f) { f.dosage = a; f.dosageBasis = "editor"; f.dosageSource = ""; f.dosageWhy = ""; draw(); }
     else if (action === "place" && f) { f.place = broadPlace(placeFromArea(R.lists.areas, a)); refreshDesig(f); f.wine = nameFor(f, f.wine); f.placeWhy = ""; f.placeSource = ""; f.placeNote = ""; f.q = ""; f.typing = false; draw(); }   // the chosen place's words leave the name
     else if (action === "type" && f) {
       f.typing = !f.typing;
@@ -367,7 +392,7 @@ export function createVenueReview(ctx) {
         if (plan.error || plan.creates.length || !plan.areaId) throw new Error(plan.error || "its place is not in the list yet");
         await db.addVenueCatalogWine(sb, ctx.userId(), {
           producerName: f.producer, wineName: f.wine, style: f.style, areaId: plan.areaId, vintage: f.vintage === "NV" ? "NV" : f.vintage,
-          grapes: grapesFrom(f.grapes, R.lists.grapes), publish: true, rowId: f.rowId, listedAs: f.title, sourceName: `${VENUE.name} list`,
+          grapes: grapesFrom(f.grapes, R.lists.grapes), dosage: R.lists.dosageReady ? f.dosage || "" : undefined, dosageBasis: f.dosageBasis || "editor", dosageSource: f.dosageSource || null, publish: true, rowId: f.rowId, listedAs: f.title, sourceName: `${VENUE.name} list`,
         });
       };
       const worker = async () => {
