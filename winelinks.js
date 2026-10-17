@@ -2,6 +2,7 @@
 // The list comes from the project file wine-photo-links.md (the "photos" link of each of the 200 wines); only the search words are kept here,
 // because every link starts the same way. A wine that is not in the list (one added later) gets a search built from its own details.
 // Pure: no browser, no network.
+import { plainKey } from "./text.js?v=2";
 const BASE = "https://www.google.com/search?tbm=isch&q=";
 // [name as listed (a grape in brackets tells apart wines that share a name), search words]
 export const LINKS = [
@@ -207,7 +208,7 @@ export const LINKS = [
   ["NV Zonin", "Zonin+Prosecco+wine+bottle"],
 ];
 
-const fold = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const fold = plainKey;   // text.js: the shared lookup key
 // "2022 Alamos (Malbec)" -> the name without the grape, and the grape.
 const parts = (name) => { const m = /^(.*?)\s*\(([^)]*)\)\s*$/.exec(name); return m ? { base: m[1], grape: m[2] } : { base: name, grape: "" }; };
 const INDEX = new Map();

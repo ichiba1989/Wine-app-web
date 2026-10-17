@@ -1,18 +1,17 @@
-import { fold, splitGrapeText, checkGrapeText, grapeProblem } from "./grapes.js?v=1";
+import { fold, splitGrapeText, checkGrapeText, grapeProblem } from "./grapes.js?v=2";
+import { reactionOf, skipsOf } from "./reactions.js?v=3";
+import { isComplete, missingFields } from "./catalog.js?v=6";
 // Pure logic for the wine app web page. No browser and no network in this file,
 // so every rule here can be tested on its own.
 
 export const COLORS = { ink: "#16261D", muted: "#5A6A5F", wine: "#7B1E3A", slate: "#3E5C76", moss: "#3A4B40", line: "#C3CFC1" };
 
-// A swipe records how familiar the wine is; the switch under the card records interest.
+// OLD MODEL (kept so earlier answers still read): a swipe recorded how familiar the wine was (the "interest" it also stored is read by reactions.js).
+// The current answers (like, dislike, I don't know it, I've had this bottle) are in reactions.js.
 export const FAMILIARITY = {
   recognize: { label: "I recognize it", color: COLORS.slate },
   unknown: { label: "I don't know it", color: COLORS.moss },
   had: { label: "I've had this bottle", color: COLORS.wine },
-};
-export const INTEREST = {
-  try: { label: "Interested", color: COLORS.wine },
-  nope: { label: "Not interested", color: COLORS.moss },
 };
 
 export const FLAGS = {
@@ -54,6 +53,33 @@ export const WINE_STYLES = [
   { id: "fortified", label: "Fortified", dims: ["acidity", "body", "tannin", "sweetness", "oak"] },
 ];
 export const styleInfo = (id) => WINE_STYLES.find((x) => x.id === id) || null;
+
+// ---------------------------------------------------------------- how sweet a sparkling wine is, as its label says (owner, 2026-10-17)
+// Sparkling wines carry one of these terms on the label (EU rules for sparkling wine, Regulation (EU) 2019/33, Annex III part B, which also lists
+// the other-language words that mean the same: "pas dosé" and "dosage zéro" are Brut Nature, "trocken" and "secco" are Sec ...). It is kept in its
+// own field (wines.dosage, docs/sparkling_dosage.sql), not in the wine's name. Driest first. A term is only ever read from the label (or a source
+// that quotes it); it is never worked out from taste or price.
+export const DOSAGES = [
+  { id: "brut_nature", label: "Brut Nature", words: ["brut nature", "pas dose", "dosage zero", "zero dosage", "dosaggio zero", "non dose", "naturherb", "brut natur"] },
+  { id: "extra_brut", label: "Extra Brut", words: ["extra brut", "extra herb"] },
+  { id: "brut", label: "Brut", words: ["brut", "herb"] },
+  { id: "extra_dry", label: "Extra Dry", words: ["extra dry", "extra sec", "extra seco", "extra trocken", "extra secco"] },
+  { id: "sec", label: "Sec", words: ["sec", "dry", "secco", "asciutto", "seco", "trocken"] },
+  { id: "demi_sec", label: "Demi-Sec", words: ["demi sec", "demi-sec", "halbtrocken", "semi secco", "abboccato", "semi seco", "medium dry"] },
+  { id: "doux", label: "Doux", words: ["doux", "dolce", "dulce", "mild"] },
+];
+export const dosageLabel = (id) => (DOSAGES.find((d) => d.id === id) || {}).label || "";
+const dosageWords = DOSAGES.flatMap((d) => d.words.map((w) => ({ id: d.id, w: w.replace(/-/g, " ") }))).sort((a, b) => b.w.length - a.w.length);
+const plainWords = (s) => ` ${String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `;
+// Words that look like a term but are part of a name ("Dry Creek Valley", "Herbst"): taken out before looking.
+const NOT_DOSAGE = [" dry creek ", " dry river ", " dry farm ", " dry farmed ", " dry stack "];
+// The term written in a sparkling wine's name or title: { id, word } or null. Longest words first, so "Extra Brut" is never read as "Brut".
+export function dosageFromText(text) {
+  let t = plainWords(text);
+  NOT_DOSAGE.forEach((w) => { t = t.split(w).join(" "); });
+  for (const x of dosageWords) if (t.includes(` ${x.w} `)) return { id: x.id, word: x.w };
+  return null;
+}
 export const DEFAULT_STRUCTURE = 3;   // scale sliders start in the middle until a wine has a reference profile
 export const dimMeta = (key) => DIMS.find((d) => d.key === key);
 // The structure lines that apply to a wine of this style. An unknown style is treated as red.
@@ -88,12 +114,12 @@ export const shuffle = (a) => { const b = [...a]; for (let i = b.length - 1; i >
 // ---------------------------------------------------------------- swiping
 // Double-tapping near an edge of the card does the same as swiping that way.
 export function tapEdge(nx, ny) {
-  const [kind, dist] = [["unknown", nx], ["recognize", 1 - nx], ["had", ny]].sort((a, b) => a[1] - b[1])[0];
+  const [kind, dist] = [["dislike", nx], ["like", 1 - nx], ["had", ny]].sort((a, b) => a[1] - b[1])[0];
   return dist < 0.35 ? kind : null;
 }
 export function swipeKind(dx, dy, t = 100) {
-  if (dx > t) return "recognize";
-  if (dx < -t) return "unknown";
+  if (dx > t) return "like";
+  if (dx < -t) return "dislike";
   if (dy < -t) return "had";
   return null;
 }
@@ -125,7 +151,7 @@ export function decideSwipe(dx, dy, vx = 0, vy = 0, t = 100) {
 }
 // Where a released card flies to and how long it takes: it keeps going the way it was thrown, at the speed it was thrown.
 export function flyPlan(kind, dx, dy, vx, vy, W, H) {
-  const to = kind === "recognize" ? [W * 1.3, dy + vy * 120] : kind === "unknown" ? [-W * 1.3, dy + vy * 120] : [dx + vx * 120, -H * 1.1];
+  const to = kind === "like" ? [W * 1.3, dy + vy * 120] : kind === "dislike" ? [-W * 1.3, dy + vy * 120] : kind === "dont_know" ? [dx + vx * 120, H * 1.1] : [dx + vx * 120, -H * 1.1];
   const left = Math.hypot(to[0] - dx, to[1] - dy);
   const duration = Math.round(clampN(left / Math.max(Math.hypot(vx, vy), 1.1), 190, 400));
   return { to, rot: clampN(to[0] / 14, -30, 30), duration };
@@ -138,7 +164,9 @@ export function cardFromRow(r) {
   if (r.label_grapes && r.label_grapes.length) facts.push({ text: r.label_grapes.join("-"), derived: false });
   if (r.rule_grapes && r.rule_grapes.length) facts.push({ text: r.rule_grapes.join(", "), derived: true });
   if (r.appellation) facts.push({ text: r.appellation, derived: false });
-  if (r.classification) facts.push({ text: r.classification, derived: true });
+  // A designation belongs to an appellation: a wine that only names its region (a Vin de France from Bordeaux) shows none, even if the
+  // region row still carries one from an earlier fill (docs/designations_appellation_only.sql takes those off).
+  if (r.classification && r.appellation) facts.push({ text: r.classification, derived: true });
   const place = [r.region && r.region !== r.appellation ? r.region : null, r.country].filter(Boolean).join(", ");
   if (place) facts.push({ text: place, derived: true });
   return {
@@ -148,6 +176,7 @@ export function cardFromRow(r) {
     grapes: [...(r.label_grapes || [])], ruleGrapes: [...(r.rule_grapes || [])],
     reach: r.reach == null ? null : Number(r.reach), archived: !!r.archived_at, wineStatus: r.wine_status || "",   // set by update 15; empty before it
     image: r.image_path || null,   // the bottle photo's path in storage (update 16); empty when the wine has no photo
+    ...(r.dosage ? { dosage: r.dosage } : {}),   // a sparkling wine's sweetness term, once the view carries it (docs/catalog_speed.sql)
     facts,
   };
 }
@@ -175,14 +204,17 @@ export function entryGrape(e, cardsById) {
   return names.length === 1 ? names[0] : "";
 }
 // A wine's name always starts with its vintage.
-export const wineName = (c) => `${c.vintage ? c.vintage + " " : ""}${c.producer}${c.cuvee ? " " + c.cuvee : ""}`;
+export const wineName = (c) => `${c.vintage ? c.vintage + " " : ""}${c.producer || ""}${c.cuvee ? (c.producer ? " " : "") + c.cuvee : ""}`.trim();
 
 // A journal row (from the v_journal_entries view) shaped like a card.
 export function entryCard(e) {
   const vintage = e.is_non_vintage ? "NV" : e.vintage_year ? String(e.vintage_year) : "";
   return { vintage, producer: e.producer, cuvee: e.wine_name || "", style: e.style, country: e.country };
 }
-export const entryName = (e) => wineName(entryCard(e));
+export const entryName = (e) => wineName(entryCard(e)) || "Untitled wine";
+// A wine the player typed in with details still missing (see isComplete in catalog.js). Catalog wines are always complete.
+export const entryIncomplete = (e) => !!e && !!e.is_outside_wine && !isComplete(e);
+export const entryMissing = (e) => (entryIncomplete(e) ? missingFields(e) : []);
 
 export function styleLabel(style) {
   return style === "red" ? "Red" : style === "white" ? "White" : style === "sparkling" ? "Sparkling" : style === "rose" ? "Ros\u00e9" : style === "fortified" ? "Fortified" : "Other or unknown";
@@ -201,9 +233,10 @@ export const GROUPS = [
 ];
 export const GROUP_PAGE = 20;   // rows shown per group before "Show more"
 
-export function filterEntries(entries, { q = "", verdict = "all" } = {}) {
+export function filterEntries(entries, { q = "", verdict = "all", incomplete = false } = {}) {
   const term = q.trim().toLowerCase();
   return entries.filter((e) => {
+    if (incomplete && !entryIncomplete(e)) return false;
     if (verdict === "none") { if (e.verdict) return false; }
     else if (verdict !== "all" && e.verdict !== verdict) return false;
     if (!term) return true;
@@ -277,6 +310,8 @@ export function sortCards(list, by, order, get = (x) => x) {
 }
 
 // Builds the Swipes tab lists from the catalog cards, the user's swipe states and the journal.
+// liked / disliked / dontKnow follow the current answers; answers from the old model are folded in (an old "not interested" is a dislike, an old "I don't know it" is
+// "I don't know it"); an old "I recognize it" has no match in the new model and stays in `rec` ("Recognized earlier").
 export function swipeLists(cards, states, journal) {
   const byId = new Map(cards.map((c) => [c.id, c]));
   const entryOf = new Map(journal.filter((j) => j.wine_vintage_id).map((j) => [j.wine_vintage_id, j]));
@@ -284,15 +319,18 @@ export function swipeLists(cards, states, journal) {
   [...states].sort((a, b) => ((a.last_swiped_at || "") < (b.last_swiped_at || "") ? -1 : 1)).forEach((s, i) => { order[s.wine_vintage_id] = i; });
   const cardsWhere = (test) => states.filter((s) => byId.has(s.wine_vintage_id) && test(s)).map((s) => byId.get(s.wine_vintage_id));
   const notInJournal = (s) => !entryOf.has(s.wine_vintage_id);
+  const is = (k) => (s) => reactionOf(s) === k && notInJournal(s);
   return {
     order, entryOf,
+    skipsOf: Object.fromEntries(states.filter((s) => reactionOf(s) === "dont_know").map((s) => [s.wine_vintage_id, skipsOf(s)])),
     interestOf: Object.fromEntries(states.map((s) => [s.wine_vintage_id, s.interest])),
-    rec: cardsWhere((s) => s.familiarity === "recognize" && s.interest === "try" && notInJournal(s)),
-    unk: cardsWhere((s) => s.familiarity === "unknown" && s.interest === "try" && notInJournal(s)),
-    notInt: cardsWhere((s) => s.interest === "nope" && notInJournal(s)),
+    liked: cardsWhere(is("like")),
+    disliked: cardsWhere(is("dislike")),
+    dontKnow: cardsWhere(is("dont_know")),
+    rec: cardsWhere(is("recognized")),
     tried: states.filter((s) => byId.has(s.wine_vintage_id) && entryOf.has(s.wine_vintage_id) && entryOf.get(s.wine_vintage_id).verdict)
       .map((s) => ({ ...byId.get(s.wine_vintage_id), entry: entryOf.get(s.wine_vintage_id) })),
-    had: cardsWhere((s) => s.familiarity === "had"),
+    had: cardsWhere((s) => reactionOf(s) === "had"),
   };
 }
 
@@ -343,7 +381,7 @@ export function sheetForEntry(e, perceptionRows, today, defaults = {}, photoRows
 // A rating sheet for a wine typed in by hand. The wine row is only created when the review is saved.
 export function outsideName(form) {
   const vintage = form.vintage === "NV" ? "NV" : /^\d{4}$/.test(form.vintage || "") ? form.vintage : "";
-  return `${vintage ? vintage + " " : ""}${(form.producer || "").trim()}${form.wine_name && form.wine_name.trim() ? " " + form.wine_name.trim() : ""}`;
+  return (`${vintage ? vintage + " " : ""}${(form.producer || "").trim()}${form.wine_name && form.wine_name.trim() ? ((form.producer || "").trim() ? " " : "") + form.wine_name.trim() : ""}`.trim()) || "Untitled wine";
 }
 export function sheetForOutside(form, today) {
   return {
@@ -452,7 +490,8 @@ export function referenceWrites(values, existingRows, wineId, userId, nowIso) {
 
 // ---------------------------------------------------------------- wines typed in by hand
 export function validateOutside(form) {
-  if (!form || !(form.producer || "").trim()) return "Enter the producer.";
+  // Incomplete wines are allowed: only something to call the wine by is needed. The rest can be added later (isComplete in catalog.js says when it is complete).
+  if (!form || !((form.producer || "").trim() || (form.wine_name || "").trim())) return "Enter the producer or the wine's name.";
   const g = checkGrapeText(form.grape || "");
   if (!g.ok) return grapeProblem(g.bad);
   return null;
@@ -461,7 +500,7 @@ export function validateOutside(form) {
 export function grapeTextOf(text) { const r = checkGrapeText(text || ""); return r.names.length ? r.names.join(", ") : null; }
 export function outsideRow(form, userId) {
   return {
-    user_id: userId, producer: form.producer.trim(), wine_name: clean(form.wine_name),
+    user_id: userId, producer: clean(form.producer), wine_name: clean(form.wine_name),   // producer may be empty for an incomplete wine (docs/incomplete_wines.sql)
     vintage_year: /^\d{4}$/.test(form.vintage || "") ? Number(form.vintage) : null,
     is_non_vintage: form.vintage === "NV",
     grape_text: grapeTextOf(form.grape), region_text: clean(form.region),
@@ -492,8 +531,10 @@ export function wineEditForm(entry, card, userWine) {
   const c = card || { producer: entry.producer, cuvee: entry.wine_name || "", vintage: entry.is_non_vintage ? "NV" : entry.vintage_year ? String(entry.vintage_year) : "", appellation: "", region: entry.region || "", country: entry.country || "", grapes: entry.grape ? [entry.grape] : [], ruleGrapes: [] };
   return { producer: c.producer || "", wine_name: c.cuvee || "", vintage: c.vintage || "", style: entry.style || c.style || "unknown", grape: grapeTextOfCard(c), region: placeTextOf(c) };
 }
-export function validateWineEdit(form) {
-  if (!(form.producer || "").trim()) return "Enter the producer.";
+export function validateWineEdit(form, entry = null) {
+  // A wine the player typed in may stay incomplete (a producer or a name is enough); catalog wines keep their producer.
+  const own = entry && entry.is_outside_wine;
+  if (own ? !((form.producer || "").trim() || (form.wine_name || "").trim()) : !(form.producer || "").trim()) return own ? "Enter the producer or the wine's name." : "Enter the producer.";
   const g = checkGrapeText(form.grape || "");
   if (!g.ok) return grapeProblem(g.bad);
   return "";
@@ -503,7 +544,7 @@ export function findCatalogMatch(cards, form) {
   return (cards || []).find((c) => same(c.producer, form.producer) && same(c.cuvee || "", form.wine_name || "") && String(c.vintage || "") === v) || null;
 }
 const wineFields = (form) => ({
-  producer: form.producer.trim(), wine_name: clean(form.wine_name),
+  producer: clean(form.producer), wine_name: clean(form.wine_name),
   vintage_year: /^\d{4}$/.test(vintageText(form)) ? Number(vintageText(form)) : null, is_non_vintage: vintageText(form) === "NV",
   grape_text: grapeTextOf(form.grape), region_text: clean(form.region),
   style: styleInfo(form.style) ? form.style : "unknown",

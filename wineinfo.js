@@ -1,17 +1,34 @@
 // Wine info (editors only): change a catalog wine's details. Producer, wine name, vineyard, vintage, type of wine,
 // place, the grapes printed on the label, and other grapes in the wine (for blends the label does not list).
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
-import { esc, WINE_STYLES } from "./logic.js?v=10";
-import { checkGrapeText, grapeProblem, grapeIndex, setExtraGrapes } from "./grapes.js?v=1";
-import { expandBlends, BLEND_NAMES } from "./blends.js?v=1";
-import { infoLine } from "./wineline.js?v=1";
-import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, placeClassification, savePlace } from "./geo.js?v=1";
-import { loadWinePrice, saveWinePrice, parsePrice, centsToField, blendPrice, formatPrice } from "./pricing.js?v=1";
-import { archivePlanFor } from "./catalog.js?v=2";
-import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=3";
-import * as db from "./data.js?v=15";
+import { esc, WINE_STYLES, DOSAGES, dosageFromText } from "./logic.js?v=20";
+import { checkGrapeText, grapeProblem, grapeIndex, setExtraGrapes } from "./grapes.js?v=2";
+import { expandBlends, BLEND_NAMES } from "./blends.js?v=2";
+import { infoLine } from "./wineline.js?v=3";
+import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, savePlace, designationChoices, designationFromText, designationPlan, placeDesignation, splitDesignation, BROAD_PLACES, ruleDesignation } from "./geo.js?v=8";
+import { loadWinePrice, saveWinePrice, parsePrice, centsToField, blendPrice, formatPrice } from "./pricing.js?v=3";
+import { archivePlanFor } from "./catalog.js?v=6";
+import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=18";
+import * as db from "./data.js?v=43";
+import { caseKey, lookalikes } from "./text.js?v=2";
 
-const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+// ---------------------------------------------------------------- how sweet a sparkling wine is (owner, 2026-10-17; logic.js DOSAGES)
+// The term the form starts with: the wine's own, else the one written in its name (it is on the label, so it is a fact; the editor still saves it).
+// dosageReady is false until docs/sparkling_dosage.sql has been run: the row then says so instead of offering chips that could not be saved.
+function startDosage(wine) {
+  if (wine.dosage === undefined) return { dosage: "", dosageWhy: "", dosageReady: false };
+  if (wine.dosage) return { dosage: wine.dosage, dosageWhy: "", dosageReady: true };
+  const found = wine.style === "sparkling" ? dosageFromText(wine.name) : null;
+  return { dosage: found ? found.id : "", dosageWhy: found ? `"${found.word}" in the name` : "", dosageReady: true };
+}
+export function dosageRowHtml(f, attr = "data-wi") {
+  if (f.style !== "sparkling") return "";
+  if (f.dosageReady === false) return `<div class="qlabel">How sweet (as on the label)</div><div class="muted small">Needs a database update first (docs/sparkling_dosage.sql).</div>`;
+  const chips = [...DOSAGES, { id: "", label: "Not on the label" }].map((d) => `<button class="chip${(f.dosage || "") === d.id ? " on" : ""}" ${attr}="dosage:${d.id}" aria-pressed="${(f.dosage || "") === d.id}">${esc(d.label)}</button>`).join("");
+  return `<div class="qlabel">How sweet (as on the label)</div><div class="stylerow">${chips}</div>${f.dosageWhy ? `<div class="muted small">From the name: ${esc(f.dosageWhy)}</div>` : ""}`;
+}
+
+const fold = caseKey;   // text.js: accents and capitals ignored, punctuation still counts
 
 // "Barolo, Piedmont, Italy": a place with the areas above it.
 export function placeLabel(areas, id) {
@@ -72,18 +89,69 @@ export function formFromInfo(info, lists) {
     producerName: producer ? producer.name : "", wineName: info.wine.name || "", vineyard: info.wine.vineyard || "",
     year: info.vintage.vintage_year ? String(info.vintage.vintage_year) : "", nonVintage: !!info.vintage.is_non_vintage,
     reach: info.wine.reach != null ? String(info.wine.reach) : "",   // empty before database update 15
-    style: info.wine.style || "unknown", price: "", ...placeFromArea(lists.areas, info.wine.appellation_id),
+    style: info.wine.style || "unknown", ...startDosage(info.wine), price: "", ...placeFromArea(lists.areas, info.wine.appellation_id), designation: "", designationWhy: "",
     labelGrapes: label.map(nameOf).filter(Boolean).join(", "), otherGrapes: other.map(nameOf).filter(Boolean).join(", "),
   };
 }
 
-// The line under the place fields: what saving would add, and the classification of the appellation.
+// The line under the place fields: what saving would add, and a "Looks like ..." question for a typed name close to one already in the list.
 function placeNoteHtml(W) {
-  const place = { country: W.form.country, region: W.form.region, appellation: W.form.appellation };
-  const plan = planPlace(W.lists.areas, place);
-  if (plan.error) return esc(plan.error);
-  const cls = placeClassification(W.lists.areas, place);
-  return [...plan.notes.map(esc), cls ? `Classification (from the appellation): ${esc(cls)}` : ""].filter(Boolean).join(" ");
+  const plan = planPlace(W.lists.areas, placeOf(W.form));
+  const looks = ["country", "region", "appellation"].map((k) => lookalikeHtml(W, k, W.lists.areas.filter((a) => a.level === (k === "country" ? "country" : k === "region" ? "region" : "appellation")).map((a) => a.name))).join("");
+  return (plan.error ? esc(plan.error) : plan.notes.map(esc).join(" ")) + looks;
+}
+// ---------------------------------------------------------------- "Looks like ... already in our list" (text.js lookalikes)
+// A typed name that only LOOKS like one in the list ("Saint-Julien" / "St.-Julien", "Billecart Salmon" / "Billecart-Salmon") is never swapped
+// for it: the editor picks. "Use it" puts the list's name in the field; "Keep mine as new" keeps the typed name (a new one is created on save).
+// Names are kept exactly as written: official spellings and legal abbreviations ("Sta. Rita Hills") are never changed by the app.
+export function lookalikeHtml(W, field, names) {
+  const typed = String(W.form[field] || "").trim();
+  if (!typed || (W.form.keep || []).includes(`${field}|${caseKey(typed)}`)) return "";
+  const like = lookalikes(typed, names);
+  if (!like.length) return "";
+  return `<div class="looklike" role="group" aria-label="Similar name already in our list">Looks like ${like.map((n) => `<b>${esc(n)}</b>`).join(" or ")} already in our list.
+    ${like.map((n) => `<button class="link" data-wilook="${esc(field)}" data-name="${esc(n)}">Use ${esc(n)}</button>`).join(" ")}
+    <button class="link" data-wikeep="${esc(field)}">Keep mine as new</button></div>`;
+}
+const producerNoteHtml = (W) => {
+  const f = W.form;
+  if (!f.producerName.trim() || W.lists.producers.some((p) => fold(p.name) === fold(f.producerName))) return "";
+  return lookalikeHtml(W, "producerName", W.lists.producers.map((p) => p.name)) || `<div class="muted small">A new producer will be created.</div>`;
+};
+const placeOf = (f) => ({ country: f.country, region: f.region, appellation: f.appellation });
+// Germany and Austria: only the broad wine region is a place (geo.js BROAD_PLACES); the village and vineyard stay in the wine name.
+const appPlaceholder = (country) => { const k = String(country || "").trim().toLowerCase(); return BROAD_PLACES[k] ? `Only a wine region (for example ${k === "austria" ? "Kamptal" : "Mosel"}); the vineyard stays in the name` : "For example Barolo or Rutherford"; };
+
+// ---------------------------------------------------------------- designation (DOC, DOCG, AOC ...), kept on the place (geo.js)
+// The row of choices under the place, used here and in the venue review (venuereview.js). attr is the data attribute the chips use.
+// chosen: the pick so far; why: where a suggestion came from. The place's own designation always shows and wins (geo.js designationPlan).
+export function designationRowHtml(areas, place, chosen, why, attr) {
+  if (!designationChoices(place.country).length) return `<div class="muted small">${esc(place.country)} has no place designation: quality words (Kabinett, Grosse Lage …) stay in the wine name.</div>`;
+  const plan = designationPlan(areas, place, chosen), have = plan.existing || plan.conflict || "";
+  if (plan.regionOnly) return `<div class="muted small">A designation (AOC, DOC …) belongs to an appellation. This wine names only ${esc(place.region || place.country)}, which holds wines of different designations, so none is kept. If the label names an appellation (for example Bordeaux AOC), add it as the appellation.</div>`;
+  const pick = plan.conflict ? chosen : have || chosen || "";
+  const choices = [...designationChoices(place.country)];
+  [have, pick].forEach((x) => { if (x && !choices.some((c) => c.toLowerCase() === x.toLowerCase())) choices.unshift(x); });
+  const chip = (v, label) => `<button class="chip${(pick || "") === v ? " on" : ""}" ${attr}="${esc(v)}" aria-pressed="${(pick || "") === v}">${esc(label)}</button>`;
+  const name = place.appellation || place.region || place.country;
+  const note = plan.conflict ? `<span class="err">Our place list says ${esc(plan.conflict)} for ${esc(name)}. Nothing will be changed; a place's designation is the same for every wine there.</span>`
+    : plan.existing ? `From our place list (${esc(name)}).`
+    : plan.set ? `${why ? `Suggested from ${esc(why)}. ` : ""}It will be kept on ${esc(name)}, for every wine there.`
+    : !String(name || "").trim() ? "Choose the place first." : "";
+  return `<div class="desigchips">${choices.map((c) => chip(c, c)).join("")}${chip("", "None")}</div>${note ? `<div class="muted small">${note}</div>` : ""}`;
+}
+// The designation the form starts with: the place's own, else one written in the wine's name.
+export function startDesignation(areas, place, text) {
+  if (designationPlan(areas, place, "").regionOnly) return { designation: "", why: "" };
+  const have = placeDesignation(areas, place);
+  if (have) return { designation: have, why: "" };
+  if (!designationChoices(place.country).length) return { designation: "", why: "" };
+  const rule = ruleDesignation(place);   // the stored rule list (geo.js KNOWN_DESIGNATIONS): Leithaberg -> DAC
+  if (rule) return { designation: rule.designation, why: `${rule.name} is ${rule.designation} (our rule list)` };
+  const typed = [place.appellation, place.region].map((x) => splitDesignation(x).designation).find(Boolean);   // "Kamptal DAC" typed as the place
+  if (typed) return { designation: typed, why: `"${typed}" typed with the place` };
+  const t = designationFromText(text);
+  return { designation: t, why: t ? `"${t}" in the name` : "" };
 }
 // The line under the price: what players paid, and what players will see.
 function priceNoteHtml(W) {
@@ -99,7 +167,6 @@ function priceNoteHtml(W) {
 function sheetHtml(W) {
   const f = W.form, L = W.lists;
   const chips = [...WINE_STYLES, { id: "unknown", label: "Other" }].map((s) => `<button class="chip${f.style === s.id ? " on" : ""}" data-wi="style:${s.id}" aria-pressed="${f.style === s.id}">${esc(s.label)}</button>`).join("");
-  const matchProducer = L.producers.some((p) => fold(p.name) === fold(f.producerName));
   return `<div class="overlay"><div class="sheet" id="wineInfoPanel">
     <div class="sheethead"><div class="sheettitle"><div class="serif big">Wine info</div><div class="muted small">${esc(W.title)}. Changes show for everyone.</div>${W.card && infoLine(W.card) ? `<div class="muted small">${esc(infoLine(W.card))}</div>` : ""}</div>
       <div class="sheetbtns"><button class="pill wine" data-wi="save"${W.saving ? " disabled" : ""}>Save</button><button class="xbtn" data-wi="close" aria-label="Close">&times;</button></div></div>
@@ -108,7 +175,7 @@ function sheetHtml(W) {
         <div class="photobtns"><label class="btn outline slim photobtn${W.photoBusy ? " disabled" : ""}">${W.photoBusy ? "Saving…" : W.card && W.card.image ? "Replace photo" : "Add photo"}<input type="file" accept="image/*" data-wiphoto${W.photoBusy ? " disabled" : ""} hidden></label>${W.card && W.card.image && !W.photoBusy ? `<button class="link" data-wi="photoremove">${W.photoConfirm ? "Tap again to remove" : "Remove"}</button>` : ""}${(() => { const re = W.reuse; return re ? `<button class="link" data-wi="photoreuse:${esc(re.id)}:${esc(re.vintage || "")}">Use the ${esc(re.vintage || "earlier")} photo</button>` : ""; })()}</div>
         ${W.card && W.card.image && photoTag(W.card) ? `<div class="muted tiny">Photo: ${esc(photoTag(W.card))}</div>` : ""}${W.photoNote ? `<div class="muted small">${esc(W.photoNote)}</div>` : ""}${W.photoError ? `<div class="err">${esc(W.photoError)}</div>` : ""}</div></div>
     <div class="qlabel">Producer</div><input class="field" list="dlProducers" data-wif="producerName" value="${esc(f.producerName)}" autocomplete="off">
-    ${f.producerName.trim() && !matchProducer ? `<div class="muted small">A new producer will be created.</div>` : ""}
+    <div id="wiProducerNote">${producerNoteHtml(W)}</div>
     <div class="qlabel">Wine name (leave empty if there is none)</div><input class="field" data-wif="wineName" value="${esc(f.wineName)}">
     <div class="qlabel">Vineyard (optional)</div><input class="field" data-wif="vineyard" value="${esc(f.vineyard)}">
     <div class="two"><div><div class="qlabel">Vintage</div><input class="field" inputmode="numeric" maxlength="4" data-wif="year" value="${esc(f.year)}"${f.nonVintage ? " disabled" : ""}></div>
@@ -116,11 +183,13 @@ function sheetHtml(W) {
     <div class="qlabel">Typical price in US dollars (optional)</div><input class="field" inputmode="decimal" data-wif="price" value="${esc(f.price)}" placeholder="For example 24.99" autocomplete="off">
     <div class="muted small">${priceNoteHtml(W)}</div>
     <div class="qlabel">Type of wine</div><div class="stylerow">${chips}</div>
+    ${dosageRowHtml(f)}
     ${f.reach ? `<div class="qlabel">How easy to find (helps decide who is likely to recognize it)</div><select class="field" data-wif="reach" aria-label="How easy to find">${REACH_CHOICES.map(([v, l]) => `<option value="${v}"${f.reach === v ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>` : ""}
     <div class="qlabel">Country</div><input class="field" list="dlCountries" data-wif="country" value="${esc(f.country)}" placeholder="Start typing, then pick from the list" autocomplete="off">
     <div class="qlabel">Region</div><input class="field" list="dlRegions" data-wif="region" value="${esc(f.region)}" placeholder="For example Piedmont or Napa Valley" autocomplete="off">
-    <div class="qlabel">Appellation (optional)</div><input class="field" list="dlApps" data-wif="appellation" value="${esc(f.appellation)}" placeholder="For example Barolo or Rutherford" autocomplete="off">
+    <div class="qlabel">Appellation (optional)</div><input class="field" list="dlApps" data-wif="appellation" value="${esc(f.appellation)}" placeholder="${esc(appPlaceholder(f.country))}" autocomplete="off">
     <div id="wiPlaceNote" class="muted small">${placeNoteHtml(W)}</div>
+    <div class="qlabel">Designation (DOC, DOCG, AOC …)</div><div id="wiDesig">${designationRowHtml(L.areas, placeOf(f), f.designation, f.designationWhy, "data-widesig")}</div>
     <div class="qlabel">Main varietal</div><div class="muted tiny">The grape named on the label. If the label names more than one, separate them with commas. GSM is accepted.</div><input class="field" data-grapes="multi" data-wif="labelGrapes" value="${esc(f.labelGrapes)}" placeholder="Start typing, then pick from the list" autocomplete="off" autocapitalize="words" spellcheck="false">
     <div class="qlabel">Other varietals (if blended)</div><div class="muted tiny">Other grapes in the blend that are not named on the label.</div><input class="field" data-grapes="multi" data-wif="otherGrapes" value="${esc(f.otherGrapes)}" placeholder="Start typing, then pick from the list" autocomplete="off" autocapitalize="words" spellcheck="false">
     <div id="wiErr" class="err">${esc(W.error)}</div>
@@ -190,7 +259,11 @@ export function createWineInfo(ctx) {
     const fill = (id, names) => { const el = document.getElementById(id); if (el) el.innerHTML = names.map((n) => `<option value="${esc(n)}">`).join(""); };
     fill("dlRegions", regionsOf(L.areas, f.country)); fill("dlApps", appellationsOf(L.areas, f.country, f.region));
     const note = document.getElementById("wiPlaceNote"); if (note) note.innerHTML = placeNoteHtml(W);
+    const app = document.querySelector('[data-wif="appellation"]'); if (app) app.placeholder = appPlaceholder(f.country);
+    if (!W.form.desigPicked) { const d = startDesignation(L.areas, placeOf(f), f.wineName); W.form.designation = d.designation; W.form.designationWhy = d.why; }
+    drawDesignation();
   }
+  const drawDesignation = () => { const el = document.getElementById("wiDesig"); if (el && W.form) el.innerHTML = designationRowHtml(W.lists.areas, placeOf(W.form), W.form.designation, W.form.designationWhy, "data-widesig"); };
   async function open(card, title) {
     const o = overlay();
     W.open = true; W.title = title || ""; W.card = card; W.error = ""; W.unknown = []; W.addNew = false; W.saving = false; W.del = null; W.pub = null; W.photoBusy = false; W.photoConfirm = false; W.photoError = ""; W.photoNote = "";
@@ -200,6 +273,7 @@ export function createWineInfo(ctx) {
       setExtraGrapes([...W.lists.grapes.map((x) => x.name), ...BLEND_NAMES]);   // GSM is accepted too; it is turned into its three grapes on save
       W.info = await db.loadWineInfo(ctx.sb(), card.id);
       W.form = formFromInfo(W.info, W.lists);
+      { const d = startDesignation(W.lists.areas, placeOf(W.form), W.form.wineName); W.form.designation = d.designation; W.form.designationWhy = d.why; }
       // The price comes from its own view; before database update 20 it is simply not offered.
       try { W.priceInfo = await loadWinePrice(ctx.sb(), card.id); W.form.price = centsToField(W.priceInfo.editorCents); } catch (_) { W.priceInfo = null; }
       draw();
@@ -300,9 +374,11 @@ export function createWineInfo(ctx) {
     W.unknown = [...label.unknown.map((name) => ({ name, where: "label" })), ...other.unknown.map((name) => ({ name, where: "other" }))];
     W.saving = true; setError(""); draw();
     try {
-      const areaId = await savePlace(ctx.sb(), W.lists.areas, f);   // creates a country, region or appellation that is new
+      const dPlan = designationPlan(W.lists.areas, placeOf(f), f.designation);
+      const areaId = await savePlace(ctx.sb(), W.lists.areas, f, { classification: dPlan.set || "" });   // creates a country, region or appellation that is new (with its designation)
+      if (dPlan.set && !placePlan.creates.length && areaId) { try { await db.savePlaceDesignation(ctx.sb(), areaId, dPlan.set); } catch (e) { W.desigProblem = String(e.message || e); } }
       await db.saveWineInfo(ctx.sb(), ctx.userId(), W.info, {
-        producerName: f.producerName, wineName: f.wineName, vineyard: f.vineyard, year: f.year, nonVintage: f.nonVintage, style: f.style, areaId, reach: f.reach,
+        producerName: f.producerName, wineName: f.wineName, vineyard: f.vineyard, year: f.year, nonVintage: f.nonVintage, style: f.style, dosage: f.dosage, areaId, reach: f.reach,
         labelGrapes: label.ids, otherGrapes: other.ids, newGrapes: W.unknown,
       }, W.lists);
     } catch (e) { W.saving = false; draw(); return setError("Could not save. " + (e.message || e)); }
@@ -313,12 +389,29 @@ export function createWineInfo(ctx) {
       if (cents !== W.priceInfo.editorCents) { try { await saveWinePrice(ctx.sb(), W.info.wine.id, cents); } catch (e) { priceProblem = String((e && e.message) || e); } }
     }
     if (priceProblem) { W.saving = false; W.priceInfo = null; draw(); return setError("The wine info was saved, but not the price: " + priceProblem); }   // the form stays open, so keep what it draws from
+    if (W.desigProblem) { const m = W.desigProblem; W.desigProblem = ""; W.saving = false; W.lists = await db.loadEditorLists(ctx.sb()); draw(); return setError("The wine info was saved. " + m); }
     W.lists = null;   // producers, grapes and places may have changed
     close();
     if (ctx.onSaved) await ctx.onSaved();
   }
 
   document.addEventListener("click", (ev) => {
+    const lk = ev.target.closest("[data-wilook], [data-wikeep]");
+    if (lk && W.open && W.form && !W.del && !W.pub) {
+      const field = lk.dataset.wilook || lk.dataset.wikeep;
+      if (lk.dataset.wilook) {
+        const name = lk.dataset.name;
+        if (field === "producerName") {
+          const typed = W.form.producerName, prod = W.lists.producers.find((p) => p.name === name);
+          W.form.producerName = name;
+          if (prod && prod.id && caseKey(typed) !== caseKey(name)) db.addProducerAlias(ctx.sb(), typed.trim(), prod.id).catch(() => {});   // remembered, so it is offered next time
+        }
+        else { const a = W.lists.areas.find((x) => x.name === name && x.level === field); if (a) Object.assign(W.form, placeFromArea(W.lists.areas, a.id)); else W.form[field] = name; }
+      } else W.form.keep = [...(W.form.keep || []), `${field}|${caseKey(W.form[field])}`];
+      draw(); return;
+    }
+    const d = ev.target.closest("[data-widesig]");
+    if (d && W.open && W.form && !W.del && !W.pub) { W.form.designation = d.dataset.widesig; W.form.designationWhy = ""; W.form.desigPicked = true; drawDesignation(); return; }
     const t = ev.target.closest("[data-wi]");
     if (!t || !W.open || !W.form) return;
     const [action, arg] = t.dataset.wi.split(":");
@@ -332,6 +425,7 @@ export function createWineInfo(ctx) {
     else if (action === "delcancel") { W.del = null; draw(); }
     else if (W.del || W.pub) return;
     else if (action === "style") { W.form.style = arg; draw(); }
+    else if (action === "dosage") { W.form.dosage = arg; W.form.dosageWhy = ""; draw(); }
     else if (action === "save") save();
     else if (action === "close") close();
   });
@@ -347,6 +441,7 @@ export function createWineInfo(ctx) {
     else {
       W.form[k] = t.value;
       if (k === "country" || k === "region" || k === "appellation") refreshPlace();
+      else if (k === "producerName") { const n = document.getElementById("wiProducerNote"); if (n) n.innerHTML = producerNoteHtml(W); }
       else if (k === "price") { const n = document.querySelector("[data-wif='price']"); const note = n && n.nextElementSibling; if (note) note.innerHTML = priceNoteHtml(W); }
     }
   });

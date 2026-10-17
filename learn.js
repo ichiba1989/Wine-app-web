@@ -1,7 +1,12 @@
 // Learn tab: quiz modes, difficulty, the review archive, timed rounds and feedback on answers.
 // The rules at the top are pure (no browser, no network) so they can be tested on their own.
 // The controller at the bottom loads questions from Supabase, saves answers and draws the tab.
-import { esc, shuffle } from "./logic.js?v=10";
+import { esc, shuffle } from "./logic.js?v=20";
+import { weave, boostFor, refOf, focusOptions, fold } from "./tags.js?v=4";
+import { proToolsOn } from "./words.js?v=1";
+import { overlayQuiz } from "./overlay.js?v=1";
+// Marks a write as one that may wait in the outbox when there is no connection (offline.js), with what it did (overlay.js).
+const tag = (q, effect) => (q && typeof q.queue === "function" ? q.queue(effect) : q);
 
 // ---------------------------------------------------------------- settings
 export const DIFFS = [
@@ -54,8 +59,12 @@ export function removeFromArchive(p, qid) { p.archive.delete(qid); }
 // ---------------------------------------------------------------- building a round
 // Which questions a round uses. Review lists come from the archive:
 // Incorrect = latest answer wrong, I don't know = latest answer skipped, Archive = everything kept.
-export function poolFor(questions, p, { mode, diff = "all", review = "incorrect" }) {
-  const qs = questions.filter((q) => diff === "all" || q.difficulty === diff);
+// focus (optional, Enthusiast and Professional): a tag's ref (tags.js refOf): only questions with that tag. tagsByQ: Map(question id -> [{ kind, name }]).
+// only (optional): a list of question ids, from a game's "More in Learn" button (questionsAbout below); the round keeps to those until "Show all".
+export function poolFor(questions, p, { mode, diff = "all", review = "incorrect", focus = null, tagsByQ = null, only = null }) {
+  let qs = questions.filter((q) => diff === "all" || q.difficulty === diff);
+  if (only && mode !== "review") { const keep = new Set(only); qs = qs.filter((q) => keep.has(q.id)); }
+  if (focus && tagsByQ && mode !== "review") qs = qs.filter((q) => (tagsByQ.get(q.id) || []).some((t) => refOf(t) === focus));
   if (mode === "review") {
     const kept = qs.filter((q) => p.archive.has(q.id));
     if (review === "archive") return kept.map((q) => q.id);
@@ -67,9 +76,27 @@ export function poolFor(questions, p, { mode, diff = "all", review = "incorrect"
 }
 // No repeats until the full set has been answered once: unseen questions come first.
 // Once everything has been seen, each new round starts from a fresh random order.
-export function orderFor(pool, p, { mode, review }, rnd = shuffle) {
+// boost (optional): Map(question id -> how much it is about something the player has not met, from tags.js boostFor). Those unseen questions are woven in every other
+// place, so the quiz leans toward what the player said "I don't know it" to without becoming only that. Nothing is skipped: seen-once-everything still holds.
+export function orderFor(pool, p, { mode, review, boost = null }, rnd = shuffle) {
   if (mode === "review") return review === "archive" ? rnd(pool) : [...pool];
-  return [...rnd(pool.filter((id) => !p.seen.has(id))), ...rnd(pool.filter((id) => p.seen.has(id)))];
+  return [...weave(rnd(pool.filter((id) => !p.seen.has(id))), boost), ...rnd(pool.filter((id) => p.seen.has(id)))];
+}
+// The questions about some topics, for a game that wants to point at the quiz (Guess the Glass). topics: [{ kind, name, words }] in order of importance.
+// For each topic: first the questions editors tagged with it (tags.js refOf), then the ones that name it as whole words in the question or its answer
+// (and, for a theme, any of its words). Questions the player has not answered yet come before the ones they have. Returns question ids, at most limit.
+export function questionsAbout(questions, tagsByQ, topics, { limit = 2, seen = new Set() } = {}) {
+  const all = [], taken = new Set();
+  const add = (ids) => ids.forEach((id) => { if (!taken.has(id)) { taken.add(id); all.push(id); } });
+  const pad = (s) => " " + fold(s) + " ";
+  for (const t of topics || []) {
+    if (!t || !t.name) continue;
+    const ref = t.kind + ":" + fold(t.name);
+    if (tagsByQ) add((questions || []).filter((q) => (tagsByQ.get(q.id) || []).some((x) => refOf(x) === ref)).map((q) => q.id));
+    const needles = [t.name, ...(t.words || [])].map(fold).filter((n) => n.length >= 3).map((n) => " " + n + " ");
+    add((questions || []).filter((q) => { const text = pad(q.question) + pad(q.correct_answer); return needles.some((n) => text.includes(n)); }).map((q) => q.id));
+  }
+  return [...all.filter((id) => !seen.has(id)), ...all.filter((id) => seen.has(id))].slice(0, limit);
 }
 export const optionsFor = (q, rnd = shuffle) => rnd([q.correct_answer, ...(q.distractors || [])]);
 // choice null means "I don't know".
@@ -82,7 +109,7 @@ export function feedbackOn(row, tier) { return !!row && (row.all_tiers || (Array
 export function newRun(questions, p, sel, rnd = shuffle) {
   const timed = sel.mode === "timed";
   return {
-    mode: sel.mode, review: sel.review, seconds: sel.seconds, timed,
+    mode: sel.mode, review: sel.review, seconds: sel.seconds, timed, focus: sel.focus || (sel.only ? "game" : null),
     order: orderFor(poolFor(questions, p, sel), p, sel, rnd), i: 0, opts: [],
     answered: false, choice: null, result: null,
     tally: { c: 0, n: 0, u: 0 }, streak: 0, best: 0,
@@ -132,7 +159,14 @@ function controlsHtml(L) {
   let extra = "";
   if (s.mode === "review") extra = `<div class="chips">${REVIEW_FILTERS.map((r) => `<button class="chip${s.review === r.id ? " on" : ""}" data-learn="review:${r.id}">${r.label}</button>`).join("")}</div>`;
   if (s.mode === "timed") extra = `<div class="chips left">${TIMED_SECONDS.map((sec) => `<button class="chip wide${s.seconds === sec ? " on" : ""}" data-learn="secs:${sec}">${sec / 60} min</button>`).join("")}</div>`;
-  return `<div class="modes">${tiles}</div><div class="chips" role="group" aria-label="Difficulty">${diffs}</div>${extra}`;
+  // Enthusiast and Professional can focus a round on one grape, place or producer (the tags editors put on questions).
+  const focusList = proToolsOn() && s.mode !== "review" ? focusOptions(L.tagsByQ, L.weights) : [];
+  const kindWord = { grape: "grape", region: "place", country: "country", producer: "producer", style: "style", theme: "theme" };
+  const focus = focusList.length ? `<select class="sortsel" data-learn-focus aria-label="Focus the round on one topic"><option value="">Focus: anything</option>${focusList.map((o) => `<option value="${esc(o.ref)}"${s.focus === o.ref ? " selected" : ""}>${esc(o.name)} (${kindWord[o.kind] || o.kind}, ${o.count})</option>`).join("")}</select>` : "";
+  // A round opened from a game keeps to that game's topic until "Show all" (every kind of player sees this, not only Enthusiast and Professional).
+  const only = s.only ? `<div class="chips left lonly"><span class="chip on">Topic: ${esc(s.onlyLabel || "from the game")}</span><button class="chip" data-learn="unfocus">Show all</button></div>` : "";
+  const atlas = `<button class="atlasbtn" data-action="atlas:open"><span class="serif">Atlas</span><span class="muted small">Explore wine places on the map</span></button>`;   // app.js opens it (atlasview.js)
+  return `${atlas}<div class="modes">${tiles}</div>${only}<div class="chips" role="group" aria-label="Difficulty">${diffs}</div>${focus}${extra}`;
 }
 
 function questionHtml(L, run, q) {
@@ -169,7 +203,7 @@ function bodyHtml(L) {
   if (!run.order.length) {
     return `<p class="muted">${run.mode === "review"
       ? "Nothing here yet. Questions you miss or skip are saved to your archive so you can review them again."
-      : "No questions at this level yet."}</p>`;
+      : run.focus ? "No questions for that topic at this level yet." : "No questions at this level yet."}</p>`;
   }
   if (run.timed && !run.started) {
     const mins = run.seconds / 60;
@@ -208,12 +242,15 @@ const must = ({ data, error }) => { if (error) throw error; return data; };
 
 // ctx: { sb(), user(), profile(), onError(message) }. mount(el) draws the tab into el; leave() stops timers.
 export function createLearn(ctx) {
+  // How much each question is about something the player has not met (needs ctx.gapWeights from app.js and the question tags).
+  const boostNow = () => { try { return ctx.gapWeights && L.tagsByQ ? boostFor(L.tagsByQ, ctx.gapWeights()) : null; } catch (_) { return null; } };
   const L = {
     loaded: false, loading: false, error: null, questions: [], byId: new Map(),
     progress: progressFrom([], []), feedback: false,
-    sel: { mode: "random", diff: "all", review: "incorrect", seconds: 60 },
+    sel: { mode: "random", diff: "all", review: "incorrect", seconds: 60, focus: null, only: null, onlyLabel: "" },
     run: null, flag: null,
   };
+  const selNow = () => ({ ...L.sel, boost: boostNow(), tagsByQ: L.tagsByQ });
   let root = null, clockTimer = null, nextTimer = null;
   const stopTimers = () => { clearInterval(clockTimer); clearTimeout(nextTimer); clockTimer = nextTimer = null; };
   const overlay = () => document.querySelector("#overlay");
@@ -232,11 +269,17 @@ export function createLearn(ctx) {
         sb.from("feature_access").select("feature, all_tiers, tiers").eq("feature", "contentFeedback").maybeSingle(),
       ]);
       L.questions = must(qs);
+      L.tagsByQ = new Map();
+      try {   // quiz tags (docs/quiz_tags.sql); without them the quiz simply is not tag-aware
+        const [tg, lk] = await Promise.all([sb.from("quiz_tags").select("id, kind, name"), sb.from("quiz_question_tags").select("question_id, tag_id")]);
+        if (!tg.error && !lk.error) { const byId = new Map(tg.data.map((t) => [t.id, t])); lk.data.forEach((l) => { const t = byId.get(l.tag_id); if (t) { if (!L.tagsByQ.has(l.question_id)) L.tagsByQ.set(l.question_id, []); L.tagsByQ.get(l.question_id).push(t); } }); }
+      } catch (_) { L.tagsByQ = new Map(); }
       L.byId = new Map(L.questions.map((q) => [q.id, q]));
-      L.progress = progressFrom(must(latest), must(arch));
+      const mine = overlayQuiz(must(latest), must(arch));   // plus the answers given offline that have not been uploaded yet
+      L.progress = progressFrom(mine.latest, mine.archive);
       L.feedback = feedbackOn(must(feat), (ctx.profile() || {}).tier || "default");
       L.loaded = true;
-      L.run = newRun(L.questions, L.progress, L.sel);
+      L.run = newRun(L.questions, L.progress, selNow());
     } catch (e) {
       L.error = "Could not load the quiz: " + (e.message || e);
     }
@@ -246,6 +289,7 @@ export function createLearn(ctx) {
 
   function draw() {
     if (!root) return;
+    try { L.weights = ctx.gapWeights ? ctx.gapWeights() : null; } catch (_) { L.weights = null; }
     const run = L.run;
     if (run && !run.finished && run.order.length && run.started && !run.opts.length) run.opts = optionsFor(L.byId.get(currentId(run)));
     root.innerHTML = learnHtml(L);
@@ -257,7 +301,7 @@ export function createLearn(ctx) {
     if (b) { b.style.width = `${(run.timeLeft / run.seconds) * 100}%`; b.style.background = run.timeLeft <= 15 ? "var(--wine)" : "var(--slate)"; }
   }
 
-  function startRound() { stopTimers(); closeFlag(); L.run = newRun(L.questions, L.progress, L.sel); draw(); }
+  function startRound() { stopTimers(); closeFlag(); L.run = newRun(L.questions, L.progress, selNow()); draw(); }
 
   function startClock() {
     const run = L.run;
@@ -278,9 +322,9 @@ export function createLearn(ctx) {
     if (!run.saved) {
       run.saved = true;
       const u = ctx.user();
-      saveQuietly(ctx.sb().from("timed_runs").insert({
+      saveQuietly(tag(ctx.sb().from("timed_runs").insert({
         user_id: u.id, seconds: run.seconds, answered: run.tally.n, correct: run.tally.c, skipped: run.tally.u, best_streak: run.best,
-      }), "the timed round");
+      }), null), "the timed round");
     }
     draw();
   }
@@ -290,9 +334,7 @@ export function createLearn(ctx) {
     const q = L.byId.get(currentId(run));
     const result = answer(run, q, choice);
     if (!result) return;
-    recordAnswer(L.progress, q.id, result);
-    const u = ctx.user();
-    saveQuietly(ctx.sb().from("quiz_answers").insert({ user_id: u.id, question_id: q.id, result, mode: run.mode }), "your answer");
+    saveAnswer(q.id, result, run.mode);
     draw();
     if (run.timed) {
       nextTimer = setTimeout(() => {
@@ -301,6 +343,13 @@ export function createLearn(ctx) {
         draw();
       }, FEEDBACK_MS);
     }
+  }
+
+  // Every answer is saved the same way, from a round or from a game (it may wait offline in the outbox, see overlay.js).
+  function saveAnswer(qid, result, mode) {
+    recordAnswer(L.progress, qid, result);
+    const u = ctx.user();
+    saveQuietly(tag(ctx.sb().from("quiz_answers").insert({ user_id: u.id, question_id: qid, result, mode }), { t: "answer", qid, result }), "your answer");
   }
 
   function openFlag() {
@@ -321,9 +370,9 @@ export function createLearn(ctx) {
     if (!f || !f.reason || f.sending) return;
     f.sending = true; f.error = ""; syncFlag();
     try {
-      must(await ctx.sb().from("content_flags").insert({
+      must(await tag(ctx.sb().from("content_flags").insert({
         user_id: ctx.user().id, target_type: "quiz_question", quiz_question_id: f.qid, reason: f.reason, note: f.note.trim() || null,
-      }));
+      }), null));
       if (L.run && currentId(L.run) === f.qid) L.run.flagged = true;
       closeFlag();
       draw();
@@ -338,7 +387,8 @@ export function createLearn(ctx) {
     const [action, arg] = t.dataset.learn.split(":");
     if (!root && !L.flag) return;
     const run = L.run;
-    if (action === "mode") { L.sel.mode = arg; startRound(); }
+    if (action === "mode") { L.sel.mode = arg; L.sel.only = null; startRound(); }
+    else if (action === "unfocus") { L.sel.only = null; L.sel.onlyLabel = ""; startRound(); }
     else if (action === "diff") { L.sel.diff = arg; startRound(); }
     else if (action === "review") { L.sel.review = arg; startRound(); }
     else if (action === "secs") { L.sel.seconds = Number(arg); startRound(); }
@@ -352,7 +402,7 @@ export function createLearn(ctx) {
       const qid = currentId(run);
       removeFromArchive(L.progress, qid);
       run.removed = true;
-      saveQuietly(ctx.sb().from("quiz_archive_removals").insert({ user_id: ctx.user().id, question_id: qid }), "the archive change");
+      saveQuietly(tag(ctx.sb().from("quiz_archive_removals").insert({ user_id: ctx.user().id, question_id: qid }), { t: "archiveRemove", qid }), "the archive change");
       draw();
     }
     else if (action === "flag") openFlag();
@@ -361,6 +411,7 @@ export function createLearn(ctx) {
     else if (action === "flagsend") sendFlag();
   });
   document.addEventListener("input", (ev) => {
+    if (ev.target.dataset && ev.target.dataset.learnFocus !== undefined && root) { L.sel.focus = ev.target.value || null; startRound(); return; }
     if (ev.target.dataset && ev.target.dataset.learnNote !== undefined && L.flag) L.flag.note = ev.target.value;
   });
 
@@ -369,7 +420,23 @@ export function createLearn(ctx) {
     mount(el) {
       root = el;
       if (!L.loaded && !L.loading && !L.error) load();
-      else { if (L.loaded && !L.run) L.run = newRun(L.questions, L.progress, L.sel); draw(); }
+      else { if (L.loaded && !L.run) L.run = newRun(L.questions, L.progress, selNow()); draw(); }
+    },
+    // ---- for games (Guess the Glass): the questions load without the tab being open
+    ensureLoaded() { if (!L.loaded && !L.loading && !L.error) return load(); return Promise.resolve(); },
+    ready: () => L.loaded,
+    // Up to `limit` question ids about the topics (see questionsAbout), and one question with its choices in a fixed order for the screen.
+    about: (topics, limit = 2) => (L.loaded ? questionsAbout(L.questions, L.tagsByQ, topics, { limit, seen: L.progress.seen }) : []),
+    question: (id) => L.byId.get(id) || null,
+    choicesOf: (id) => { const q = L.byId.get(id); return q ? optionsFor(q) : []; },
+    // Answers one question from a game; saved as an ordinary quiz answer (mode "random"). Returns "correct", "wrong" or "unknown".
+    answerOne(id, choice) { const q = L.byId.get(id); if (!q) return null; const result = resultOf(q, choice); saveAnswer(q.id, result, "random"); return result; },
+    // Opens the next round on these questions only, until the player taps "Show all".
+    focusOn(ids, label) {
+      stopTimers(); closeFlag();
+      L.sel = { ...L.sel, mode: "random", diff: "all", focus: null, only: ids && ids.length ? [...ids] : null, onlyLabel: label || "" };
+      if (L.loaded) L.run = newRun(L.questions, L.progress, selNow());
+      if (root) draw();
     },
     // Leaving the tab stops the clock. A timed round in progress is dropped, not saved.
     leave() {

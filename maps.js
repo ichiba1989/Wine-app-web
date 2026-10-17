@@ -7,9 +7,9 @@
 //   in that country. The region view is a close-up of the place with a grid, nearby places, a scale, a compass and a small locator map.
 // Anything drawn from schematic data says so. Pure: no browser, no network.
 import { COUNTRY, VILLAGES, DETAIL } from "./geodata.js?v=1";
-import { placeFor, tables } from "./flavors.js?v=1";
-import { fold } from "./flavordata.js?v=1";
-import { tintFor } from "./visuals.js?v=1";
+import { placeFor, tables } from "./flavors.js?v=3";
+import { fold } from "./flavordata.js?v=3";
+import { tintFor } from "./visuals.js?v=4";
 
 const COS = (lat) => Math.cos((lat * Math.PI) / 180);
 const r1 = (n) => Math.round(n * 10) / 10;
@@ -37,7 +37,7 @@ function countryInner(country, place, type, size, pad = 5, o = {}) {
   const fit = fitCountry(country, size, pad);
   if (!fit) return "";
   const t = tintFor(type), pr = o.pr || 1;
-  const land = COUNTRY[country].map((poly) => `<path d="${path(poly.map(([lon, lat]) => fit.project(lon, lat)))}" fill="${o.land || "#cfdacb"}" stroke="${o.stroke || "#8fa38c"}" stroke-width="${o.sw || 1}" stroke-linejoin="round"/>`).join("");
+  const land = COUNTRY[country].map((poly) => `<path d="${path(poly.map(([lon, lat]) => fit.project(lon, lat)))}" fill="${o.land || "#f6f1e1"}" stroke="${o.stroke || "#9aa893"}" stroke-width="${o.sw || 1}" stroke-linejoin="round"/>`).join("");
   let pin = "";
   if (place && Number.isFinite(place.lat) && Number.isFinite(place.lon)) {
     const [x, y] = fit.project(place.lon, place.lat);
@@ -45,7 +45,7 @@ function countryInner(country, place, type, size, pad = 5, o = {}) {
   }
   return land + pin;
 }
-// The silhouette of the country with the wine's pin. Returns "" if the country has no outline.
+// The silhouette of the country with the wine's pin, in the Atlas's colours (cream land on the sea blue of the button). Returns "" if the country has no outline.
 export function countryMapSvg(country, place, type = "red", size = 64) {
   const inner = countryInner(country, place, type, size, 5);
   return inner ? `<svg class="cmap" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" aria-hidden="true">${inner}</svg>` : "";

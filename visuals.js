@@ -1,6 +1,6 @@
 // The card's drawings, all made by code (no photos, labels or logos): four bottle silhouettes tinted by the type of wine, and 42 flat flavor icons.
 // Pure: they return SVG text.
-import { LABEL } from "./flavordata.js?v=1";
+import { LABEL } from "./flavordata.js?v=3";
 
 // ---------------------------------------------------------------- bottles
 // Each shape is one path in a 100 x 300 box; the capsule is the foil at the top. The glass and capsule colours come from the type of wine.
@@ -20,14 +20,13 @@ export const TYPE = {
   unknown: { glass: "#8a948f", capsule: "#6f7a75", pin: "#6f7a75", dot: "#8a948f", label: "Other" },
 };
 export const tintFor = (type) => TYPE[type] || TYPE.unknown;
-// The bottle: a plain silhouette with a soft highlight, no label art. class "bottle" is what the card's CSS sizes.
+// The bottle: a flat, abstract silhouette in the colour of the wine's type, no label art or highlights. class "bottle" is what the card's CSS sizes.
 export function bottleSilhouette(shape = "bordeaux", type = "red") {
   const sh = SHAPES[shape] || SHAPES.bordeaux, t = tintFor(type);
   return `<svg class="bottle" viewBox="0 0 100 300" aria-hidden="true" data-shape="${shape in SHAPES ? shape : "bordeaux"}">
     <path d="${sh.d}" fill="${t.glass}"/>
     <rect x="${sh.cap.x}" y="6" width="${sh.cap.w}" height="${sh.cap.h}" rx="3" fill="${t.capsule}"/>
-    <rect x="${shape === "champagne" ? 24 : shape === "hock" ? 34 : 29}" y="130" width="7" height="150" rx="3.5" fill="#fff" opacity=".16"/>
-    <rect x="${shape === "champagne" ? 70 : shape === "hock" ? 62 : 66}" y="140" width="4" height="140" rx="2" fill="#000" opacity=".1"/></svg>`;
+    </svg>`;
 }
 
 // ---------------------------------------------------------------- flavor icons

@@ -1,9 +1,10 @@
 // The small second line shown under a wine's name on every screen: up to three facts about the wine, most important first.
 // Order: varietal, vineyard, appellation, region, country. A fact that is missing or repeats another is skipped, so the line is as full as the data allows.
 // Pure: no browser, no network.
-import { splitPlace } from "./blends.js?v=1";
+import { splitPlace } from "./blends.js?v=2";
+import { caseKey } from "./text.js?v=2";
 
-const fold = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+const fold = caseKey;   // text.js: accents and capitals ignored, punctuation still counts
 const clean = (s) => String(s == null ? "" : s).trim();
 export const SEPARATOR = " \u00b7 ";
 

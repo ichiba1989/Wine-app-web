@@ -630,6 +630,7 @@ Lado
 `;
 
 // Short forms people actually type, mapped to the name on the list.
+let MORE_SHORTCUTS = {};   // more typing shortcuts read from the database (addGrapeShortcuts)
 const ALIASES = {
   "cab sauv": "Cabernet Sauvignon", "cab sav": "Cabernet Sauvignon", "cabernet": "Cabernet Sauvignon", "cab": "Cabernet Sauvignon",
   "cab franc": "Cabernet Franc", "sauv blanc": "Sauvignon Blanc", "sauvignon": "Sauvignon Blanc", "chard": "Chardonnay",
@@ -651,10 +652,16 @@ export const GRAPES = firstSpellings(LIST.split("\n").map((x) => x.trim()).filte
 export function grapeIndex(extra = []) {
   const names = firstSpellings([...GRAPES, ...extra.map((x) => String(x || "").trim()).filter(Boolean)]);
   const byFold = new Map(names.map((n) => [fold(n), n]));
-  Object.entries(ALIASES).forEach(([a, n]) => { if (!byFold.has(a) && byFold.has(fold(n))) byFold.set(a, byFold.get(fold(n))); });
+  Object.entries({ ...ALIASES, ...MORE_SHORTCUTS }).forEach(([a, n]) => { if (!byFold.has(a) && byFold.has(fold(n))) byFold.set(a, byFold.get(fold(n))); });
   return { names, byFold, folded: names.map((n) => [fold(n), n]) };
 }
-const DEFAULT_INDEX = grapeIndex();
+let DEFAULT_INDEX = grapeIndex();
+// The typing shortcuts above, for the database's reference list (docs/reference_lists.sql), and more read from it (rows in use only).
+export const GRAPE_SHORTCUTS = ALIASES;
+export function addGrapeShortcuts(pairs) {
+  (pairs || []).forEach(([alias, target]) => { const a = fold(alias); if (a && !ALIASES[a]) MORE_SHORTCUTS[a] = target; });
+  DEFAULT_INDEX = grapeIndex();
+}
 
 // The name on the list that this text means, or null.
 export const resolveGrape = (text, index = DEFAULT_INDEX) => index.byFold.get(fold(text)) || null;

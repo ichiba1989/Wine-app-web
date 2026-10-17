@@ -2,8 +2,8 @@
 // is a shape for it). Tap again, the close button, outside the box, or Escape: it closes. Each view zooms out from the pin while the next one zooms in
 // from small (about 0.75 s); with reduced motion on there is only a quick crossfade. The caption changes with each step.
 // The rules at the top are pure (no browser); app.js puts the markup on the page and handles the taps.
-import { zoomPlan, captionFor, countryViewSvg, regionViewSvg, vineyardViewSvg, regionPin, countryPin } from "./maps.js?v=2";
-import { esc } from "./logic.js?v=10";
+import { zoomPlan, captionFor, countryViewSvg, regionViewSvg, vineyardViewSvg, regionPin, countryPin } from "./maps.js?v=6";
+import { esc } from "./logic.js?v=20";
 
 // What a tap does now: the next step number, or null to close.
 export const nextStep = (plan, step) => (step + 1 < plan.steps.length ? step + 1 : null);
@@ -21,6 +21,7 @@ export function zoomHtml(plan, type = "red", step = 0) {
       </div>
       <div class="zcap" data-zoomcap>${esc(captionFor(plan, plan.steps[step]))}</div>
       ${dots}<div class="zhint" data-zoomhint>${esc(hintFor(plan, step))}</div>
+      <button class="pill zatlas" data-zoomatlas>Open in the Atlas</button>
     </div></div>`;
 }
 // Moves an open overlay to a step without redrawing it, so the layers can animate.

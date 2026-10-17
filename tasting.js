@@ -4,7 +4,10 @@
 // The grid is an extra on top of the normal rating. Its answers for acidity, tannin, body, sweetness, oak and bubbles also move the
 // five structure sliders, so the palate and the Discover deck keep working from the same lines for everyone.
 // The rules at the top are pure (no browser, no network). The functions at the bottom talk to Supabase.
-import { esc, dimsFor } from "./logic.js?v=10";
+import { esc, dimsFor } from "./logic.js?v=20";
+import { overlayTasting } from "./overlay.js?v=1";
+// Marks a write as one that may wait in the outbox when there is no connection (offline.js), with what it did (overlay.js).
+const tag = (q, effect) => (q && typeof q.queue === "function" ? q.queue(effect) : q);
 
 export const METHOD = "grid1";
 export const FEATURE = "proTasting";
@@ -62,6 +65,10 @@ export const FIELDS = [
   { id: "oak", section: "Palate", label: "Oak", type: "one", scale: true, options: () => ["none", "subtle", "pronounced"] },
   { id: "flavourIntensity", section: "Palate", label: "Flavour intensity", type: "one", scale: true, options: () => STRENGTH },
   { id: "flavours", section: "Palate", label: "Flavours", type: "tags" },
+  // How ripe the fruit tastes: a strong clue to where the grapes grew (tart and zippy from cool places, jammy and cooked from hot, sunny ones).
+  // Not a structure line, so it does not move the sliders. The same idea is used in Guess the Glass (blindgame.js RIPENESS).
+  { id: "fruitRipeness", section: "Palate", label: "Fruit ripeness", type: "one", scale: true, options: () => ["under-ripe", "just ripe", "ripe", "over-ripe"],
+    hint: "Tart and zippy fruit often means a cool place; ripe and juicy, a warm one; jammy and cooked, a hot, sunny one." },
   { id: "finish", section: "Palate", label: "Finish", type: "one", scale: true, options: () => ["short", "medium", "long"] },
   { id: "quality", section: "Conclusions", label: "Quality", type: "one", options: () => ["faulty", "poor", "acceptable", "good", "very good", "outstanding"] },
   { id: "readiness", section: "Conclusions", label: "Readiness", type: "one", options: () => ["too young", "drink now, may improve", "drink now, will not improve", "too old"] },
@@ -72,7 +79,7 @@ const SHORT = { "medium -": "Med \u2212", "medium +": "Med +", medium: "Med" };
 export const shortLabel = (option) => SHORT[option] || option.charAt(0).toUpperCase() + option.slice(1);
 export const SECTIONS = ["Appearance", "Nose", "Palate", "Conclusions"];
 export const fieldsFor = (style) => FIELDS.filter((f) => !f.applies || f.applies(style));
-const optionsOf = (f, style) => (f.options ? f.options(style) : []);
+export const optionsOf = (f, style) => (f.options ? f.options(style) : []);
 
 // ---------------------------------------------------------------- the rules
 // Keeps only answers that are real options for this type of wine (so a stale answer, such as a colour for the wrong type, is dropped).
@@ -144,9 +151,9 @@ export function gridToDims(grid, style) {
 
 // ---------------------------------------------------------------- the screens
 // The block shown on the Structure step of the rating window.
-export function proBlockHtml(grid, style) {
+export function proBlockHtml(grid, style, fromNotes = 0) {
   return `<div class="problock" data-problock><div class="serif" style="font-size:16px">Professional tasting grid</div>
-    <div class="muted small">${esc(summaryText(grid, style))}. Appearance, nose, palate and conclusions. Each tap is kept and moves the sliders below.</div>
+    <div class="muted small">${esc(summaryText(grid, style))}. Appearance, nose, palate and conclusions. Each tap is kept and moves the sliders below.${fromNotes ? ` ${fromNotes} filled in from your notes.` : ""}</div>
     <button class="btn outline slim" data-grid="open" style="margin-top:8px">${isEmptyGrid(grid, style) ? "Open the grid" : "Edit the grid"}</button></div>`;
 }
 const tagChip = (g, field, tag) => { const i = TAG_LIST.indexOf(tag); const on = Array.isArray(g[field]) && g[field].includes(tag); return `<button class="gopt tag${on ? " on" : ""}" data-grid="tag:${field}:${i}" aria-pressed="${on}">${esc(tag)}</button>`; };
@@ -170,7 +177,7 @@ export function gridHtml(values, open, style, wineName, info = "") {
   const body = SECTIONS.map((sec) => {
     const rows = fieldsFor(style).filter((f) => f.section === sec).map((f) => {
       if (f.type === "one") {
-        if (f.scale) return `<div class="glabel">${esc(f.label)}</div>${scaleHtml(g, f, style)}`;
+        if (f.scale) return `<div class="glabel">${esc(f.label)}</div>${f.hint ? `<div class="muted small ghint">${esc(f.hint)}</div>` : ""}${scaleHtml(g, f, style)}`;
         const opts = optionsOf(f, style).map((o, i) => `<button class="gopt${g[f.id] === o ? " on" : ""}" data-grid="pick:${f.id}:${i}" aria-pressed="${g[f.id] === o}">${esc(o)}</button>`).join("");
         return `<div class="glabel">${esc(f.label)}</div><div class="gopts">${opts}</div>`;
       }
@@ -184,6 +191,7 @@ export function gridHtml(values, open, style, wineName, info = "") {
       <div class="sheetbtns"><button class="pill wine" data-grid="close">Close</button></div></div>
     <p class="muted small">Every tap is kept straight away. Acidity, tannin, body, sweetness, oak and bubbles also set the structure sliders. Tap an answer again to clear it. For aromas and flavours, tap a group to open it.</p>
     <div id="gridMsg" class="err"></div>
+    <div id="gridNoteBar" class="notebar"></div><div id="gridUnplaced" class="unplaced"></div><div id="gridTeach" class="teach"></div>
     ${body}
     <button class="btn primary" data-grid="close">Close</button></div></div>`;
 }
@@ -209,18 +217,62 @@ export function syncGridDom(values, open, style, root = document) {
 
 // ---------------------------------------------------------------- the database
 export async function loadTasting(sb, consumptionId) {
+  if (String(consumptionId).startsWith("tmp_")) return overlayTasting(consumptionId, {});   // an entry made offline and not uploaded yet
   const { data, error } = await sb.from("tasting_notes").select("data").eq("consumption_id", consumptionId).maybeSingle();
   if (error) throw error;
-  return (data && data.data) || {};
+  return overlayTasting(consumptionId, (data && data.data) || {});
 }
 // An empty grid removes the note. Needs database update 21 and the professional tier.
 export async function saveTasting(sb, consumptionId, grid, style) {
   const clean = cleanGrid(grid, style);
   if (!Object.keys(clean).length) {
-    const { error } = await sb.from("tasting_notes").delete().eq("consumption_id", consumptionId);
+    const { error } = await tag(sb.from("tasting_notes").delete().eq("consumption_id", consumptionId), { t: "tasting", id: consumptionId, data: {} });
     if (error) throw error;
     return;
   }
-  const { error } = await sb.from("tasting_notes").upsert({ consumption_id: consumptionId, method: METHOD, data: clean, updated_at: new Date().toISOString() }, { onConflict: "consumption_id" });
+  const { error } = await tag(sb.from("tasting_notes").upsert({ consumption_id: consumptionId, method: METHOD, data: clean, updated_at: new Date().toISOString() }, { onConflict: "consumption_id" }), { t: "tasting", id: consumptionId, data: clean });
   if (error) throw error;
+}
+
+// ---------------------------------------------------------------- answers filled in from the notes (notegrid.js)
+// marks: { auto: { field: true | [tags] }, evidence: { field: [words] }, unplaced: [words] } for the open rating sheet. These only change how the grid LOOKS and what it offers; the answers themselves are ordinary grid answers.
+export const autoCount = (marks) => Object.values((marks && marks.auto) || {}).reduce((n, v) => n + (Array.isArray(v) ? v.length : 1), 0);
+// The line at the top of the grid: how many answers came from the notes, the button to clear them, and the button to read the notes again.
+export function noteBarHtml(marks) {
+  const n = autoCount(marks);
+  return `<div class="muted small">${n ? `${n} ${n === 1 ? "answer was" : "answers were"} filled in from your notes (marked). Tap one to change it.` : "Your notes can fill in the grid for you."}</div>
+    <div class="gopts"><button class="pill dark" data-grid="fill">Fill from my notes</button>${n ? `<button class="pill" data-grid="clearauto">Clear what was filled in</button>` : ""}</div>`;
+}
+// Words from the notes that were not understood, each one a button: "Words I could not place".
+export function unplacedHtml(marks) {
+  const list = (marks && marks.unplaced) || [];
+  if (!list.length) return "";
+  return `<div class="muted small">Words I could not place. Tap one to tell me what it means:</div><div class="gopts">${list.map((w) => `<button class="gopt wordbtn" data-grid="teach:${esc(w)}">${esc(w)}</button>`).join("")}</div>`;
+}
+// The small form for one word: which grid line, which answer, and whether to share the word (never the note) so other players benefit once an editor approves it.
+export function teachHtml(t, style, canShare) {
+  if (!t) return "";
+  const lines = fieldsFor(style).filter((f) => f.type === "one" || f.type === "tags");
+  const field = t.field || "";
+  const opts = field === "tag" || field === "aromas" || field === "flavours" ? TAG_LIST : (() => { const f = lines.find((x) => x.id === field); return f ? optionsOf(f, style) : []; })();
+  return `<div class="teachbox"><div class="serif" style="font-size:16px">What did you mean by &ldquo;${esc(t.word)}&rdquo;?</div>
+    <select class="field" data-teach="field" aria-label="Which line of the grid"><option value="">Choose a line of the grid</option>${lines.map((f) => { const id = f.type === "tags" ? "tag" : f.id; return `<option value="${id}"${field === id ? " selected" : ""}>${esc(f.type === "tags" ? "Aroma or flavour" : f.section + ": " + f.label)}</option>`; }).filter((x, i, a) => a.indexOf(x) === i).join("")}</select>
+    <select class="field" data-teach="value" aria-label="Which answer"${field ? "" : " disabled"}><option value="">Choose the answer</option>${opts.map((o) => `<option value="${esc(o)}"${t.value === o ? " selected" : ""}>${esc(o)}</option>`).join("")}</select>
+    ${canShare ? `<label class="small"><input type="checkbox" data-teach="share"${t.share ? " checked" : ""}> Help other players: share this word and answer (never your notes)</label>` : ""}
+    <div id="teachErr" class="err">${esc(t.error || "")}</div>
+    <div class="gopts"><button class="pill wine" data-grid="tsave">Save and use it now</button><button class="pill" data-grid="tcancel">Cancel</button></div></div>`;
+}
+// Marks the answers that came from the notes, and redraws the bar and the word buttons. Call after every change to the grid or the notes.
+export function paintNoteMarks(marks, values, style, root = document) {
+  const g = values || {}, auto = (marks && marks.auto) || {}, ev = (marks && marks.evidence) || {};
+  root.querySelectorAll("[data-grid^='pick:'], [data-grid^='tag:']").forEach((b) => {
+    const [kind, id, i] = b.dataset.grid.split(":");
+    let on = false;
+    if (kind === "pick") { const f = fieldsFor(style).find((x) => x.id === id); on = !!f && auto[id] === true && g[id] === optionsOf(f, style)[Number(i)]; }
+    else { const tag = TAG_LIST[Number(i)]; on = Array.isArray(auto[id]) && auto[id].includes(tag) && Array.isArray(g[id]) && g[id].includes(tag); }
+    b.classList.toggle("fromnotes", on);
+    if (on) b.title = "From your notes" + (ev[id] && ev[id].length ? `: ${ev[id].join(", ")}` : ""); else b.removeAttribute("title");
+  });
+  const bar = root.querySelector("#gridNoteBar"); if (bar) bar.innerHTML = noteBarHtml(marks);
+  const un = root.querySelector("#gridUnplaced"); if (un) un.innerHTML = unplacedHtml(marks);
 }

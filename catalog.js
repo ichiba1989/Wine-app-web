@@ -5,7 +5,8 @@
 // 2. An editor decides: add it (it is created as "pending review" and stays out of the deck until the editor publishes it) or not now.
 // 3. "The same wine, minus the vintage" is checked against the catalog. Only the MOST RECENT vintage is used for the deck;
 //    older vintages of the same wine are archived (kept, with players' swipes and journals intact, but not shown in Discover again).
-import { fold, checkGrapeText, splitGrapeText } from "./grapes.js?v=1";
+import { fold, checkGrapeText, splitGrapeText } from "./grapes.js?v=2";
+import { plainKey } from "./text.js?v=2";
 
 export const DEFAULT_RULES = { minEntries: 10, minPeople: 1 };
 // app_config rows [{ key, value }] -> rules. Anything missing or silly falls back to the default.
@@ -14,9 +15,24 @@ export function rulesFrom(rows) {
   return { minEntries: get("catalog_candidate_min_entries") ?? DEFAULT_RULES.minEntries, minPeople: get("catalog_candidate_min_people") ?? DEFAULT_RULES.minPeople };
 }
 
+// ---------------------------------------------------------------- when is a player's wine complete?
+// A player may save a wine with only some details (a name and a note, say). It stays in their own journal and is used for nothing shared (catalog candidates,
+// Bingo, community numbers) until it is COMPLETE: a producer, a vintage (a year, or NV) and a type of wine. This is the one place that says what complete means.
+// w: { producer, vintage (a year, "NV", or empty), style }  (vintage may instead come as vintage_year / is_non_vintage, as journal rows have it)
+export function missingFields(w) {
+  const x = w || {};
+  const out = [];
+  if (!String(x.producer || "").trim()) out.push("producer");
+  const v = x.is_non_vintage ? "NV" : x.vintage_year != null ? String(x.vintage_year) : String(x.vintage || "");
+  if (v !== "NV" && !/^\d{4}$/.test(v)) out.push("vintage");
+  if (!x.style || x.style === "unknown") out.push("type of wine");
+  return out;
+}
+export const isComplete = (w) => missingFields(w).length === 0;
+
 // ---------------------------------------------------------------- "the same wine, minus the vintage"
 // Producers and wine names: no capitals, accents, punctuation or spaces ("Château d'Or" and "chateau d or" are the same name).
-export const nameKey = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/ß/g, "ss").replace(/[^a-z0-9]+/g, "");
+export const nameKey = (s) => plainKey(s).replace(/ /g, "");   // text.js plainKey with the spaces taken out too
 const grapeSet = (names) => [...new Set((names || []).map(fold).filter(Boolean))].sort().join("|");
 export function grapeKeyOfText(text) {
   const r = checkGrapeText(text || "");
@@ -25,7 +41,24 @@ export function grapeKeyOfText(text) {
 // The loose key (producer, wine name, type, grapes) is how a submission is matched with the catalog.
 export const looseKey = (x) => [nameKey(x.producer), nameKey(x.wine_name ?? x.cuvee ?? ""), x.style || "", x.grapeKey ?? grapeSet(x.grapes)].join("¦");
 // The strict key also needs the same appellation. It decides which catalog vintages are the same wine, because archiving removes a wine from Discover.
-export const strictKey = (x) => looseKey(x) + "¦" + nameKey(x.appellation || "");
+export const strictKey = (x) => looseKey(x) + "¦" + nameKey(x.appellation || "") + (x.dosage ? "¦" + x.dosage : "");
+// The one rule for "the same wine, another vintage" (owner, 2026-10-15). Used when a wine is added (another vintage of a wine we have is
+// added to it, data.js addVenueCatalogWine) and, through strictKey, for "Same wine, different vintages" (duplicateGroups).
+//   the same producer and wine name (wineIdentity), the same type and the same place, and the same label grapes, and for a sparkling wine the same
+//   sweetness term (dosage) when both sides have one; a NAMED wine whose grapes are not on record on one side still counts (the name says which wine it is). A wine with no name needs the grapes too,
+//   so "Trimbach Riesling" and "Trimbach Pinot Gris" (both unnamed, white, Alsace) stay two wines, and one producer's two "Grand Cru" wines from
+//   different places stay two.
+// a / b: { producer, wine_name | cuvee | name, style, placeId | appellation, grapeKey | grapes (names), dosage }. Places are compared by id when both
+// have one, else by appellation name. This decides only when to ASK or reuse; it never renames anything.
+export const wineIdentity = (x) => `${nameKey(x.producer)}¦${nameKey(x.wine_name ?? x.cuvee ?? x.name ?? "")}`;
+const placeOf = (x) => (x.placeId !== undefined ? x.placeId || "" : nameKey(x.appellation || ""));
+export function sameWine(a, b) {
+  if (wineIdentity(a) !== wineIdentity(b) || (a.style || "") !== (b.style || "") || placeOf(a) !== placeOf(b)) return false;
+  if (a.dosage && b.dosage && a.dosage !== b.dosage) return false;   // a producer's unnamed Brut and Extra Brut are two wines (the term is not in the name)
+  const ga = a.grapeKey ?? grapeSet(a.grapes), gb = b.grapeKey ?? grapeSet(b.grapes);
+  const named = !!nameKey(a.wine_name ?? a.cuvee ?? a.name ?? "");
+  return ga === gb || (named && (!ga || !gb));
+}
 const cardId = (c) => c.id;
 const yearOf = (c) => (/^\d{4}$/.test(String(c.vintage || "")) ? Number(c.vintage) : null);
 const live = (c) => !c.archived && (!c.wineStatus || c.wineStatus === "verified");
@@ -37,7 +70,7 @@ const live = (c) => !c.archived && (!c.wineStatus || c.wineStatus === "verified"
 export function groupSubmissions(rows, { rules = DEFAULT_RULES, cards = [], decisions = [] } = {}) {
   const groups = new Map();
   (rows || []).forEach((r) => {
-    if (!r.producer || !(r.entries > 0)) return;
+    if (!(r.entries > 0) || !isComplete(r)) return;   // incomplete wines never become candidates
     const key = looseKey({ producer: r.producer, wine_name: r.wine_name, style: r.style, grapeKey: grapeKeyOfText(r.grape_text) });
     if (!groups.has(key)) groups.set(key, { key, rows: [] });
     groups.get(key).rows.push(r);
@@ -108,7 +141,7 @@ export function planPromotion(cand, lists = { producers: [], grapes: [] }) {
 export function duplicateGroups(cards) {
   const map = new Map();
   (cards || []).filter((c) => live(c) && yearOf(c) != null).forEach((c) => {
-    const k = strictKey({ producer: c.producer, cuvee: c.cuvee, style: c.style, grapes: c.grapes, appellation: c.appellation });
+    const k = strictKey({ producer: c.producer, cuvee: c.cuvee, style: c.style, grapes: c.grapes, appellation: c.appellation, dosage: c.dosage });
     if (!map.has(k)) map.set(k, []);
     map.get(k).push(c);
   });

@@ -75,6 +75,12 @@ const GRAPE_LOOKUP = {};
 for (const [k, g] of Object.entries(GRAPES)) GRAPE_LOOKUP[k] = k;
 for (const [alias, target] of Object.entries(ALIASES)) GRAPE_LOOKUP[norm(alias)] = norm(target);
 export const grapeFor = (name) => GRAPES[GRAPE_LOOKUP[norm(name)]] || null;
+// The starting synonyms, for the database's reference list (docs/reference_lists.sql), and more synonyms read from it (only rows an editor or the owner
+// put in use). A synonym only helps find the grape's rules; the label keeps its own word (owner, 2026-10-15).
+export const GRAPE_SYNONYMS = ALIASES;
+export function addGrapeSynonyms(pairs) {
+  (pairs || []).forEach(([alias, target]) => { const t = norm(target); if (GRAPES[GRAPE_LOOKUP[t]] && norm(alias)) GRAPE_LOOKUP[norm(alias)] = GRAPE_LOOKUP[t]; });
+}
 
 // ---------------------------------------------------------------- climate
 // How warm or cool a place is changes acidity, body and tannin. First match wins: appellation, then region, then country.
