@@ -14,6 +14,7 @@
 //      complémentaires") are left out; only appellations are kept. Without the file the French AOCs are simply left out.
 //   2. node docs/atlas_data.mjs <that folder>          (writes atlasdata.js in the repository root)
 //   3. Bump atlasdata.js?v= where it is imported (atlasview.js).
+//   4. Write the new dates in docs/DATA_REFRESH.md (refresh every six months: INAO and the AVA list change several times a year).
 // Licences: Natural Earth is in the public domain (naturalearthdata.com/about/terms-of-use). The AVA boundaries are from the UC Davis American
 // Viticultural Areas project, CC0 1.0 (github.com/UCDavisLibrary/ava). The French AOC outlines are INAO's, Licence Ouverte (reuse allowed with the
 // source named); INAO says its published shapes are for information only (the legal plans are the ones filed with INAO and the town halls), and some
