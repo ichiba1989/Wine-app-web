@@ -5,8 +5,9 @@
 // atlasdata.js for the Atlas, the lighter atlaslite.js for the card (app.js loads them on first use, so neither costs anything at start-up).
 // The rules are in atlas.js; this file draws and listens. While a finger moves only the map's viewBox changes; pins and labels are drawn again when
 // the finger lifts.
-import * as A from "./atlas.js?v=5";
-import { esc } from "./logic.js?v=21";
+import * as A from "./atlas.js?v=6";
+import { esc } from "./logic.js?v=22";
+import { infoLine } from "./wineline.js?v=3";   // grape · appellation · region, under a wine's name
 
 const SEA = "#d6e4ea", LAND = "#efeadb", WINE_LAND = "#f6f1e1", BORDER = "#9aa893", PROVINCE = "#c4bfa8", AREA = "#7b2d43";
 const STYLE_WORD = { red: "Red", white: "White", sparkling: "Sparkling", rose: "Rosé", fortified: "Fortified" };
@@ -360,8 +361,9 @@ export function createAtlas(ctx) {
   function myWinesHere(place) {
     const journal = A.pinsOf({ show: "journal", journal: ctx.journal(), cardsById: ctx.cardsById(), entryName: ctx.entryName, placeOf }).pins.filter((p) => p.place.key === place.key);
     const liked = A.pinsOf({ show: "liked", states: ctx.states(), cardsById: ctx.cardsById(), nameOf: ctx.nameOf, placeOf }).pins.filter((p) => p.place.key === place.key && !journal.some((j) => j.cardId === p.cardId));
-    const rows = [...journal.map((p) => `<button class="jrow" data-action="entry:${esc(p.id)}"><span class="adotc" style="background:${p.color}"></span><span class="jl"><span class="serif trunc">${esc(p.name)}</span><span class="meta">${esc(STYLE_WORD[p.style] || "")}</span></span></button>`),
-      ...liked.map((p) => `<div class="jrow still"><span class="adotc" style="background:${p.color}"></span><span class="jl"><span class="serif trunc">${esc(p.name)}</span><span class="meta">Liked swipe</span></span><button class="pill" data-action="review:${esc(p.cardId)}">I've had it: rate it</button></div>`)];
+    const lineOf = (p) => { const c = p.cardId && ctx.cardsById().get(p.cardId); return (c && infoLine(c)) || STYLE_WORD[p.style] || ""; };
+    const rows = [...journal.map((p) => `<button class="jrow" data-action="entry:${esc(p.id)}"><span class="adotc" style="background:${p.color}"></span><span class="jl"><span class="serif trunc">${esc(p.name)}</span><span class="meta trunc">${esc(lineOf(p))}</span></span></button>`),
+      ...liked.map((p) => `<div class="jrow still"><span class="adotc" style="background:${p.color}"></span><span class="jl"><span class="serif trunc">${esc(p.name)}</span><span class="meta trunc">Liked swipe${lineOf(p) ? " · " + esc(lineOf(p)) : ""}</span></span><button class="pill" data-action="review:${esc(p.cardId)}">I've had it: rate it</button></div>`)];
     return rows.join("");
   }
   function placeHtml(f) {
@@ -370,7 +372,7 @@ export function createAtlas(ctx) {
     const boundary = f.area ? A.AREA_SOURCE[f.area.source] || "" : `No outline on file: the dot marks roughly where it is.`;
     const mine = myWinesHere(p);
     const tries = ctx.suggest(p) || [];
-    const tryRows = tries.map((r) => `<div class="jrow still"><span class="jl"><span class="serif trunc">${esc(ctx.nameOf(r.card))}</span>${r.reason ? `<span class="meta">${esc(r.reason)}</span>` : ""}</span><button class="pill" data-action="review:${esc(r.card.id)}">I've had it: rate it</button></div>`).join("");
+    const tryRows = tries.map((r) => `<div class="jrow still"><span class="jl"><span class="serif trunc">${esc(ctx.nameOf(r.card))}</span>${infoLine(r.card) ? `<span class="meta trunc">${esc(infoLine(r.card))}</span>` : ""}${r.reason ? `<span class="meta">${esc(r.reason)}</span>` : ""}</span><button class="pill" data-action="review:${esc(r.card.id)}">I've had it: rate it</button></div>`).join("");
     const quiz = ctx.quizFor(A.topicsOf(f));
     return `<div class="apagehead"><div><div class="muted tiny">${esc(KIND_WORD[p.kind] || "Place")}</div><div class="serif big">${esc(p.name)}${f.designation ? ` <span class="pill dark">${esc(f.designation)}</span>` : ""}</div><div class="small">${chain}</div></div>
         <button class="xbtn" data-atlas="pageclose" aria-label="Close the page">&times;</button></div>

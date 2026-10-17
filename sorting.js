@@ -1,7 +1,7 @@
 // Sorting for the Editor lists that hold a lot of data: wines (Structure, Photos), quiz questions, flags and feedback.
 // Pure: no browser, no network, so every rule can be tested on its own. A value that is missing always sorts last, and equal values
 // keep a sensible second order (producer, then newest vintage), so a list never jumps around.
-import { esc } from "./logic.js?v=21";
+import { esc } from "./logic.js?v=22";
 import { caseKey } from "./text.js?v=2";
 
 const fold = caseKey;   // text.js: accents and capitals ignored, punctuation still counts

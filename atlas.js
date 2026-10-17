@@ -166,7 +166,7 @@ export function pinsOf({ show = "journal", style = "", journal = [], states = []
     if (!place) { unplaced += 1; return; }
     out.push({ ...pin, style: card.style || "", place });
   };
-  if (show === "journal") journal.forEach((e) => add(entryCard(e, cardsById), { id: e.id, kind: "entry", cardId: e.wine_vintage_id || null, name: entryName(e), color: PIN_COLOR[e.verdict] || PIN_COLOR.unrated, verdict: e.verdict || null }));
+  if (show === "journal") journal.forEach((e) => add(entryCard(e, cardsById), { id: e.id, kind: "entry", cardId: e.wine_vintage_id || null, name: entryName(e, e.wine_vintage_id ? cardsById.get(e.wine_vintage_id) : null), color: PIN_COLOR[e.verdict] || PIN_COLOR.unrated, verdict: e.verdict || null }));
   else if (show === "liked") states.filter((s) => reactionOf(s) === "like").forEach((s) => { const c = cardsById.get(s.wine_vintage_id); if (c) add(c, { id: c.id, kind: "card", cardId: c.id, name: nameOf(c), color: PIN_COLOR.liked }); });
   else cards.forEach((c) => add(c, { id: c.id, kind: "card", cardId: c.id, name: nameOf(c), color: PIN_COLOR.catalog }));
   return { pins: out, unplaced };

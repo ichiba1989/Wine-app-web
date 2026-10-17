@@ -7,7 +7,6 @@
 --   Chablis Grand Cru (white): no such appellation in our place list
 -- Lines still to check (not filled until an editor has read the official text and marked them checked in aocgrapes.js):
 --   Régnié (red): Gamay
---   Chambolle-Musigny (red): Pinot Noir
 --   Morey-Saint-Denis (red): Pinot Noir
 --   Beaune (red): Pinot Noir
 --   Monthélie (red): Pinot Noir
@@ -29,23 +28,79 @@
 --   Clos des Lambrays (red): Pinot Noir
 --   Bonnes-Mares (red): Pinot Noir
 --   Musigny (red): Pinot Noir
---   Clos de Vougeot (red): Pinot Noir
 --   Échezeaux (red): Pinot Noir
 --   Grands-Échezeaux (red): Pinot Noir
 --   Richebourg (red): Pinot Noir
 --   Romanée-Saint-Vivant (red): Pinot Noir
 --   Corton (red): Pinot Noir
+--   Nuits-Saint-Georges (red): Pinot Noir
+--   Chassagne-Montrachet (red): Pinot Noir
+--   Puligny-Montrachet (red): Pinot Noir
+--   Meursault (red): Pinot Noir
+--   Saint-Aubin (red): Pinot Noir
+--   Saint-Romain (red): Pinot Noir
+--   Bourgogne Hautes-Côtes de Beaune (red): Pinot Noir
+--   Bourgogne Hautes-Côtes de Nuits (red): Pinot Noir
+--   Mercurey (red): Pinot Noir
+--   Givry (red): Pinot Noir
+--   Rully (red): Pinot Noir
+--   Santenay (red): Pinot Noir
+--   Maranges (red): Pinot Noir
+--   Ladoix (red): Pinot Noir
+--   Pernand-Vergelesses (red): Pinot Noir
+--   Chorey-lès-Beaune (red): Pinot Noir
+--   Aloxe-Corton (red): Pinot Noir
+--   Bourgogne (red): Pinot Noir
+--   Irancy (red): Pinot Noir
+--   Meursault (white): Chardonnay
+--   Saint-Aubin (white): Chardonnay
+--   Saint-Romain (white): Chardonnay
+--   Beaune (white): Chardonnay
+--   Morey-Saint-Denis (white): Chardonnay
+--   Monthélie (white): Chardonnay
+--   Auxey-Duresses (white): Chardonnay
+--   Savigny-lès-Beaune (white): Chardonnay
+--   Santenay (white): Chardonnay
+--   Rully (white): Chardonnay
+--   Mercurey (white): Chardonnay
+--   Givry (white): Chardonnay
+--   Montagny (white): Chardonnay
+--   Bourgogne (white): Chardonnay
+--   Bourgogne Hautes-Côtes de Beaune (white): Chardonnay
+--   Bourgogne Hautes-Côtes de Nuits (white): Chardonnay
+--   Mâcon (white): Chardonnay
+--   Mâcon-Villages (white): Chardonnay
+--   Viré-Clessé (white): Chardonnay
+--   Saint-Véran (white): Chardonnay
+--   Pouilly-Loché (white): Chardonnay
+--   Pouilly-Vinzelles (white): Chardonnay
+--   Pernand-Vergelesses (white): Chardonnay
+--   Ladoix (white): Chardonnay
+--   Nuits-Saint-Georges (white): Chardonnay
+--   Marsannay (white): Chardonnay
+--   Fixin (white): Chardonnay
 --   Montrachet (white): Chardonnay
 --   Chevalier-Montrachet (white): Chardonnay
 --   Bâtard-Montrachet (white): Chardonnay
 --   Bienvenues-Bâtard-Montrachet (white): Chardonnay
 --   Criots-Bâtard-Montrachet (white): Chardonnay
 --   Corton-Charlemagne (white): Chardonnay
+--   Pouilly-Fuissé (white): Chardonnay
 --   Cornas (red): Syrah
 --   Hermitage (red): Syrah
+--   Saint-Joseph (red): Syrah
+--   Crozes-Hermitage (red): Syrah
+--   Condrieu (white): Viognier
 --   Sancerre (white): Sauvignon Blanc
 --   Sancerre (red): Pinot Noir
 --   Sancerre (rose): Pinot Noir
+--   Pouilly-Fumé (white): Sauvignon Blanc
+--   Vouvray (white): Chenin Blanc
+--   Savennières (white): Chenin Blanc
+--   Saumur-Champigny (red): Cabernet Franc
+--   Barbaresco (red): Nebbiolo
+--   Gattinara (red): Nebbiolo
+--   Carema (red): Nebbiolo
 
 create table if not exists public.rule_grape_fill_log (
   wine_id uuid not null, grape_id uuid not null, appellation text, rule text, source text, filled_at timestamptz not null default now(),
@@ -64,6 +119,8 @@ with rules (appellation_id, style, grape_id, appellation, rule, source) as (valu
   ('0260e048-98ec-4433-af35-f39ec9365f9f'::uuid, 'red', '743e0808-56d3-527d-a465-46dc470dafc9'::uuid, 'Pommard', 'main', 'https://extranet.inao.gouv.fr/fichier/PNOCDCPommard.pdf'),
   ('0416bb9d-5811-48d6-a623-1bfef79fad00'::uuid, 'red', '743e0808-56d3-527d-a465-46dc470dafc9'::uuid, 'Volnay', 'main', 'https://extranet.inao.gouv.fr/fichier/PNOCDC-Volnay.pdf'),
   ('1a143be5-c592-43ff-8650-74575e4553b1'::uuid, 'red', '743e0808-56d3-527d-a465-46dc470dafc9'::uuid, 'Gevrey-Chambertin', 'main', 'https://extranet.inao.gouv.fr/fichier/PNOCDCGevreyChambertin.pdf'),
+  ('94fbf9de-d26f-4d4f-a8cd-db0514b0cb27'::uuid, 'red', '743e0808-56d3-527d-a465-46dc470dafc9'::uuid, 'Chambolle-Musigny', 'main', 'https://extranet.inao.gouv.fr/fichier/PNOCDC-Chambolle-Musigny.pdf'),
+  ('619f4ab3-640f-4d68-8577-37a76675c886'::uuid, 'red', '743e0808-56d3-527d-a465-46dc470dafc9'::uuid, 'Clos de Vougeot', 'main', 'https://extranet.inao.gouv.fr/fichier/PNOCDC-ClosDeVougeotOuClosVougeot.pdf'),
   ('47b7c6a3-c60a-5872-a904-f5f6e824a114'::uuid, 'white', '191b79cd-7325-5609-86d1-c71b76699506'::uuid, 'Chablis', 'only', 'https://www.legifrance.gouv.fr/loda/article_lc/LEGIARTI000021229093/2010-01-27'),
   ('79b96c4c-536a-4118-b933-7cc4c1e68dad'::uuid, 'white', '191b79cd-7325-5609-86d1-c71b76699506'::uuid, 'Petit Chablis', 'only', 'https://www.legifrance.gouv.fr/loda/article_lc/LEGIARTI000021229093/2010-01-27'),
   ('72c81650-bc36-4e60-9af2-dc1097d17201'::uuid, 'red', 'd830247b-18bd-5d71-b140-eb0e8c20add3'::uuid, 'Côte-Rôtie', 'main', 'https://extranet.inao.gouv.fr/fichier/PNO2023AOPCoteRotie.pdf'),

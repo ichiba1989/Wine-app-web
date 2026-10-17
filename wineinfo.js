@@ -1,17 +1,17 @@
 // Wine info (editors only): change a catalog wine's details. Producer, wine name, vineyard, vintage, type of wine,
 // place, the grapes printed on the label, and other grapes in the wine (for blends the label does not list).
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
-import { esc, WINE_STYLES, DOSAGES, dosageFromText } from "./logic.js?v=21";
+import { esc, WINE_STYLES, DOSAGES, dosageFromText } from "./logic.js?v=22";
 import { checkGrapeText, grapeProblem, grapeIndex, setExtraGrapes } from "./grapes.js?v=2";
 import { expandBlends, BLEND_NAMES } from "./blends.js?v=2";
 import { infoLine } from "./wineline.js?v=3";
 import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, savePlace, designationChoices, designationFromText, designationPlan, placeDesignation, splitDesignation, BROAD_PLACES, ruleDesignation } from "./geo.js?v=8";
 import { loadWinePrice, saveWinePrice, parsePrice, centsToField, blendPrice, formatPrice } from "./pricing.js?v=3";
 import { archivePlanFor } from "./catalog.js?v=6";
-import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=19";
-import * as db from "./data.js?v=44";
+import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=20";
+import * as db from "./data.js?v=45";
 import { caseKey, lookalikes } from "./text.js?v=2";
-import { ruleLineFor } from "./aocgrapes.js?v=1";
+import { ruleLineFor } from "./aocgrapes.js?v=2";
 
 // ---------------------------------------------------------------- how sweet a sparkling wine is (owner, 2026-10-17; logic.js DOSAGES)
 // The term the form starts with: the wine's own, else the one written in its name (it is on the label, so it is a fact; the editor still saves it).
@@ -126,8 +126,8 @@ function ruleGrapeNoteHtml(f) {
   if (String(f.labelGrapes || "").trim()) return "";
   const r = ruleLineFor({ country: f.country, appellation: f.appellation, style: f.style }, { checkedOnly: false });
   if (!r) return "";
-  const what = r.rule === "only" ? `allow only ${r.grape}` : `name ${r.grape} as the main grape`;
-  return `<div class="muted tiny wirule">The ${esc(r.appellation)} rules ${esc(what)} for this type of wine${r.checked ? `${r.source ? ` (<a href="${esc(r.source)}" target="_blank" rel="noopener">source</a>)` : ""}. With no grape on the label, the card shows ${esc(r.grape)} from this rule.` : `: still to check against the official rules (aocgrapes.js). Until it is checked, the card shows no grape from it.`}</div>`;
+  const what = r.rule === "only" ? `allow only ${r.grape}` : r.rule === "usual" ? `allow ${r.grape} (what these wines are made from in practice) beside another grape` : `name ${r.grape} as the main grape`;
+  return `<div class="muted tiny wirule">The ${esc(r.appellation)} rules ${esc(what)} for this type of wine${r.checked ? `${r.source ? ` (<a href="${esc(r.source)}" target="_blank" rel="noopener">source</a>)` : ""}. With no grape on the label, the card shows ${esc(r.grape)} from this rule.` : `: still to check against the official rules (aocgrapes.js). The card already shows ${esc(r.grape)} from it.`}</div>`;
 }
 // Germany and Austria: only the broad wine region is a place (geo.js BROAD_PLACES); the village and vineyard stay in the wine name.
 const appPlaceholder = (country) => { const k = String(country || "").trim().toLowerCase(); return BROAD_PLACES[k] ? `Only a wine region (for example ${k === "austria" ? "Kamptal" : "Mosel"}); the vineyard stays in the name` : "For example Barolo or Rutherford"; };

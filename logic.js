@@ -1,7 +1,8 @@
 import { fold, splitGrapeText, checkGrapeText, grapeProblem } from "./grapes.js?v=2";
 import { reactionOf, skipsOf } from "./reactions.js?v=3";
 import { isComplete, missingFields } from "./catalog.js?v=6";
-import { ruleGrapesFor } from "./aocgrapes.js?v=1";
+import { ruleGrapesFor } from "./aocgrapes.js?v=2";
+import { matchKey } from "./text.js?v=2";
 // Pure logic for the wine app web page. No browser and no network in this file,
 // so every rule here can be tested on its own.
 
@@ -213,14 +214,35 @@ export function entryGrape(e, cardsById) {
   return names.length === 1 ? names[0] : "";
 }
 // A wine's name always starts with its vintage.
-export const wineName = (c) => `${c.vintage ? c.vintage + " " : ""}${c.producer || ""}${c.cuvee ? (c.producer ? " " : "") + c.cuvee : ""}`.trim();
+// ---------------------------------------------------------------- the wine part of a name, as the label reads (owner, 2026-10-17)
+// The stored name leaves out what is in the place field, so a Burgundy grand cru is stored as "Grand Cru" under the appellation Charmes-Chambertin.
+// Shown alone it says nothing; the label reads "Charmes-Chambertin Grand Cru". displayCuvee puts the appellation back in front, for showing only
+// (nothing stored changes; identity and matching keep using the stored name):
+//   no name                                   -> "Gevrey-Chambertin"
+//   only a rank ("Grand Cru", "1er Cru", "Riserva") -> "Charmes-Chambertin Grand Cru", "St.-Émilion Grand Cru", "Chianti Classico Riserva"
+//   a name holding "1er Cru" / "Premier Cru"    -> "Gevrey-Chambertin 1er Cru La Perrière", "Chambolle-Musigny Les Fuées 1er Cru" (a premier cru vineyard
+//                                                 needs its village; a name holding "Grand Cru" already names its place: "Furstentum Grand Cru")
+//   only a colour ("Blanc", "Rouge", "Rosé")    -> "Sancerre Blanc"
+// A name that already holds the appellation, a wine with no appellation, or a cuvée name ("Mes Cinq Terroirs") is shown as it is.
+const RANK_ONLY = /^(grand cru|premier cru|1er cru|grand cru class[ée]|(premier|1er) grand cru( class[ée])?( [ab])?|riserva|reserva|gran reserva|gran selezione)$/i;
+const CRU_INSIDE = /(^|\s)(premier cru|1er cru)(\s|$)/i;
+const COLOUR_ONLY = /^(blanc|rouge|ros[ée])$/i;
+export function displayCuvee(c) {
+  const name = String((c && c.cuvee) || "").trim(), app = String((c && c.appellation) || "").trim();
+  if (!app) return name;
+  if (!name) return app;
+  if (matchKey(name).includes(matchKey(app))) return name;
+  return RANK_ONLY.test(name) || CRU_INSIDE.test(name) || COLOUR_ONLY.test(name) ? `${app} ${name}` : name;
+}
+export const wineName = (c) => { const cuvee = displayCuvee(c); return `${c.vintage ? c.vintage + " " : ""}${c.producer || ""}${cuvee ? (c.producer ? " " : "") + cuvee : ""}`.trim(); };
 
 // A journal row (from the v_journal_entries view) shaped like a card.
 export function entryCard(e) {
   const vintage = e.is_non_vintage ? "NV" : e.vintage_year ? String(e.vintage_year) : "";
   return { vintage, producer: e.producer, cuvee: e.wine_name || "", style: e.style, country: e.country };
 }
-export const entryName = (e) => wineName(entryCard(e)) || "Untitled wine";
+// With the catalog card at hand, the entry is named like the card (the appellation in front of a "Grand Cru", displayCuvee).
+export const entryName = (e, card = null) => wineName(card || entryCard(e)) || "Untitled wine";
 // A wine the player typed in with details still missing (see isComplete in catalog.js). Catalog wines are always complete.
 export const entryIncomplete = (e) => !!e && !!e.is_outside_wine && !isComplete(e);
 export const entryMissing = (e) => (entryIncomplete(e) ? missingFields(e) : []);

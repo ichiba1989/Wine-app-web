@@ -3,10 +3,10 @@
 //   Feedback: general messages testers sent from the app (broken, confusing, ideas), to read and mark handled.
 //   Quiz:  edit each question, record its source if you have one, and verify it (verified questions are what players see).
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
-import { esc, wineName } from "./logic.js?v=21";
+import { esc, wineName } from "./logic.js?v=22";
 import { suggestTags, pullGroups, canPull, tagDiff, MAX_PULLDOWN, TAG_KINDS } from "./tags.js?v=4";
-import * as db from "./data.js?v=44";
-import { sortFlags, sortFeedback, sortQuestions, sortSelectHtml, FLAG_SORTS, FEEDBACK_SORTS, QUESTION_SORTS } from "./sorting.js?v=11";
+import * as db from "./data.js?v=45";
+import { sortFlags, sortFeedback, sortQuestions, sortSelectHtml, FLAG_SORTS, FEEDBACK_SORTS, QUESTION_SORTS } from "./sorting.js?v=12";
 
 export const TOPICS = ["Grapes", "Regions", "Producers", "Winemaking", "Other alcohol"];
 export const DIFFS = [
