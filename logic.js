@@ -180,6 +180,7 @@ export function cardFromRow(r) {
     grapes: [...(r.label_grapes || [])], ruleGrapes: [...(r.rule_grapes || [])],
     reach: r.reach == null ? null : Number(r.reach), archived: !!r.archived_at, wineStatus: r.wine_status || "",   // set by update 15; empty before it
     image: r.image_path || null,   // the bottle photo's path in storage (update 16); empty when the wine has no photo
+    ...(r.dosage ? { dosage: r.dosage } : {}),   // a sparkling wine's sweetness term, once the view carries it (docs/catalog_speed.sql)
     facts,
   };
 }

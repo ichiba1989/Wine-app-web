@@ -2,7 +2,7 @@
 import {
   FAMILIARITY, FLAGS, VERDICTS, isChoice, GROUPS, GROUP_PAGE, SORTS, YEARS,
   esc, wineName, entryCard, entryName, entryIncomplete, entryMissing, verdictShort, groupEntries, filterEntries, sortCards,
-  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims, dosageLabel } from "./logic.js?v=18";
+  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims, dosageLabel } from "./logic.js?v=19";
 import { splitGrapeParts, splitPlace } from "./blends.js?v=2";
 import { REACTIONS, iconHtml, SKIP_LIMIT } from "./reactions.js?v=3";
 import { say, proToolsOn } from "./words.js?v=1";
@@ -95,8 +95,9 @@ export const ANSWER_BUTTONS = [{ kind: "dislike" }, { kind: "dont_know" }, { kin
 export const answerFace = (kind) => (kind === "dont_know" ? `${esc(REACTIONS[kind].label)} ${iconHtml(kind, 18)}` : iconHtml(kind, 26));
 export const answerButtonsHtml = () => `<div class="answers" role="group" aria-label="Your answer">${ANSWER_BUTTONS.map((a) =>
   `<button class="ans" data-action="answer:${a.kind}" aria-label="${esc(REACTIONS[a.kind].label)}" style="--c:${REACTIONS[a.kind].color}">${answerFace(a.kind)}</button>`).join("")}</div>`;
-export function discoverHtml({ deck, interest, banner, counts, feedback = false, flaggedId = null, nudge = false, buttons = true, mapHint = false }) {
+export function discoverHtml({ deck, loading = false, interest, banner, counts, feedback = false, flaggedId = null, nudge = false, buttons = true, mapHint = false }) {
   const bannerHtml = banner ? `<div class="banner" data-action="dismiss">${esc(banner)} (tap to dismiss)</div>` : "";
+  if (!deck.length && loading) return `${bannerHtml}<div class="center muted">Loading more wines…</div>`;   // the catalog is still arriving (app.js enterMain)
   if (!deck.length) {
     return `${bannerHtml}<div class="center"><div class="serif" style="font-size:22px">No more wines to show.</div>
       <div class="muted">If you expected some, check that the sample wines were published for testing.</div></div>`;

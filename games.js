@@ -1,10 +1,10 @@
 // The Games tab: a list of games (Wine Bingo, This or That, Guess the Glass), then each game's screens. Every function here takes data and returns an HTML
 // string; nothing touches the network. The rules (what fills a square, what unlocks a tier) are in bingo.js; app.js holds the screen state and clicks.
-import { esc, wineName, entryName } from "./logic.js?v=18";
+import { esc, wineName, entryName } from "./logic.js?v=19";
 import { infoLine } from "./wineline.js?v=3";
 import { PAIRS, AXES, AXIS_ORDER, AXIS_VIEW, nextPair, answeredCount, pickedCount, isDone, leanings, axisValues, compareAxes, isClear } from "./thisorthat.js?v=4";
 import { TIERS, CARDS, CLEARS_TO_UNLOCK, cardById, cardsOfTier, tierOpen, clearedIn } from "./bingo.js?v=4";
-import { MODES as GUESS_MODES, LEVELS, ROUND, modeById, bestOf, isRight, scoreOf } from "./blindgame.js?v=7";
+import { MODES as GUESS_MODES, LEVELS, ROUND, modeById, bestOf, isRight, scoreOf } from "./blindgame.js?v=8";
 
 // g: { screen: "hub" | "bingo" | "card", cardId, sq }
 // data: { progress: Map(cardId -> progress), memory, news: [{ id, kind }], help }

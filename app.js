@@ -5,16 +5,16 @@ import {
   wineName, esc, clamp01, filterEntries, groupEntries, swipeLists,
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete, styleLabel,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
-  dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=18";
-import * as db from "./data.js?v=41";
-import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=16";
-import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=9";
+  dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=19";
+import * as db from "./data.js?v=42";
+import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=17";
+import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=10";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=41";
-import { createLearn } from "./learn.js?v=14";
+  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=42";
+import { createLearn } from "./learn.js?v=15";
 import { setMode } from "./words.js?v=1";
-import { journalCsv, exportName } from "./exportcsv.js?v=5";
+import { journalCsv, exportName } from "./exportcsv.js?v=6";
 import { newBlind, cleanPending, hasGuess, scoreGuess, summarize, resultLine, notesAfterReveal, actualOfCard, actualOfForm } from "./blind.js?v=2";
 import { composeNote, stampOf, noteProblem } from "./notes.js?v=1";
 import { createDictation, dictationSupported } from "./dictation.js?v=5";
@@ -28,35 +28,35 @@ import { buildVocab, fixTerms } from "./termfix.js?v=2";
 import { WINE_TERMS, setSpeechLang, speechCodeOf } from "./winewords.js?v=1";
 import { expandBlends, BLEND_NAMES, joinGrapeParts, joinPlace } from "./blends.js?v=2";
 import { loadPrices, applyPrices, tidyFacts, parsePrice, saveWinePrice } from "./pricing.js?v=3";
-import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=14";
-import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=10";
+import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=15";
+import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=11";
 import { applyVisualTables } from "./visualdata.js?v=3";
-import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=8";
-import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=13";
+import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=9";
+import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=14";
 import { infoLine, entryInfoLine } from "./wineline.js?v=3";
-import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, paintNoteMarks, teachHtml, autoCount } from "./tasting.js?v=13";
-import { gridFromNotes, mergeFromNotes, touched, legendEntry, compileWith } from "./notegrid.js?v=6";
+import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, paintNoteMarks, teachHtml, autoCount } from "./tasting.js?v=14";
+import { gridFromNotes, mergeFromNotes, touched, legendEntry, compileWith } from "./notegrid.js?v=7";
 import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=9";
-import { createProfile } from "./profile.js?v=26";
-import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=16";
-import { createFeedback } from "./feedback.js?v=10";
-import { createEditor } from "./editor.js?v=41";
-import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=13";
-import { gamesHtml } from "./games.js?v=20";
+import { createProfile } from "./profile.js?v=27";
+import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=17";
+import { createFeedback } from "./feedback.js?v=11";
+import { createEditor } from "./editor.js?v=42";
+import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=14";
+import { gamesHtml } from "./games.js?v=21";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
 import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=4";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=4";
-import * as GG from "./blindgame.js?v=7";
-import { recommendMix, recommend } from "./recommend.js?v=10";
-import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=1";
+import * as GG from "./blindgame.js?v=8";
+import { recommendMix, recommend } from "./recommend.js?v=11";
+import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=2";
 import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
 import { setOffline, setCardLookup } from "./overlay.js?v=1";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=22"));
-const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=10"));
-const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=13"));
-import { createWineInfo } from "./wineinfo.js?v=28";
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=23"));
+const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=11"));
+const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=14"));
+import { createWineInfo } from "./wineinfo.js?v=29";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -194,7 +194,8 @@ function addVineyard(card) {
 // while sign-in and the profile load instead of after them. state.early holds the pending requests; once() uses one if it is there (and asks again if it failed).
 const keepQuiet = (p) => { p.catch(() => {}); return p; };
 function startEarlyLoads() {
-  state.early = { visual: keepQuiet(applyVisualTables(state.sb)), cards: keepQuiet(db.loadCards(state.sb)), vintages: keepQuiet(db.loadVintageWines(state.sb)), refs: keepQuiet(db.loadReferenceRows(state.sb)), lists: keepQuiet(db.loadReferenceLists(state.sb)) };
+  state.earlyCards = cardStream();   // the catalog, piece by piece (see loadAllCards)
+  state.early = { visual: keepQuiet(applyVisualTables(state.sb)), vintages: keepQuiet(db.loadVintageWines(state.sb)), refs: keepQuiet(db.loadReferenceRows(state.sb)), lists: keepQuiet(db.loadReferenceLists(state.sb)) };
 }
 const once = (key, fn) => {
   const p = state.early && state.early[key];
@@ -202,28 +203,60 @@ const once = (key, fn) => {
   delete state.early[key];
   return p.catch(() => fn());
 };
-async function loadAllCards() {
-  // The flavor tables, the player's private wine changes, the catalog and the prices are separate requests that do not need each other: ask for them together.
-  const [, mine, rawCards, prices, lists, dosages] = await Promise.all([
+// ---------------------------------------------------------------- the catalog, in steps (owner, 2026-10-17)
+// The catalog arrives in pieces, small ones first (data.js loadCards), so Discover can show its first card as soon as the first piece is in.
+// A stream starts reading at once and keeps every piece, so a listener that comes later is handed the pieces it missed first.
+function cardStream() {
+  const pieces = [], subs = new Set();
+  const finished = db.loadCards(state.sb, { onPiece: (cards) => { pieces.push(cards); subs.forEach((f) => f(cards)); } });
+  finished.catch(() => {});   // the listener sees the failure through finished
+  return { finished, listen(f) { pieces.forEach(f); subs.add(f); } };
+}
+const takeCardStream = () => { const s = state.earlyCards; state.earlyCards = null; return s || cardStream(); };
+// The catalog as cards. Small things every card needs come first and together: the flavor tables, the player's private wine changes, prices,
+// the reference lists and the sweetness terms. Then each piece of the catalog is made into cards as it arrives and onCards(all cards so far, { saved })
+// is told. A phone that has the whole catalog saved (offline.js) shows that copy at once ({ saved: true }) and the fresh pieces replace it as they
+// come. Resolves with the fresh catalog only, so a wine taken out since the copy was saved is gone at the end.
+async function loadAllCards(onCards = null) {
+  const extrasP = Promise.all([
     once("visual", () => applyVisualTables(state.sb)),   // flavor weights and place nudges the Owner or an editor tuned in the database (the built-in set is used if there are none)
     loadMyInfo(state.sb).catch(() => new Map()),          // before database update 24 nobody has private changes
-    once("cards", () => db.loadCards(state.sb)),
     loadPrices(state.sb).then((p) => ({ p }), () => null),
     once("lists", () => db.loadReferenceLists(state.sb)).catch(() => null),   // grape and producer aliases, designation rules, broad regions (built-in lists if none)
-    db.loadDosages(state.sb).catch(() => null),            // how sweet a sparkling wine's label says it is (docs/sparkling_dosage.sql)
-  ]);
-  if (dosages) rawCards.forEach((c) => { const d = dosages.get(c.id); if (d) c.dosage = d; });
-  applyReferenceLists(lists);
-  state.mine = mine;
-  const cards = [];
-  for (const c of rawCards) {
-    try {
-      c.catalogForm = wineEditForm({ style: c.style }, c, null);   // the catalog's own details, kept so a change can be compared and undone
-      cards.push(addVineyard(patchCard(c, state.mine.get(c.id))));
-    } catch (e) { console.warn("A wine could not be read and was left out:", e); }   // one bad row must not take the whole deck down
+    db.loadDosages(state.sb).catch(() => null),            // sweetness terms, until the catalog view carries them itself (docs/catalog_speed.sql)
+  ]).then(([, mine, prices, lists, dosages]) => { applyReferenceLists(lists); state.mine = mine; return { prices, dosages }; });
+  state.mineReady = extrasP;   // the journal is patched with the player's private changes once they are in (refreshData)
+  const stream = takeCardStream();   // started before anything is awaited, so the first piece is on its way
+  const make = (raw, ex) => {
+    const out = [];
+    for (const c of raw) {
+      try {
+        if (!c.dosage && ex.dosages) { const d = ex.dosages.get(c.id); if (d) c.dosage = d; }
+        c.catalogForm = wineEditForm({ style: c.style }, c, null);   // the catalog's own details, kept so a change can be compared and undone
+        const card = addVineyard(patchCard(c, state.mine.get(c.id)));
+        try { if (!ex.prices) throw new Error("no prices"); applyPrices([card], ex.prices.p); } catch (_) { tidyFacts(card); }
+        out.push(card);
+      } catch (e) { console.warn("A wine could not be read and was left out:", e); }   // one bad row must not take the whole deck down
+    }
+    return out;
+  };
+  const shown = new Map(), fresh = new Map();
+  if (onCards) {
+    const saved = await db.loadCards(state.sb, { saved: true }).catch(() => null);
+    if (saved && saved.length) { const ex = await extrasP; make(saved, ex).forEach((c) => shown.set(c.id, c)); onCards([...shown.values()], { saved: true }); }
   }
-  try { if (!prices) throw new Error("no prices"); applyPrices(cards, prices.p); } catch (_) { cards.forEach(tidyFacts); }
-  return cards;
+  let chain = Promise.resolve();
+  const piece = (raw) => { chain = chain.then(async () => {
+    const ex = await extrasP;
+    make(raw, ex).forEach((c) => { fresh.set(c.id, c); shown.set(c.id, c); });
+    if (onCards) onCards([...shown.values()], { saved: false });
+  }); };
+  stream.listen(piece);
+  try { await stream.finished; }
+  catch (_) { const again = cardStream(); again.listen(piece); await again.finished; }   // one more try (the early read may have started before sign-in finished)
+  await chain;
+  await extrasP;
+  return [...fresh.values()];
 }
 // The reference lists from the database (docs/reference_lists.sql): only rows in use or checked. Without them the built-in lists stay.
 function applyReferenceLists(r) {
@@ -330,27 +363,55 @@ async function loadReferences() {
     state.refs = refsByVintage(vintageToWine, rows);
   } catch (_) { state.refs = new Map(); }
 }
+// Discover shows its first card as soon as the first piece of the catalog and the player's own swipes and journal are in (owner, 2026-10-17).
+// Everything else keeps loading behind it: more of the catalog (the deck grows behind the card on screen, growDeck), the feature switches, quiz
+// knowledge and what other players know (folded in when they arrive). While pieces are still coming, an empty deck says so (state.cardsLoading).
 async function enterMain() {
   const tier = (state.profile || {}).tier || "default";
-  // Everything the first screen needs is asked for at the same time (the catalog and references may already be on their way, see startEarlyLoads).
-  // The extras (feature switches, quiz knowledge, what other players know) are not essential: each falls back to "off" or empty if it fails.
-  const cardsP = loadAllCards();
-  const [cards, , , feedback, pro, quiz, crowd] = await Promise.all([
-    cardsP,
-    refreshData(cardsP),
-    loadReferences(),
-    db.loadFeature(state.sb, "contentFeedback").then((r) => feedbackOn(r, tier), () => false),
-    db.loadFeature(state.sb, PRO_FEATURE).then((r) => feedbackOn(r, tier), () => false),   // off until database update 21 is run
-    db.loadQuizKnowledge(state.sb).catch(() => null),   // what the person knows and what other players know both help decide the deck
-    db.loadCrowd(state.sb).catch(() => new Map()),
-    db.loadSwipeConfig(state.sb).then(setSwipeConfig, () => {}),
-    db.loadPlanSwitchOpen(state.sb).then((on) => { state.planSwitch = on; }, () => { state.planSwitch = false; }),   // whether Settings shows the Plan row   // the owner's numbers for likes, dislikes and "I don't know it"
+  let shown = false, first = null;
+  const firstCards = new Promise((res) => { first = res; });
+  state.cardsLoading = true;
+  const cardsP = loadAllCards((cards) => { state.cards = cards; if (!shown) first(); else growDeck(); });
+  const essentials = Promise.all([
+    refreshData(state.mineReady),
+    db.loadSwipeConfig(state.sb).then(setSwipeConfig, () => {}),   // the owner's numbers for likes, dislikes and "I don't know it"
   ]);
-  state.cards = cards; state.feedback = feedback; state.pro = pro; state.quiz = quiz; state.crowd = crowd;
+  const extras = Promise.all([
+    loadReferences(),
+    db.loadFeature(state.sb, "contentFeedback").then((r) => { state.feedback = feedbackOn(r, tier); }, () => { state.feedback = false; }),
+    db.loadFeature(state.sb, PRO_FEATURE).then((r) => { state.pro = feedbackOn(r, tier); }, () => { state.pro = false; }),   // off until database update 21 is run
+    db.loadQuizKnowledge(state.sb).then((q) => { state.quiz = q; }, () => {}),   // what the person knows and what other players know both help decide the deck
+    db.loadCrowd(state.sb).then((c) => { state.crowd = c; }, () => {}),
+    db.loadPlanSwitchOpen(state.sb).then((on) => { state.planSwitch = on; }, () => { state.planSwitch = false; }),   // whether Settings shows the Plan row
+  ]);
+  // The first card waits for the first piece (or the saved copy) and the player's own data, never for the whole catalog. If the catalog fails
+  // before any piece arrives, the failure is shown as before.
+  await Promise.race([Promise.all([firstCards, essentials]), cardsP]);
+  await essentials;
+  shown = true;
   rebuildDeck();
   state.status = "main"; render();
   startOffline();
   maybeShowDemo();
+  extras.then(() => growDeck());
+  try { state.cards = await cardsP; }
+  catch (e) { console.warn("Part of the catalog could not be loaded:", e); setBanner("Not every wine could be loaded. Reopen the app to try again."); }   // keep the wines already in
+  finally { state.cardsLoading = false; }
+  growDeck(true);
+  if (state.status === "main" && state.tab !== "discover") renderBody();   // tabs that list wines see the whole catalog now
+}
+// More of the catalog (or the extras) arrived: the deck is rebuilt behind the card on screen, at most every half second. The card on screen and
+// the next one stay where they are, so a swipe in progress is never disturbed. An empty deck ("Loading more wines...") is redrawn at once.
+let growTimer = null;
+function growDeck(now = false) {
+  clearTimeout(growTimer);
+  const run = () => {
+    growTimer = null;
+    const wasEmpty = !state.deck.length;
+    rebuildDeckBehind();
+    if (wasEmpty && state.status === "main" && state.tab === "discover" && !state.busy) renderBody();
+  };
+  if (now) run(); else growTimer = setTimeout(run, 500);
 }
 // ---------------------------------------------------------------- working offline: the status chip, syncing, thumbnails, the service worker
 let offlineStarted = false;
@@ -413,6 +474,12 @@ function settlePhotos() {   // a photo that was already loaded before the page w
 }
 // Discover cards do not show bottle photos, so nothing is fetched ahead of time. (photoCache is kept only because window.__wine exposes it.)
 const photoCache = new Map();
+// Rebuilds the deck but keeps the card on screen and the next one in front (used while the catalog is still arriving).
+function rebuildDeckBehind() {
+  const keep = (state.deck || []).slice(0, 2), ids = new Set(keep.map((c) => c.id));
+  rebuildDeck();
+  state.deck = [...keep, ...state.deck.filter((c) => !ids.has(c.id))];
+}
 function rebuildDeck() {
   const r = buildDeck({ cards: state.cards, states: state.states, journal: state.journal, quiz: state.quiz, refs: structureMap(state.cards, state.refs), crowd: state.crowd });
   state.deck = r.deck; state.deckInfo = r.info; state.deckMix = r.mix; state.sinceDeck = 0;
@@ -792,7 +859,7 @@ function swipeMatch() {
 }
 function drawTab(body) {
   if (state.tab === "discover") {
-    body.innerHTML = discoverHtml({ deck: state.deck, banner: null, counts: state.counts, feedback: state.feedback, flaggedId: state.wfDone, nudge: showNudge(), buttons: state.settings.buttons, mapHint: mapHintFor(state.deck[0]) });
+    body.innerHTML = discoverHtml({ deck: state.deck, loading: !!state.cardsLoading, banner: null, counts: state.counts, feedback: state.feedback, flaggedId: state.wfDone, nudge: showNudge(), buttons: state.settings.buttons, mapHint: mapHintFor(state.deck[0]) });
     const card = $("#card");
     if (card) attachCard(card);
     settlePhotos();
