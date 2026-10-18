@@ -1,8 +1,8 @@
 // Screens. Every function here takes data and returns an HTML string; nothing touches the network.
 import {
   FAMILIARITY, FLAGS, VERDICTS, isChoice, GROUPS, GROUP_PAGE, SORTS, YEARS,
-  esc, wineName, entryCard, entryName, entryIncomplete, entryMissing, verdictShort, groupEntries, filterEntries, sortCards,
-  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims, dosageLabel } from "./logic.js?v=23";
+  esc, wineName, displayCuvee, entryCard, entryName, entryIncomplete, entryMissing, verdictShort, groupEntries, filterEntries, sortCards,
+  WINE_FLAG_REASONS, photoCount, WINE_STYLES, barDims, choiceDims, dosageLabel } from "./logic.js?v=24";
 import { splitGrapeParts, splitPlace } from "./blends.js?v=3";
 import { REACTIONS, iconHtml, SKIP_LIMIT } from "./reactions.js?v=3";
 import { say, proToolsOn } from "./words.js?v=1";
@@ -86,7 +86,7 @@ export function cardHtml(c, { mapHint = false } = {}) {
     <div class="body">
       ${href ? `<a class="winelink" data-wimg href="${esc(href)}" target="_blank" rel="noopener noreferrer" draggable="false" aria-label="${shop ? `See ${esc(wineName(c))} on the shop's website` : `Search Google Images for ${esc(wineName(c))}`}">` : `<div class="winelink">`}
         <div class="topline"><div class="producer serif">${esc(c.producer)}</div>${c.vintage ? `<span class="vpill">${esc(c.vintage)}</span>` : ""}</div>
-        ${c.cuvee ? `<div class="title serif">${esc(c.cuvee)}</div>` : ""}${href ? "</a>" : "</div>"}
+        ${displayCuvee(c) ? `<div class="title serif">${esc(displayCuvee(c))}</div>` : ""}${href ? "</a>" : "</div>"}
       ${summary ? `<div class="metaline"><span class="tdot" style="background:${t.dot}"></span><span>${summary}</span></div>` : ""}
       <div class="visrow" style="background:${t.pin}1a">${bottleSilhouette(v.shape, v.type)}${flavorRowHtml(v.flavors)}${map}</div>
       <div class="facts">${facts.map((f) => `<span class="${f.derived ? "derived" : ""}">${esc(f.text)}</span>`).join("")}</div>
@@ -222,7 +222,7 @@ export function journalListHtml(entries, j, photoUrls, cards = []) {
     const shown = g.items.slice(0, limit).map((e) => {
       const c = entryCard(e); const v = verdictShort(e.verdict);
       return `<button class="jrow" data-action="entry:${e.id}">${thumbHtml(photoUrls, e.first_photo_path) || bottleThumbHtml(e.wine_vintage_id ? cardsById.get(e.wine_vintage_id) : null)}<span class="jl">
-        <span class="iname"><span class="serif trunc">${esc(entryName(e))}</span><span class="ed edbtn" role="button" tabindex="0" data-action="wineinfo-entry:${e.id}" aria-label="Change wine info">&#9998;</span>${marksHtml(c, 16)}</span>
+        <span class="iname"><span class="serif trunc">${esc(entryName(e, e.wine_vintage_id ? cardsById.get(e.wine_vintage_id) : null))}</span><span class="ed edbtn" role="button" tabindex="0" data-action="wineinfo-entry:${e.id}" aria-label="Change wine info">&#9998;</span>${marksHtml(c, 16)}</span>
         ${entryInfoLine(e, e.wine_vintage_id ? cardsById.get(e.wine_vintage_id) : null) ? `<span class="meta grapeline trunc">${esc(entryInfoLine(e, e.wine_vintage_id ? cardsById.get(e.wine_vintage_id) : null))}</span>` : ""}
         <span class="meta trunc"><b class="${v ? "wine" : ""}">${esc(v || say("no_verdict"))}</b>${e.consumed_on ? ", " + esc(e.consumed_on) : ""}${e.food ? ", with " + esc(e.food) : ""}${e.is_outside_wine ? ", not in catalog" : ""}</span>${e.pending ? `<span class="meta waiting">Waiting to upload</span>` : ""}${entryIncomplete(e) ? `<span class="meta incomp">Incomplete: needs ${esc(entryMissing(e).join(", "))}</span>` : ""}</span>
         ${v ? "" : `<span class="pill dark">Rate</span>`}</button>`;

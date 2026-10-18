@@ -8,13 +8,13 @@
 // Everything fits on one phone screen. Editor writes are online only. The rules are in venue.js (pure); this file draws the screen and handles the taps.
 // "Publish the sure ones" (owner, 2026-10-17): the rows whose every field comes from the title, a stored rule or a cited source and agrees with the
 // others (venue.js sureOf) are listed together; the editor looks through the list, unticks any, and publishes them with one tap. The rest stay here.
-import { esc, WINE_STYLES, DOSAGES, dosageFromText, dosageLabel } from "./logic.js?v=23";
-import { VENUE, withoutDosage, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf, placeLookalikes, linkSummary, rowTitle, sureContext, sureOf } from "./venue.js?v=24";
-import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=40";
+import { esc, WINE_STYLES, DOSAGES, dosageFromText, dosageLabel } from "./logic.js?v=24";
+import { VENUE, withoutDosage, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf, placeLookalikes, linkSummary, rowTitle, sureContext, sureOf } from "./venue.js?v=25";
+import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=41";
 import { placeFromArea, savePlace, designationPlan, broadPlace, planPlace } from "./geo.js?v=9";
-import * as db from "./data.js?v=53";
+import * as db from "./data.js?v=54";
 import { caseKey, lookalikes } from "./text.js?v=3";
-import { ruleLineFor } from "./aocgrapes.js?v=2";
+import { ruleLineFor } from "./aocgrapes.js?v=3";
 
 const fold = caseKey;   // text.js: accents and capitals ignored, punctuation still counts
 const STYLE_CHOICES = WINE_STYLES.map((s) => ({ id: s.id, label: s.label }));
@@ -70,7 +70,8 @@ function ruleNoteHtml(f) {
   if (String(f.grapes || "").trim() || !f.place) return "";
   const r = ruleLineFor({ country: f.place.country, appellation: f.place.appellation, style: f.style }, { checkedOnly: false });
   if (!r) return "";
-  return `<div class="muted tiny">The ${esc(r.appellation)} rules ${r.rule === "only" ? `allow only ${esc(r.grape)}` : `name ${esc(r.grape)} as the main grape`} for this type of wine${r.checked ? `: the card shows ${esc(r.grape)} from this rule.` : ": still to check against the official rules."}</div>`;
+  const what = r.rule === "only" ? `allow only ${r.grape}` : r.rule === "usual" ? `allow ${r.grape} (what these wines are made from in practice) beside another grape` : `name ${r.grape} as the main grape`;
+  return `<div class="muted tiny">The ${esc(r.appellation)} rules ${esc(what)} for this type of wine${r.checked ? `: with no grape on the label, the card shows ${esc(r.grape)} from this rule.` : `: still to check against the official rules. The card already shows ${esc(r.grape)} from it.`}</div>`;
 }
 // The wine name for the form's current grapes and place (venue.js wineNameOf), from the title words after the producer.
 const nameFor = (f, rest) => wineNameOf(rest, { grapes: String(f.grapes || "").split(/[,;]/).map((x) => x.trim()).filter(Boolean), place: f.place });

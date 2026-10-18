@@ -1,5 +1,5 @@
 // Everything that talks to Supabase. Each function takes the client and throws on an error.
-import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=23";
+import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=24";
 import { BUCKET, newPhotoPath } from "./photos.js?v=5";
 import { LEGACY_OF } from "./reactions.js?v=3";
 import { overlayStates, overlayJournal, overlayCounts, overlayPerceptions, entryRowOf, isOffline } from "./overlay.js?v=1";

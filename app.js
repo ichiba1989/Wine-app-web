@@ -5,16 +5,16 @@ import {
   wineName, entryName, esc, clamp01, filterEntries, groupEntries, swipeLists,
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete, styleLabel,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
-  dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=23";
-import * as db from "./data.js?v=53";
-import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=28";
-import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=14";
+  dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=24";
+import * as db from "./data.js?v=54";
+import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=29";
+import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=15";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=49";
-import { createLearn } from "./learn.js?v=20";
+  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=50";
+import { createLearn } from "./learn.js?v=21";
 import { setMode } from "./words.js?v=1";
-import { journalCsv, exportName } from "./exportcsv.js?v=10";
+import { journalCsv, exportName } from "./exportcsv.js?v=11";
 import { newBlind, cleanPending, hasGuess, scoreGuess, summarize, resultLine, notesAfterReveal, actualOfCard, actualOfForm } from "./blind.js?v=3";
 import { composeNote, stampOf, noteProblem } from "./notes.js?v=1";
 import { createDictation, dictationSupported } from "./dictation.js?v=5";
@@ -28,41 +28,41 @@ import { addGrapeSynonyms } from "./rules.js?v=6";
 import { setPlaceLists } from "./geo.js?v=9";
 import { setNameAliases } from "./text.js?v=3";
 import { loadPrices, applyPrices, tidyFacts, parsePrice, saveWinePrice } from "./pricing.js?v=4";
-import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=19";
-import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=17";
+import { applyTaste, cleanTaste, feelBlockHtml, tastePageHtml, tasteInnerHtml, changeFrom, saveTaste, loadTaste } from "./feel.js?v=20";
+import { zoomHtml, nextStep, applyStep, zoomPlan } from "./zoommap.js?v=18";
 import { applyVisualTables } from "./visualdata.js?v=4";
-import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=13";
-import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=18";
+import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=14";
+import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=19";
 import { infoLine, entryInfoLine } from "./wineline.js?v=4";
-import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, paintNoteMarks, teachHtml, autoCount } from "./tasting.js?v=18";
-import { gridFromNotes, mergeFromNotes, touched, legendEntry, compileWith } from "./notegrid.js?v=11";
+import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, paintNoteMarks, teachHtml, autoCount } from "./tasting.js?v=19";
+import { gridFromNotes, mergeFromNotes, touched, legendEntry, compileWith } from "./notegrid.js?v=12";
 import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=10";
-import { createProfile } from "./profile.js?v=34";
-import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=21";
-import { createFeedback } from "./feedback.js?v=15";
-import { createEditor } from "./editor.js?v=61";
-import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=18";
-import { gamesHtml } from "./games.js?v=25";
-import { tintFor } from "./visuals.js?v=4";
+import { createProfile } from "./profile.js?v=35";
+import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=22";
+import { createFeedback } from "./feedback.js?v=16";
+import { createEditor } from "./editor.js?v=62";
+import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=19";
+import { gamesHtml } from "./games.js?v=26";
+import { tintFor } from "./visuals.js?v=5";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
 import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=4";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=5";
-import * as GG from "./blindgame.js?v=12";
-import { createVenueReview } from "./venuereview.js?v=33";
-import { VENUE, venueCardsOf, readList, recheck as venueRecheck, listIds, linkMap, siteUrl } from "./venue.js?v=24";
-import { recommendMix, recommend } from "./recommend.js?v=15";
+import * as GG from "./blindgame.js?v=13";
+import { createVenueReview } from "./venuereview.js?v=34";
+import { VENUE, venueCardsOf, readList, recheck as venueRecheck, listIds, linkMap, siteUrl } from "./venue.js?v=25";
+import { recommendMix, recommend } from "./recommend.js?v=16";
 import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=3";
 import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
 import { setOffline, setCardLookup } from "./overlay.js?v=1";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null, ATL = null, ATLD = null, ATLL = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=42"));
-const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=15"));
-const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=21"));
-const loadAtlasModule = async () => (ATL = ATL || await import("./atlasview.js?v=7"));   // the Atlas screen, on first use
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=43"));
+const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=16"));
+const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=22"));
+const loadAtlasModule = async () => (ATL = ATL || await import("./atlasview.js?v=8"));   // the Atlas screen, on first use
 const loadAtlasData = async () => (ATLD = ATLD || await import("./atlasdata.js?v=2"));   // the Atlas's map data (about 290 KB compressed), when the Atlas opens
 const loadAtlasLite = async () => (ATLL = ATLL || await import("./atlaslite.js?v=2"));   // the card map's lighter data (about 90 KB compressed), when a card's map is tapped
-import { createWineInfo } from "./wineinfo.js?v=40";
+import { createWineInfo } from "./wineinfo.js?v=41";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.

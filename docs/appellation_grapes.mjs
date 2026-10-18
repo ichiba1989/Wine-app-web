@@ -1,6 +1,7 @@
 // Writes docs/appellation_grapes_fill.sql from aocgrapes.js (the grapes an appellation's own rules name), for the owner to run by hand in the
 // Supabase SQL editor. Run:  node docs/appellation_grapes.mjs   (reads the public place and grape lists with the public key in config.js).
-// Only lines marked checked: true are written; a line still to check is listed in the file's header, commented out.
+// Only lines marked checked: true with rule "only" or "main" are written; a line still to check is listed in the file's header, commented out;
+// a "usual" line (white Burgundy: Chardonnay, Pinot Blanc also allowed) is shown on cards but never stored.
 // The SQL adds a grape row (basis 'rule') only to a wine in that appellation, of that type, that has no grape row of any kind yet, and logs every
 // row it adds in rule_grape_fill_log, so the fill can be undone (the undo statement is at the end of the file, commented out).
 import { writeFileSync } from "node:fs";
@@ -28,6 +29,7 @@ const q = (s) => `'${String(s).replace(/'/g, "''")}'`;
 const values = [], skipped = [], toCheck = [];
 for (const line of APPELLATION_GRAPES) {
   if (!line.checked) { toCheck.push(line); continue; }
+  if (line.rule === "usual") continue;   // shown on cards, never stored: the rules allow another grape beside it (aocgrapes.js)
   const places = areas.filter((g) => g.level === "appellation" && matchKey(g.name) === matchKey(line.appellation) && plainKey(countryOf(g)) === plainKey(line.country));
   const gid = grapeId.get(plainKey(line.grape));
   if (!places.length || !gid) { skipped.push(`${line.appellation} (${line.style}): ${!places.length ? "no such appellation in our place list" : "grape not in our grape list"}`); continue; }
