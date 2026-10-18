@@ -3,6 +3,7 @@ import { reactionOf, skipsOf } from "./reactions.js?v=3";
 import { isComplete, missingFields } from "./catalog.js?v=6";
 import { ruleGrapesFor } from "./aocgrapes.js?v=2";
 import { matchKey } from "./text.js?v=2";
+import { isRankAppellation, nameBeyondRank } from "./rankaoc.js?v=1";
 // Pure logic for the wine app web page. No browser and no network in this file,
 // so every rule here can be tested on its own.
 
@@ -231,6 +232,10 @@ export function displayCuvee(c) {
   const name = String((c && c.cuvee) || "").trim(), app = String((c && c.appellation) || "").trim();
   if (!app) return name;
   if (!name) return app;
+  // A "Grand Cru" appellation of its own (rankaoc.js: Saint-Émilion Grand Cru, Chablis Grand Cru, Alsace Grand Cru Furstentum): the words it
+  // already says are taken off the name and what is left follows it ("Chablis Grand Cru Les Clos"; "1er Grand Cru" -> "Saint-Émilion Grand Cru").
+  // A cuvée name that says none of them ("Aromes de Pavie") is shown as it is, like any other.
+  if (isRankAppellation(app)) { const rest = nameBeyondRank(name, app); return !rest ? app : rest !== name ? `${app} ${rest}` : name; }
   if (matchKey(name).includes(matchKey(app))) return name;
   return RANK_ONLY.test(name) || CRU_INSIDE.test(name) || COLOUR_ONLY.test(name) ? `${app} ${name}` : name;
 }

@@ -4,7 +4,7 @@
 // The grid is an extra on top of the normal rating. Its answers for acidity, tannin, body, sweetness, oak and bubbles also move the
 // five structure sliders, so the palate and the Discover deck keep working from the same lines for everyone.
 // The rules at the top are pure (no browser, no network). The functions at the bottom talk to Supabase.
-import { esc, dimsFor } from "./logic.js?v=22";
+import { esc, dimsFor } from "./logic.js?v=23";
 import { overlayTasting } from "./overlay.js?v=1";
 // Marks a write as one that may wait in the outbox when there is no connection (offline.js), with what it did (overlay.js).
 const tag = (q, effect) => (q && typeof q.queue === "function" ? q.queue(effect) : q);
