@@ -6,10 +6,11 @@
 // The list is kept in the database (venue_wines, docs/venue_decks.sql): the owner uploads the venue's file and adds or removes wines by hand on the Owner page.
 // Pure: no browser, no network. The file reading itself is done by importer.js, loaded on the Owner page.
 import { grapeFor } from "./rules.js?v=6";
-import { DOSAGES } from "./logic.js?v=24";
-import { planPlace, designationPlan } from "./geo.js?v=9";
+import { DOSAGES } from "./logic.js?v=25";
+import { planPlace, designationPlan } from "./geo.js?v=10";
 import { duplicateGroups } from "./catalog.js?v=7";
 import { plainKey, matchKey, caseKey, lookalikes } from "./text.js?v=3";
+import { rankAppellationFor, rankLineOf } from "./rankaoc.js?v=1";
 
 // ---------------------------------------------------------------- the venue (the one line a new venue branch changes)
 export const VENUE = { id: "vwm", name: "Vintage Wine Merchants", site: "www.vintagewinemerchants.com" };
@@ -227,6 +228,12 @@ export function suggestRow(title, { producers = [], areas = [], shopType = "" } 
   for (const a of areas) { if (norm(a.name).length >= 3 && has(text, a.name) && (!area || norm(a.name).length > norm(area.name).length)) area = a; }
   return { split, producerId: producer ? producer.id : null, style, styleWhy, grapes: grapes.map((g) => g.name), areaId: area ? area.id : null, areaWhy: area ? `"${area.name}" in the title` : "" };
 }
+// A title that names a "Grand Cru" appellation of its own (rankaoc.js, owner 2026-10-18): "Chateau Ausone Saint-Emilion Grand Cru" is AOC
+// Saint-Émilion Grand Cru, not Saint-Émilion; "... Alsace Grand Cru Brand" is AOC Alsace Grand Cru Brand. The place moves to it (made on add if new).
+export function rankPlace(place, title) {
+  const r = rankAppellationFor(place, title);
+  return r ? { place: { ...place, appellation: r.appellation }, why: `"${r.words}" in the title: ${r.appellation} is an AOC of its own (INAO)` } : null;
+}
 // The producer and wine name for a split point (how many title words belong to the producer).
 export function splitTitle(title, k) {
   const words = String(title || "").trim().split(/\s+/).filter(Boolean), n = Math.max(0, Math.min(words.length, k));
@@ -332,7 +339,9 @@ const JOINERS = new Set(["de", "di", "du", "des", "del", "della", "dei", "da", "
 const CATEGORIES = ["vin de france", "vino d italia", "vino de espana", "vinho de portugal", "wein aus deutschland"];
 export function wineNameOf(text, { grapes = [], place = {} } = {}) {
   let words = String(text || "").trim().split(/\s+/).filter(Boolean);
-  const placeNames = [place.appellation, place.region, place.country].map((x) => String(x || "").trim()).filter(Boolean);
+  // A "Grand Cru" appellation of its own (rankaoc.js) also takes the wider name off ("Chablis Les Clos Grand Cru" at Chablis Grand Cru -> "Les Clos Grand Cru").
+  const wider = (rankLineOf(place.appellation) || {}).within;
+  const placeNames = [place.appellation, wider, place.region, place.country].map((x) => String(x || "").trim()).filter(Boolean);
   const phrases = [...(grapes || []), ...placeNames].map((x) => placeKey(x)).filter(Boolean).sort((a, b) => b.length - a.length);
   // Words that belong to a category name are never taken out.
   let keep = new Set();

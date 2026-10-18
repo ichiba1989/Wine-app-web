@@ -8,11 +8,11 @@
 // Everything fits on one phone screen. Editor writes are online only. The rules are in venue.js (pure); this file draws the screen and handles the taps.
 // "Publish the sure ones" (owner, 2026-10-17): the rows whose every field comes from the title, a stored rule or a cited source and agrees with the
 // others (venue.js sureOf) are listed together; the editor looks through the list, unticks any, and publishes them with one tap. The rest stay here.
-import { esc, WINE_STYLES, DOSAGES, dosageFromText, dosageLabel } from "./logic.js?v=24";
-import { VENUE, withoutDosage, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf, placeLookalikes, linkSummary, rowTitle, sureContext, sureOf } from "./venue.js?v=25";
-import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=41";
-import { placeFromArea, savePlace, designationPlan, broadPlace, planPlace } from "./geo.js?v=9";
-import * as db from "./data.js?v=54";
+import { esc, WINE_STYLES, DOSAGES, dosageFromText, dosageLabel } from "./logic.js?v=25";
+import { VENUE, withoutDosage, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf, placeLookalikes, linkSummary, rowTitle, sureContext, sureOf, rankPlace } from "./venue.js?v=26";
+import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=42";
+import { placeFromArea, savePlace, designationPlan, broadPlace, planPlace } from "./geo.js?v=10";
+import * as db from "./data.js?v=55";
 import { caseKey, lookalikes } from "./text.js?v=3";
 import { ruleLineFor } from "./aocgrapes.js?v=3";
 
@@ -26,20 +26,24 @@ export function formFor(row, lists, prep = null) {
   if (p) {
     const split = splitOf(row.wine_name, p.producer);
     const sp = split ? splitTitle(row.wine_name, split) : { producer: p.producer, wine: p.wine };
-    const place = canonPlace(lists.areas, broadPlace(p.place));   // Germany and Austria: only the broad wine region (geo.js)
+    let place = canonPlace(lists.areas, broadPlace(p.place));   // Germany and Austria: only the broad wine region (geo.js)
+    const rk = rankPlace(place, row.wine_name);   // "Saint-Emilion Grand Cru" in the title: its own AOC (rankaoc.js)
+    if (rk) place = canonPlace(lists.areas, rk.place);
     const d = dosageFor(p.style, row.wine_name, p, lists);
     return {
-      ...base, ...desigFor(lists, place, row.wine_name), ...d, split, producer: sp.producer, wine: withoutDosage(wineNameOf(p.wine || sp.wine, { grapes: p.grapes, place: { ...p.place, ...place } }), d.dosage), style: p.style, styleWhy: p.styleWhy, place, placeWhy: p.placeWhy, placeSource: p.placeSource || "", placeNote: p.placeNote || "",
+      ...base, ...desigFor(lists, place, row.wine_name), ...d, split, producer: sp.producer, wine: withoutDosage(wineNameOf(p.wine || sp.wine, { grapes: p.grapes, place: { ...p.place, ...place } }), d.dosage), style: p.style, styleWhy: p.styleWhy, place, placeWhy: rk ? rk.why : p.placeWhy, placeSource: p.placeSource || "", placeNote: p.placeNote || "",
       grapes: p.grapes.join(", "), notWine: p.notWine, knownProducer: lists.producers.some((x) => fold(x.name) === fold(sp.producer)),
     };
   }
   const s = suggestRow(row.wine_name, { producers: lists.producers, areas: lists.areas, shopType: row.shop_type || "" });
   const sp = splitTitle(row.wine_name, s.split);
-  const place = broadPlace(s.areaId ? placeFromArea(lists.areas, s.areaId) : { country: "", region: "", appellation: "" });
+  let place = broadPlace(s.areaId ? placeFromArea(lists.areas, s.areaId) : { country: "", region: "", appellation: "" });
+  const rk = rankPlace(place, row.wine_name);
+  if (rk) place = canonPlace(lists.areas, rk.place);
   const d = dosageFor(s.style, row.wine_name, null, lists);
   return {
     ...base, ...desigFor(lists, place, row.wine_name), ...d, split: s.split, producer: sp.producer, wine: withoutDosage(wineNameOf(sp.wine, { grapes: s.grapes, place }), d.dosage), style: s.style, styleWhy: s.styleWhy, place,
-    placeWhy: s.areaWhy, grapes: s.grapes.join(", "), notWine: false, knownProducer: !!s.producerId,
+    placeWhy: rk ? rk.why : s.areaWhy, grapes: s.grapes.join(", "), notWine: false, knownProducer: !!s.producerId,
   };
 }
 // A sparkling wine's sweetness term (owner, 2026-10-17; logic.js DOSAGES): the one looked up for this title (vwmprep.js PREP_DOSAGE, with its page),
@@ -259,7 +263,7 @@ export function createVenueReview(ctx) {
   async function load() {
     R.loading = true; R.error = "";
     // The prepared suggestions are a large file, read only here; without them the app's own suggestions are used.
-    const prep = import("./vwmprep.js?v=3").then((m) => prepIndex(m.PREP, m.PREP_DOSAGE)).catch(() => null);
+    const prep = import("./vwmprep.js?v=4").then((m) => prepIndex(m.PREP, m.PREP_DOSAGE)).catch(() => null);
     try { await loadLists(); R.prep = await prep; }
     catch (e) { R.error = "Could not load the producer, grape and place lists: " + (e.message || e); }
     R.loading = false; draw();

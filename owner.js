@@ -2,17 +2,18 @@
 // Every table can be searched and sorted (tap a heading). It is reached from the gear (Settings) and only offered to the owner; the database
 // still decides what anyone may change. The rules at the top (rows, search, sort, checks, coverage) are pure: no page, no network.
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
-import { esc } from "./logic.js?v=24";
-import { REACH_CHOICES } from "./wineinfo.js?v=41";
+import { esc } from "./logic.js?v=25";
+import { REACH_CHOICES } from "./wineinfo.js?v=42";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=5";
-import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=16";
+import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=17";
 import { TAG_KINDS } from "./tags.js?v=5";
-import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=19";
+import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=20";
 import { centsToField } from "./pricing.js?v=4";
 import { ASSIGNABLE_ROLES, ROLES, PERMISSIONS, staffRows, filterStaff, rowActions } from "./access.js?v=4";
-import { VENUE, listRows, addable, summary, LIST_FILTERS, filterListRows } from "./venue.js?v=25";
+import { VENUE, listRows, addable, summary, LIST_FILTERS, filterListRows } from "./venue.js?v=26";
 import { plainKey } from "./text.js?v=3";
-import { placeChecks } from "./geo.js?v=9";
+import { rankAppellationFor } from "./rankaoc.js?v=1";
+import { placeChecks } from "./geo.js?v=10";
 export { placeChecks };   // used by app.js through the lazily loaded Owner module
 
 export const OWNER_TABS = [{ id: "wines", label: "Wines" }, { id: "lenses", label: "Lenses" }, { id: "bingo", label: "Bingo" }, { id: "checks", label: "Checks" }, { id: "tags", label: "Tags" }, { id: "legend", label: "Legend" }, { id: "roles", label: "Roles" }, { id: "config", label: "Config" }, { id: "lists", label: "Lists" }, { id: "venue", label: `${VENUE.name} list` }];
@@ -34,6 +35,7 @@ export function wineRows(cards) {
       style: c.style || "", country: c.country || "", place: [c.appellation, c.region].filter((x, i, a) => x && a.indexOf(x) === i).join(" · "),
       grapes: [...(c.grapes || []), ...(c.ruleGrapes || [])].join(", "), reach: c.reach == null ? null : Number(c.reach), price: typeof c.price === "number" ? c.price : null,
       photo: c.photo ? (c.imageKind || "photo") : "", hasPhoto: !!c.photo, photoKind: c.imageKind || "", tags: "", tagIds: [], dosage: c.dosage || "",
+      rankAoc: (rankAppellationFor({ country: c.country, appellation: c.appellation }, c.cuvee) || {}).appellation || "",   // rankaoc.js
     };
   });
 }
@@ -46,6 +48,7 @@ export const ISSUES = [
   { id: "noregion", label: "No region or appellation", test: (r) => !r.place },
   { id: "nostyle", label: "Type unknown", test: (r) => !r.style || r.style === "unknown" },
   { id: "nodosage", label: "Sparkling with no sweetness term (Brut, Extra Brut ...)", test: (r) => r.style === "sparkling" && !r.dosage },
+  { id: "rankaoc", label: "Under the wider appellation, but its name says a Grand Cru AOC (Saint-Émilion Grand Cru, Chablis Grand Cru, Alsace Grand Cru ...)", test: (r) => !!r.rankAoc },
 ];
 export const issueById = (id) => ISSUES.find((i) => i.id === id) || null;
 export function checkCounts(rows) { return ISSUES.map((i) => ({ id: i.id, label: i.label, count: rows.filter(i.test).length })); }

@@ -25,6 +25,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PLACES } from "../flavordata.js";
 import { matchKey } from "../text.js";
+import { RANK_APPELLATIONS } from "../rankaoc.js";
 
 const dir = process.argv[2];
 if (!dir) { console.error("usage: node docs/atlas_data.mjs <folder with the three downloads>"); process.exit(1); }
@@ -187,5 +188,8 @@ try {
   for (const g of rows) if (g.level === "appellation") { const c = countryOf(g); if (c) { PLACE_KEYS.add(`${c}|appellation|${matchKey(g.name)}`); n += 1; } }
   console.log(`catalog appellations read: ${n}`);
 } catch (e) { console.log(`catalog appellations not read (${e.message}): the card map keeps only the PLACES outlines`); }
+// And every "Grand Cru" appellation of its own (rankaoc.js: Saint-Émilion Grand Cru, Chablis Grand Cru, the Alsace grands crus), so a wine moved to one
+// by docs/rank_appellations.sql finds its outline before the next run.
+for (const r of RANK_APPELLATIONS) PLACE_KEYS.add(`${r.country}|appellation|${matchKey(r.appellation)}`);
 const known = (name, aka, country, kind) => [name, ...aka].some((n) => ["appellation", ...(kind === "aoc" ? [] : ["region"])].some((k) => PLACE_KEYS.has(`${country}|${k}|${matchKey(n)}`)));
 write("atlaslite.js", "The card map's borders and wine-area boundaries (a lighter copy of atlasdata.js).", "Pure data: loaded only when a card's map is tapped (app.js openZoom).", build({ wine: 0.05, other: 0.25, province: 0.08, ava: 0.008, aoc: 0.004, aocWide: 0.02 }, known));

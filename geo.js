@@ -2,6 +2,7 @@
 // The database keeps places as a tree (country, then region, then appellation) and a wine points at the most specific one it has.
 // The rules at the top are pure (no browser, no network). savePlace at the bottom creates any missing places.
 import { caseKey, plainKey, matchKey } from "./text.js?v=3";
+import { isRankAppellation, RANK_SOURCE } from "./rankaoc.js?v=1";
 const fold = caseKey;   // text.js: accents and capitals ignored, punctuation still counts
 const byName = (a, b) => fold(a).localeCompare(fold(b));
 
@@ -73,7 +74,8 @@ export function placeNameProblem(name, country = "", level = "") {
   const sp = splitDesignation(n);
   if (sp.inside) return `${sp.designation} is a designation, not part of a place's name: leave it out and pick it under Designation.`;
   const k = ` ${key(sp.name)} `, rank = RANKS.find((r) => k.includes(` ${r} `));
-  if (rank && !(broadList(country) && isBroad(country, sp.name))) return `"${sp.name}" holds a classification (${rank}): that stays in the wine name, not in the place.`;
+  // An AOC whose own name holds "Grand Cru" (rankaoc.js: Saint-Émilion Grand Cru, Alsace Grand Cru Brand) is a place: INAO lists it as one.
+  if (rank && !isRankAppellation(sp.name) && !(broadList(country) && isBroad(country, sp.name))) return `"${sp.name}" holds a classification (${rank}): that stays in the wine name, not in the place.`;
   if (level && level !== "country" && !isBroad(country, sp.name)) return `For ${key(country) === "austria" ? "Austrian" : "German"} wines choose the wine region (for example ${key(country) === "austria" ? "Kamptal or Wachau" : "Mosel or Rheingau"}): the village and vineyard stay in the wine name.`;
   return "";
 }
@@ -231,6 +233,7 @@ export function ruleDesignation(place) {
   if (!list) return null;
   const name = splitDesignation(place.appellation).name;
   if (!name) return null;
+  if (fold(place.country) === "france" && isRankAppellation(name)) return { designation: "AOC", name };   // rankaoc.js: each is an AOC in INAO's list
   for (const [d, names] of Object.entries(list)) if (names.some((n) => key(n) === key(name))) return { designation: d, name };
   return null;
 }
@@ -308,7 +311,7 @@ export const LEGAL_NAMES = [
 export const OFFICIAL_SPELLINGS = [
   { country: "France", from: "St.-Julien", to: "Saint-Julien", confirmed: true, why: "INAO names the appellation \"Saint-Julien\" (decree of 14 November 1936).", source: "https://www.inao.gouv.fr/node/1782/printable/pdf" },
   { country: "France", from: "St.-Joseph", to: "Saint-Joseph", confirmed: false, why: "Probably written out in full like Saint-Julien; check the name on the INAO site before applying.", source: "https://www.inao.gouv.fr/" },
-  { country: "France", from: "St.-Émilion", to: "Saint-Émilion", confirmed: false, why: "Probably written out in full like Saint-Julien; check the name on the INAO site before applying.", source: "https://www.inao.gouv.fr/" },
+  { country: "France", from: "St.-Émilion", to: "Saint-Émilion", confirmed: true, why: "Written out in full in INAO's list of AOCs (\"Saint-Emilion\", beside \"Saint-Emilion grand cru\"), like Saint-Julien.", source: RANK_SOURCE },
 ];
 // Places filed as appellations straight under their country that are broad wine regions.
 export const REGION_LEVEL = [

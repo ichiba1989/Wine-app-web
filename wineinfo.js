@@ -1,17 +1,18 @@
 // Wine info (editors only): change a catalog wine's details. Producer, wine name, vineyard, vintage, type of wine,
 // place, the grapes printed on the label, and other grapes in the wine (for blends the label does not list).
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
-import { esc, WINE_STYLES, DOSAGES, dosageFromText } from "./logic.js?v=24";
+import { esc, WINE_STYLES, DOSAGES, dosageFromText } from "./logic.js?v=25";
 import { checkGrapeText, grapeProblem, grapeIndex, setExtraGrapes } from "./grapes.js?v=3";
 import { expandBlends, BLEND_NAMES } from "./blends.js?v=3";
 import { infoLine } from "./wineline.js?v=4";
-import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, savePlace, designationChoices, designationFromText, designationPlan, placeDesignation, splitDesignation, BROAD_PLACES, ruleDesignation } from "./geo.js?v=9";
+import { countriesOf, regionsOf, appellationsOf, placeFromArea, planPlace, savePlace, designationChoices, designationFromText, designationPlan, placeDesignation, splitDesignation, BROAD_PLACES, ruleDesignation } from "./geo.js?v=10";
 import { loadWinePrice, saveWinePrice, parsePrice, centsToField, blendPrice, formatPrice } from "./pricing.js?v=4";
 import { archivePlanFor } from "./catalog.js?v=7";
-import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=29";
-import * as db from "./data.js?v=54";
+import { uploadWinePhoto, removeWinePhoto, reuseWinePhoto, pullSource, shareWinePhoto, shareNote, photoTag, FOUND_ONLINE_PERMISSION } from "./winephotos.js?v=30";
+import * as db from "./data.js?v=55";
 import { caseKey, lookalikes } from "./text.js?v=3";
 import { ruleLineFor } from "./aocgrapes.js?v=3";
+import { rankAppellationFor } from "./rankaoc.js?v=1";
 
 // ---------------------------------------------------------------- how sweet a sparkling wine is (owner, 2026-10-17; logic.js DOSAGES)
 // The term the form starts with: the wine's own, else the one written in its name (it is on the label, so it is a fact; the editor still saves it).
@@ -99,7 +100,15 @@ export function formFromInfo(info, lists) {
 function placeNoteHtml(W) {
   const plan = planPlace(W.lists.areas, placeOf(W.form));
   const looks = ["country", "region", "appellation"].map((k) => lookalikeHtml(W, k, W.lists.areas.filter((a) => a.level === (k === "country" ? "country" : k === "region" ? "region" : "appellation")).map((a) => a.name))).join("");
-  return (plan.error ? esc(plan.error) : plan.notes.map(esc).join(" ")) + looks;
+  return (plan.error ? esc(plan.error) : plan.notes.map(esc).join(" ")) + looks + rankHintHtml(W.form);
+}
+// The name says "Grand Cru" but the place is the wider appellation on the same land (rankaoc.js): Saint-Émilion Grand Cru, Chablis Grand Cru and
+// the Alsace grands crus are appellations of their own. Offered, never swapped: "Use it" puts the appellation in the field (made on save if new).
+function rankHintHtml(f) {
+  const r = rankAppellationFor(placeOf(f), f.wineName);
+  if (!r) return "";
+  return `<div class="looklike" role="group" aria-label="Appellation named on the label">The name says ${esc(r.words)}: <b>${esc(r.appellation)}</b> is an appellation of its own (AOC), on the same land as ${esc(r.within)}.
+    <button class="link" data-wilook="appellation" data-name="${esc(r.appellation)}">Use ${esc(r.appellation)}</button></div>`;
 }
 // ---------------------------------------------------------------- "Looks like ... already in our list" (text.js lookalikes)
 // A typed name that only LOOKS like one in the list ("Saint-Julien" / "St.-Julien", "Billecart Salmon" / "Billecart-Salmon") is never swapped
@@ -451,6 +460,7 @@ export function createWineInfo(ctx) {
     else {
       W.form[k] = t.value;
       if (k === "country" || k === "region" || k === "appellation") refreshPlace();
+      else if (k === "wineName") { const n = document.getElementById("wiPlaceNote"); if (n) n.innerHTML = placeNoteHtml(W); }   // the Grand Cru hint reads the name
       else if (k === "producerName") { const n = document.getElementById("wiProducerNote"); if (n) n.innerHTML = producerNoteHtml(W); }
       else if (k === "price") { const n = document.querySelector("[data-wif='price']"); const note = n && n.nextElementSibling; if (note) note.innerHTML = priceNoteHtml(W); }
     }

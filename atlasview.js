@@ -6,7 +6,7 @@
 // The rules are in atlas.js; this file draws and listens. While a finger moves only the map's viewBox changes; pins and labels are drawn again when
 // the finger lifts.
 import * as A from "./atlas.js?v=7";
-import { esc } from "./logic.js?v=24";
+import { esc } from "./logic.js?v=25";
 import { infoLine } from "./wineline.js?v=4";   // grape · appellation · region, under a wine's name
 
 const SEA = "#d6e4ea", LAND = "#efeadb", WINE_LAND = "#f6f1e1", BORDER = "#9aa893", PROVINCE = "#c4bfa8", AREA = "#7b2d43";
