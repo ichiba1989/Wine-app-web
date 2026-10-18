@@ -57,7 +57,7 @@ let OWN = null, DEMO = null, IMP = null, ATL = null, ATLD = null, ATLL = null;
 const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=26"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=14"));
 const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=19"));
-const loadAtlasModule = async () => (ATL = ATL || await import("./atlasview.js?v=6"));   // the Atlas screen, on first use
+const loadAtlasModule = async () => (ATL = ATL || await import("./atlasview.js?v=7"));   // the Atlas screen, on first use
 const loadAtlasData = async () => (ATLD = ATLD || await import("./atlasdata.js?v=2"));   // the Atlas's map data (about 290 KB compressed), when the Atlas opens
 const loadAtlasLite = async () => (ATLL = ATLL || await import("./atlaslite.js?v=2"));   // the card map's lighter data (about 90 KB compressed), when a card's map is tapped
 import { createWineInfo } from "./wineinfo.js?v=32";

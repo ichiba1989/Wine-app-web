@@ -374,7 +374,7 @@ export function createAtlas(ctx) {
     const tries = ctx.suggest(p) || [];
     const tryRows = tries.map((r) => `<div class="jrow still"><span class="jl"><span class="serif trunc">${esc(ctx.nameOf(r.card))}</span>${infoLine(r.card) ? `<span class="meta trunc">${esc(infoLine(r.card))}</span>` : ""}${r.reason ? `<span class="meta">${esc(r.reason)}</span>` : ""}</span><button class="pill" data-action="review:${esc(r.card.id)}">I've had it: rate it</button></div>`).join("");
     const quiz = ctx.quizFor(A.topicsOf(f));
-    return `<div class="apagehead"><div><div class="muted tiny">${esc(KIND_WORD[p.kind] || "Place")}</div><div class="serif big">${esc(p.name)}${f.designation ? ` <span class="pill dark">${esc(f.designation)}</span>` : ""}</div><div class="small">${chain}</div></div>
+    return `<div class="apagehead"><div><div class="muted tiny">${esc(KIND_WORD[p.kind] || "Place")}${f.designation ? ` · ${esc(f.designation)}` : ""}</div><div class="serif big">${esc(p.name)}</div><div class="small">${chain}</div></div>
         <button class="xbtn" data-atlas="pageclose" aria-label="Close the page">&times;</button></div>
       <div class="muted tiny">${esc(boundary)}</div>
       ${section("Your wines from here", mine)}
