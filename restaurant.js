@@ -5,7 +5,7 @@
 // A list line with too little (winelist.js confidence "low") is shown last as "not enough on the list to judge" and is never a pick.
 import { LENSES, buildContext, oddness } from "./recommend.js?v=15";
 import { structureMap } from "./structure.js?v=14";
-import { FOODS, WINE_KINDS, kindById, kindOfValues, pair, ratingOf, fitOf, RATING_LABEL } from "./foods.js?v=2";
+import { FOODS, WINE_KINDS, kindById, kindOfValues, pair, ratingOf, fitOf, RATING_LABEL } from "./foods.js?v=3";
 import { plainKey } from "./text.js?v=2";
 import { wineName } from "./logic.js?v=23";
 
@@ -149,6 +149,6 @@ function decorate(r, { pick = "", lens, dishes, occasion }) {
   const t = r.taste[lens] && r.taste[lens].reason; if (t && !SHOP_TALK.test(t)) why.push(t);
   if (r.occ.note) why.push(r.occ.note);
   if (r.card.source === "list" && r.card.said && r.card.said.length) why.push(`Judged from what the list says: ${r.card.said.join(", ")}.`);
-  return { card: r.card, name: r.card.source === "catalog" ? wineName(r.card) : r.card.cuvee, pick, kind: r.kind, dishes: r.dishRows.map((d) => ({ name: d.dish.name, rating: d.rating })), foodMean: r.foodMean, why };
+  return { card: r.card, name: r.card.source === "catalog" ? wineName(r.card) : r.card.cuvee, label: r.card.source === "catalog" ? wineName(r.card) : [r.card.vintage, r.card.cuvee].filter(Boolean).join(" "), pick, kind: r.kind, dishes: r.dishRows.map((d) => ({ name: d.dish.name, rating: d.rating })), foodMean: r.foodMean, why };
 }
 export { FOODS, WINE_KINDS, kindById, ratingOf, fitOf };

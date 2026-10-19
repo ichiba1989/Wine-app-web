@@ -13,8 +13,9 @@
 do $$
 declare t text;
 begin
-  foreach t in array array['user_wines','encounters','consumptions','journal_photos','quiz_answers','quiz_archive_removals','timed_runs','content_flags','app_feedback','my_wine_info']
+  foreach t in array array['user_wines','encounters','consumptions','journal_photos','quiz_answers','quiz_archive_removals','timed_runs','content_flags','app_feedback','my_wine_info','restaurant_visits']
   loop
+    continue when to_regclass(format('public.%I', t)) is null;   -- restaurant_visits only exists after docs/restaurant_visits.sql
     execute format('alter table public.%I add column if not exists retired_key uuid', t);
     execute format('create index if not exists %I on public.%I (retired_key)', t || '_retired_key', t);
   end loop;
@@ -87,6 +88,7 @@ begin
   update content_flags         set retired_key = k, user_id = null where user_id = uid;
   update app_feedback          set retired_key = k, user_id = null where user_id = uid;
   update my_wine_info          set retired_key = k, user_id = null where user_id = uid;
+  if to_regclass('public.restaurant_visits') is not null then execute 'update restaurant_visits set retired_key = $1, user_id = null where user_id = $2' using k, uid; end if;
   update this_or_that_answers  set user_id = null where user_id = uid;
   update this_or_that_players  set user_id = null where user_id = uid;
 

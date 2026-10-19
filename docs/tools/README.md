@@ -33,6 +33,8 @@ Serve the main branch (the repository itself works) and run:
     node docs/tools/food_more_ui.mjs           # the More tab and the Food screens (25)
     node docs/tools/food_owner_ui.mjs          # the owner's pairing pins (11; role admin = owner in the stub)
     node docs/tools/foods_check.mjs            # the food rules on classic pairings (49; no browser)
+    node docs/tools/restaurant_check.mjs       # reading a wine list and the advice (38; no browser)
+    node docs/tools/restaurant_ui.mjs          # At a restaurant, the whole flow, offline save then upload (29)
 
 The `vwm` checks expect a copy of the `vwm` branch served on port 8124:
 

@@ -4,16 +4,16 @@
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
 import { esc } from "./logic.js?v=23";
 import { rankAppellationFor } from "./rankaoc.js?v=1";
-import { REACH_CHOICES } from "./wineinfo.js?v=34";
+import { REACH_CHOICES } from "./wineinfo.js?v=35";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=4";
 import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=15";
 import { TAG_KINDS } from "./tags.js?v=4";
-import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=18";
+import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=19";
 import { centsToField } from "./pricing.js?v=3";
 import { ASSIGNABLE_ROLES, ROLES, PERMISSIONS, staffRows, filterStaff, rowActions } from "./access.js?v=4";
 import { plainKey } from "./text.js?v=2";
 import { placeChecks } from "./geo.js?v=9";
-import { WINE_KINDS, FOODS, RATING_ORDER, RATING_LABEL, kindById, fitOf, ratingOf } from "./foods.js?v=2";
+import { WINE_KINDS, FOODS, RATING_ORDER, RATING_LABEL, kindById, fitOf, ratingOf } from "./foods.js?v=3";
 export { placeChecks };   // used by app.js through the lazily loaded Owner module
 
 export const OWNER_TABS = [{ id: "wines", label: "Wines" }, { id: "lenses", label: "Lenses" }, { id: "bingo", label: "Bingo" }, { id: "checks", label: "Checks" }, { id: "tags", label: "Tags" }, { id: "legend", label: "Legend" }, { id: "roles", label: "Roles" }, { id: "config", label: "Config" }, { id: "lists", label: "Lists" }, { id: "pairings", label: "Pairings" }];

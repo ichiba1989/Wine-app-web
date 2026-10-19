@@ -6,13 +6,13 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete, styleLabel,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=23";
-import * as db from "./data.js?v=47";
-import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=22";
+import * as db from "./data.js?v=48";
+import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=23";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=14";
 import { shrinkImage } from "./photos.js?v=5";
 import {
   visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=49";
-import { createLearn } from "./learn.js?v=20";
+import { createLearn } from "./learn.js?v=21";
 import { setMode } from "./words.js?v=1";
 import { journalCsv, exportName } from "./exportcsv.js?v=10";
 import { newBlind, cleanPending, hasGuess, scoreGuess, summarize, resultLine, notesAfterReveal, actualOfCard, actualOfForm } from "./blind.js?v=2";
@@ -35,34 +35,36 @@ import { applyVisualTables } from "./visualdata.js?v=3";
 import { diffForm, patchCard, patchEntry, loadMyInfo, saveMyInfo } from "./mywine.js?v=13";
 import { consentHtml, needsConsent, acceptConsents, allAccepted, toggleConsent } from "./consent.js?v=18";
 import { infoLine, entryInfoLine } from "./wineline.js?v=3";
-import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, paintNoteMarks, teachHtml, autoCount } from "./tasting.js?v=18";
-import { gridFromNotes, mergeFromNotes, touched, legendEntry, compileWith } from "./notegrid.js?v=11";
+import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, paintNoteMarks, teachHtml, autoCount } from "./tasting.js?v=19";
+import { gridFromNotes, mergeFromNotes, touched, legendEntry, compileWith } from "./notegrid.js?v=12";
 import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=9";
 import { createProfile } from "./profile.js?v=36";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=21";
 import { createFeedback } from "./feedback.js?v=15";
-import { createEditor } from "./editor.js?v=50";
+import { createEditor } from "./editor.js?v=51";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=18";
-import { gamesHtml } from "./games.js?v=27";
+import { gamesHtml } from "./games.js?v=28";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
 import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=4";
 import { foodIdeas } from "./pairing.js?v=2";
+import { tables as flavorTables } from "./flavors.js?v=3";
 import { ratedWines, allProgress, mergeMemory, parseMemory, unratedMatches, cardFacts, matches as bingoMatches, cardById as bingoCard } from "./bingo.js?v=4";
 import * as GG from "./blindgame.js?v=12";
 import { recommendMix, recommend } from "./recommend.js?v=15";
-import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=2";
+import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=3";
 import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
-import { setOffline, setCardLookup } from "./overlay.js?v=1";
+import { setOffline, setCardLookup } from "./overlay.js?v=2";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
-let OWN = null, DEMO = null, IMP = null, ATL = null, ATLD = null, ATLL = null, FOOD = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=28"));
+let OWN = null, DEMO = null, IMP = null, ATL = null, ATLD = null, ATLL = null, FOOD = null, REST = null;
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=29"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=15"));
-const loadFoodModule = async () => { FOOD = FOOD || await import("./foodview.js?v=3"); ensureFoodPins(); return FOOD; };   // the Food screens in the More tab, on first use
+const loadFoodModule = async () => { FOOD = FOOD || await import("./foodview.js?v=4"); ensureFoodPins(); return FOOD; };   // the Food screens in the More tab, on first use
+const loadRestModule = async () => (REST = REST || await import("./restview.js?v=3"));   // At a restaurant, in the More tab, on first use
 const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=21"));
 const loadAtlasModule = async () => (ATL = ATL || await import("./atlasview.js?v=8"));   // the Atlas screen, on first use
 const loadAtlasData = async () => (ATLD = ATLD || await import("./atlasdata.js?v=2"));   // the Atlas's map data (about 290 KB compressed), when the Atlas opens
 const loadAtlasLite = async () => (ATLL = ATLL || await import("./atlaslite.js?v=3"));   // the card map's lighter data (about 90 KB compressed), when a card's map is tapped
-import { createWineInfo } from "./wineinfo.js?v=34";
+import { createWineInfo } from "./wineinfo.js?v=35";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -112,6 +114,8 @@ const GUESS_KEY = "wine.guess";   // Guess the Glass: the best score of each mod
 const state = {
   owner: { ...OWNER_START },                       // the Owner page (owner.js)
   g: { screen: "more", cardId: null, sq: null },   // the More tab (its id is still "games"): which screen is open (more, hub = Games, bingo, tot, guess, food)
+  r: null,                                        // At a restaurant (restview.js initialRest), made when it is first opened
+  restOpen: undefined,                            // app_config restaurant_visits_open (the owner always sees it); undefined until read
   f: null,                                        // the Food screens (foodview.js initialFood), made when Food is first opened
   gamesMemory: parseMemory(store.get(GAMES_KEY)),
   totAnswers: parseAnswers(store.get(TOT_KEY)), totTaste: null,
@@ -470,7 +474,7 @@ function startOffline() {
     if (reg.active) reg.active.postMessage({ type: "cache", urls: [...urls, new URL("./manifest.webmanifest", location.href).href] });
   }).catch(() => {}); } } catch (_) {}
   loadDemoModule().catch(() => {});   // the practice walkthrough is loaded ahead of time so it opens offline too
-  setTimeout(() => loadFoodModule().catch(() => {}), 4000);   // the Food screens too, a little later so Discover opens first (they then work offline)
+  setTimeout(() => { loadFoodModule().catch(() => {}); loadRestModule().catch(() => {}); }, 4000);   // the Food screens too, a little later so Discover opens first (they then work offline)
 }
 // The Discover deck: three decks (familiar, getting warmer, new territory) mixed by what the person knows and likes. See deck.js.
 // ---------------------------------------------------------------- bottle photos on the cards
@@ -805,7 +809,58 @@ function ensureFoodPins() {
   state.foodPinsAsked = true;
   db.loadFoodOverrides(state.sb).then((rows) => { state.foodPins = rows || []; if (FOOD) FOOD.setPairingOverrides(state.foodPins); if (state.tab === "games" && state.g.screen === "food") renderBody(); }, () => {});
 }
+// At a restaurant: the switch (app_config restaurant_visits_open, until privacy.html has its line) and the player's past visits are read once, behind the screen.
+const restIsOpen = () => !!state.restOpen || isOwner();
+function ensureRest() {
+  if (!REST) { loadRestModule().then(() => { if (state.tab === "games" && state.g.screen === "rest") renderBody(); }, () => {}); return false; }
+  state.r = state.r || REST.initialRest(null);
+  if (state.restAsked || !state.sb) return true;
+  state.restAsked = true;
+  db.loadConfigFlag(state.sb, "restaurant_visits_open").then((on) => { state.restOpen = on; }, () => { state.restOpen = false; }).then(() => {
+    if (!restIsOpen()) return;
+    return db.loadRestaurantVisits(state.sb).then((rows) => { state.r.history = rows || []; }, () => { state.r.history = []; });
+  }).then(() => { if (state.tab === "games" && state.g.screen === "rest") renderBody(); });
+  return true;
+}
+// What the advice needs: the catalog, the places the app knows, the player's taste, and the indexes (made once per catalog).
+function restDeps() {
+  if (state._restFor !== state.cards) {
+    state._restFor = state.cards;
+    const places = [...flavorTables().REGION.values()];
+    state._restIdx = { places, placeIdx: REST.placeIndex(state.cards, places), catalogIdx: REST.catalogIndex(state.cards) };
+  }
+  const refs = structureMap(state.cards, state.refs);
+  return { catalog: state.cards, ...state._restIdx, refs, model: userModel({ cards: state.cards, states: state.states, journal: state.journal, quiz: state.quiz, refs }), crowd: state.crowd, journal: state.journal, states: state.states };
+}
+// Saving a visit keeps only text: the corrected list lines, the dishes, the occasion, what was suggested and what was ordered (never a photo).
+async function saveRestVisit() {
+  const r = state.r; if (!r || !r.result || r.saving || r.saved) return;
+  r.saving = true; renderBody();
+  const R = r.result, name = (p) => p.name, price = (p) => p.card.priceText || "";
+  const all = [...(R.toast ? [R.toast] : []), ...R.ranked].filter((p, i, arr) => arr.findIndex((q) => q.card.id === p.card.id) === i);   // a toast is also on the ranked list: count it once
+  const row = {
+    visited_on: today(), place_name: r.place.trim().slice(0, 120) || null, occasion: r.occasion, adventure: r.adventure,
+    dishes: r.diners.filter((d) => d.dish).map((d) => ({ id: d.dish, name: REST_FOODS(d.dish) })),
+    list_lines: R.ranked.concat(R.unjudged.map((u) => ({ card: u.card, name: u.card.cuvee }))).map((p) => ({ name: p.card.source === "catalog" ? p.name : p.card.cuvee, vintage: p.card.vintage, price: price(p), style: p.card.style, stated: p.card.said || [], source: p.card.source })),
+    picks: [...(R.toast ? [R.toast] : []), ...R.picks].map((p) => ({ pick: p.pick, name: name(p), price: price(p) })),
+    ordered: all.filter((p) => r.ordered.includes(p.card.id)).map(name),
+  };
+  try { const saved = await db.saveRestaurantVisit(state.sb, state.user.id, row); r.saved = true; r.history = [saved, ...(r.history || [])]; }
+  catch (e) { setBanner("Could not save this visit: " + (e.message || e)); }
+  r.saving = false; renderBody();
+}
+async function hideRestVisit(id) {
+  if (!state.r) return;
+  try { await db.hideRestaurantVisit(state.sb, id); state.r.history = (state.r.history || []).filter((v) => String(v.id) !== String(id)); }
+  catch (e) { setBanner("Could not remove it: " + (e.message || e)); }
+  renderBody();
+}
+const REST_FOODS = (id) => (REST && REST.foodName ? REST.foodName(id) : id);
 function gamesView() {
+  if (state.g.screen === "rest") {
+    if (!ensureRest()) return `<div class="games"><div class="center muted">Loading\u2026</div></div>`;
+    return REST.restHtml(state.r, { open: restIsOpen() });
+  }
   if (state.g.screen === "food") {
     if (!FOOD) { loadFoodModule().then(() => { if (state.tab === "games" && state.g.screen === "food") renderBody(); }, () => {}); return `<div class="games"><div class="center muted">Loading\u2026</div></div>`; }
     state.f = state.f || FOOD.initialFood();
@@ -822,7 +877,7 @@ function gamesView() {
   const tot = { answers: state.totAnswers, matches: [], taste: state.totTaste };
   if (state.g.screen === "tot" && (state.g.totResults || !nextPair(state.totAnswers))) tot.matches = matchWines({ answers: state.totAnswers, cards: state.cards, structure: structureMap(state.cards, state.refs) });
   const guess = { ...state.guess, follow: state.g.screen === "guess" ? guessFollow() : null };
-  return gamesHtml(state.g, { progress, memory, news, help, tot, guess });
+  return gamesHtml(state.g, { progress, memory, news, help, tot, guess, restOpen: restIsOpen() });
 }
 // ---------------------------------------------------------------- Guess the Glass (blindgame.js)
 // A round is built from the classics and the catalog (with the editors' structure). Nothing here is saved to the database except the quiz answers given
@@ -2008,6 +2063,17 @@ document.addEventListener("keydown", (ev) => {
   else if ((ev.key === "Enter" || ev.key === " ") && ev.target.matches("[data-zoomstage]")) { ev.preventDefault(); zoomTap(); }
 });
 // The consent page (consent.js): tick boxes, Tick all, Accept and continue, I am under 21.
+document.addEventListener("input", (ev) => {   // At a restaurant: typed boxes keep their text without redrawing (so the keyboard stays up)
+  const t = ev.target; if (!REST || !state.r || !t || !t.dataset) return;
+  if (t.dataset.rsList !== undefined) state.r = REST.restAction(state.r, "ltext", t.value);
+  else if (t.dataset.rsPlace !== undefined) state.r = REST.restAction(state.r, "place", t.value);
+});
+document.addEventListener("change", (ev) => {   // At a restaurant: a typed dish, the dish pull-down, a typed grape
+  const t = ev.target; if (!REST || !state.r || !t || !t.dataset) return;
+  if (t.dataset.rsDiner !== undefined) { state.r = REST.restAction(state.r, "dtext", t.dataset.rsDiner, t.value); renderBody(); }
+  else if (t.dataset.rsDish !== undefined) { state.r = REST.restAction(state.r, "dpick", t.dataset.rsDish, t.value); renderBody(); }
+  else if (t.dataset.rsGrape !== undefined) { state.r = REST.restAction(state.r, "fixgrape", t.dataset.rsGrape, t.value, restDeps()); renderBody(); }
+});
 document.addEventListener("change", (ev) => {   // the Food screens: the dish pull-down and the tweak boxes
   const t = ev.target;
   if (t.dataset && FOOD && state.f) {
@@ -2117,12 +2183,19 @@ document.addEventListener("click", async (ev) => {
       fly(el, a);
     }
     else if (action === "zoomcard") { const el = $("#card"); if (el && el.__toggleZoom) el.__toggleZoom(); }
+    else if (action === "rs") {   // At a restaurant: rs:go:STEP, rs:start, rs:occ:ID, rs:adv:N, rs:read, rs:fixstyle:N:STYLE, rs:drop:N, rs:results, rs:open:ID, rs:order:ID, rs:save, rs:hide:ID (restview.js restAction)
+      if (!REST || !state.r) return;
+      if (a === "save") { await saveRestVisit(); return; }
+      if (a === "hide") { await hideRestVisit(b); return; }
+      state.r = REST.restAction(state.r, a, b, c, restDeps()); renderBody();
+    }
     else if (action === "fd") {   // Food screens: fd:go:SCREEN, fd:kind:ID, fd:dish:ID, fd:cell:FOOD:KIND, fd:plate:SLOT:ID, fd:mdish:ID ... (foodview.js foodAction)
       if (FOOD && state.f) { state.f = FOOD.foodAction(state.f, a, b, c); if (a === "go" && b === "more") state.g = { screen: "more", cardId: null, sq: null }; renderBody(); }
     }
     else if (action === "game") {     // game:hub, game:bingo, game:card:ID, game:sq:N, game:tot, game:pick:a|b, game:skip, game:totresults, game:totagain, and Guess the Glass: game:guess, game:ghub, game:glevel:L, game:gplay:MODE, game:gpick:N, game:gnext, game:gagain, game:glq:QID:N, game:glearn:N
       if (a === "more") state.g = { screen: "more", cardId: null, sq: null };
       else if (a === "food") { state.g = { screen: "food", cardId: null, sq: null }; loadFoodModule().catch(() => {}); }
+      else if (a === "rest") { state.g = { screen: "rest", cardId: null, sq: null }; loadRestModule().catch(() => {}); }
       else if (a === "hub") state.g = { screen: "hub", cardId: null, sq: null };
       else if (a === "bingo") state.g = { screen: "bingo", cardId: null, sq: null };
       else if (a === "card") state.g = { screen: "card", cardId: b, sq: null };

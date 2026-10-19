@@ -21,7 +21,7 @@ is merged, move the lines to "Merged" with the date. Whenever a venue gets somet
 ## Venue: `vwm` (published under `/vwm/`)
 
 ### On main, not yet merged into `vwm`
-_(nothing: `vwm` has all of main as of 2026-10-19)_
+- 2026-10-19 **At a restaurant** (convention 31, `docs/restaurant_visits.sql`): the wine-list reading, advice and screens; merge into `vwm` (there the catalog is the venue's own list).
 
 ### Merged (main is in `vwm` up to)
 - 2026-10-19 (later): main's **More tab, Food screens and the owner's pairing pins** (convention 30, `docs/food_pairing.sql`) merged into `vwm`. Conflicts
