@@ -1,0 +1,53 @@
+import { chromium } from "/opt/node-tools/node_modules/playwright/index.mjs";
+import fs from "fs";
+const SP = process.env.SP || new URL(".", import.meta.url).pathname.replace(/\/$/, "");
+const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome", args: ["--no-sandbox"] });
+const lib = fs.readFileSync(SP + "/stub_venue.js", "utf8"), cards = fs.readFileSync(SP + "/cards.json", "utf8");
+let pass = 0, fail = 0; const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL", m); } };
+const row = (id, t, v) => ({ id, wine_vintage_id: null, producer: "", wine_name: t, vintage: v, shop_type: "", source: "file" });
+const rows = [row("s1", "Vietti Barolo Ravera DOCG", "2020"), row("s2", "Domaine Rene Rostaing Cote-Rotie La Landonne", "2021"), row("s3", "Giuseppe Rinaldi Barolo Tre Tine DOCG", "2018"),
+  row("u1", "Chateau Cheval Blanc Saint Emilion", "2020"), row("u2", "Accendo Red Wine Laurea", "2021")];
+const areas = [{ id: "c1", name: "France", level: "country", parent_id: null }, { id: "rv", name: "Rhône Valley", level: "region", parent_id: "c1" }, { id: "bx", name: "Bordeaux", level: "region", parent_id: "c1" },
+  { id: "c3", name: "Italy", level: "country", parent_id: null }, { id: "r3", name: "Piedmont", level: "region", parent_id: "c3" }, { id: "a3", name: "Barolo", level: "appellation", parent_id: "r3", classification: "DOCG" },
+  { id: "c2", name: "USA", level: "country", parent_id: null }, { id: "ca", name: "California", level: "region", parent_id: "c2" }, { id: "nv", name: "Napa Valley", level: "appellation", parent_id: "ca", classification: "AVA" }];
+const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+await ctx.route(/esm\.sh|cdn\.jsdelivr\.net|vendor\/supabase\.js/, (r) => r.fulfill({ status: 200, contentType: "application/javascript", headers: { "access-control-allow-origin": "*" }, body: lib }));
+await ctx.route("**/__cards.json", (r) => r.fulfill({ status: 200, contentType: "application/json", body: cards }));
+const p = await ctx.newPage(); const errs = []; p.on("pageerror", (e) => errs.push(e.message));
+await p.addInitScript({ content: `window.__LAT = 5; localStorage.setItem("wine.consent", "2026-10-e"); localStorage.setItem("wine.demoSeen", "1"); window.__EMPTY = 1; window.__ROLE = "editor";
+  window.__VENUE_ROWS = ${JSON.stringify(rows)}; window.__PRODUCERS = []; window.__AREAS = ${JSON.stringify(areas)}; window.__GRAPES = [{ id: "g1", name: "Cabernet Sauvignon" }];` });
+await p.goto("http://localhost:8124/index.html"); await p.waitForSelector("#tabbody"); await p.waitForTimeout(500);
+await p.click('[data-action="tab:editor"]'); await p.waitForTimeout(300);
+await p.click('[data-editor="sec:venue"]'); await p.waitForSelector(".vrcard"); await p.waitForTimeout(300);
+await p.click('[data-vr="view:sure"]'); await p.waitForSelector(".vrsure", { timeout: 5000 }).catch(() => {});
+let txt = await p.textContent(".vrev");
+ok(/3 sure/.test(txt) && /2 left for editors/.test(txt), "3 sure, 2 left: " + txt.slice(0, 200));
+const titles = await p.$$eval(".vrsure b", (b) => b.map((x) => x.textContent));
+ok(titles.length === 3 && !titles.some((t) => /Cheval|Accendo/.test(t)), "only the sure ones listed: " + titles);
+ok(/Rostaing · La Landonne · Red · Côte-Rôtie, Rhône Valley, France · 2021/.test(txt), "each line shows producer, name, type, place, vintage");
+ok(/Publish 3 wines/.test(await p.textContent('[data-vr="sure:go"]')), "button counts the ticked");
+await p.click("summary"); ok(/where the producer's name ends|wine name to check|place not from the title/.test(await p.textContent("details")), "reasons for the others: " + await p.textContent("details"));
+// untick Rinaldi
+await p.click('[data-vrsure="s3"]'); await p.waitForTimeout(50);
+ok(/Publish 2 wines/.test(await p.textContent('[data-vr="sure:go"]')), "unticking changes the count");
+await p.screenshot({ path: SP + "/sure-list.png" });
+await p.evaluate(() => { window.__writes = []; });
+await p.click('[data-vr="sure:go"]');
+await p.waitForFunction(() => /Published 2 of 2 wines/.test(document.querySelector(".vrev").textContent), null, { timeout: 15000 }).catch(() => {});
+txt = await p.textContent(".vrev");
+ok(/Published 2 of 2 wines/.test(txt), "done message: " + txt.replace(/\s+/g, " ").slice(300, 700));
+const w = await p.evaluate(() => window.__writes);
+const geo = w.filter((x) => x.table === "geo_areas" && !x.update).flatMap((x) => x.rows);
+ok(geo.length === 1 && geo[0].name === "Côte-Rôtie" && geo[0].parent_id === "rv" && geo[0].level === "appellation", "one new appellation, under its region: " + JSON.stringify(geo));
+const wines = w.filter((x) => x.table === "wines" && !x.update).flatMap((x) => x.rows);
+ok(wines.length === 2 && wines.every((x) => x.status === "verified") && wines.some((x) => x.name === "Ravera" && x.appellation_id === "a3") && wines.some((x) => x.name === "La Landonne"), "two wines, published: " + JSON.stringify(wines));
+const links = w.filter((x) => x.table === "venue_wines" && x.update);
+ok(links.length === 2, "both list rows linked");
+ok(!w.some((x) => x.table === "wines" && x.rows.some((r) => /Tre Tine/.test(r.name || ""))), "the unticked wine was not published");
+txt = await p.textContent(".vrev");
+ok(/1 sure/.test(txt) && /Rinaldi/.test(txt) && /Published 2 of 2/.test(txt), "after: the list is worked out again, the message stays: " + txt.slice(0, 250));
+await p.click('[data-vr="view:add"]'); await p.waitForTimeout(200);
+ok(/3 wines to add/.test(await p.textContent(".vrev")), "back to one at a time: 3 waiting");
+ok(!errs.length, "no page errors: " + errs.join(" | "));
+console.log(`== sure_ui: ${pass} pass ${fail} fail`);
+await browser.close();

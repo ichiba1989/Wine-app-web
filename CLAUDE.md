@@ -2,6 +2,8 @@
 
 Guidance for AI assistants working in this repository. Read this before changing code.
 
+**Picking the project up in a new session? Read `docs/HANDOFF.md` next**: what is waiting (database scripts to run, open items) and how the work is done (`docs/tools/`: version bumps, the `vwm` merge, browser checks).
+
 ## What this project is
 
 A consumer wine **discovery and learning game**: *"A game that learns your palate while teaching you about wine."*
