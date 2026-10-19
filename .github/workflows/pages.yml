@@ -6,7 +6,7 @@ name: Publish the app
 
 on:
   push:
-    branches: ["claude/wine-discovery-architecture-3pithw", "vwm"]
+    branches: ["main", "vwm"]
   workflow_dispatch:
 
 permissions:
@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  MAIN_BRANCH: claude/wine-discovery-architecture-3pithw   # the main app, at the site's address
+  MAIN_BRANCH: main                                        # the main app, at the site's address
   VWM_BRANCH: vwm                                          # Vintage Wine Merchants, at <site>/vwm/
 
 jobs:

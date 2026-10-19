@@ -2,12 +2,13 @@
 // The rules at the top are pure (no browser, no network) so they can be tested on their own.
 // The controller at the bottom loads what it needs from Supabase and draws the tab.
 import { DIMS, dimRange, VERDICTS, FLAGS, esc, styleLabel, verdictShort, entryCard, entryName } from "./logic.js?v=25";
-import { marksHtml } from "./views.js?v=51";
+import { marksHtml } from "./views.js?v=52";
 import { accountCardHtml } from "./account.js?v=23";
 import { feedbackCardHtml } from "./feedback.js?v=17";
 import { worldOf } from "./thisorthat.js?v=4";
 import { reactionOf, palateWeightOf } from "./reactions.js?v=3";
 import { entryInfoLine } from "./wineline.js?v=4";
+import { recapYears, recapOf, recapText } from "./recap.js?v=3";
 
 // ---------------------------------------------------------------- settings
 // How much each verdict counts toward the palate. A journal wine with no verdict yet counts a
@@ -272,13 +273,16 @@ const PATHS = {
   timer: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M9 2h6"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
 };
+// The Year in wine page (recap.js) is parked: built and kept, but not shown (owner, 2026-10-19). Set SHOW_RECAP to true to bring it back.
+const SHOW_RECAP = false;
 const SUBS = [
   { id: "overview", label: "Overview", icon: "grid" },
   { id: "palate", label: "Taste", icon: "glass" },
   { id: "knowledge", label: "Knowledge", icon: "cap" },
   { id: "explored", label: "Explored", icon: "compass" },
+  { id: "recap", label: "Recap", icon: "award" },
   { id: "trophies", label: "Trophies", icon: "trophy" },
-];
+].filter((s) => s.id !== "recap" || SHOW_RECAP);
 const card = (title, inner) => `<div class="pcard">${title ? `<div class="ptitle">${esc(title)}</div>` : ""}${inner}</div>`;
 const flagName = (c) => `${FLAGS[c] || ""} ${esc(c)}`.trim();
 
@@ -367,6 +371,25 @@ function trophyTile(t) {
     <div class="lbar"><div style="width:${t.progress * 100}%;background:${t.maxed ? color : "var(--slate)"}"></div></div>
     <div class="muted tiny">${t.maxed ? "Top tier reached" : `${t.current} of ${t.next}`}</div></div>`;
 }
+// ---------------------------------------------------------------- recap
+// A year in the player's own journal (recap.js). Counts only what they recorded.
+function recapHtml(P) {
+  const years = recapYears(P.journal);
+  if (!years.length) return `<h2 class="serif ph">Year in wine</h2><p class="muted small">Add wines to your journal and your year will show up here.</p>`;
+  const year = years.includes(P.recapYear) ? P.recapYear : years[0];
+  const r = recapOf(P.journal, year);
+  const chips = years.length > 1 ? `<div class="chips left">${years.map((y) => `<button class="chip${y === year ? " on" : ""}" data-prof="year:${y}" aria-pressed="${y === year}">${y}</button>`).join("")}</div>` : "";
+  const stat = (label, value) => `<div class="pstat"><div class="serif pnum">${value}</div><div class="muted small">${label}</div></div>`;
+  const list = (items) => items.map((x) => esc(x)).join(", ");
+  return `<h2 class="serif ph">Your ${year} in wine</h2>${chips}
+    <div class="pgrid">${stat("Wines in your journal", r.total)}${stat("Wines rated", r.rated)}${stat("Countries", r.countries.length)}${stat("Grapes", r.grapes.length)}</div>
+    ${r.newCountries.length ? card("New countries this year", `<p class="ptext">${list(r.newCountries.map((c) => c.name))}</p>`) : ""}
+    ${r.newGrapes.length ? card("Grapes you met for the first time", `<p class="ptext">${list(r.newGrapes.map((g) => g.name))}</p>`) : ""}
+    ${r.topRated.length ? card("Your favourites", r.topRated.map((e) => `<div class="iname"><span class="serif trunc">${esc(entryName(e))}</span></div>`).join("")) : ""}
+    ${r.busiestMonth ? card("Busiest month", `<p class="ptext">${esc(r.busiestMonth.name)}, with ${r.busiestMonth.count} wine${r.busiestMonth.count === 1 ? "" : "s"}.</p>`) : ""}
+    <button class="btn outline" data-prof="share:${year}">Share my ${year}</button>`;
+}
+
 function trophiesHtml(P) {
   const not = P.trophies.filter((t) => !t.earned), got = P.trophies.filter((t) => t.earned);
   return `<h2 class="serif ph">Trophies</h2><p class="muted small">Each trophy has tiers. Keep going to reach the next one.</p>
@@ -379,7 +402,7 @@ export function profileHtml(P) {
   let body;
   if (P.error) body = `<div class="err">${esc(P.error)}</div><button class="btn outline" data-prof="retry">Try again</button>`;
   else if (!P.loaded) body = `<p class="muted">Loading your profile…</p>`;
-  else body = { overview: overviewHtml, palate: palateHtml, knowledge: knowledgeHtml, explored: exploredHtml, trophies: trophiesHtml }[P.sub](P);
+  else body = { overview: overviewHtml, palate: palateHtml, knowledge: knowledgeHtml, explored: exploredHtml, recap: recapHtml, trophies: trophiesHtml }[P.sub](P);
   return `<div class="profile"><div class="ptabs">${tabs}</div><div id="pbody">${body}</div></div>`;
 }
 
@@ -445,6 +468,12 @@ export function createProfile(ctx) {
     const [action, arg] = t.dataset.prof.split(":");
     if (action === "sub") { P.sub = arg; draw(); const c = document.querySelector("#content"); if (c) c.scrollTop = 0; }
     else if (action === "retry") load();
+    else if (action === "year") { P.recapYear = Number(arg); draw(); }
+    else if (action === "share") {
+      const text = recapText(recapOf(P.journal, Number(arg)), (e) => entryName(e));
+      if (navigator.share) navigator.share({ text }).catch(() => {});
+      else if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => { t.textContent = "Copied"; }, () => {});
+    }
   });
 
   // The same taste numbers as the Taste page, worked out on their own for the This or That results (it does not need the Profile tab to have been opened).

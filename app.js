@@ -11,7 +11,7 @@ import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=30";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=16";
 import { shrinkImage } from "./photos.js?v=5";
 import {
-  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=51";
+  visualFor, discoverHtml, swipesHtml, swipesListHtml, journalShellHtml, journalMetaHtml, journalListHtml, quickNoteHtml, speakLangHtml, blindHtml, sheetHtml, addFormHtml, formPhotosHtml, wineFlagHtml, confirmHtml, footState, wineEditHtml, structurePageHtml, characterPageHtml, SHEET_PAGES, syncChoiceControl } from "./views.js?v=52";
 import { createLearn } from "./learn.js?v=22";
 import { setMode } from "./words.js?v=1";
 import { journalCsv, exportName } from "./exportcsv.js?v=12";
@@ -37,10 +37,10 @@ import { infoLine, entryInfoLine } from "./wineline.js?v=4";
 import { FEATURE as PRO_FEATURE, proBlockHtml, gridHtml, syncGridDom, pickValue, tapTag, openFromGrid, cleanGrid, gridToDims, loadTasting, saveTasting, paintNoteMarks, teachHtml, autoCount } from "./tasting.js?v=20";
 import { gridFromNotes, mergeFromNotes, touched, legendEntry, compileWith } from "./notegrid.js?v=13";
 import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=10";
-import { createProfile } from "./profile.js?v=36";
+import { createProfile } from "./profile.js?v=37";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=23";
 import { createFeedback } from "./feedback.js?v=17";
-import { createEditor } from "./editor.js?v=63";
+import { createEditor } from "./editor.js?v=64";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=20";
 import { gamesHtml } from "./games.js?v=27";
 import { tintFor } from "./visuals.js?v=5";
@@ -52,13 +52,14 @@ import { createVenueReview } from "./venuereview.js?v=35";
 import { VENUE, venueCardsOf, readList, recheck as venueRecheck, listIds, linkMap, siteUrl } from "./venue.js?v=26";
 import { recommendMix, recommend } from "./recommend.js?v=17";
 import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=3";
+import { foodIdeas } from "./pairing.js?v=2";
 import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
 import { setOffline, setCardLookup } from "./overlay.js?v=1";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null, ATL = null, ATLD = null, ATLL = null;
 const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=44"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=17"));
-const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=23"));
+const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=24"));
 const loadAtlasModule = async () => (ATL = ATL || await import("./atlasview.js?v=10"));   // the Atlas screen, on first use
 const loadAtlasData = async () => (ATLD = ATLD || await import("./atlasdata.js?v=2"));   // the Atlas's map data (about 290 KB compressed), when the Atlas opens
 const loadAtlasLite = async () => (ATLL = ATLL || await import("./atlaslite.js?v=3"));   // the card map's lighter data (about 90 KB compressed), when a card's map is tapped
@@ -2294,6 +2295,16 @@ document.addEventListener("click", async (ev) => {
     else if (action === "atlas") {   // atlas:open[:journal|liked|catalog|untried], atlas:sheet (the wine on the rating sheet)
       if (a === "sheet") { const key = sheetPlaceKey(state.sheet); closeOverlay(); await openAtlas({ place: key, show: "journal" }); }
       else await openAtlas(b ? { show: b, fit: "pins" } : {});
+    }
+    else if (action === "food") {   // food:sheet, food ideas for the wine on the rating sheet (pairing.js: its starting structure, never the player's sliders)
+      const box = $("#foodIdeas"), s = state.sheet; if (!box || !s) return;
+      if (!box.hidden) { box.hidden = true; t.setAttribute("aria-expanded", "false"); return; }
+      const values = {}; Object.entries(s.dims || {}).forEach(([k, d]) => { if (d && typeof d.def === "number") values[k] = d.def; });
+      const ideas = foodIdeas(values, s.style, 4);
+      box.innerHTML = ideas.length
+        ? `<div class="muted tiny">Food that usually suits this kind of wine</div>${ideas.map((i) => `<div class="foodrow"><b>${esc(i.dish)}</b><div class="muted small">${esc(i.why)}</div></div>`).join("")}`
+        : `<div class="muted small">Not enough is known about this wine's style yet to suggest food.</div>`;
+      box.hidden = false; t.setAttribute("aria-expanded", "true");
     }
     else if (action === "jtoggle") {
       const key = decodeURIComponent(a);

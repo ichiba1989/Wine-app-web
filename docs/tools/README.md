@@ -29,6 +29,7 @@ Serve the main branch (the repository itself works) and run:
     node docs/tools/morgon_ui.mjs              # appellation on the card and its map (13)
     node docs/tools/rank_ui.mjs                # Saint-Émilion Grand Cru, Chablis Grand Cru (8)
     node docs/tools/steps_ui.mjs               # the catalog arriving in pieces (12)
+    node docs/tools/food_ui.mjs                # Food ideas on the rating sheet (4)
 
 The `vwm` checks expect a copy of the `vwm` branch served on port 8124:
 
