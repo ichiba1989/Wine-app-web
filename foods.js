@@ -42,6 +42,23 @@ export function grapesOf(kindId) {
   return out.sort((a, b) => a.localeCompare(b));
 }
 
+// The kind of wine nearest to a structure ({ acidity, body, tannin, sweetness, oak }) among the kinds of that style, or null when the style is not one of
+// ours or no structure is known. Used by the restaurant advice to rate a list wine against a dish; nothing is invented, it only names the closest kind.
+const STYLE_KINDS = { red: ["light-red", "medium-red", "full-red"], white: ["crisp-white", "rich-white", "offdry-white", "sweet"], rose: ["rose"], sparkling: ["sparkling", "sweet"], fortified: ["fortified"] };
+export function kindOfValues(values, style) {
+  const ids = STYLE_KINDS[style]; if (!ids || !values) return null;
+  const known = ["acidity", "body", "tannin", "sweetness", "oak"].filter((d) => typeof values[d] === "number");
+  if (!known.length) return null;
+  const W = { acidity: 1, body: 1.3, tannin: 0.9, sweetness: 1.6, oak: 0.5 };
+  let best = null, bestD = Infinity;
+  for (const id of ids) {
+    const k = kindById(id);
+    const d = known.reduce((sum, dim) => sum + Math.abs((k[dim] || 0) - values[dim]) * W[dim] * (dim === "tannin" && k.style !== "red" ? 0 : 1), 0);
+    if (d < bestD) { best = k; bestD = d; }
+  }
+  return best;
+}
+
 // ---------------------------------------------------------------- dishes
 // weight 1-5 (light to heavy), richness 0-5 (fat, cream, oil), acidity 0-5 (lemon, vinegar, tomato), sweetness 0-3 (same scale as wine),
 // spice 0-5 (heat), salt 0-5, char 0-5 (grilled, smoked, roasted), crisp 0-3 (fried, crunchy).
