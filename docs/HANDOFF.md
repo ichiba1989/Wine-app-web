@@ -7,7 +7,7 @@ what is waiting and how the work is done.
 
 - **Branches.** Main working branch `claude/wine-discovery-architecture-3pithw` (the app at the site's address) and `vwm` (Vintage Wine
   Merchants, under `/vwm/`). Both are pushed and published. Shared changes are made on the main branch first, then merged into `vwm`
-  (recipe in `docs/tools/README.md`). Never push to a `backup/` branch (`docs/VERSIONS.md`). No pull request unless the owner asks.
+  (recipe in `docs/tools/README.md`). **`docs/BRANCHES.md` is the ledger of what main has that `vwm` does not yet, and what is only in `vwm`: keep it current.** Never push to a `backup/` branch (`docs/VERSIONS.md`). No pull request unless the owner asks.
 - **Publishing.** Push, then run the GitHub Actions workflow `pages.yml` on the main branch (it publishes both branches).
 - **Last work (2026-10-17 to 2026-10-19):** the Atlas and the card's map (INAO outlines for French AOCs), the appellation and its
   designation on the card, grapes from the appellation's rules (`aocgrapes.js`), wines shown named the way the label reads (`displayCuvee`),

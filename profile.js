@@ -273,6 +273,8 @@ const PATHS = {
   timer: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M9 2h6"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
 };
+// The Year in wine page (recap.js) is parked: built and kept, but not shown (owner, 2026-10-19). Set SHOW_RECAP to true to bring it back.
+const SHOW_RECAP = false;
 const SUBS = [
   { id: "overview", label: "Overview", icon: "grid" },
   { id: "palate", label: "Taste", icon: "glass" },
@@ -280,7 +282,7 @@ const SUBS = [
   { id: "explored", label: "Explored", icon: "compass" },
   { id: "recap", label: "Recap", icon: "award" },
   { id: "trophies", label: "Trophies", icon: "trophy" },
-];
+].filter((s) => s.id !== "recap" || SHOW_RECAP);
 const card = (title, inner) => `<div class="pcard">${title ? `<div class="ptitle">${esc(title)}</div>` : ""}${inner}</div>`;
 const flagName = (c) => `${FLAGS[c] || ""} ${esc(c)}`.trim();
 
