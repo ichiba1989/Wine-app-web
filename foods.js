@@ -194,6 +194,14 @@ export function tweaksFor(food, kindId, limit = 4) {
     .filter((t) => t.gain > 0.15).sort((a, b) => b.gain - a.gain).slice(0, limit);
 }
 
+// A dish with several tweaks applied, one after the other (ids that are not tweaks are ignored).
+export function applyTweaks(food, ids) {
+  if (!ids || !ids.length) return food;   // nothing changed: still the stored dish, so a pin still applies
+  let p = { ...food };
+  for (const id of ids || []) { const t = TWEAKS.find((x) => x.id === id); if (t) p = bump(p, t.delta); }
+  return { ...p, custom: true };
+}
+
 // ---------------------------------------------------------------- Edit food: build a plate from parts
 // A plate starts from the protein or main part, and each other part changes the profile (same lines as a dish).
 const part = (id, label, d) => ({ id, label, d });

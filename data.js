@@ -396,6 +396,25 @@ export async function addProducerAlias(sb, alias, producerId) {
   const { error } = await sb.from("producer_aliases").insert({ alias, producer_id: producerId });
   if (error && !/duplicate|23505|producer_aliases|42P01|PGRST205/.test(`${error.code} ${error.message}`)) throw new Error(error.message || String(error));
 }
+// ---------------------------------------------------------------- food pairing pins (docs/food_pairing.sql, run by hand; all versions)
+// The owner's hand-set ratings for a dish with a kind of wine (foods.js reads the ones in use or checked). Returns null when the update has not been run
+// (the app keeps its rules alone). Writes are online only and the owner's.
+const pinsMissing = (e) => /food_pairing_overrides|42P01|PGRST205/.test(`${e && e.code} ${e && e.message}`);
+export async function loadFoodOverrides(sb) {
+  try { return await allRows(() => sb.from("food_pairing_overrides").select("*").order("id")); }
+  catch (e) { if (pinsMissing(e)) return null; throw e; }
+}
+// One pin per dish and kind of wine: saving again changes it.
+export async function saveFoodOverride(sb, row) {
+  const { data, error } = await sb.from("food_pairing_overrides").upsert(row, { onConflict: "food_id,kind_id" }).select("id");
+  if (error) throw new Error(pinsMissing(error) ? "Pairing pins need a database update first (docs/food_pairing.sql)." : error.message || String(error));
+  if (!data || !data.length) throw new Error("Not saved. Your access may not allow changing pairings.");
+}
+export async function removeFoodOverride(sb, id) {
+  const { data, error } = await sb.from("food_pairing_overrides").delete().eq("id", id).select("id");
+  if (error) throw new Error(error.message || String(error));
+  if (!data || !data.length) throw new Error("Not removed. Your access may not allow changing pairings.");
+}
 // ---------------------------------------------------------------- wine tags (docs/wine_tags.sql, run by hand; all versions)
 // The owner's own labels on catalog wines. LABELS ONLY for now: nothing in the deck or the suggestions reads them. Online only.
 // Returns null when the update has not been run.

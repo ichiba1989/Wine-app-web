@@ -5,7 +5,7 @@
 // The rules at the top are pure (no browser, no network). The controller at the bottom talks to Supabase.
 import { esc, wineName } from "./logic.js?v=23";
 import { suggestTags, pullGroups, canPull, tagDiff, MAX_PULLDOWN, TAG_KINDS } from "./tags.js?v=4";
-import * as db from "./data.js?v=46";
+import * as db from "./data.js?v=47";
 import { sortFlags, sortFeedback, sortQuestions, sortSelectHtml, FLAG_SORTS, FEEDBACK_SORTS, QUESTION_SORTS } from "./sorting.js?v=13";
 
 export const TOPICS = ["Grapes", "Regions", "Producers", "Winemaking", "Other alcohol"];

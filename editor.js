@@ -9,13 +9,13 @@
 //   Feedback:  read what testers sent from the app and mark it handled.
 // Every change is logged by the database.
 import { dimsFor, dimMeta, defaultFor, esc, wineName, placeLine, editorList, hasFullProfile, refsByVintage, clampDimValue, isChoice, choiceLabel, barDims, choiceDims, styleInfo } from "./logic.js?v=23";
-import * as db from "./data.js?v=46";
+import * as db from "./data.js?v=47";
 import { marksHtml, dimControlHtml, syncChoiceControl } from "./views.js?v=49";
-import { createReview } from "./review.js?v=24";
-import { createWineInfo, publishSummary } from "./wineinfo.js?v=33";
+import { createReview } from "./review.js?v=25";
+import { createWineInfo, publishSummary } from "./wineinfo.js?v=34";
 import { groupSubmissions, planPromotion, duplicateGroups, rulesFrom } from "./catalog.js?v=6";
-import { visibleKinds, FOUND_ONLINE_PERMISSION, photoSummary, photoList, photoTag, pullSource, shareWinePhoto, shareNote, uploadWinePhoto, removeWinePhoto, reuseWinePhoto } from "./winephotos.js?v=21";
-import { communityHtml, loadSubmissionState, approvalPlan } from "./sharing.js?v=21";
+import { visibleKinds, FOUND_ONLINE_PERMISSION, photoSummary, photoList, photoTag, pullSource, shareWinePhoto, shareNote, uploadWinePhoto, removeWinePhoto, reuseWinePhoto } from "./winephotos.js?v=22";
+import { communityHtml, loadSubmissionState, approvalPlan } from "./sharing.js?v=22";
 import { infoLine } from "./wineline.js?v=3";
 import { sortWines, sortSelectHtml, STRUCTURE_SORTS, PHOTO_SORTS } from "./sorting.js?v=13";
 import { suggestStructure, values as ruleValues, goldInfo, GOLD, GROUPS, evaluateRules, reportText, TARGETS, RULES_VERSION } from "./rules.js?v=5";

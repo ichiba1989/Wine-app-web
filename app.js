@@ -6,8 +6,8 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete, styleLabel,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=23";
-import * as db from "./data.js?v=46";
-import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=21";
+import * as db from "./data.js?v=47";
+import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=22";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=14";
 import { shrinkImage } from "./photos.js?v=5";
 import {
@@ -41,9 +41,9 @@ import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=9";
 import { createProfile } from "./profile.js?v=36";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=21";
 import { createFeedback } from "./feedback.js?v=15";
-import { createEditor } from "./editor.js?v=49";
+import { createEditor } from "./editor.js?v=50";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=18";
-import { gamesHtml } from "./games.js?v=25";
+import { gamesHtml } from "./games.js?v=27";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
 import { parseAnswers, answer as totAnswer, nextPair, matchWines, answerRow } from "./thisorthat.js?v=4";
 import { foodIdeas } from "./pairing.js?v=2";
@@ -54,14 +54,15 @@ import { createOffline, createIdbStore, makeThumb } from "./offline.js?v=2";
 import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
 import { setOffline, setCardLookup } from "./overlay.js?v=1";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
-let OWN = null, DEMO = null, IMP = null, ATL = null, ATLD = null, ATLL = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=27"));
+let OWN = null, DEMO = null, IMP = null, ATL = null, ATLD = null, ATLL = null, FOOD = null;
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=28"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=15"));
+const loadFoodModule = async () => { FOOD = FOOD || await import("./foodview.js?v=3"); ensureFoodPins(); return FOOD; };   // the Food screens in the More tab, on first use
 const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=21"));
 const loadAtlasModule = async () => (ATL = ATL || await import("./atlasview.js?v=8"));   // the Atlas screen, on first use
 const loadAtlasData = async () => (ATLD = ATLD || await import("./atlasdata.js?v=2"));   // the Atlas's map data (about 290 KB compressed), when the Atlas opens
 const loadAtlasLite = async () => (ATLL = ATLL || await import("./atlaslite.js?v=3"));   // the card map's lighter data (about 90 KB compressed), when a card's map is tapped
-import { createWineInfo } from "./wineinfo.js?v=33";
+import { createWineInfo } from "./wineinfo.js?v=34";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -110,7 +111,8 @@ const GAMES_KEY = "wine.games";   // which bingo cards this phone has cleared (b
 const GUESS_KEY = "wine.guess";   // Guess the Glass: the best score of each mode (blindgame.js), only on this phone
 const state = {
   owner: { ...OWNER_START },                       // the Owner page (owner.js)
-  g: { screen: "hub", cardId: null, sq: null },   // the Games tab: which screen is open
+  g: { screen: "more", cardId: null, sq: null },   // the More tab (its id is still "games"): which screen is open (more, hub = Games, bingo, tot, guess, food)
+  f: null,                                        // the Food screens (foodview.js initialFood), made when Food is first opened
   gamesMemory: parseMemory(store.get(GAMES_KEY)),
   totAnswers: parseAnswers(store.get(TOT_KEY)), totTaste: null,
   // Guess the Glass: the round being played, and what its follow-ups showed (kept so they do not change while the player reads them)
@@ -159,7 +161,7 @@ const startFor = (card) => startingValues(card, card && state.refs.get(card.id))
 const startForEntry = (entry) => (entry.wine_vintage_id ? startFor(cardById(entry.wine_vintage_id)) : startingValues(entryAsCard(entry), null));
 // What the palate uses as a baseline from the rules alone (the editor's own scores are added in profile.js).
 const ruleBase = (wineVintageId, entry) => rulesFor(wineVintageId ? cardById(wineVintageId) : entryAsCard(entry));
-const TITLES = { discover: "Discover", swipes: "Swipes", journal: "Journal", profile: "Profile", learn: "Learn", games: "Games", editor: "Editor", owner: "Owner" };
+const TITLES = { discover: "Discover", swipes: "Swipes", journal: "Journal", profile: "Profile", learn: "Learn", games: "More", editor: "Editor", owner: "Owner" };
 
 // The Learn tab lives in learn.js. It saves quiz answers itself and reports save problems through the banner.
 const learn = createLearn({ gapWeights: () => gapWeights(gapsOf(userModel({ cards: state.cards, states: state.states, journal: state.journal, quiz: state.quiz, refs: structureMap(state.cards, state.refs) }))), sb: () => state.sb, user: () => state.user, profile: () => state.profile, onError: (m) => setBanner(m) });
@@ -468,6 +470,7 @@ function startOffline() {
     if (reg.active) reg.active.postMessage({ type: "cache", urls: [...urls, new URL("./manifest.webmanifest", location.href).href] });
   }).catch(() => {}); } } catch (_) {}
   loadDemoModule().catch(() => {});   // the practice walkthrough is loaded ahead of time so it opens offline too
+  setTimeout(() => loadFoodModule().catch(() => {}), 4000);   // the Food screens too, a little later so Discover opens first (they then work offline)
 }
 // The Discover deck: three decks (familiar, getting warmer, new territory) mixed by what the person knows and likes. See deck.js.
 // ---------------------------------------------------------------- bottle photos on the cards
@@ -512,7 +515,7 @@ function shellHtml() {
   return `<div class="top"><h1 class="serif" id="title"></h1><div class="topright"><button class="netchip" id="netchip" data-action="syncinfo" hidden></button><span class="muted small">Early build</span><button class="gear" data-action="settings" aria-label="Settings">&#9881;</button></div></div>
     <div id="gbanner" class="banner gb" data-action="dismiss" hidden></div>
     <div class="content" id="content"><div id="tabbody"></div></div>
-    <nav class="tabs">${tab("discover", "Discover")}${tab("swipes", "Swipes")}${tab("journal", "Journal")}${tab("profile", "Profile")}${tab("learn", "Learn")}${tab("games", "Games")}${editorLink}</nav>`;
+    <nav class="tabs">${tab("discover", "Discover")}${tab("swipes", "Swipes")}${tab("journal", "Journal")}${tab("profile", "Profile")}${tab("learn", "Learn")}${tab("games", "More")}${editorLink}</nav>`;
 }
 function renderBody() {
   const body = $("#tabbody");
@@ -525,7 +528,7 @@ function ownerData() {
   const O = state.owner;
   if (state._ownerFor !== state.cards) { state._ownerFor = state.cards; state._ownerCache = { rows: OWN.wineRows(state.cards), bingo: OWN.bingoCoverage(state.cards) }; }
   const { bingo } = state._ownerCache, rows = OWN.withTags(state._ownerCache.rows, O.wineTags, O.wineIds);
-  return { rows, bingo, wineTags: O.wineTags, wineTagsError: O.wineTagsError, checks: OWN.checkCounts(rows), places: O.places, refLists: O.refLists, refListsError: O.refListsError, config: O.config, configError: O.configError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, staff: O.staff, staffError: O.staffError, staffAudit: O.staffAudit, seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
+  return { rows, bingo, wineTags: O.wineTags, wineTagsError: O.wineTagsError, checks: OWN.checkCounts(rows), places: O.places, refLists: O.refLists, refListsError: O.refListsError, config: O.config, configError: O.configError, pins: O.pins, pinsError: O.pinsError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, staff: O.staff, staffError: O.staffError, staffAudit: O.staffAudit, seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
 }
 // The lens preview: the top picks of one lens for the owner's own profile, or for a brand-new player, using the weights typed on the page.
 function ownerLens() {
@@ -671,6 +674,27 @@ async function ownerRef(a, b) {
     applyReferenceLists(O.refLists);   // the app uses the change at once
   } catch (e) { ownerSay("Not saved: " + (e.message || e)); ownerRedraw(); }
 }
+// The food pairing pins (Owner page, Pairings tab; docs/food_pairing.sql). Players get the same pins when they open Food (ensureFoodPins).
+async function loadOwnerPins() {
+  const O = state.owner;
+  try { O.pins = await db.loadFoodOverrides(state.sb); O.pinsError = ""; if (O.pins) { state.foodPins = O.pins; if (FOOD) FOOD.setPairingOverrides(O.pins); } }
+  catch (e) { O.pins = null; O.pinsError = "Could not load the pins: " + (e.message || e); }
+  if (state.tab === "owner" && O.tab === "pairings") ownerRedraw();
+}
+async function ownerPairing(a, b, c) {
+  const O = state.owner;
+  if (a === "pkind") { O.pkind = b; O.q = ""; renderBody(); return; }
+  try {
+    if (a === "ppin") {
+      const el = document.querySelector("[data-owner-preason]");
+      await db.saveFoodOverride(state.sb, { food_id: b, kind_id: O.pkind || "full-red", rating: c, reason: el ? el.value.trim() : "", status: "in use", basis: "owner" });
+      ownerSay("Pinned.");
+    } else if (a === "pclear") { await db.removeFoodOverride(state.sb, b); ownerSay("Cleared."); }
+    else if (a === "puse") { const r = (O.pins || []).find((x) => String(x.id) === String(b)); if (r) { await db.saveFoodOverride(state.sb, { food_id: r.food_id, kind_id: r.kind_id, rating: r.rating, reason: r.reason, status: "in use" }); ownerSay("Now in use."); } }
+    else if (a === "pcheck") { const r = (O.pins || []).find((x) => String(x.id) === String(b)); if (r) { await db.saveFoodOverride(state.sb, { food_id: r.food_id, kind_id: r.kind_id, rating: r.rating, reason: r.reason, status: "checked", checked_at: new Date().toISOString() }); ownerSay("Marked checked."); } }
+    await loadOwnerPins();
+  } catch (e) { ownerSay("Not saved: " + (e.message || e)); ownerRedraw(); }
+}
 async function loadOwnerTags() {
   try { state.owner.tags = await db.loadQuizTags(state.sb); state.owner.tagsError = ""; }
   catch (e) { state.owner.tagsError = "Tags need one more database update (docs/quiz_tags.sql). " + (e.message || ""); }
@@ -775,7 +799,18 @@ function ensureTotTaste() {
   profileTab.tasteForGame().then((t) => { state.totTaste = t; }, () => { state.totTaste = { error: true }; })
     .then(() => { state.totLoading = false; if (state.tab === "games" && state.g.screen === "tot") renderBody(); });
 }
+// The owner's pairing pins (docs/food_pairing.sql) are read once when Food is first opened; the rules alone apply until they arrive or without the table.
+function ensureFoodPins() {
+  if (state.foodPinsAsked || !state.sb) { if (FOOD && state.foodPins) FOOD.setPairingOverrides(state.foodPins); return; }
+  state.foodPinsAsked = true;
+  db.loadFoodOverrides(state.sb).then((rows) => { state.foodPins = rows || []; if (FOOD) FOOD.setPairingOverrides(state.foodPins); if (state.tab === "games" && state.g.screen === "food") renderBody(); }, () => {});
+}
 function gamesView() {
+  if (state.g.screen === "food") {
+    if (!FOOD) { loadFoodModule().then(() => { if (state.tab === "games" && state.g.screen === "food") renderBody(); }, () => {}); return `<div class="games"><div class="center muted">Loading\u2026</div></div>`; }
+    state.f = state.f || FOOD.initialFood();
+    return FOOD.foodHtml(state.f);
+  }
   const cardsById = new Map(state.cards.map((c) => [c.id, c]));
   const progress = allProgress(ratedWines(state.journal.filter((e) => !entryIncomplete(e)), cardsById, new Date(), state.photoUrls));
   const { memory, news } = mergeMemory(state.gamesMemory, progress);
@@ -879,6 +914,7 @@ function drawTab(body) {
     if (isOwner() && state.owner.tab === "tags" && !state.owner.tags && !state.owner.tagsError) loadOwnerTags();
     if (isOwner() && state.owner.tab === "checks" && state.owner.places === undefined) loadOwnerPlaces();
     if (isOwner() && state.owner.tab === "lists" && state.owner.refLists === undefined) loadOwnerLists();
+    if (isOwner() && state.owner.tab === "pairings" && state.owner.pins === undefined) loadOwnerPins();
     if (isOwner() && state.owner.tab === "roles" && !state.owner.staff && !state.owner.staffError) loadOwnerStaff();
     if (isOwner() && state.owner.tab === "config" && !state.owner.config && !state.owner.configError) loadOwnerConfig();
   } else if (state.tab === "games") {
@@ -1972,8 +2008,12 @@ document.addEventListener("keydown", (ev) => {
   else if ((ev.key === "Enter" || ev.key === " ") && ev.target.matches("[data-zoomstage]")) { ev.preventDefault(); zoomTap(); }
 });
 // The consent page (consent.js): tick boxes, Tick all, Accept and continue, I am under 21.
-document.addEventListener("change", (ev) => {
+document.addEventListener("change", (ev) => {   // the Food screens: the dish pull-down and the tweak boxes
   const t = ev.target;
+  if (t.dataset && FOOD && state.f) {
+    if (t.dataset.fdSelect === "tdish") { state.f = FOOD.foodAction(state.f, "tdish", t.value); renderBody(); }
+    else if (t.dataset.fdTweak) { state.f = FOOD.foodAction(state.f, "ttoggle", t.dataset.fdTweak); renderBody(); }
+  }
   if (t.dataset && t.dataset.consent && state.status === "age") { state.consent = toggleConsent(state.consent, t.dataset.consent); render(); }
 });
 document.addEventListener("click", async (ev) => {
@@ -2077,8 +2117,13 @@ document.addEventListener("click", async (ev) => {
       fly(el, a);
     }
     else if (action === "zoomcard") { const el = $("#card"); if (el && el.__toggleZoom) el.__toggleZoom(); }
+    else if (action === "fd") {   // Food screens: fd:go:SCREEN, fd:kind:ID, fd:dish:ID, fd:cell:FOOD:KIND, fd:plate:SLOT:ID, fd:mdish:ID ... (foodview.js foodAction)
+      if (FOOD && state.f) { state.f = FOOD.foodAction(state.f, a, b, c); if (a === "go" && b === "more") state.g = { screen: "more", cardId: null, sq: null }; renderBody(); }
+    }
     else if (action === "game") {     // game:hub, game:bingo, game:card:ID, game:sq:N, game:tot, game:pick:a|b, game:skip, game:totresults, game:totagain, and Guess the Glass: game:guess, game:ghub, game:glevel:L, game:gplay:MODE, game:gpick:N, game:gnext, game:gagain, game:glq:QID:N, game:glearn:N
-      if (a === "hub") state.g = { screen: "hub", cardId: null, sq: null };
+      if (a === "more") state.g = { screen: "more", cardId: null, sq: null };
+      else if (a === "food") { state.g = { screen: "food", cardId: null, sq: null }; loadFoodModule().catch(() => {}); }
+      else if (a === "hub") state.g = { screen: "hub", cardId: null, sq: null };
       else if (a === "bingo") state.g = { screen: "bingo", cardId: null, sq: null };
       else if (a === "card") state.g = { screen: "card", cardId: b, sq: null };
       else if (a === "sq") state.g = { ...state.g, sq: Number(b) };
@@ -2141,6 +2186,7 @@ document.addEventListener("click", async (ev) => {
       else if (["selall", "selnone", "bulktag", "bulkreach", "wtagadd", "wtagrename", "wtagdel"].includes(a)) await ownerWines(a, b);
       else if (a.startsWith("legend")) await ownerLegend(a, b);
       else if (a.startsWith("ref")) await ownerRef(a, b);
+      else if (["pkind", "ppin", "pclear", "puse", "pcheck"].includes(a)) await ownerPairing(a, b, c);
       else if (a === "placefix" || a === "placedismiss") await ownerPlace(a, b, t.dataset.action.split(":").slice(3).join(":"));
       else if (a.startsWith("staff")) await ownerStaff(a, b, c);
     }
