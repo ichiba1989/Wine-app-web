@@ -344,7 +344,7 @@ export function sheetHtml(sheet, { saving = false, error = "", page = 0, onMap =
   return `<div class="overlay"><div class="sheet" id="sheetPanel" data-page="${page}">
     <div class="wtop">
       <div class="wnav"><button class="wcorner" data-sheet="prev" aria-label="Back">&lsaquo;</button><div class="wsteps" role="group" aria-label="Steps">${steps}</div><button class="wcorner" data-sheet="next" aria-label="Next">&rsaquo;</button></div>
-      <div class="sheethead"><div class="sheettitle"><div class="serif big">${esc(sheet.target.name)}</div><div class="muted small" id="wtitle">Step ${page + 1} of ${n}: ${esc(SHEET_PAGES[page].title)}</div>${onMap ? `<button class="link small" data-action="atlas:sheet">Show on map</button>` : ""}</div>
+      <div class="sheethead"><div class="sheettitle"><div class="serif big">${esc(sheet.target.name)}</div><div class="muted small" id="wtitle">Step ${page + 1} of ${n}: ${esc(SHEET_PAGES[page].title)}</div>${onMap ? `<button class="link small" data-action="atlas:sheet">Show on map</button>` : ""}${sheet.style && sheet.style !== "unknown" ? ` <button class="link small" data-action="food:sheet" aria-expanded="false">Food ideas</button>` : ""}<div id="foodIdeas" class="foodbox" hidden></div></div>
         <div class="sheetbtns"><button class="pill wine" data-sheet="save"${canSave ? "" : " disabled"}>Save</button><button class="xbtn" data-sheet="close" aria-label="Close">&times;</button></div></div>
     </div>
     <div class="wpages" id="wpages">${pages.map((h, i) => `<section class="wpage" data-wpage="${i}"${i === page ? "" : " hidden"}>${h}</section>`).join("")}</div>
