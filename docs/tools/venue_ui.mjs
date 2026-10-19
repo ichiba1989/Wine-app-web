@@ -24,6 +24,7 @@ const N = 12, listed = new Set(all.slice(0, N).map((r) => r.wine_vintage_id));
   ok(!/\bVWM\b/.test(await p.evaluate(() => document.body.innerText)), "VWM never shown");
   // games use only listed wines
   await p.click('.tabs button[data-action="tab:games"]'); await p.waitForTimeout(150);
+  await p.click('[data-action="game:hub"]'); await p.waitForTimeout(150);   // the tab opens on More, which holds Games and Food
   await p.click('[data-action="game:guess"]'); await p.waitForTimeout(150);
   await p.click('[data-action="game:gplay:full"]'); await p.waitForTimeout(200);
   const round = await p.evaluate(() => (window.__wine.state.guess.play ? window.__wine.state.guess.play.round : []).map((q) => q.itemId));

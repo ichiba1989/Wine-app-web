@@ -10,7 +10,7 @@ async function session(init, fn) {
   await ctx.route(/esm\.sh|cdn\.jsdelivr\.net|vendor\/supabase\.js/, (r) => r.fulfill({ status: 200, contentType: "application/javascript", headers: { "access-control-allow-origin": "*" }, body: lib }));
   await ctx.route("**/__cards.json", (r) => r.fulfill({ status: 200, contentType: "application/json", body: cards }));
   const p = await ctx.newPage(); const errs = []; p.on("pageerror", (e) => errs.push(e.message));
-  await p.addInitScript({ content: `window.__LAT = 10; localStorage.setItem("wine.consent", "2026-10-e"); localStorage.setItem("wine.demoSeen", "1"); window.__EMPTY = 1; ${init}` });
+  await p.addInitScript({ content: `window.__LAT = 10; localStorage.setItem("wine.consent", "2026-10-e"); localStorage.setItem("wine.demoSeen", "1"); window.__EMPTY = 1; ${init} ${process.env.INIT || ""}` });
   await p.goto(`http://localhost:${PORT}/index.html`); await p.waitForSelector("#tabbody .card");
   await fn(p); ok(errs.length === 0, "no errors " + errs.join(" | ")); await ctx.close();
 }
