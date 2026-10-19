@@ -8,6 +8,8 @@ const table = async (name) => {
   if (name === "feature_access") return [...(window.__PROFEAT ? [{ feature: "importLarge", all_tiers: false, tiers: ["pro"] }] : []), ...(window.__PRO ? [{ feature: "proTasting", all_tiers: false, tiers: ["pro"] }] : [])];
   if (name === "note_legend" && window.__LEGEND) return window.__LEGEND;
   if (name === "food_pairing_overrides") return window.__PINS || [];
+  if (name === "restaurant_visits") return window.__VISITS || [];
+  if (name === "app_config" && window.__CONFIG) return window.__CONFIG;
   if (name === "quiz_questions" && window.__QUIZ) return window.__QUIZ;
   if (name === "quiz_tags" && window.__QTAGS) return window.__QTAGS;
   if (name === "quiz_question_tags" && window.__QLINKS) return window.__QLINKS;

@@ -60,7 +60,7 @@ export function swapIds(v, map) {
 const stable = (calls, extra) => JSON.stringify([calls, extra === undefined ? null : extra]);
 const needsConnection = (what = "This") => ({ data: null, count: null, status: 0, statusText: "offline", error: { message: `${what} needs a connection. Try again when you are online.`, code: OFFLINE_CODE } });
 const withTimeout = (p, ms) => { let t; return Promise.race([p, new Promise((_, rej) => { t = setTimeout(() => rej(Object.assign(new Error("The request timed out"), { code: "NETWORK" })), ms); })]).finally(() => clearTimeout(t)); };
-const LABELS = { state: "a swipe", stateDelete: "removing a swipe", entry: "a journal entry", entryPatch: "a change to a journal entry", entryDelete: "removing a journal entry", answer: "a quiz answer", archiveRemove: "a quiz archive change", tasting: "a tasting grid" };
+const LABELS = { visit: "a restaurant visit", state: "a swipe", stateDelete: "removing a swipe", entry: "a journal entry", entryPatch: "a change to a journal entry", entryDelete: "removing a journal entry", answer: "a quiz answer", archiveRemove: "a quiz archive change", tasting: "a tasting grid" };
 export const describe = (item) => {
   const e = (item.effects || [])[0];
   if (e && LABELS[e.t]) return LABELS[e.t];

@@ -261,3 +261,12 @@ No database script. Check on a phone:
 - [ ] Owner page, Pairings: pin a dish for a kind of wine with a reason; a player's phone shows it ("set by hand"); Clear and Mark checked work; a "suggested" pin is not used.
 - [ ] **Editors: read every dish and rule in `foods.js`** (the profiles in `FOODS`, the principles in `needsOf`, the kinds in `WINE_KINDS`, the tweaks and parts) and correct what a sommelier would not say; nothing is marked checked until then.
 
+## At a restaurant (added 2026-10-19; all versions)
+- [ ] Run `docs/restaurant_visits.sql` in the Supabase SQL editor (safe to run again), then run `docs/retain_after_delete.sql` again. Until then the screens work but saving a visit says the update is needed.
+- [ ] **Do not switch `restaurant_visits_open` to 1 (Owner page, Config tab) until `privacy.html` has its line about restaurant visits** (typed list lines, dishes, occasion, an optional place name, kept anonymously after an account is deleted). Until then players see "Coming soon"; you always see it. Photo reading is not built; adding it later needs a provider decision and its own privacy line.
+- [ ] More shows three doors; At a restaurant walks through dishes, occasion, adventure, the list, the check and the picks without a connection (try it in aeroplane mode).
+- [ ] **A real wine list on a real phone at a real table**: paste or type it, see which lines it misses, and tell us which lines it read wrongly; those are the tuning list. A line the list does not describe must read "not enough on the list to judge", never a guess.
+- [ ] A celebration shows a sparkling "To start"; "Surprise me" puts A stretch first; two different dishes say when a bottle suits one less.
+- [ ] Save a visit: it shows in Past visits at once (also offline), uploads when back online, and "Remove from my list" hides it (the row stays in the database with deleted_at).
+- [ ] **Editors: read the dish words in `restaurant.js` (`DISH_WORDS`) and the occasion rules (`occasionAdjust`)**, plus everything in `foods.js`; nothing is marked checked until then.
+

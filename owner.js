@@ -3,18 +3,18 @@
 // still decides what anyone may change. The rules at the top (rows, search, sort, checks, coverage) are pure: no page, no network.
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
 import { esc } from "./logic.js?v=25";
-import { REACH_CHOICES } from "./wineinfo.js?v=43";
+import { REACH_CHOICES } from "./wineinfo.js?v=44";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=5";
 import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=17";
 import { TAG_KINDS } from "./tags.js?v=5";
-import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=20";
+import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=21";
 import { centsToField } from "./pricing.js?v=4";
 import { ASSIGNABLE_ROLES, ROLES, PERMISSIONS, staffRows, filterStaff, rowActions } from "./access.js?v=4";
 import { VENUE, listRows, addable, summary, LIST_FILTERS, filterListRows } from "./venue.js?v=26";
 import { plainKey } from "./text.js?v=3";
 import { rankAppellationFor } from "./rankaoc.js?v=1";
 import { placeChecks } from "./geo.js?v=10";
-import { WINE_KINDS, FOODS, RATING_ORDER, RATING_LABEL, kindById, fitOf, ratingOf } from "./foods.js?v=3";
+import { WINE_KINDS, FOODS, RATING_ORDER, RATING_LABEL, kindById, fitOf, ratingOf } from "./foods.js?v=4";
 export { placeChecks };   // used by app.js through the lazily loaded Owner module
 
 export const OWNER_TABS = [{ id: "wines", label: "Wines" }, { id: "lenses", label: "Lenses" }, { id: "bingo", label: "Bingo" }, { id: "checks", label: "Checks" }, { id: "tags", label: "Tags" }, { id: "legend", label: "Legend" }, { id: "roles", label: "Roles" }, { id: "config", label: "Config" }, { id: "lists", label: "Lists" }, { id: "pairings", label: "Pairings" }, { id: "venue", label: `${VENUE.name} list` }];

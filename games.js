@@ -15,16 +15,18 @@ export function gamesHtml(g, data) {
   if (g.screen === "tot") return totScreen(g, data);
   if (g.screen === "guess") return guessScreen(g, data);
   if (g.screen === "hub") return hubScreen(data);
-  return moreScreen();
+  return moreScreen(data);
 }
 
 // The More tab: the places that are not one of the main tabs. Games and Food so far (the Food screens are in foodview.js, loaded when opened).
-function moreScreen() {
+function moreScreen(data = {}) {
   return `<div class="games"><h2 class="serif gh">More</h2>
     <button class="gtile" data-action="game:hub"><div class="serif gt-title">Games</div>
       <div class="muted small">Wine Bingo, This or That and Guess the Glass.</div></button>
     <button class="gtile" data-action="game:food"><div class="serif gt-title">Food</div>
-      <div class="muted small">Which wines suit a dish, which dishes suit a wine, and how to change a plate so it fits.</div></button></div>`;
+      <div class="muted small">Which wines suit a dish, which dishes suit a wine, and how to change a plate so it fits.</div></button>
+    <button class="gtile" data-action="game:rest"><div class="serif gt-title">At a restaurant</div>
+      <div class="muted small">${data.restOpen ? "Say what you are eating and the occasion, give the wine list, and get wines that suit the food and your taste." : "Coming soon."}</div></button></div>`;
 }
 
 function hubScreen({ memory, tot, guess }) {

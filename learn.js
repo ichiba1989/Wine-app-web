@@ -4,7 +4,7 @@
 import { esc, shuffle } from "./logic.js?v=25";
 import { weave, boostFor, refOf, focusOptions, fold } from "./tags.js?v=5";
 import { proToolsOn } from "./words.js?v=1";
-import { overlayQuiz } from "./overlay.js?v=1";
+import { overlayQuiz } from "./overlay.js?v=3";
 // Marks a write as one that may wait in the outbox when there is no connection (offline.js), with what it did (overlay.js).
 const tag = (q, effect) => (q && typeof q.queue === "function" ? q.queue(effect) : q);
 

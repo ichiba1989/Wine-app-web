@@ -2,7 +2,7 @@
 import { cardFromRow, buildReview, outsideRow, referenceWrites } from "./logic.js?v=25";
 import { BUCKET, newPhotoPath } from "./photos.js?v=5";
 import { LEGACY_OF } from "./reactions.js?v=3";
-import { overlayStates, overlayJournal, overlayCounts, overlayPerceptions, entryRowOf, isOffline } from "./overlay.js?v=1";
+import { overlayStates, overlayJournal, overlayCounts, overlayPerceptions, entryRowOf, isOffline, overlayVisits } from "./overlay.js?v=3";
 import { sameWine } from "./catalog.js?v=7";
 
 const must = ({ data, error }) => { if (error) throw error; return data; };
@@ -396,6 +396,35 @@ export async function removeReferenceRow(sb, table, id) {
 export async function addProducerAlias(sb, alias, producerId) {
   const { error } = await sb.from("producer_aliases").insert({ alias, producer_id: producerId });
   if (error && !/duplicate|23505|producer_aliases|42P01|PGRST205/.test(`${error.code} ${error.message}`)) throw new Error(error.message || String(error));
+}
+// ---------------------------------------------------------------- restaurant visits (docs/restaurant_visits.sql, run by hand; all versions)
+// A switch in app_config: 1 = on. Missing or unreadable means off (the same reading as the plan switch).
+export async function loadConfigFlag(sb, key) {
+  try {
+    const { data, error } = await sb.from("app_config").select("value").eq("key", key).maybeSingle();
+    if (error || !data) return false;
+    const v = data.value !== null && typeof data.value === "object" ? data.value.value : data.value;
+    return v === true || Number(v) === 1;
+  } catch (_) { return false; }
+}
+const visitsMissing = (e) => /restaurant_visits|delete_my_restaurant_visit|42P01|PGRST205|PGRST202/.test(`${e && e.code} ${e && e.message}`);
+// The player's visits, newest first (hidden ones skipped), with any visit still waiting to upload on top. Empty before the update.
+export async function loadRestaurantVisits(sb) {
+  let rows = [];
+  try { rows = await allRows(() => sb.from("restaurant_visits").select("id, visited_on, place_name, occasion, adventure, dishes, picks, ordered, created_at").is("deleted_at", null).order("created_at", { ascending: false })); }
+  catch (e) { if (!visitsMissing(e)) throw e; }
+  return overlayVisits(rows);
+}
+// Saves one visit (text only). Queued, so a visit made where there is no signal uploads later and shows in the list at once.
+export async function saveRestaurantVisit(sb, userId, row) {
+  const { data, error } = await tag(sb.from("restaurant_visits").insert({ ...row, user_id: userId }).select("id").single(), { t: "visit", row: { ...row } });
+  if (error) throw new Error(visitsMissing(error) ? "Saving visits needs a database update first (docs/restaurant_visits.sql)." : error.message || String(error));
+  return { ...row, id: (data && data.id) || "pending-" + Date.now() };
+}
+// Hiding a visit (it stays in the database): online only.
+export async function hideRestaurantVisit(sb, id) {
+  const { error } = await sb.rpc("delete_my_restaurant_visit", { p_id: id });
+  if (error) throw new Error(visitsMissing(error) ? "Removing visits needs a database update first (docs/restaurant_visits.sql)." : error.message || String(error));
 }
 // ---------------------------------------------------------------- food pairing pins (docs/food_pairing.sql, run by hand; all versions)
 // The owner's hand-set ratings for a dish with a kind of wine (foods.js reads the ones in use or checked). Returns null when the update has not been run

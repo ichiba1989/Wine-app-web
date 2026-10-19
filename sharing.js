@@ -4,8 +4,8 @@
 //   Editors: offered photos wait in Editor, Photos. An editor approves one (it becomes a Community photo on the wine's card) or rejects it.
 // The rules at the top are pure (no browser, no network). The functions that talk to Supabase go through data.js.
 import { esc, photoCount, wineName } from "./logic.js?v=25";
-import * as db from "./data.js?v=56";
-import { photoTag } from "./winephotos.js?v=31";
+import * as db from "./data.js?v=57";
+import { photoTag } from "./winephotos.js?v=32";
 import { infoLine } from "./wineline.js?v=4";
 
 // ---------------------------------------------------------------- the rules

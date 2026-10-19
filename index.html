@@ -498,6 +498,21 @@
   .fslot { margin-top: 10px; } .fplate { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
   .fprow { display: flex; justify-content: space-between; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
   .fcourse { margin-top: 8px; }
+  /* ---- at a restaurant (restview.js, in the More tab) */
+  .rest .rstep { margin-top: 2px; } .rest .rnav { display: flex; gap: 10px; margin-top: 14px; } .rest .rnav .btn { margin-top: 0; }
+  .rest .rnav .rback { flex: 0 0 34%; } .rest .rnav .rnext { flex: 1; }
+  .rest .gtile.on { outline: 2px solid var(--wine); outline-offset: 1px; }
+  .rest .rtext { min-height: 170px; resize: vertical; font-size: calc(15px * var(--ts)); line-height: 1.4; }
+  .rest .rdiner .field { margin-top: 8px; } .rest .rmatch { margin-top: 6px; } .rest .rnote { margin-top: 10px; }
+  .rest .rline { margin-top: 8px; } .rest .rline.low { border-color: #DDA9B3; } .rest .rline.dropped { opacity: .6; }
+  .rest .rlhead { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; } .rest .rmiss { color: var(--wine); }
+  .rest .rfix { margin-top: 6px; } .rest .rgrape { margin-top: 4px; }
+  .rest .rpick { margin-top: 10px; } .rest .rpick.open { outline: 2px solid var(--ink); outline-offset: 1px; }
+  .rest .rlabel { font-size: calc(11px * var(--ts)); text-transform: uppercase; letter-spacing: .06em; color: var(--wine); font-weight: 700; margin-bottom: 4px; }
+  .rest .rwine { width: 100%; text-align: left; background: transparent; border: 0; padding: 4px 0; display: flex; flex-direction: column; gap: 2px; font-size: calc(16px * var(--ts)); }
+  .rest .fbtn.on { background: var(--slate); color: #fff; border-color: var(--slate); }
+  .rest .rrank { display: flex; gap: 8px; align-items: flex-start; } .rest .rnum { width: 22px; flex: none; padding-top: 14px; text-align: right; } .rest .rrbody { flex: 1; min-width: 0; }
+  .rest .rvisit { margin-top: 8px; } .rest .rvhead { display: flex; justify-content: space-between; gap: 8px; }
   /* This or That (games.js) */
   .tprog { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin: 8px 0 14px; }
   .tprog i { display: block; height: 100%; background: var(--wine); }
@@ -782,6 +797,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=132" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=133" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>

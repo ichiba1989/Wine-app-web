@@ -3,7 +3,7 @@
 // The screens read the lists from the database (or from the copy kept on the phone) and pass them through these functions, so a swipe or an entry made offline shows up at once, and the same
 // quiz rules ("seen", "incorrect", the archive) keep working. When the change reaches the server its effect goes away and the real row takes its place on the next refresh.
 // Effects: { t: "state", wvid, row } a swipe; { t: "stateDelete", wvid }; { t: "entry", row } a new journal entry (row.id is the temporary id); { t: "entryPatch", id, patch, perceptions? };
-//          { t: "entryDelete", id }; { t: "answer", qid, result } a quiz answer; { t: "archiveRemove", qid }; { t: "tasting", id, data }.
+//          { t: "entryDelete", id }; { t: "answer", qid, result } a quiz answer; { t: "archiveRemove", qid }; { t: "tasting", id, data }; { t: "visit", row } a restaurant visit.
 
 // The offline layer (offline.js) registers itself here so the data functions can read the effects without importing it.
 let current = null, cards = () => null;
@@ -87,4 +87,12 @@ export function overlayQuiz(latest, archive, effects = pendingEffects()) {
     else if (e.t === "archiveRemove") keep.delete(e.qid);
   }
   return { latest: [...last].map(([question_id, result]) => ({ question_id, result })), archive: [...keep].map((question_id) => ({ question_id })) };
+}
+
+// ---------------------------------------------------------------- restaurant visits
+// A visit saved with no signal appears at the top of the list at once (marked pending) until it uploads and the real row takes its place.
+export function overlayVisits(rows, effects = pendingEffects()) {
+  const out = [...(rows || [])];
+  effects.filter((e) => e.t === "visit").forEach((e, i) => out.unshift({ ...e.row, id: "pending-" + i, created_at: e.row.created_at || new Date().toISOString(), pending: true }));
+  return out;
 }

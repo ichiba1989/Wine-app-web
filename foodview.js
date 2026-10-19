@@ -5,8 +5,8 @@ import { esc } from "./logic.js?v=25";
 import {
   WINE_KINDS, FOODS, GROUPS, TWEAKS, PARTS, RATING_ORDER, RATING_LABEL, kindById, foodById, grapesOf, plateFor, chartOf, pair, bestKinds,
   tweaksFor, applyTweaks, platePairs, menuFromDishes, menuFromWines,
-} from "./foods.js?v=3";
-export { setPairingOverrides } from "./foods.js?v=3";
+} from "./foods.js?v=4";
+export { setPairingOverrides } from "./foods.js?v=4";
 
 // f: { screen, kind, grapes, group, cell, openDish, tweak: { dish, kind, applied }, plate, menu: { mode, dishes, kinds } }
 export const initialFood = () => ({
