@@ -10,9 +10,9 @@
 // others (venue.js sureOf) are listed together; the editor looks through the list, unticks any, and publishes them with one tap. The rest stay here.
 import { esc, WINE_STYLES, DOSAGES, dosageFromText, dosageLabel } from "./logic.js?v=25";
 import { VENUE, withoutDosage, suggestRow, splitTitle, reviewQueue, checkReview, prepIndex, prepOf, canonPlace, placeText, placePlan, searchPlaces, splitOf, wineNameOf, placeLookalikes, linkSummary, rowTitle, sureContext, sureOf, rankPlace } from "./venue.js?v=26";
-import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=42";
+import { placeOptions, designationRowHtml, startDesignation } from "./wineinfo.js?v=43";
 import { placeFromArea, savePlace, designationPlan, broadPlace, planPlace } from "./geo.js?v=10";
-import * as db from "./data.js?v=55";
+import * as db from "./data.js?v=56";
 import { caseKey, lookalikes } from "./text.js?v=3";
 import { ruleLineFor } from "./aocgrapes.js?v=3";
 

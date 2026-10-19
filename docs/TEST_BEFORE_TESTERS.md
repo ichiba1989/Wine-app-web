@@ -251,3 +251,13 @@ No database script. Check on a phone:
 - [ ] Editors: work through the "to check" lines in `aocgrapes.js` (the Côte d'Or reds and grands crus, the Montrachet whites, Cornas, Hermitage, Sancerre, Régnié): read each official cahier des charges, set checked: true with its source, regenerate and run the fill.
 - [ ] Names read like the label: Arnaud Mortet's grand cru reads "Charmes-Chambertin Grand Cru" on its card, in Swipes, the Journal and the Atlas; a wine with no name shows its appellation as its title; "Les Pucelles 1er Cru" reads "Puligny-Montrachet Les Pucelles 1er Cru"; a cuvée name ("Cuvee Corcelette") is unchanged. The Atlas's "Wines to try from here" rows show grape · appellation · region under the name.
 - [ ] Red Burgundy cards show Pinot Noir and white Burgundy cards Chardonnay; a "usual" line's note in Edit wine info says Pinot Blanc is also allowed.
+
+## Food and the More tab (added 2026-10-19; all versions)
+- [ ] Run `docs/food_pairing.sql` in the Supabase SQL editor (safe to run again). Until then the Owner page's Pairings tab says the update is needed and players see the rules' ratings only.
+- [ ] The tab bar shows More in place of Games; More opens Games (Bingo, This or That and Guess the Glass all still work, "< More" goes back) and Food.
+- [ ] Food, Pick a wine: each of the ten kinds of wine shows four shelves; Steak is Ideal for a Full red and Oysters for a Crisp white; "Show the grapes" lists grapes for the reds and for Crisp / Rich white only; tapping a dish gives its reasons and "Tweak this dish".
+- [ ] Pairing chart: readable on a real phone, scrolls sideways with the dish names staying put, every mark has a symbol, a tap on a cell explains it.
+- [ ] Edit food: Tweak a dish (curry with a Full red offers "Tone down the chili"), Build a plate (a fish plate leads with a white; a grilled beef plate with a red), Plan a menu (steak, oysters, chocolate are flagged and can be put in the natural order).
+- [ ] Owner page, Pairings: pin a dish for a kind of wine with a reason; a player's phone shows it ("set by hand"); Clear and Mark checked work; a "suggested" pin is not used.
+- [ ] **Editors: read every dish and rule in `foods.js`** (the profiles in `FOODS`, the principles in `needsOf`, the kinds in `WINE_KINDS`, the tweaks and parts) and correct what a sommelier would not say; nothing is marked checked until then.
+

@@ -465,6 +465,39 @@
   /* ---- games */
   .games { padding: 4px 4px 24px; }
   .gh { font-size: calc(24px * var(--ts)); font-weight: 400; margin: 6px 0 6px; }
+  /* ---- food (foodview.js, in the More tab) */
+  .food .fchips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .food .fchips .chip { flex: 0 0 auto; }
+  .food .back { margin-bottom: 2px; }
+  .flegend { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0; }
+  .frate { display: inline-flex; align-items: center; gap: 4px; font-size: calc(12px * var(--ts)); font-weight: 600; border-radius: 999px; padding: 2px 9px; border: 1px solid transparent; white-space: nowrap; }
+  .frate i, .fdish i, .fc i { font-style: normal; letter-spacing: -1px; }
+  .frate.ideal, .fdish.ideal, .fc.ideal { background: #CFE6D2; color: #1D4B2C; border-color: #9CC8A4; }
+  .frate.good, .fdish.good, .fc.good { background: #E4EFD3; color: #3C5A1E; border-color: #BCD59B; }
+  .frate.okay, .fdish.okay, .fc.okay { background: #F2EAD0; color: #6B5516; border-color: #DCCB93; }
+  .frate.avoid, .fdish.avoid, .fc.avoid { background: #F2DADA; color: #7B1E3A; border-color: #DDA9B3; }
+  .fshelf { margin: 10px 0; } .fshead { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .fdishes { display: flex; flex-wrap: wrap; gap: 6px; }
+  .fdish { border: 1px solid; border-radius: 12px; padding: 7px 10px; font-size: calc(13px * var(--ts)); text-align: left; }
+  .fdish.on { outline: 2px solid var(--ink); outline-offset: 1px; }
+  .fdetail { margin-top: 12px; } .fdrow { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+  .freasons { margin: 6px 0 0; padding-left: 18px; font-size: calc(13px * var(--ts)); } .freasons li { margin: 3px 0; }
+  .fbtn { margin-top: 10px; padding: 10px 14px; font-size: calc(14px * var(--ts)); }
+  .fnote { margin: 14px 2px 0; } .fnote2 { margin-top: 8px; } .ftop { margin-top: 10px; } .fgrapes { margin-top: 6px; }
+  .fscroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); -webkit-overflow-scrolling: touch; }
+  .fchart { border-collapse: separate; border-spacing: 0; font-size: calc(12px * var(--ts)); }
+  .fchart th { font-weight: 600; padding: 6px 4px; text-align: center; vertical-align: bottom; min-width: 58px; }
+  .fchart thead th span { display: block; line-height: 1.15; }
+  .fchart .fsticky { position: sticky; left: 0; z-index: 1; background: var(--panel); text-align: left; min-width: 120px; max-width: 140px; padding: 6px 8px; border-right: 1px solid var(--line); font-weight: 500; }
+  .fchart td { padding: 3px; text-align: center; }
+  .fc { width: 100%; min-width: 44px; min-height: 36px; border: 1px solid; border-radius: 8px; font-size: calc(13px * var(--ts)); }
+  .fc.on { outline: 2px solid var(--ink); outline-offset: 1px; }
+  .ftweaks { display: flex; flex-direction: column; gap: 8px; }
+  .ftweak { display: flex; gap: 10px; align-items: flex-start; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px; font-size: calc(14px * var(--ts)); }
+  .ftweak input { width: 22px; height: 22px; margin-top: 2px; flex: none; } .fwhy { display: block; margin-top: 2px; }
+  .fslot { margin-top: 10px; } .fplate { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+  .fprow { display: flex; justify-content: space-between; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
+  .fcourse { margin-top: 8px; }
   /* This or That (games.js) */
   .tprog { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin: 8px 0 14px; }
   .tprog i { display: block; height: 100%; background: var(--wine); }
@@ -749,6 +782,6 @@
   setTimeout(function () { show("The app is taking too long to start. Check your connection."); }, 20000);
 })();
 </script>
-<script type="module" src="app.js?v=131" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
+<script type="module" src="app.js?v=132" onerror="window.__bootFailed('A file the app needs could not be loaded.')"></script>
 </body>
 </html>

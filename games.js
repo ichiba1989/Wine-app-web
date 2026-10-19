@@ -14,12 +14,22 @@ export function gamesHtml(g, data) {
   if (g.screen === "bingo") return bingoScreen(data);
   if (g.screen === "tot") return totScreen(g, data);
   if (g.screen === "guess") return guessScreen(g, data);
-  return hubScreen(data);
+  if (g.screen === "hub") return hubScreen(data);
+  return moreScreen();
+}
+
+// The More tab: the places that are not one of the main tabs. Games and Food so far (the Food screens are in foodview.js, loaded when opened).
+function moreScreen() {
+  return `<div class="games"><h2 class="serif gh">More</h2>
+    <button class="gtile" data-action="game:hub"><div class="serif gt-title">Games</div>
+      <div class="muted small">Wine Bingo, This or That and Guess the Glass.</div></button>
+    <button class="gtile" data-action="game:food"><div class="serif gt-title">Food</div>
+      <div class="muted small">Which wines suit a dish, which dishes suit a wine, and how to change a plate so it fits.</div></button></div>`;
 }
 
 function hubScreen({ memory, tot, guess }) {
   const cleared = CARDS.filter((c) => memory.cleared[c.id]).length;
-  return `<div class="games"><h2 class="serif gh">Games</h2>
+  return `<div class="games"><button class="link back" data-action="game:more">\u2039 More</button><h2 class="serif gh">Games</h2>
     <button class="gtile" data-action="game:bingo"><div class="serif gt-title">Wine Bingo</div>
       <div class="muted small">Rate wines to fill nine-square cards. Three in a row clears a card, and clearing cards opens harder ones.</div>
       <div class="gt-meta">${cleared} of ${CARDS.length} cards cleared</div></button>

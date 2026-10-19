@@ -7,6 +7,7 @@ const table = async (name) => {
   if (name === "v_catalog_cards") return await cardsP;
   if (name === "feature_access") return [...(window.__PROFEAT ? [{ feature: "importLarge", all_tiers: false, tiers: ["pro"] }] : []), ...(window.__PRO ? [{ feature: "proTasting", all_tiers: false, tiers: ["pro"] }] : [])];
   if (name === "note_legend" && window.__LEGEND) return window.__LEGEND;
+  if (name === "food_pairing_overrides") return window.__PINS || [];
   if (name === "quiz_questions" && window.__QUIZ) return window.__QUIZ;
   if (name === "quiz_tags" && window.__QTAGS) return window.__QTAGS;
   if (name === "quiz_question_tags" && window.__QLINKS) return window.__QLINKS;
@@ -24,6 +25,8 @@ function builder(name, opts) {
       if (k === "then") return (res, rej) => {
         window.__calls.push({ t: Math.round(performance.now()), q: name });
         sleep(LAT()).then(async () => {
+          if (window.__NOPINS && name === "food_pairing_overrides") return { data: null, error: { message: 'relation "food_pairing_overrides" does not exist', code: "42P01" } };
+          if (st.insert && name === "food_pairing_overrides") { window.__PINS = window.__PINS || []; st.insert.forEach((r, i) => { const at = window.__PINS.findIndex((x) => x.food_id === r.food_id && x.kind_id === r.kind_id); const row = { id: at >= 0 ? window.__PINS[at].id : 100 + window.__PINS.length, status: "in use", reason: "", ...(at >= 0 ? window.__PINS[at] : {}), ...r }; if (at >= 0) window.__PINS[at] = row; else window.__PINS.push(row); }); return { data: st.insert.map((r) => ({ id: 1 })), error: null }; }
           if (window.__NOLEGEND && /^note_legend/.test(name)) return { data: null, error: { message: 'relation "' + name + '" does not exist', code: "42P01" } };
           if (st.insert && window.__REFUSE && name === "consumptions") return { data: null, error: { message: "Limit reached: you can add up to 100 wines every 24 hours.", hint: "import_limit" } };
           const rows = st.insert ? st.insert.map((r, i) => ({ id: name + "-" + Math.random().toString(36).slice(2, 8) })) : await table(name);

@@ -30,6 +30,9 @@ Serve the main branch (the repository itself works) and run:
     node docs/tools/rank_ui.mjs                # Saint-Émilion Grand Cru, Chablis Grand Cru (8)
     node docs/tools/steps_ui.mjs               # the catalog arriving in pieces (12)
     node docs/tools/food_ui.mjs                # Food ideas on the rating sheet (4)
+    node docs/tools/food_more_ui.mjs           # the More tab and the Food screens (25)
+    node docs/tools/food_owner_ui.mjs          # the owner's pairing pins (11; role admin = owner in the stub)
+    node docs/tools/foods_check.mjs            # the food rules on classic pairings (49; no browser)
 
 The `vwm` checks expect a copy of the `vwm` branch served on port 8124:
 

@@ -3,7 +3,7 @@
 // still decides what anyone may change. The rules at the top (rows, search, sort, checks, coverage) are pure: no page, no network.
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
 import { esc } from "./logic.js?v=25";
-import { REACH_CHOICES } from "./wineinfo.js?v=42";
+import { REACH_CHOICES } from "./wineinfo.js?v=43";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=5";
 import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=17";
 import { TAG_KINDS } from "./tags.js?v=5";
@@ -14,9 +14,10 @@ import { VENUE, listRows, addable, summary, LIST_FILTERS, filterListRows } from 
 import { plainKey } from "./text.js?v=3";
 import { rankAppellationFor } from "./rankaoc.js?v=1";
 import { placeChecks } from "./geo.js?v=10";
+import { WINE_KINDS, FOODS, RATING_ORDER, RATING_LABEL, kindById, fitOf, ratingOf } from "./foods.js?v=3";
 export { placeChecks };   // used by app.js through the lazily loaded Owner module
 
-export const OWNER_TABS = [{ id: "wines", label: "Wines" }, { id: "lenses", label: "Lenses" }, { id: "bingo", label: "Bingo" }, { id: "checks", label: "Checks" }, { id: "tags", label: "Tags" }, { id: "legend", label: "Legend" }, { id: "roles", label: "Roles" }, { id: "config", label: "Config" }, { id: "lists", label: "Lists" }, { id: "venue", label: `${VENUE.name} list` }];
+export const OWNER_TABS = [{ id: "wines", label: "Wines" }, { id: "lenses", label: "Lenses" }, { id: "bingo", label: "Bingo" }, { id: "checks", label: "Checks" }, { id: "tags", label: "Tags" }, { id: "legend", label: "Legend" }, { id: "roles", label: "Roles" }, { id: "config", label: "Config" }, { id: "lists", label: "Lists" }, { id: "pairings", label: "Pairings" }, { id: "venue", label: `${VENUE.name} list` }];
 
 const fold = plainKey;   // text.js: the shared lookup key
 const isLive = (c) => !c.archived && (!c.wineStatus || c.wineStatus === "verified");
@@ -359,8 +360,28 @@ function listsTable(O, d) {
     <div class="ocontrols">${inputs}<button class="opill" data-action="owner:refadd">Add</button></div>
     ${table(`${kind.cols.map(([, l]) => `<th>${esc(l)}</th>`).join("")}<th>Status</th><th></th>`, body, "Nothing in this list yet.")}`;
 }
+// ---------------------------------------------------------------- food pairings (docs/food_pairing.sql; data.js loadFoodOverrides; rules in foods.js)
+// One kind of wine at a time: each dish with what the rules say, and the owner's hand-set pin (which always wins while in use or checked).
+// A pin comes with a reason players can read. "Mark checked" records that a source was read.
+export function pairingsTable(O, d) {
+  const kind = kindById(O.pkind) || kindById("full-red"), P = d.pins;
+  if (P === undefined) return `<p class="muted">Loading\u2026</p>`;
+  const q = fold(O.q || ""), rows = (P || []).filter((r) => r.kind_id === kind.id), pinOf = (id) => rows.find((r) => r.food_id === id);
+  const status = (r) => (r.status === "checked" ? `<span class="gbadge ok">Checked</span>` : r.status === "in use" ? `<span class="gbadge">In use</span>` : `<span class="gbadge draft">Suggested</span>`);
+  const body = FOODS.filter((f) => !q || fold(f.name).includes(q)).map((f) => {
+    const rules = ratingOf(fitOf(f, kind).score), pin = pinOf(f.id);
+    const buttons = P ? RATING_ORDER.map((r) => `<button class="opill${pin && pin.rating === r ? " on" : ""}" data-action="owner:ppin:${f.id}:${r}" aria-pressed="${!!pin && pin.rating === r}">${esc(RATING_LABEL[r])}</button>`).join(" ")
+      + (pin ? ` <button class="opill" data-action="owner:pclear:${pin.id}">Clear</button>${pin.status === "suggested" ? ` <button class="opill" data-action="owner:puse:${pin.id}">Use</button>` : ""}${pin.status !== "checked" ? ` <button class="opill" data-action="owner:pcheck:${pin.id}">Mark checked</button>` : ""}` : "") : "";
+    return `<tr><td>${esc(f.name)}</td><td>${esc(RATING_LABEL[rules])}</td><td>${pin ? `${esc(RATING_LABEL[pin.rating])} ${status(pin)}<div class="muted tiny">${esc(pin.reason || "no reason given")}</div>` : `<span class="muted">none</span>`}</td><td>${buttons}</td></tr>`;
+  }).join("");
+  return `<div class="ocontrols">${WINE_KINDS.map((k) => `<button class="opill${k.id === kind.id ? " on" : ""}" data-action="owner:pkind:${k.id}" aria-pressed="${k.id === kind.id}">${esc(k.label)}</button>`).join("")}</div>
+    ${P === null ? `<div class="muted small onote">${esc(d.pinsError || "Pairing pins need a database update (docs/food_pairing.sql). Until then players see the rules' ratings only.")}</div>` : `<div class="muted small onote">A pin beats the rules for this dish and this kind of wine, and players see its reason. Type the reason first, then tap a rating.</div>
+    <div class="ocontrols"><input class="ofield osearch" data-owner-preason placeholder="Reason players will read (optional)" aria-label="Reason for the pin" autocomplete="off"></div>`}
+    ${table("<th>Dish</th><th>Rules say</th><th>Your pin</th><th></th>", body, "No dish matches.")}`;
+}
 export function ownerTableHtml(O, d) {
   if (O.tab === "venue") return venueTable(O, d);
+  if (O.tab === "pairings") return pairingsTable(O, d);
   if (O.tab === "roles") return rolesTable(O, d);
   if (O.tab === "legend") return legendTable(O, d);
   if (O.tab === "tags") return tagsTable(O, d);
@@ -379,6 +400,7 @@ export function ownerHtml(O, d) {
     <select class="ofield" data-owner-issue aria-label="Show"><option value="all">All wines</option>${ISSUES.map((i) => `<option value="${i.id}"${O.issue === i.id ? " selected" : ""}>${esc(i.label)}</option>`).join("")}</select>
     ${d.wineTags ? `<select class="ofield" data-owner-tagfilter aria-label="Tag"><option value="all">Any tag</option><option value="none"${O.tagFilter === "none" ? " selected" : ""}>No tag</option>${d.wineTags.tags.map((t) => `<option value="${esc(t.id)}"${O.tagFilter === t.id ? " selected" : ""}>${esc(t.name)}</option>`).join("")}</select>` : ""}`;
   else if (O.tab === "bingo") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search cards or squares" value="${esc(O.q)}" aria-label="Search bingo cards">`;
+  else if (O.tab === "pairings") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search dishes" value="${esc(O.q)}" aria-label="Search dishes">`;
   else if (O.tab === "lists") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search this list" value="${esc(O.q)}" aria-label="Search this list">`;
   else if (O.tab === "tags") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search tags" value="${esc(O.q)}" aria-label="Search tags">
     <select class="ofield" data-owner-tagkind aria-label="Kind of new tag">${TAG_KINDS.map((k) => `<option value="${k.id}">${esc(k.label)}</option>`).join("")}</select>
