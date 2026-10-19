@@ -5,7 +5,7 @@ what is waiting and how the work is done.
 
 ## Where things stand
 
-- **Branches.** Main working branch `claude/wine-discovery-architecture-3pithw` (the app at the site's address) and `vwm` (Vintage Wine
+- **Branches.** Main working branch `main` (renamed on 2026-10-19 from `claude/wine-discovery-architecture-3pithw`; the old `main` is frozen as `archive/old-main`) (the app at the site's address) and `vwm` (Vintage Wine
   Merchants, under `/vwm/`). Both are pushed and published. Shared changes are made on the main branch first, then merged into `vwm`
   (recipe in `docs/tools/README.md`). **`docs/BRANCHES.md` is the ledger of what main has that `vwm` does not yet, and what is only in `vwm`: keep it current.** Never push to a `backup/` branch (`docs/VERSIONS.md`). No pull request unless the owner asks.
 - **Publishing.** Push, then run the GitHub Actions workflow `pages.yml` on the main branch (it publishes both branches).
