@@ -21,15 +21,14 @@ is merged, move the lines to "Merged" with the date. Whenever a venue gets somet
 ## Venue: `vwm` (published under `/vwm/`)
 
 ### On main, not yet merged into `vwm`
-- 2026-10-19 Branch rename: the working branch is now `main`; `pages.yml` and the docs say so (this commit).
-- 2026-10-19 `12e7910` Year in wine recap (`recap.js`, Profile). **Parked and hidden** by the next commit (`SHOW_RECAP = false` in
-  `profile.js`); it is harmless to merge.
-- 2026-10-19 Recap hidden from the Profile tab; this page (`docs/BRANCHES.md`).
-- 2026-10-19 Food ideas on the rating sheet (`pairing.js`, convention 29). Venue check: the venue's rating sheet uses the same `sheetHtml`, so it should
-  just work after the merge; run the `vwm` browser checks.
+_(nothing: `vwm` has all of main as of 2026-10-19)_
 
 ### Merged (main is in `vwm` up to)
-- 2026-10-19: main `0e57e98` (hand-off notes and working tools) merged as `10d47a4`. Includes the Atlas, the card's map, label-style names,
+- 2026-10-19: main (branch rename to `main`, Food ideas on the rating sheet, parked recap, this ledger) merged into `vwm`. Conflicts were only `?v=`
+  numbers and imports (settled with `resolve_v.py` / `resolve_imports.py`); `recap.js` was pointed at `logic.js?v=25` (the `vwm` number) and the
+  changed modules re-bumped with `cascade.py`. `vwm` browser checks: venue_ui 17, vrev_ui 48, sure_ui 14, atlas_v 14, cardmap_v 19, steps 12,
+  food_ui 4, all passing.
+- 2026-10-19 (earlier): main `0e57e98` (hand-off notes and working tools) merged as `10d47a4`. Includes the Atlas, the card's map, label-style names,
   appellation grapes, Grand Cru appellations, the sparkling sweetness term and the paged catalog read.
 
 ### Only in `vwm` (not meant for main)
