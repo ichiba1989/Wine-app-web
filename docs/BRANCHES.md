@@ -26,6 +26,8 @@ _(nothing: `vwm` has all of main as of 2026-10-26)_
 ### Merged (main is in `vwm` up to)
 - 2026-10-26: main's **reference model draft and read-only database inspection** (Phase 2.0B.1; documents and SQL only, no app file changed:
   `docs/REFERENCE_MODEL.md`, `docs/reference/`) merged into `vwm`. No version numbers changed.
+- 2026-10-26 (later): main's **database inspection findings** (`docs/reference/results/FINDINGS.md`, the model updated; documents only)
+  merged into `vwm`.
 - 2026-10-19 (latest): main's **At a restaurant** (convention 31, `docs/restaurant_visits.sql`) merged into `vwm`; there the matching and the taste context use the venue's own list as the catalog. Conflicts were `?v=` numbers, duplicated import lines and `CLAUDE.md`; the new files were pointed at `vwm`'s numbers (`text.js` 3, `logic.js` 25, `recommend.js` 17, `grapes.js` 3, `flavors.js` 4, `structure.js` 16, `aocgrapes.js` 3). All `vwm` browser checks pass (venue_ui 17, vrev_ui 48, sure_ui 14, atlas_v 14, cardmap_v 19, steps 12, food_more_ui 25, food_owner_ui 11, food_ui 4, restaurant_ui 29) and the Node checks (foods 49, restaurant 38).
 - 2026-10-19 (later): main's **More tab, Food screens and the owner's pairing pins** (convention 30, `docs/food_pairing.sql`) merged into `vwm`. Conflicts
   were `?v=` numbers and imports plus hand-resolved lines in `app.js` (the venue's tab title and state kept, `FOOD`, `f` and the More title added),
