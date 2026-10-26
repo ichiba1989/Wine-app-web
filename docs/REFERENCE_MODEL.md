@@ -1,6 +1,7 @@
 # Wine Education Master Reference: the reference model (DRAFT, Phase 2.0B.1, 2026-10-26)
 
-**Status: draft for the owner's approval. Nothing here is built.** No table, function, file or screen of the app was changed for it, and
+**Status: draft for the owner's approval. Nothing here is built.** Updated 2026-10-26 with the database inspection
+(`docs/reference/results/FINDINGS.md`); the **[Check]** points it settled are marked *Checked*. No table, function, file or screen of the app was changed for it, and
 no database change has been made. It follows the Phase 2.0A audit (shared as the doc "Wine Reference Audit (Phase 2.0A)") and the owner's
 provisional approval (2026-10-26): integrate into the existing Supabase database; keep every existing catalog and personal-data table as
 it is; add the reference beside them; build the canonical reference before any education feature; no bulk content.
@@ -80,9 +81,10 @@ The four levels are the owner's. The definitions below are drafts to confirm; th
   lot). When nothing is stated, the wine has one **"unidentified non-vintage" edition**: honest about not knowing, and splittable later
   without changing ids that journals already point at.
 - **Multi-vintage blends:** one edition with several harvest events, each only when stated.
-- **Legacy flag:** today a vintage row is either a year or `is_non_vintage = true` (`wine_vintages`; 144 non-vintage rows among the
-  1,877 published on 2026-10-26). Each legacy non-vintage row maps to an "unidentified non-vintage" edition until an editor links it to a
-  stated one.
+- **Legacy flag:** today a vintage row is either a year or `is_non_vintage = true` (`wine_vintages`; 151 non-vintage rows among 1,888
+  on 2026-10-26). *Checked:* the database allows **at most one non-vintage row per wine** (and one row per wine and year), so non-vintage
+  editions cannot be told apart in the old catalog and live only in the reference. Each legacy non-vintage row maps to an "unidentified
+  non-vintage" edition until an editor links it to a stated one.
 - **A vintage year is not a quality statement.** Good or poor years are claims with their own sources (section 7), never a field.
 
 ## 6. Legacy catalog mapping rules [Proposal]
@@ -93,16 +95,23 @@ The reference adds **mapping rows** that point from its entities to legacy ids.
 1. **Never change a legacy id, row or name** for the reference. Journals, swipes, photos, quiz answers and restaurant visits keep
    pointing at `wine_vintages.id` (audit risk 11).
 2. **Mapping rows** carry: legacy table and id, reference entity id, status (suggested / confirmed / rejected), basis (exact match,
-   editor, rule), who confirmed, when, and a note.
+   editor, rule), who confirmed, when, and a note. *Checked:* the old catalog's own sources are prototype samples and a retailer's list
+   (1,888 source records; no place has a source), so a link to it is evidence of nothing: it is marked "old catalog, not verified" until an
+   editor checks the entity against a real source.
 3. **Default suggestions** (nothing applied until confirmed): each `wines` row → one product; each `wine_vintages` row → one edition
    (its year, or "unidentified non-vintage"); each `producers` row → one producer entity; each `geo_areas` row → one place entity; each
    `grapes` row → one **name** (not automatically a variety: whether two grape names are one variety is an editor's decision with a source).
-4. **Duplicates** (audit: six producers differing only by accents; two duplicate wines; 43 groups that differ only by place or grape) are
+4. **Duplicates** (*Checked:* six producers differing only by accents; 12 groups of wines with the same producer, name, type and place;
+   the old tables have no uniqueness rule on producer names or wine identities) are
    resolved by mapping two legacy rows to one entity *after* an editor confirms, never by merging legacy rows.
-5. **Code lists** (`geo.js`, `aocgrapes.js`, `rankaoc.js`, `rules.js`, `grapes.js`) stay the app's fallback. They become reference claims
+5. **Build on what the database already has** (*Checked*, not in this repository's scripts): the `revisions` table and its
+   `log_revision()` trigger (before/after history, about 5,400 rows) for the change log; `field_provenance` (field-level source and
+   verification) and `appellation_grape_rules` (appellation → grape with a required source) are reconciled with the claims model, not
+   copied; `market_observations` stays separate (market price is not identity).
+6. **Code lists** (`geo.js`, `aocgrapes.js`, `rankaoc.js`, `rules.js`, `grapes.js`) stay the app's fallback. They become reference claims
    only through an import that keeps each line's own source and its "to check" status; a line without a source is not imported.
-6. **Read-only reports first:** before any mapping is written, a report lists the suggested mappings and the conflicts for the owner.
-7. **The app reads the catalog as before** until the owner decides that a screen should read the reference instead, one screen at a time.
+7. **Read-only reports first:** before any mapping is written, a report lists the suggested mappings and the conflicts for the owner.
+8. **The app reads the catalog as before** until the owner decides that a screen should read the reference instead, one screen at a time.
 
 ## 7. Claims, evidence and risk-based verification [Proposal]
 
@@ -114,8 +123,10 @@ The reference adds **mapping rows** that point from its entities to legacy ids.
 - **A source** = what it is (official register or regulation, producer's own document, reference book, dataset, label photograph, editor's
   own tasting is *not* a source for a fact) + title + publisher + link + licence + retrieved date + a fingerprint (hash) of the copy, if a
   copy may be kept (section 11).
-- **Statuses:** draft → in review → verified → published → retired (plus *superseded*). The audit found three status vocabularies in
-  today's tables; the reference uses this one, and a written table maps the old words onto it **[Check]**.
+- **Statuses:** *Checked:* the database already has the list `verification_status` (draft, pending_review, verified, retired), used by
+  wines, places, quiz questions, images and reference values. The reference **reuses it**: draft → pending_review (in review) → verified
+  (shown to players) → retired, plus a *superseded by* link. The other lists (suggested / in use / checked; pending / confirmed / rejected)
+  are mapped onto it in the design document for migration `001`.
 - **Risk-based verification (tiers are a proposal; the owner sets them):**
 
 | Tier | What kind of claim | Evidence needed | Review needed |
@@ -142,7 +153,8 @@ The reference adds **mapping rows** that point from its entities to legacy ids.
 ## 9. Layered reference templates [Proposal]
 
 - **Levels:** Beginner, Enthusiast and Professional, the three the app already uses for wording (`words.js`, `CLAUDE.md` convention 19).
-  Whether an extra "Expert" level is wanted is the owner's call (question 6).
+  *Checked:* the quiz already has a fourth level, **scholar** (`quiz_difficulty`: beginner, enthusiast, professional, scholar), a
+  precedent for an expert level. Whether entries get it too is the owner's call (question 6).
 - **One template per entity kind** (grape variety, place, producer, product, term, and the domain kinds once imported), each a list of
   sections, for example: identity (built from published claims), summary, detail, history, related entities, sources. A section shows
   only published claims; a section with nothing published is left out, as the Atlas place pages already do (`CLAUDE.md` convention 27).
@@ -162,7 +174,7 @@ Built on the existing roles and permissions (`docs/ROLES_AND_ACCESS.md`, `access
 | `ref_translate` | write translations of published entries | to decide |
 | `ref_rights` | record and approve a source's licence | Owner |
 
-- Every change is logged (who, when, before and after), like `staff_audit` today.
+- Every change is logged (who, when, before and after) through the existing `revisions` table and `log_revision()` trigger.
 - Players never write to the reference; their words reach it only through existing review paths.
 
 ## 11. Rights and licensing requirements [Proposal, from the rules in `CLAUDE.md`]
@@ -199,7 +211,7 @@ The reference needs its own set of tables. Two places were compared; the databas
 | Point | A. A dedicated `wine_reference` schema | B. `ref_`-prefixed tables in `public` |
 |---|---|---|
 | Supabase API exposure | Not served to the browser unless added to **Settings, API, Exposed schemas** (a dashboard change). If it is *not* exposed, the browser can only reach it through views and functions in `public`, chosen one by one | Served at once, like every table in `public` |
-| Default permissions | A new schema starts with **no** grants: nothing is reachable until granted (safe by default) | **[Check]** Supabase normally makes `public` grant new tables to `anon` and `authenticated` automatically (inspection section 15); then row-level security must be switched on in the same script, or the table is open |
+| Default permissions | A new schema starts with **no** grants: nothing is reachable until granted (safe by default). *Checked:* no automatic grants exist outside Supabase's own schemas | *Checked:* every new table and function in `public` is granted automatically to `anon` and `authenticated` (inspection section 15); row-level security must be on from the first moment (a `rls_auto_enable()` function exists; whether it is active was not confirmed) |
 | Row-level security | Same mechanism; required on every table either way | Same |
 | Database functions | Existing helpers (`has_permission`, `cfg_number`) are in `public` and can be called from either | Same |
 | Browser access and the app | The app's offline wrapper only catches `sb.from()` and `sb.rpc()` (`offline.js` lines 142 to 144). Calls through `sb.schema(...)` would bypass it, so the app should reach the reference only through `public` views and functions, which matches the "single hop, curated views" rule (`CLAUDE.md` convention 6) | Works with today's client and offline wrapper unchanged |
@@ -210,10 +222,11 @@ The reference needs its own set of tables. Two places were compared; the databas
 only through a small number of `public` views (players: published rows only) and `public` functions (staff writes, each checking
 permissions and logging), so the dashboard setting does not need to change, the offline wrapper keeps working, nothing is open by
 default, and the whole reference can be listed or removed in one place. The cost: every new kind of read needs a deliberate `public` view
-or function, which is also the gate that keeps the reference curated. **[Check]** before migration `001`: the inspection's sections 12,
-14, 15 and 16 (grants, exposed schemas, default permissions, schema permissions) and whether views with `security_invoker` over that
-schema behave as expected for `anon` and `authenticated` (they need `USAGE` on the schema and `SELECT` on its tables, with row-level
-security still applied).
+or function, which is also the gate that keeps the reference curated. *Checked* (2026-10-26): the inspection confirms the default
+permissions above, and the list of schemas the API serves is kept in the dashboard, not in the database (Settings, API, Exposed schemas:
+the owner checks that it lists nothing unexpected). Still to test on a local copy with migration `001`: that views with
+`security_invoker` over that schema work for `anon` and `authenticated` (they need `USAGE` on the schema and `SELECT` on its tables, with
+row-level security still applied).
 
 ## 15. Open questions for the owner
 
@@ -227,3 +240,5 @@ security still applied).
 8. Risk tiers and who may publish: approve the tiers and the two-person rule for tier 1 (sections 7 and 10).
 9. Source copies: may licensed copies be kept in a private bucket (section 11)?
 10. The open questions in the Phase 2.0A audit doc still stand (parked tech sheet tables, the accent duplicates, a second data file).
+11. From the inspection (`docs/reference/results/FINDINGS.md`): reconcile `appellation_grape_rules` with `aocgrapes.js`; close the
+    parked feature's open setting; confirm the purpose of the read-only login role.

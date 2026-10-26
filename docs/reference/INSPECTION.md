@@ -25,8 +25,11 @@ create, alter, drop, grant, revoke, truncate, copy, execute, call or set outside
 5. Use the results' **Export / Download CSV** button and save the file as `inspect_1_structure.csv`.
 6. Open a **new query** tab and repeat steps 2 to 5 with `docs/reference/inspect_2_catalog.sql` (it returns about 70 rows; columns
    `section`, `check_name`, `result`). Save it as `inspect_2_catalog.csv`.
-7. Send both CSV files back in this chat. They will be read, summarised and saved in the repository under `docs/reference/results/`
-   (structure and catalog observations kept apart), and nothing will be changed in the database.
+7. Send both CSV files back in this chat. They are read and summarised in `docs/reference/results/FINDINGS.md` (structure and catalog
+   observations kept apart); nothing is changed in the database. **The raw CSV files are not committed** (owner, 2026-10-26): the
+   publishing workflow copies `docs/` onto the public website, and the raw files are a full map of the database. The owner keeps them.
+
+**Done on 2026-10-26:** both parts were run by the owner; the summary is `docs/reference/results/FINDINGS.md`.
 
 **If something goes wrong**
 - *An error appears:* copy its text into the chat. Nothing was changed: a read that fails changes nothing.
