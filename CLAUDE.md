@@ -2,7 +2,7 @@
 
 Guidance for AI assistants working in this repository. Read this before changing code.
 
-**Picking the project up in a new session? Read `docs/HANDOFF.md` next, and `docs/BRANCHES.md` (what main has that the venue branches do not yet, and what is venue-only)**: what is waiting (database scripts to run, open items) and how the work is done (`docs/tools/`: version bumps, the `vwm` merge, browser checks). **The Wine Education Master Reference** (started 2026-10-26, not built yet) is planned in `docs/REFERENCE_MODEL.md`; its read-only database inspection is in `docs/reference/`. Never fill in its pending items (the 14 domains, the subdomain taxonomy, the Phase 1.9 revisions) without the owner's own material.
+**Picking the project up in a new session? Read `docs/HANDOFF.md` next, and `docs/BRANCHES.md` (what main has that the venue branches do not yet, and what is venue-only)**: what is waiting (database scripts to run, open items) and how the work is done (`docs/tools/`: version bumps, the `vwm` merge, browser checks). **The Wine Education Master Reference** (started 2026-10-26, not built yet) is planned in `docs/REFERENCE_MODEL.md`; its read-only database inspection is in `docs/reference/`, and migration 001 (designed and tested locally, not run live) in `docs/reference/migration_001/` (`DESIGN.md`; tests: `bash docs/reference/migration_001/tests/run_local_tests.sh`). Never fill in its pending items (the 14 domains, the subdomain taxonomy, the Phase 1.9 revisions) without the owner's own material.
 
 ## What this project is
 
