@@ -296,3 +296,103 @@ select t.run('setup: owner turns the test switch off again', 'postgres', null,
   $q$update public.app_config set value = '0' where key = 'reference_enabled'$q$);
 select t.check('read: off again means nothing is returned', 'anon', null,
   $q$select count(*) = 0 from public.ref_published_names()$q$);
+
+-- ------------------------------------------------------------------------------------------------ Owner approval override (amendment, 2026-10-26)
+-- O = the Owner (staff role 'owner' in profiles). A and B are Editors (ordinary reviewers; B also publishes). The override is tied to the
+-- ROLE: O's stub permissions stay in place when the role is removed, to show the role, not a permission, decides.
+insert into public._stub_permissions values
+  ('aaaaaaaa-0000-0000-0000-00000000000d', 'ref_edit'), ('aaaaaaaa-0000-0000-0000-00000000000d', 'ref_review'),
+  ('aaaaaaaa-0000-0000-0000-00000000000d', 'ref_publish'), ('aaaaaaaa-0000-0000-0000-00000000000d', 'ref_rights')
+on conflict do nothing;
+insert into public.profiles (id, role, staff_role) values
+  ('aaaaaaaa-0000-0000-0000-00000000000a', 'player', 'editor'), ('aaaaaaaa-0000-0000-0000-00000000000b', 'player', 'editor'),
+  ('aaaaaaaa-0000-0000-0000-00000000000c', 'player', null), ('aaaaaaaa-0000-0000-0000-00000000000d', 'player', 'owner')
+on conflict (id) do nothing;
+
+select t.run('owner setup: O writes a place P4, a grape G3, a place P5, and their names', 'postgres', 'aaaaaaaa-0000-0000-0000-00000000000d',
+  $q$insert into wine_reference.entities (id, kind) values ('e0000000-0000-0000-0000-000000000031', 'place'), ('e0000000-0000-0000-0000-000000000032', 'grape_variety'), ('e0000000-0000-0000-0000-000000000033', 'place');
+     insert into wine_reference.entity_names (id, entity_id, name, language, name_kind, is_preferred) values
+       ('a0000000-0000-0000-0000-000000000031', 'e0000000-0000-0000-0000-000000000031', 'Test place 4', 'en', 'common', true),
+       ('a0000000-0000-0000-0000-000000000032', 'e0000000-0000-0000-0000-000000000032', 'Test grape 3', 'en', 'common', true),
+       ('a0000000-0000-0000-0000-000000000033', 'e0000000-0000-0000-0000-000000000033', 'Test place 5', 'en', 'common', true)$q$);
+select t.run('owner setup: O submits their names and entities', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000d',
+  $q$select public.ref_review('entity_names', x, 'submit') from unnest(array['a0000000-0000-0000-0000-000000000031','a0000000-0000-0000-0000-000000000032','a0000000-0000-0000-0000-000000000033']::uuid[]) x;
+     select public.ref_review('entities', x, 'submit') from unnest(array['e0000000-0000-0000-0000-000000000031','e0000000-0000-0000-0000-000000000032','e0000000-0000-0000-0000-000000000033']::uuid[]) x$q$);
+select t.run('owner: O approves their own name, with a justification', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000d',
+  $q$select public.ref_review('entity_names', 'a0000000-0000-0000-0000-000000000031', 'approve', 'checked against the source')$q$);
+select t.run('owner: O approves their own eligible drafts (names and entities P4, G3)', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000d',
+  $q$select public.ref_review('entity_names', 'a0000000-0000-0000-0000-000000000032', 'approve');
+     select public.ref_review('entities', x, 'approve') from unnest(array['e0000000-0000-0000-0000-000000000031','e0000000-0000-0000-0000-000000000032']::uuid[]) x$q$);
+select t.run('owner: O publishes their own approved entities P4 and G3', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000d',
+  $q$select public.ref_review('entities', x, 'publish') from unnest(array['e0000000-0000-0000-0000-000000000031','e0000000-0000-0000-0000-000000000032']::uuid[]) x$q$);
+-- the Owner's claims: every publication rule still applies
+select t.run('owner setup: O writes claim P4 in P2 with three flawed versions (no evidence; unverified source; forbidden quote)', 'postgres', 'aaaaaaaa-0000-0000-0000-00000000000d',
+  $q$insert into wine_reference.claims (id, subject_entity_id, relationship_type, object_entity_id) values ('c0000000-0000-0000-0000-000000000031', 'e0000000-0000-0000-0000-000000000031', 'part_of', 'e0000000-0000-0000-0000-000000000002');
+     insert into wine_reference.claim_versions (id, claim_id, version_no, risk_tier) values
+       ('f0000000-0000-0000-0000-000000000031', 'c0000000-0000-0000-0000-000000000031', 1, 2),
+       ('f0000000-0000-0000-0000-000000000032', 'c0000000-0000-0000-0000-000000000031', 2, 2),
+       ('f0000000-0000-0000-0000-000000000033', 'c0000000-0000-0000-0000-000000000031', 3, 2);
+     insert into wine_reference.claim_evidence (claim_version_id, source_version_id, modality, locator) values ('f0000000-0000-0000-0000-000000000032', '51000000-0000-0000-0000-000000000002', 'documentary', 'p. 7');
+     insert into wine_reference.claim_evidence (claim_version_id, source_version_id, modality, locator, quote, quote_rights_id) values ('f0000000-0000-0000-0000-000000000033', '51000000-0000-0000-0000-000000000001', 'documentary', 'p. 8', 'a short quote', 'b0000000-0000-0000-0000-000000000001')$q$);
+select t.run('owner setup: O submits and self-approves the three flawed versions', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000d',
+  $q$select public.ref_review('claim_versions', x, 'submit') from unnest(array['f0000000-0000-0000-0000-000000000031','f0000000-0000-0000-0000-000000000032','f0000000-0000-0000-0000-000000000033']::uuid[]) x;
+     select public.ref_review('claim_versions', x, 'approve') from unnest(array['f0000000-0000-0000-0000-000000000031','f0000000-0000-0000-0000-000000000032','f0000000-0000-0000-0000-000000000033']::uuid[]) x$q$);
+select t.run('owner: O cannot publish a claim without evidence', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000d',
+  $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000031', 'publish')$q$, '23514');
+select t.run('owner: O cannot publish on evidence from an unverified source version', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000d',
+  $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000032', 'publish')$q$, '23514');
+select t.run('owner: O cannot publish a quote whose rights forbid quoting', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000d',
+  $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000033', 'publish')$q$, '23514');
+-- a high-risk (tier 1) claim by the Owner with the right evidence
+select t.run('owner setup: O writes a tier-1 claim, G1 genetic parent of G3, with genetic evidence from a verified source version', 'postgres', 'aaaaaaaa-0000-0000-0000-00000000000d',
+  $q$insert into wine_reference.claims (id, subject_entity_id, relationship_type, object_entity_id) values ('c0000000-0000-0000-0000-000000000032', 'e0000000-0000-0000-0000-000000000004', 'genetic_parent_of', 'e0000000-0000-0000-0000-000000000032');
+     insert into wine_reference.claim_versions (id, claim_id, version_no, risk_tier) values ('f0000000-0000-0000-0000-000000000034', 'c0000000-0000-0000-0000-000000000032', 1, 1);
+     insert into wine_reference.claim_evidence (claim_version_id, source_version_id, modality, locator) values ('f0000000-0000-0000-0000-000000000034', '51000000-0000-0000-0000-000000000001', 'genetic', 'table 2')$q$);
+select t.run('owner: O submits, self-approves and publishes their own tier-1 claim', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000d',
+  $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000034', 'submit');
+     select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000034', 'approve', 'owner checked the genetic study');
+     select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000034', 'publish')$q$);
+-- ordinary reviewers and publishers keep the two-person rule
+select t.run('owner setup: B (Editor, reviewer and publisher) writes and submits a version of P2 in P3', 'postgres', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$insert into wine_reference.claim_versions (id, claim_id, version_no, risk_tier) values ('f0000000-0000-0000-0000-000000000036', 'c0000000-0000-0000-0000-000000000002', 2, 2);
+     insert into wine_reference.claim_evidence (claim_version_id, source_version_id, modality, locator) values ('f0000000-0000-0000-0000-000000000036', '51000000-0000-0000-0000-000000000001', 'documentary', 'p. 9')$q$);
+select t.run('owner setup: B submits it', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b', $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000036', 'submit')$q$);
+select t.run('two-person rule: an ordinary reviewer (B) cannot approve their own draft', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000036', 'approve')$q$, '42501');
+select t.run('two-person rule: a non-Owner publisher (B) cannot publish without independent approval', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000036', 'publish')$q$, '22023');
+select t.run('two-person rule: a user cannot claim to be Owner through a session setting', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select set_config('request.jwt.claim.role', 'owner', true), set_config('app.role', 'owner', true);
+     select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000036', 'approve')$q$, '42501');
+-- the audit history
+select t.check('audit: the Owner''s self-approvals are recorded with owner_override, actor, decision and justification', 'postgres', null,
+  $q$select exists (select 1 from wine_reference.review_events where target_id = 'a0000000-0000-0000-0000-000000000031' and decision = 'approve'
+                      and owner_override and actor = 'aaaaaaaa-0000-0000-0000-00000000000d' and note = 'checked against the source' and acted_at is not null)
+        and exists (select 1 from wine_reference.review_events where target_id = 'f0000000-0000-0000-0000-000000000034' and decision = 'approve'
+                      and owner_override and note = 'owner checked the genetic study')$q$);
+select t.check('audit: no one but the Owner ever has owner_override, and never on submit or publish', 'postgres', null,
+  $q$select not exists (select 1 from wine_reference.review_events where owner_override and (actor <> 'aaaaaaaa-0000-0000-0000-00000000000d' or decision <> 'approve'))
+        and exists (select 1 from wine_reference.review_events where decision = 'publish' and actor = 'aaaaaaaa-0000-0000-0000-00000000000d' and not owner_override)$q$);
+select t.check('audit: approvals of someone else''s work are not marked as overrides', 'postgres', null,
+  $q$select not exists (select 1 from wine_reference.review_events e where e.decision = 'approve' and e.owner_override and e.actor = 'aaaaaaaa-0000-0000-0000-00000000000b')
+        and exists (select 1 from wine_reference.review_events e where e.decision = 'approve' and not e.owner_override)$q$);
+select t.run('audit: an override record cannot be changed', 'postgres', null,
+  $q$update wine_reference.review_events set owner_override = false where owner_override$q$, '42501');
+select t.run('audit: an override record cannot be deleted', 'postgres', null,
+  $q$delete from wine_reference.review_events where owner_override$q$, '42501');
+select t.run('audit: a hand-written override row is refused for anything but approve', 'postgres', null,
+  $q$insert into wine_reference.review_events (target_table, target_id, decision, from_status, to_status, actor, owner_override)
+     values ('entities', 'e0000000-0000-0000-0000-000000000033', 'publish', 'verified', 'verified', 'aaaaaaaa-0000-0000-0000-00000000000d', true)$q$, '23514');
+-- revoking the Owner role ends the override at once
+select t.run('owner setup: the Owner role is removed from O (O keeps every ref_* permission in this test)', 'postgres', null,
+  $q$update public.profiles set staff_role = null where id = 'aaaaaaaa-0000-0000-0000-00000000000d'$q$);
+select t.run('revocation: O can no longer approve their own submitted draft (name of P5)', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000d',
+  $q$select public.ref_review('entity_names', 'a0000000-0000-0000-0000-000000000033', 'approve')$q$, '42501');
+select t.run('revocation: O can no longer approve their own submitted entity P5', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000d',
+  $q$select public.ref_review('entities', 'e0000000-0000-0000-0000-000000000033', 'approve')$q$, '42501');
+select t.run('revocation: someone else (A) can still approve O''s draft the normal way', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000a',
+  $q$select public.ref_review('entity_names', 'a0000000-0000-0000-0000-000000000033', 'approve')$q$);
+select t.run('owner setup: the Owner role is given back through the older profiles.role ''admin'' path', 'postgres', null,
+  $q$update public.profiles set role = 'admin' where id = 'aaaaaaaa-0000-0000-0000-00000000000d'$q$);
+select t.run('owner: the older admin path counts as Owner again (O approves own P5)', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000d',
+  $q$select public.ref_review('entities', 'e0000000-0000-0000-0000-000000000033', 'approve')$q$);

@@ -1,11 +1,11 @@
 # Wine Education Master Reference: complete briefing
 
-**As of 2026-10-26.** One document that covers the whole effort so far, written to be read on its own (no access to the code needed).
+**As of 2026-10-26 (updated the same day for the Owner approval override).** One document that covers the whole effort so far, written to be read on its own (no access to the code needed).
 Repository: `ichiba1989/Wine-app-web`, branch `main` (latest commit at writing: `76032a4`); the venue version `vwm` has the same documents.
 
 **Status in one paragraph.** The reference has been audited, the live database has been inspected (read-only), a reference model has
 been drafted, and **migration 001** (the database foundation) has been designed, written as SQL and **tested on a throwaway local
-database: 127 tests passed, 0 failed**. **Nothing has been run on the live database and nothing in the app has changed.** The next step
+database: 160 tests passed, 0 failed** (re-run in full after the Owner approval override was added). **Nothing has been run on the live database and nothing in the app has changed.** The next step
 needs the owner: the decisions in section 10 and written approval, then the checklist in section 11.
 
 ---
@@ -58,7 +58,7 @@ real bottle photographs only; third-party data only with a checked licence; data
 | Restore point | Both versions saved as frozen branches before the change (`backup/before-big-change-2026-10-26`, `backup/vwm-before-big-change-2026-10-26`) | Can always go back |
 | 2.0A | Read-only repository audit | Recommendation: build inside the existing database, in its own section, additive only |
 | 2.0B.1 | Read-only database inspection scripts written and tested; the owner ran them on the live database; draft reference model | `docs/REFERENCE_MODEL.md`, `docs/reference/results/FINDINGS.md` (raw results kept by the owner, not published) |
-| 2.0B.2 | Migration 001 designed, written, tested locally | `docs/reference/migration_001/`: 127 of 127 tests passed; not run live |
+| 2.0B.2 | Migration 001 designed, written, tested locally | `docs/reference/migration_001/`: 160 of 160 tests passed; not run live |
 
 ---
 
@@ -208,7 +208,7 @@ setting or permission is changed. No wine content is added; the taxonomy is empt
 **Editorial life of a row:** draft → submitted (`pending_review`, content frozen) → approved (`verified`, by someone other than the
 author) → published (entities and claim versions only) → retired. Rejection returns it to draft.
 
-**Rules the database enforces itself:** new rows start as drafts; status changes only through `ref_review`; no self-approval;
+**Rules the database enforces itself:** new rows start as drafts; status changes only through `ref_review`; no self-approval except by the Owner (below);
 publication needs supporting evidence from a verified source version, the claim type's required evidence modality, quotes with verified
 rights that allow quoting, published subject and object, and published dependencies; publishing a new claim version retires the old one;
 dates must be in order; shares between 0 and 100; no loops in the taxonomy, in "part of" relationships or in dependencies; a taxonomy
@@ -216,8 +216,14 @@ node's parent is in the same domain.
 
 **Permissions (application level):** `ref_edit` (submit), `ref_review` (approve, reject), `ref_publish` (publish, retire), `ref_rights`
 (approve a licence). They are given to roles by a **separate script, `001a`**, the only step that touches an existing table (the role
-definitions). As drafted it gives all four to the Owner role only. **Note: with one person holding everything, nothing can be approved,
-because the author cannot approve their own work. A second reviewer is needed.**
+definitions). As drafted it gives all four to the Owner role only.
+
+**Owner approval override (owner policy, 2026-10-26).** The person whose staff role is **Owner** may approve their own work (any risk tier)
+and publish it without a second person. Everyone else keeps the two-person rule. The Owner is recognised only by the app's existing
+server-side role lookup (`my_staff_role_code()`, which reads the person's staff role; players cannot change it, and the Owner role is only
+ever set by hand), asked on every call, so removing the Owner role ends the override at once. No other rule is waived: evidence, verified
+sources, quotation rights, required evidence modality and published dependencies still apply. Every use is recorded in the append-only
+review history as `owner_override`, with who, when, the decision and an optional justification.
 
 **Deliberately deferred:** wine product / edition / release / release-event tables and the legacy mapping (002); staff tools to create
 drafts and an Owner page tab (002/003; until then rows typed in the SQL Editor have no author and cannot be approved); reconciling the
@@ -239,11 +245,12 @@ education; database search per language.
 **Compatibility.** The whole `public` schema was compared before and after the migration in the test: the only difference is the two
 new `ref_*` functions. No app file changes; neither version of the app uses the reference yet.
 
-**Tests (local only, PostgreSQL 16, throwaway database): 127 passed, 0 failed.** Covered: fresh install; running it twice (no change,
+**Tests (local only, PostgreSQL 16, throwaway database): 160 passed, 0 failed.** Covered: fresh install; running it twice (no change,
 no duplicates); backward compatibility; the read-only verify script; foreign keys and uniqueness; taxonomy loops and domains;
 relationship types and loops; dates and values; editorial rules and the two-person rule; provenance (frozen versions, evidence only on
 drafts); rights; dependencies; append-only history; access refused for every browser role; publication rules of the read door; rollback
-(refused with content, clean when empty); the permissions script. *Limits:* not Supabase itself; the permission check and sign-in were
+(refused with content, clean when empty); the permissions script; the Owner approval override (allowed for the Owner, refused for
+reviewers and publishers, no rule waived, recorded, ended at once when the role is removed); a missing live function stops the migration. *Limits:* not Supabase itself; the permission check and sign-in were
 stand-ins; the verify script re-checks access on the live database after the migration.
 
 **Recovery.** The migration is one transaction (all or nothing). While the reference is empty, a tested rollback script removes exactly
@@ -257,7 +264,7 @@ what it created. Once content exists: never drop; fix forward with a new migrati
 2. Supply the **fourteen approved knowledge domains**, the **~140-subdomain taxonomy** and the **Phase 1.9 document**.
 3. Approve the starting lists: 9 entity kinds, 8 name kinds, 9 source kinds, 7 evidence modalities, 6 relationship types (and which to activate).
 4. Revision 7: does "assessment evidence separated by modality" mean claim evidence (built), learner assessments (deferred), or both?
-5. Who holds `ref_edit`, `ref_review`, `ref_publish`, `ref_rights` (a second reviewer is needed).
+5. Who holds `ref_edit`, `ref_review`, `ref_publish`, `ref_rights` (the Owner no longer needs a second reviewer; Editors who get them keep the two-person rule).
 6. Whether tier-1 claims need more than "author ≠ approver" (for example an official primary source, or two approvers).
 7. The first attribute types (for example alcohol by volume, founding year).
 8. Languages to start with.
@@ -276,9 +283,10 @@ Nothing here happens until the owner approves in writing. Scripts run one at a t
 - [ ] Owner approves the design, including decisions 1, 3 and 5.
 - [ ] A recent database backup exists (dashboard: Database, Backups), or note that the plan has none.
 - [ ] Settings, API, Exposed schemas does **not** list `wine_reference`; leave it unchanged.
-- [ ] Use the approved files. Fingerprints (first 16 hex characters of SHA-256): `001_wine_reference_foundation.sql` `04aafc32e0abbe43`,
-      `001a_reference_permissions.sql` `8cf791d1e3d0256a`, `001_verify.sql` `c86dc824897f1c9f`, `001_rollback.sql` `210b650d5b103a2f`.
-- [ ] Re-run the local tests on that commit: 127 passed, 0 failed.
+- [ ] Use the approved files. Fingerprints (first 16 hex characters of SHA-256): `001_wine_reference_foundation.sql` `ae69fb54f1be71d7`,
+      `001a_reference_permissions.sql` `8cf791d1e3d0256a`, `001_verify.sql` `512247ba1d83ae50`, `001_rollback.sql` `210b650d5b103a2f`.
+- [ ] Read the live body of `my_staff_role_code()` once (read-only) and confirm it returns 'owner' only for the Owner role (DESIGN.md §8).
+- [ ] Re-run the local tests on that commit: 160 passed, 0 failed.
 
 **Run**
 - [ ] Paste `001_wine_reference_foundation.sql`, Run: expect "Success. No rows returned". Any error: stop; nothing was applied.
@@ -301,7 +309,6 @@ Nothing here happens until the owner approves in writing. Scripts run one at a t
 | The 14 approved knowledge domains and the ~140-subdomain taxonomy | Taxonomy tables stay empty; no codes or names are invented | Owner |
 | The Phase 1.9 document | The eight revisions are taken from the brief's wording; no line-by-line comparison yet | Owner |
 | Permission or licence for CMS / WSET material | No syllabus wording, numbering or mapping | Owner (and the bodies concerned) |
-| A second reviewer | Nothing can be approved under the two-person rule | Owner |
 | Staff entry tools (migration 002/003) | Content can only be typed in the SQL Editor, and such rows cannot be approved | Next phases |
 
 ---
@@ -341,6 +348,6 @@ Nothing here happens until the owner approves in writing. Scripts run one at a t
 | Source version | The exact edition, page or file that was read |
 | Evidence modality | How evidence was obtained (document, label, laboratory, genetic test, map, tasting, expert statement) |
 | Risk tier | How much checking a kind of claim needs (1 = most) |
-| Two-person rule | The author of a row can never approve it |
+| Two-person rule | The author of a row can never approve it, except the Owner (Owner approval override, always recorded) |
 | Published | Approved and released to players (separate from approved) |
 | Retired | Withdrawn but kept for the record |

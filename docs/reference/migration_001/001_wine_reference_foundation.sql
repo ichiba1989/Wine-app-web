@@ -13,10 +13,25 @@
 -- Safe to run again: every statement is "if not exists", "create or replace" or "on conflict do nothing"; a second run changes nothing.
 -- Once run on the live database this file is frozen: later changes go in migration 002 and after (never edit 001 after it is applied).
 -- Requires (all present on the live database per docs/reference/results/FINDINGS.md): PostgreSQL 15+ (gen_random_uuid), the enum
--- public.verification_status, the functions public.has_permission(text) and public.cfg_number(text, numeric), auth.uid(),
--- the roles anon / authenticated / service_role, and pg_trgm installed in schema public.
+-- public.verification_status, the functions public.has_permission(text) and public.cfg_number(text, numeric),
+-- auth.uid(), the roles anon / authenticated / service_role, and pg_trgm installed in schema public. The first step checks them and stops
+-- (changing nothing) if one is missing. (Also: public.my_staff_role_code(), for the Owner approval override below.)
+--
+-- Owner approval override (owner policy, 2026-10-26, Phase 2.0B.2 amendment): the person whose staff role is Owner may approve their own
+-- contributions; everyone else keeps the two-person rule. The Owner is identified only by public.my_staff_role_code() = 'owner' (the
+-- app's authoritative, server-side role lookup), asked again on every call, and every use is marked owner_override in review_events.
 
 begin;
+
+-- 0. Stop before changing anything if a required piece of the live database is missing.
+do $$
+begin
+  if to_regtype('public.verification_status') is null then raise exception 'Missing enum public.verification_status'; end if;
+  if to_regprocedure('public.has_permission(text)') is null then raise exception 'Missing function public.has_permission(text)'; end if;
+  if to_regprocedure('public.my_staff_role_code()') is null then raise exception 'Missing function public.my_staff_role_code()'; end if;
+  if to_regprocedure('public.cfg_number(text,numeric)') is null then raise exception 'Missing function public.cfg_number(text, numeric)'; end if;
+  if to_regprocedure('auth.uid()') is null then raise exception 'Missing function auth.uid()'; end if;
+end $$;
 
 -- =====================================================================================================================================
 -- 1. The private schema. Nobody but its owner (postgres) may use it. It is NOT to be added to the API's Exposed schemas.
@@ -396,7 +411,9 @@ create table if not exists wine_reference.review_events (
   to_status    public.verification_status not null,
   actor        uuid not null,
   acted_at     timestamptz not null default now(),
-  note         text not null default '' check (length(note) <= 2000)
+  note         text not null default '' check (length(note) <= 2000),   -- optional justification
+  owner_override boolean not null default false,                         -- true when the Owner approved without a second person
+  constraint review_events_override_only_on_approve check (not owner_override or decision = 'approve')
 );
 create index if not exists review_events_target on wine_reference.review_events (target_table, target_id, acted_at);
 
@@ -704,7 +721,7 @@ returns text language plpgsql security definer set search_path = '' as $$
 declare
   v_actor uuid := auth.uid();
   v_from public.verification_status; v_to public.verification_status; v_creator uuid; v_published timestamptz;
-  v_has_published boolean; v_perm text;
+  v_has_published boolean; v_perm text; v_override boolean := false;
   v_cv record; v_ok boolean;
 begin
   if v_actor is null then raise exception 'Sign in first' using errcode = '42501'; end if;
@@ -736,9 +753,16 @@ begin
     else null end;
   if v_to is null then raise exception 'Cannot % a row that is %', p_decision, v_from using errcode = '22023'; end if;
 
-  -- two-person rule: nobody approves their own work; an unknown author (a row typed in the SQL editor) cannot be approved here
+  -- two-person rule: nobody approves their own work; an unknown author (a row typed in the SQL editor) cannot be approved here.
+  -- Owner exemption (owner policy 2026-10-26): the person whose staff role is Owner may approve anyway. The role is read server-side by
+  -- public.my_staff_role_code() (profiles.staff_role, or the older profiles.role 'admin'), which players cannot change; it is asked on
+  -- every call, so removing the Owner role ends the exemption at once. Every other rule below still applies to the Owner.
   if p_decision = 'approve' and (v_creator is null or v_creator = v_actor) then
-    raise exception 'The author cannot approve their own row (and a row with no recorded author cannot be approved here)' using errcode = '42501';
+    if coalesce(public.my_staff_role_code(), '') = 'owner' then
+      v_override := true;
+    else
+      raise exception 'The author cannot approve their own row (and a row with no recorded author cannot be approved here)' using errcode = '42501';
+    end if;
   end if;
 
   -- publication rules
@@ -797,8 +821,8 @@ begin
   end if;
   perform set_config('wine_reference.in_review', 'off', true);
 
-  insert into wine_reference.review_events (target_table, target_id, decision, from_status, to_status, actor, note)
-  values (p_table, p_id, p_decision, v_from, v_to, v_actor, left(coalesce(p_note, ''), 2000));
+  insert into wine_reference.review_events (target_table, target_id, decision, from_status, to_status, actor, note, owner_override)
+  values (p_table, p_id, p_decision, v_from, v_to, v_actor, left(coalesce(p_note, ''), 2000), v_override);
   return v_to::text;
 end $$;
 revoke all on function public.ref_review(text, uuid, text, text) from public, anon, authenticated, service_role;
@@ -825,7 +849,7 @@ comment on table wine_reference.claims is 'The stable identity of a statement: s
 comment on table wine_reference.claim_versions is 'What a claim says, when it was true, its risk tier and status. Frozen once it leaves draft; one live published version per claim.';
 comment on table wine_reference.claim_version_dependencies is 'This claim version holds only if that one holds (Phase 1.9 revision 6). No cycles.';
 comment on table wine_reference.claim_evidence is 'Where a claim version is supported or contradicted: source version, locator, modality, optional quote with its rights.';
-comment on table wine_reference.review_events is 'Append-only history of every status decision (submit, approve, reject, publish, retire).';
+comment on table wine_reference.review_events is 'Append-only history of every status decision (submit, approve, reject, publish, retire); owner_override marks the Owner approving without a second person.';
 comment on table wine_reference.change_log is 'Append-only before/after record of every insert, update and delete in the reference tables.';
 
 -- =====================================================================================================================================

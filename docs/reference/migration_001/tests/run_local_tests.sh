@@ -81,5 +81,14 @@ AS "$PSQL -d reftest2 -f $WORK/001a_reference_permissions.sql" >/dev/null 2>&1 &
 P=$(AS "$PSQL -d reftest2 -At -c \"select (select array_to_string(permissions, ',') from public.staff_roles where code = 'owner')||' / '||(select array_to_string(permissions, ',') from public.staff_roles where code = 'editor')||' / '||(select count(*) from wine_reference.schema_migrations)\"")
 [ "$P" = "catalog_edit,quiz_verify,feedback_read,settings_edit,remove_content,found_online_photos,import_extended,owner_page,ref_edit,ref_review,ref_publish,ref_rights / catalog_edit,quiz_verify,feedback_read,import_extended / 2" ] && ok "001a: owner gains ref_edit, ref_review, ref_publish, ref_rights once; editor unchanged; registered" || bad "001a result: $P"
 
+# ---------------------------------------------------------------- database 3: a required live function is missing -> the migration stops, creating nothing
+AS "$BIN/createdb -h $WORK -p 5498 -U postgres reftest3"
+AS "$PSQL -d reftest3 -f $WORK/stub_supabase.sql" >/dev/null
+AS "$PSQL -d reftest3 -c 'drop function public.my_staff_role_code()'" >/dev/null
+if AS "$PSQL -d reftest3 -f $WORK/001_wine_reference_foundation.sql" > "$WORK/install3.log" 2>&1; then bad "migration should stop when my_staff_role_code() is missing"
+else grep -q "Missing function public.my_staff_role_code()" "$WORK/install3.log" && ok "migration stops when a required live function (my_staff_role_code) is missing" || bad "unexpected failure: $(tail -2 $WORK/install3.log)"; fi
+S=$(AS "$PSQL -d reftest3 -At -c \"select count(*) from pg_namespace where nspname='wine_reference'\"")
+[ "$S" = "0" ] && ok "after that stop nothing was created" || bad "schema exists after a stopped migration"
+
 echo; echo "TOTAL: $PASS passed, $FAIL failed  (PostgreSQL $($BIN/postgres --version | awk '{print $3}'), local throwaway database)"
 [ "$FAIL" = "0" ]

@@ -1,4 +1,4 @@
-# Migration 001: design (DRAFT, Phase 2.0B.2, 2026-10-26)
+# Migration 001: design (DRAFT, Phase 2.0B.2, 2026-10-26; amended the same day: Owner approval override)
 
 **Status: a tested draft for the owner's approval. Nothing has been run on the live database.** Migration 001 creates the canonical
 foundation of the Wine Education Master Reference in a new private schema, `wine_reference`, and two functions in `public`. It changes no
@@ -12,7 +12,7 @@ existing table, row, view, function, setting or permission, and adds no wine con
 | 4. Verification and negative tests | `001_verify.sql` (read-only, also for the live database after migration); `tests/001_behaviour_tests.sql` (local only); `tests/run_local_tests.sh` |
 | 5. Security and permissions review | section 4 below |
 | 6. Compatibility assessment | section 5 below |
-| 7. Local test results | `TEST_REPORT.md`: 127 passed, 0 failed, on a throwaway local PostgreSQL 16 |
+| 7. Local test results | `TEST_REPORT.md`: 160 passed, 0 failed, on a throwaway local PostgreSQL 16 (re-run in full after the amendment) |
 | 8. Rollback and forward recovery | section 6 below; `001_rollback.sql` |
 | 9. Remaining owner decisions | section 7 below |
 | 10. Approval checklist for live execution | section 8 below |
@@ -50,7 +50,7 @@ and a full line-by-line comparison with Phase 1.9 is not possible. **This is a d
 | Change log | FINDINGS suggested reusing `public.revisions` and `log_revision()` | Its own append-only `wine_reference.change_log` | `log_revision()`'s body is not in the repository; `revisions.table_name` holds no schema, so `sources` or `claims` would clash with names in `public`; `revisions` is readable by every editor. Can be unified later (decision 10) |
 | `field_provenance`, `appellation_grape_rules` | Reconcile with the claims model | Untouched | Reconciling them is a mapping task with the legacy catalog (002) |
 | "Event" | Events attached to any level | Release events become identities in 002 | Revision 4 |
-| Risk tiers | Tier 1 needs two people | Every tier: the author never approves their own row. Tier-specific extra rules are not enforced yet | Owner decision 6 |
+| Risk tiers | Tier 1 needs two people | Every tier: the author never approves their own row, **except the Owner** (Owner approval override, below). Tier-specific extra rules are not enforced yet | Owner decision 6; owner policy 2026-10-26 |
 | `ref_translate` | Proposed permission | Not created | No translated entry text exists yet |
 
 ### Assumptions this design makes (to confirm)
@@ -147,17 +147,42 @@ point. No database or dashboard setting was changed; the owner keeps Exposed sch
 - `ref_published_names` caps the result at 200 rows and the search text at 100 characters.
 
 **Editorial rules enforced in the database (not only on screens).** New rows start as `draft`; status and publication change only
-through `ref_review` (a plain update is refused); the author never approves their own row; a claim version is frozen once submitted
+through `ref_review` (a plain update is refused); the author never approves their own row (except the Owner, below); a claim version is frozen once submitted
 (evidence and dependencies too); publication needs supporting evidence from a verified source version, the type's required modality,
 quotes with verified rights that allow quoting, published subject and object entities and published dependencies; publishing a newer
 claim version retires the old one; every decision is a `review_events` row and every row change a `change_log` row, both append-only.
+
+**Owner approval override (owner policy, 2026-10-26, Phase 2.0B.2 amendment).**
+- **The rule:** the person whose staff role is **Owner** may approve their own contributions (any risk tier, rights statements included)
+  and publish them without a second person. Everyone else, including Editors who hold `ref_review` and `ref_publish`, keeps the
+  author-versus-approver separation.
+- **How the Owner is identified:** inside `ref_review`, by `public.my_staff_role_code() = 'owner'`. That is the app's existing,
+  authoritative, server-side lookup (inspected: present on the live database, `SECURITY DEFINER`): it reads `profiles.staff_role`, or for
+  older accounts `profiles.role = 'admin'`, for the signed-in user. Players cannot change those columns (their update grant covers only
+  name and consent columns), the app's staff functions refuse to grant or change the Owner role, and the Owner is only ever set by hand in
+  SQL (`docs/ROLES_AND_ACCESS.md`). No frontend flag, no role passed in by the caller, no user id written in the code.
+- **Revocation is immediate:** the lookup is asked on every call; removing the Owner role ends the override for the next call, even if
+  the person still holds every `ref_*` permission (tested).
+- **Nothing else is waived:** the Owner still needs the decision's permission (`ref_review`, `ref_publish`, `ref_rights`, given by `001a`),
+  and every publication rule still applies: supporting evidence from a verified source version, the type's required evidence modality,
+  quotes with verified rights that allow quoting, published subject, object and dependencies (all tested with the Owner).
+- **Audit:** each use writes a `review_events` row with `owner_override = true`, the actor, the time, the decision and the optional
+  justification (`note`). `owner_override` is allowed only on `approve` (a check constraint) and the table is append-only (tested).
+  Publishing is not an override (publication never required a second person; it requires an approved row).
+- **Rows with no recorded author** (typed in the SQL Editor) can now be approved by the Owner through the same override; they are marked
+  as overrides too. Non-Owners still cannot approve them.
+- **Dependency:** the migration now also needs `public.my_staff_role_code()`; its first step checks every required live object and stops,
+  changing nothing, if one is missing (tested).
 
 **Known limits (stated, not hidden).**
 - The database owner (`postgres`, the SQL Editor) can do anything, including setting the flag `ref_review` uses. That is the platform's
   trust model for every table; owner-typed rows carry no author and cannot be approved through `ref_review`.
 - Staff user ids are stored in the review history and change log. `privacy.html` may need a line about staff records (owner and
   lawyers; not edited).
-- The live `has_permission()` body was not read; its documented behaviour is relied on.
+- The live `has_permission()` and `my_staff_role_code()` bodies were not read; their documented behaviour is relied on (read the
+  latter once before the live run: checklist, section 8).
+- The Owner override means content can be published with only one person's judgement; the `owner_override` mark makes every such
+  approval visible for later review.
 
 ---
 
@@ -169,7 +194,7 @@ claim version retires the old one; every decision is a `review_events` row and e
 - **Existing data:** no row read for writing, none changed; no catalog row is imported (nothing is marked verified).
 - **The app (`main` and `vwm`):** no file changes, no new calls; `?v=` numbers untouched. Both versions share the database, so both
   "have" the schema, and neither uses it.
-- **Live objects the migration depends on:** the enum `public.verification_status`, `public.has_permission(text)`,
+- **Live objects the migration depends on:** the enum `public.verification_status`, `public.has_permission(text)`, `public.my_staff_role_code()`,
   `public.cfg_number(text, numeric)`, `auth.uid()`, `pg_trgm` in `public`, the roles `anon`, `authenticated`, `service_role`. If any of
   them is changed later, re-run `001_verify.sql` and the local tests.
 - **Speed:** empty tables; nothing on the app's start-up path.
@@ -195,7 +220,7 @@ claim version retires the old one; every decision is a `review_events` row and e
 2. **Supply the fourteen approved knowledge domains and the ~140-subdomain taxonomy** (and the Phase 1.9 document). Until then the taxonomy stays empty.
 3. **Approve the structural lists** seeded by 001: the 9 entity kinds, 8 name kinds, 9 source kinds, 7 evidence modalities, and the 6 relationship types (seeded as *proposed*; which to activate, and when).
 4. **Revision 7, "assessment evidence separated by modality":** confirm whether it means claim evidence (built), learner assessments (deferred), or both.
-5. **Who holds `ref_edit`, `ref_review`, `ref_publish`, `ref_rights`** (`001a` gives all four to the Owner role only; Editors are commented out). With one person holding all four, the two-person rule means nothing can be approved: a second reviewer is needed.
+5. **Who holds `ref_edit`, `ref_review`, `ref_publish`, `ref_rights`** (`001a` gives all four to the Owner role only; Editors are commented out). *Amended 2026-10-26:* the Owner may approve their own work (Owner approval override), so a second reviewer is no longer needed for the Owner; Editors given these permissions keep the two-person rule.
 6. **Risk tiers:** whether tier 1 (legal, genetic, health) needs more than "author ≠ approver" (for example an official primary source, or two approvers).
 7. **The first attribute types** (none are seeded).
 8. **Languages** to start with (the tables accept any).
@@ -215,9 +240,12 @@ the owner, one at a time.
 - [ ] Confirm a recent backup exists (dashboard: Database, Backups), or note that the plan has none.
 - [ ] Confirm **Settings, API, Exposed schemas** does not list `wine_reference`; leave it unchanged.
 - [ ] Use the files from the repository's `main` branch at the approved commit. Fingerprints (first 16 hex of SHA-256) as committed:
-      `001_wine_reference_foundation.sql` `04aafc32e0abbe43`, `001a_reference_permissions.sql` `8cf791d1e3d0256a`,
-      `001_verify.sql` `c86dc824897f1c9f`, `001_rollback.sql` `210b650d5b103a2f`.
-- [ ] Re-run the local tests on that commit: `bash docs/reference/migration_001/tests/run_local_tests.sh` → 127 passed, 0 failed.
+      `001_wine_reference_foundation.sql` `ae69fb54f1be71d7`, `001a_reference_permissions.sql` `8cf791d1e3d0256a`,
+      `001_verify.sql` `512247ba1d83ae50`, `001_rollback.sql` `210b650d5b103a2f` (after the Owner override amendment).
+- [ ] Re-run the local tests on that commit: `bash docs/reference/migration_001/tests/run_local_tests.sh` → 160 passed, 0 failed.
+- [ ] Read the live body of `public.my_staff_role_code()` once (read-only:
+      `select pg_get_functiondef('public.my_staff_role_code()'::regprocedure);`) and confirm it returns `'owner'` only for
+      `profiles.staff_role = 'owner'` or `profiles.role = 'admin'`, for the signed-in user (`auth.uid()`). If it differs, stop and send it.
 
 **Run**
 - [ ] New query → paste the whole `001_wine_reference_foundation.sql` → Run. Expected: "Success. No rows returned". Any error: stop and

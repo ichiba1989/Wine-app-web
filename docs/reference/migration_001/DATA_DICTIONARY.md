@@ -37,6 +37,12 @@ review_events (append-only, every status decision)      change_log (append-only,
 
 `reject` sends a submitted row back to `draft`. A plain `update` of `status`, `published_at` or `retired_at` is refused.
 
+**Owner approval override (owner policy, 2026-10-26).** "Approved by someone other than the author" has one exception: the person whose
+staff role is Owner (read server-side by `public.my_staff_role_code()`, checked on every call) may approve their own work. Each such
+approval is a `review_events` row with `owner_override = true` (allowed on `approve` decisions only), the actor, the time, the decision and
+the optional justification in `note`. Every other rule (evidence, verified sources, quotation rights, required modality, published
+subjects and dependencies) still applies to the Owner.
+
 ## Columns, keys, rules, indexes and triggers (generated)
 
 ## `attribute_types`
@@ -378,7 +384,7 @@ Controlled list of entity-to-entity claim types. Proposed until the owner activa
 
 ## `review_events`
 
-Append-only history of every status decision (submit, approve, reject, publish, retire).
+Append-only history of every status decision (submit, approve, reject, publish, retire); owner_override marks the Owner approving without a second person.
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -391,11 +397,13 @@ Append-only history of every status decision (submit, approve, reject, publish, 
 | `actor` | uuid | not null |  |
 | `acted_at` | timestamp with time zone | not null | `now()` |
 | `note` | text | not null | `''::text` |
+| `owner_override` | boolean | not null | `false` |
 
 **Keys and rules**
 
 - Check `review_events_decision_check`: `CHECK (decision = ANY (ARRAY['submit'::text, 'approve'::text, 'reject'::text, 'publish'::text, 'retire'::text]))`
 - Check `review_events_note_check`: `CHECK (length(note) <= 2000)`
+- Check `review_events_override_only_on_approve`: `CHECK (NOT owner_override OR decision = 'approve'::text)`
 - Check `review_events_target_table_check`: `CHECK (target_table = ANY (ARRAY['entities'::text, 'entity_names'::text, 'claim_versions'::text, 'sources'::text, 'source_versions'::text, 'rights_statements'::text, 'taxonomy_assignments'::text]))`
 - Primary key `review_events_pkey`: `PRIMARY KEY (id)`
 - Index `review_events_target`: `USING btree (target_table, target_id, acted_at)`

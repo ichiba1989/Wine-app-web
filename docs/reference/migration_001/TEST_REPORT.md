@@ -1,6 +1,7 @@
-# Migration 001: local test report (2026-10-26)
+# Migration 001: local test report (2026-10-26, re-run after the Owner approval override amendment)
 
-**Result: 127 tests passed, 0 failed**, on a throwaway local PostgreSQL 16.15 database in the cloud work container. **Nothing was run on
+**Result: 160 tests passed, 0 failed**, on a throwaway local PostgreSQL 16.15 database in the cloud work container. The whole suite was
+re-run from scratch after the amendment (the earlier 127 was the suite before it; 33 tests were added). **Nothing was run on
 the live Supabase database.** Re-run at any time with `bash docs/reference/migration_001/tests/run_local_tests.sh` (it starts its own
 database and deletes it afterwards).
 
@@ -16,13 +17,18 @@ database and deletes it afterwards).
 | `tests/001_behaviour_tests.sql` | Foreign keys and uniqueness, taxonomy cycles and domains, relationship types and cycles, dates and values, the editorial rules, provenance, rights, dependencies, append-only history, access by each role, and the publication rules of the read function |
 | Rollback | `001_rollback.sql` refuses while content exists; on an empty install it removes everything and `public` is exactly as before; a re-install then works |
 | `001a_reference_permissions.sql` | Runs twice; the owner role gains the four `ref_*` permissions once; other roles unchanged |
+| Owner approval override (amendment) | The Owner approves and publishes their own eligible work, including a tier-1 claim; the Owner still cannot publish without evidence, on an unverified source version, or with a quote whose rights forbid quoting; an ordinary reviewer cannot approve their own draft; a non-Owner publisher cannot publish without independent approval; a session setting cannot make someone the Owner; each override is recorded (owner_override, actor, time, decision, justification) and cannot be changed, deleted or written for other decisions; removing the Owner role ends the override at once (even with every `ref_*` permission kept); the older `profiles.role = 'admin'` path counts as Owner |
+| Missing dependency | On a database without `my_staff_role_code()`, the migration stops at its first step and creates nothing |
 
 ## Limits of this test (what it does not prove)
 
 - **It is not Supabase.** Locally the migration runs as a superuser; on Supabase it runs as `postgres`, which is not a superuser but owns
   `public` objects and bypasses row-level security (FINDINGS.md). The statements used (create schema, revoke, alter default privileges,
   security definer functions owned by the creator) are all within what `postgres` may do there, but this was **not** run on Supabase.
-- `has_permission()` and `auth.uid()` are stubs. The live `has_permission()` body is not in the repository; the design relies only on its
+- `has_permission()`, `my_staff_role_code()` and `auth.uid()` are stubs. The stub `my_staff_role_code()` follows the rule in the
+  repository's role scripts (`docs/roles_proposal.sql`: `profiles.role` 'admin' = Owner, else `profiles.staff_role`); the live body is
+  not in the repository. **Before the live run, read the live body once** (checklist in DESIGN.md §8).
+- The live `has_permission()` body is not in the repository either; the design relies only on its
   documented behaviour (true when the signed-in person's staff role lists the permission).
 - Supabase's own event triggers and the dashboard's **Exposed schemas** setting are not present locally. `001_verify.sql`, run on the live
   database after the migration, re-checks the grants; the owner checks the dashboard setting by eye.
@@ -33,7 +39,7 @@ database and deletes it afterwards).
 ```
 PASS  fresh install runs without error
 PASS  replay (second run) runs without error
-PASS  replay changes no structure (576 objects identical)
+PASS  replay changes no structure (578 objects identical)
 PASS  replay adds no duplicate rows (migrations/kinds/relationship types/name kinds = 1/9/6/8)
 PASS  backward compatibility: public schema unchanged except the 2 new ref_* functions
 PASS  backward compatibility: existing rows untouched (wines/vintages/app_config = 5/5/0)
@@ -48,8 +54,10 @@ PASS  verify: no table grants to anon, authenticated, service_role or PUBLIC |
 PASS  verify: nothing else named ref_* in public | 
 PASS  verify: public.ref_published_names: security definer, empty search_path, executable by anon and authenticated only | 
 PASS  verify: public.ref_review: security definer, empty search_path, executable by authenticated only | 
+PASS  verify: review_events records owner_override (only ever on approve decisions) | 
 PASS  verify: row-level security is on for every table | 
 PASS  verify: schema wine_reference exists | 
+PASS  verify: the Owner lookup public.my_staff_role_code() exists (used by the Owner approval override) | 
 PASS  verify: the browser's roles cannot use the schema | 
 PASS  verify: the reference switch is off (app_config reference_enabled absent or 0) | turn it on only after the owner approves
 PASS  setup: owner activates part_of, genetic_parent_of, holds_interest_in
@@ -151,6 +159,35 @@ PASS  read: a retired entity disappears
 PASS  read: the limit is capped at 200
 PASS  setup: owner turns the test switch off again
 PASS  read: off again means nothing is returned
+PASS  owner setup: O writes a place P4, a grape G3, a place P5, and their names
+PASS  owner setup: O submits their names and entities
+PASS  owner: O approves their own name, with a justification
+PASS  owner: O approves their own eligible drafts (names and entities P4, G3)
+PASS  owner: O publishes their own approved entities P4 and G3
+PASS  owner setup: O writes claim P4 in P2 with three flawed versions (no evidence; unverified source; forbidden quote)
+PASS  owner setup: O submits and self-approves the three flawed versions
+PASS  owner: O cannot publish a claim without evidence  -> refused: 23514: A claim needs supporting evidence from a verified source version before it is published
+PASS  owner: O cannot publish on evidence from an unverified source version  -> refused: 23514: A claim needs supporting evidence from a verified source version before it is published
+PASS  owner: O cannot publish a quote whose rights forbid quoting  -> refused: 23514: A quote in the evidence has no verified rights statement that allows quoting
+PASS  owner setup: O writes a tier-1 claim, G1 genetic parent of G3, with genetic evidence from a verified source version
+PASS  owner: O submits, self-approves and publishes their own tier-1 claim
+PASS  owner setup: B (Editor, reviewer and publisher) writes and submits a version of P2 in P3
+PASS  owner setup: B submits it
+PASS  two-person rule: an ordinary reviewer (B) cannot approve their own draft  -> refused: 42501: The author cannot approve their own row (and a row with no recorded author cannot be approved here)
+PASS  two-person rule: a non-Owner publisher (B) cannot publish without independent approval  -> refused: 22023: Cannot publish a row that is pending_review
+PASS  two-person rule: a user cannot claim to be Owner through a session setting  -> refused: 42501: The author cannot approve their own row (and a row with no recorded author cannot be approved here)
+PASS  audit: the Owner's self-approvals are recorded with owner_override, actor, decision and justification
+PASS  audit: no one but the Owner ever has owner_override, and never on submit or publish
+PASS  audit: approvals of someone else's work are not marked as overrides
+PASS  audit: an override record cannot be changed  -> refused: 42501: wine_reference.review_events: rows are never changed or deleted (append-only)
+PASS  audit: an override record cannot be deleted  -> refused: 42501: wine_reference.review_events: rows are never changed or deleted (append-only)
+PASS  audit: a hand-written override row is refused for anything but approve  -> refused: 23514: new row for relation "review_events" violates check constraint "review_events_override_only_on_approve"
+PASS  owner setup: the Owner role is removed from O (O keeps every ref_* permission in this test)
+PASS  revocation: O can no longer approve their own submitted draft (name of P5)  -> refused: 42501: The author cannot approve their own row (and a row with no recorded author cannot be approved here)
+PASS  revocation: O can no longer approve their own submitted entity P5  -> refused: 42501: The author cannot approve their own row (and a row with no recorded author cannot be approved here)
+PASS  revocation: someone else (A) can still approve O's draft the normal way
+PASS  owner setup: the Owner role is given back through the older profiles.role 'admin' path
+PASS  owner: the older admin path counts as Owner again (O approves own P5)
 PASS  rollback refuses while the reference holds content
 PASS  rollback on an empty reference runs
 PASS  after rollback the public schema is exactly as before
@@ -158,5 +195,7 @@ PASS  after rollback the schema is gone
 PASS  re-install after rollback runs
 PASS  001a runs, and runs again
 PASS  001a: owner gains ref_edit, ref_review, ref_publish, ref_rights once; editor unchanged; registered
-TOTAL: 127 passed, 0 failed  (PostgreSQL 16.15, local throwaway database)
+PASS  migration stops when a required live function (my_staff_role_code) is missing
+PASS  after that stop nothing was created
+TOTAL: 160 passed, 0 failed  (PostgreSQL 16.15, local throwaway database)
 ```

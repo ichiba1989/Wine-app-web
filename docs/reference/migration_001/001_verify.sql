@@ -55,6 +55,13 @@ checks(name, ok, detail) as (
          and not has_function_privilege('anon', 'public.ref_review(text,uuid,text,text)', 'EXECUTE')
          and not has_function_privilege('service_role', 'public.ref_review(text,uuid,text,text)', 'EXECUTE'), ''
   union all
+  select 'the Owner lookup public.my_staff_role_code() exists (used by the Owner approval override)',
+         to_regprocedure('public.my_staff_role_code()') is not null, ''
+  union all
+  select 'review_events records owner_override (only ever on approve decisions)',
+         exists (select 1 from information_schema.columns where table_schema = 'wine_reference' and table_name = 'review_events' and column_name = 'owner_override')
+         and not exists (select 1 from wine_reference.review_events where owner_override and decision <> 'approve'), ''
+  union all
   select 'nothing else named ref_* in public',
          (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname like 'ref\_%') = 2, ''
   union all
