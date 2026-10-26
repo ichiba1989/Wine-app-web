@@ -1,7 +1,8 @@
 # Wine Education Master Reference: the reference model (DRAFT, Phase 2.0B.1, 2026-10-26)
 
 **Status: draft for the owner's approval. Nothing here is built.** Updated 2026-10-26 with the database inspection
-(`docs/reference/results/FINDINGS.md`); the **[Check]** points it settled are marked *Checked*. No table, function, file or screen of the app was changed for it, and
+(`docs/reference/results/FINDINGS.md`); the **[Check]** points it settled are marked *Checked*. **Migration 001 is designed and tested
+locally (not run live): `docs/reference/migration_001/DESIGN.md`**; where it changes this model, that file's section 1 says so and wins. No table, function, file or screen of the app was changed for it, and
 no database change has been made. It follows the Phase 2.0A audit (shared as the doc "Wine Reference Audit (Phase 2.0A)") and the owner's
 provisional approval (2026-10-26): integrate into the existing Supabase database; keep every existing catalog and personal-data table as
 it is; add the reference beside them; build the canonical reference before any education feature; no bulk content.
@@ -123,7 +124,8 @@ The reference adds **mapping rows** that point from its entities to legacy ids.
 - **A source** = what it is (official register or regulation, producer's own document, reference book, dataset, label photograph, editor's
   own tasting is *not* a source for a fact) + title + publisher + link + licence + retrieved date + a fingerprint (hash) of the copy, if a
   copy may be kept (section 11).
-- **Statuses:** *Checked:* the database already has the list `verification_status` (draft, pending_review, verified, retired), used by
+- **Statuses** (as built in migration 001: the live list plus a separate publish step, `published_at`, for entities and claim
+  versions; see DESIGN.md §1). *Checked:* the database already has the list `verification_status` (draft, pending_review, verified, retired), used by
   wines, places, quiz questions, images and reference values. The reference **reuses it**: draft → pending_review (in review) → verified
   (shown to players) → retired, plus a *superseded by* link. The other lists (suggested / in use / checked; pending / confirmed / rejected)
   are mapped onto it in the design document for migration `001`.
@@ -200,8 +202,11 @@ Built on the existing roles and permissions (`docs/ROLES_AND_ACCESS.md`, `access
 
 ## 13. The eight revisions incorporated in Phase 1.9
 
-**[Pending import].** The Phase 1.9 document and its eight revisions have not been supplied to this repository or this session, so they
-are not listed or summarised here. When they are supplied they will be committed as given, and each one will be checked against the
+**Received as requirements (2026-10-26, Phase 2.0B.2 brief):** (1) evidence-backed grape genetic relationships; (2) historical ownership
+and asset interests; (3) producers, brands and legal entities kept apart; (4) wine product, edition, release and release-event identities;
+(5) unified multilingual naming; (6) claim-version dependencies; (7) assessment evidence separated by modality; (8) component-level
+licensing and rights. Where each lives (or is deferred) is in `docs/reference/migration_001/DESIGN.md` §1. **The Phase 1.9 document itself
+is still [Pending import]**, so the wording above is the brief's, not the document's. When they are supplied they will be committed as given, and each one will be checked against the
 sections above, with any section that conflicts with a revision marked for change.
 
 ## 14. Where the tables live: namespace options [Proposal]
