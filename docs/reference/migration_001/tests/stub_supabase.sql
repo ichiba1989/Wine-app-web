@@ -63,3 +63,13 @@ insert into public.staff_roles (code, label, permissions, sort_order) values
   ('editor', 'Editor', '{catalog_edit,quiz_verify,feedback_read,import_extended}', 2),
   ('quiz_reviewer', 'Quiz reviewer', '{quiz_verify}', 3)
 on conflict (code) do nothing;
+
+-- A person's staff role and the authoritative lookup, my_staff_role_code(). STUB of the live function: same rule as the repository's role
+-- scripts (docs/roles_proposal.sql: profiles.role 'admin' = owner, else profiles.staff_role, else profiles.role 'editor' = editor); the live
+-- body itself is not in the repository. Live, profiles.role is the enum user_role; here plain text.
+create table if not exists public.profiles (id uuid primary key, role text not null default 'player', staff_role text references public.staff_roles(code));
+create or replace function public.my_staff_role_code() returns text
+language sql stable security definer set search_path to 'public' as $$
+  select coalesce(case when p.role = 'admin' then 'owner' end, p.staff_role, case when p.role = 'editor' then 'editor' end)
+    from public.profiles p where p.id = auth.uid()
+$$;

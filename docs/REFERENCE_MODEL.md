@@ -137,6 +137,8 @@ The reference adds **mapping rows** that point from its entities to legacy ids.
 | 2, medium | Specific facts about one product, producer, vineyard or place (dates, ownership, composition, size) | The producer's own published document or an official record; otherwise two independent reliable sources (the parked tech sheet used the same idea: `docs/tech_sheet.sql`, rules `producer_source` / `two_sources`) | One reviewer |
 | 3, lower | General explanations and definitions, and descriptions marked "typical" (never a fact about one bottle) | A cited reference source | One reviewer |
 
+- **Owner approval override (owner policy, 2026-10-26):** the Owner may approve their own work in every tier and publish it alone;
+  everyone else keeps the two-person rule; each use is recorded (`docs/reference/migration_001/DESIGN.md` §4).
 - **AI never decides:** a language model may *propose* a draft claim with its citation for a person to check; it never sets a status
   above draft, never publishes, and its drafts are marked as such.
 
