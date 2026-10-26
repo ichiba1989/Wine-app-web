@@ -33,6 +33,18 @@ The app exactly as it was before the Tech sheet (researched, sourced wine facts 
 ## Tech sheet, parked (branch `backup/tech-sheet-parked`, commit `524c505`) — saved 2026-10-14
 The app with the whole Tech sheet in it (sourced wine facts, the full-page sheet, Off / Staff only / Everyone switch, Editors' Facts tools, the research pack with `tools/verify-research.mjs`), saved just before it was taken out at the owner's request. **Why it exists:** to revisit the feature later without rebuilding it. Its database scripts (`docs/tech_sheet.sql`, `docs/tech_sheet_research.sql`) only add separate tables and are still in `docs/`. To compare: `git diff origin/backup/tech-sheet-parked main --stat`.
 
+## Before the big change (branches `backup/before-big-change-2026-10-26` and `backup/vwm-before-big-change-2026-10-26`) — saved 2026-10-26
+The whole app, the main version and the Vintage Wine Merchants version, exactly as they were just before the owner's big change. **Main** is at commit `19219b8` and **vwm** at `84bc138`; both were fully pushed and published, and every browser and Node check passed on both (`docs/tools/README.md`).
+
+**What is in this version (newest first):** At a restaurant (type or paste a wine list, dishes, occasion and adventure give a "To start", three picks and a ranked list; visits saved offline-safe; behind `app_config restaurant_visits_open`, default 0; photo reading NOT built); the More tab with Games and Food (pick a wine, pairing chart, tweak a dish, build a plate, plan a menu; owner pairing pins); Food ideas on the rating sheet; the Year in wine recap (kept, hidden); the Atlas and the card map; label-style names, grapes from appellation rules, Grand Cru appellations; the branch rename (the old `main` is `archive/old-main`).
+
+**Database scripts that go with it** (all additive; the app works before each one): `food_pairing.sql`, `restaurant_visits.sql` then `retain_after_delete.sql` again, plus everything listed in `docs/HANDOFF.md`. Going back to this version does not need any database change.
+
+### How to go back to it
+- **Look without changing anything:** `git fetch origin backup/before-big-change-2026-10-26 && git checkout origin/backup/before-big-change-2026-10-26` (then `git checkout main`). For the venue: `backup/vwm-before-big-change-2026-10-26`.
+- **Put the live site back:** `git checkout -B main origin/backup/before-big-change-2026-10-26` then `git push --force-with-lease origin main` (and the same for `vwm` from its backup). This replaces the branch with the saved version, so save anything newer under a new backup name first. Then run the publish workflow **on `main`** (pushes to `vwm` do not publish by themselves; see `docs/HANDOFF.md`).
+- **Compare with now:** `git diff origin/backup/before-big-change-2026-10-26 main --stat`.
+
 ## Venue test branches (live, not frozen)
 - **`vwm`**: the Vintage Wine Merchants version (started 2026-10-14). "VWM" is the internal short name only; every screen says Vintage Wine Merchants. Cut from the main working branch `claude/wine-discovery-architecture-3pithw`; the main branch does not carry its code. Same database, catalog and accounts as the main app; it adds one table, `venue_wines` (`docs/venue_decks.sql`, on the branch). Every place that picks catalog wines to show or suggest (the deck, Bingo help, This or That, Guess the Glass) uses only the venue's list; the player's own journal is untouched. Unlike the `backup/` branches, work continues on it. To make another venue, copy this branch and change the one line `VENUE` in `venue.js`.
 
