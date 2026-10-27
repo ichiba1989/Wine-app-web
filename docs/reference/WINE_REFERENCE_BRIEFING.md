@@ -1,11 +1,11 @@
 # Wine Education Master Reference: complete briefing
 
-**As of 2026-10-26 (updated the same day for the Owner approval override).** One document that covers the whole effort so far, written to be read on its own (no access to the code needed).
+**As of 2026-10-27 (updated for the Owner approval override and the Phase 2.0B.3 corrections).** One document that covers the whole effort so far, written to be read on its own (no access to the code needed).
 Repository: `ichiba1989/Wine-app-web`, branch `main` (latest commit at writing: `76032a4`); the venue version `vwm` has the same documents.
 
 **Status in one paragraph.** The reference has been audited, the live database has been inspected (read-only), a reference model has
 been drafted, and **migration 001** (the database foundation) has been designed, written as SQL and **tested on a throwaway local
-database: 160 tests passed, 0 failed** (re-run in full after the Owner approval override was added). **Nothing has been run on the live database and nothing in the app has changed.** The next step
+database: 270 tests passed, 0 failed** (re-run in full after the Phase 2.0B.3 corrections; release "001 r3"). **Nothing has been run on the live database and nothing in the app has changed.** The next step
 needs the owner: the decisions in section 10 and written approval, then the checklist in section 11.
 
 ---
@@ -59,6 +59,7 @@ real bottle photographs only; third-party data only with a checked licence; data
 | 2.0A | Read-only repository audit | Recommendation: build inside the existing database, in its own section, additive only |
 | 2.0B.1 | Read-only database inspection scripts written and tested; the owner ran them on the live database; draft reference model | `docs/REFERENCE_MODEL.md`, `docs/reference/results/FINDINGS.md` (raw results kept by the owner, not published) |
 | 2.0B.2 | Migration 001 designed, written, tested locally | `docs/reference/migration_001/`: 160 of 160 tests passed; not run live |
+| 2.0B.3 | Independent review; corrections: evidence lifecycle, dependencies, frozen approved records, display names, Owner role check, migration safety, 001a recovery | 270 of 270 tests passed; not run live (`CHANGE_REPORT_2_0B_3.md`) |
 
 ---
 
@@ -245,13 +246,20 @@ education; database search per language.
 **Compatibility.** The whole `public` schema was compared before and after the migration in the test: the only difference is the two
 new `ref_*` functions. No app file changes; neither version of the app uses the reference yet.
 
-**Tests (local only, PostgreSQL 16, throwaway database): 160 passed, 0 failed.** Covered: fresh install; running it twice (no change,
+**Tests (local only, PostgreSQL 16, throwaway database): 270 passed, 0 failed.** Covered: fresh install; running it twice (no change,
 no duplicates); backward compatibility; the read-only verify script; foreign keys and uniqueness; taxonomy loops and domains;
 relationship types and loops; dates and values; editorial rules and the two-person rule; provenance (frozen versions, evidence only on
 drafts); rights; dependencies; append-only history; access refused for every browser role; publication rules of the read door; rollback
 (refused with content, clean when empty); the permissions script; the Owner approval override (allowed for the Owner, refused for
 reviewers and publishers, no rule waived, recorded, ended at once when the role is removed); a missing live function stops the migration. *Limits:* not Supabase itself; the permission check and sign-in were
 stand-ins; the verify script re-checks access on the live database after the migration.
+
+**Corrections after the independent review (Phase 2.0B.3, 2026-10-27).** A published claim is now **suspended automatically** when
+its supporting source version or source is retired or replaced, a quote's licence is retired, its subject is retired, or something it
+depends on is retired or suspended (at any depth); one rule decides what is sound, and "current" means published, not suspended and
+sound. Approved names, sources, source versions, licences and claim versions are **frozen**: changes are new records, reviewed, with the
+old one retired. A published entity always keeps a display name. The migration checks itself before running (unexpected functions,
+partial installs, a different release, hand-made changes) and `001a` has its own rollback. Full list: `CHANGE_REPORT_2_0B_3.md`.
 
 **Recovery.** The migration is one transaction (all or nothing). While the reference is empty, a tested rollback script removes exactly
 what it created. Once content exists: never drop; fix forward with a new migration and retire instead of deleting.
@@ -283,10 +291,11 @@ Nothing here happens until the owner approves in writing. Scripts run one at a t
 - [ ] Owner approves the design, including decisions 1, 3 and 5.
 - [ ] A recent database backup exists (dashboard: Database, Backups), or note that the plan has none.
 - [ ] Settings, API, Exposed schemas does **not** list `wine_reference`; leave it unchanged.
-- [ ] Use the approved files. Fingerprints (first 16 hex characters of SHA-256): `001_wine_reference_foundation.sql` `ae69fb54f1be71d7`,
-      `001a_reference_permissions.sql` `8cf791d1e3d0256a`, `001_verify.sql` `512247ba1d83ae50`, `001_rollback.sql` `210b650d5b103a2f`.
-- [ ] Read the live body of `my_staff_role_code()` once (read-only) and confirm it returns 'owner' only for the Owner role (DESIGN.md §8).
-- [ ] Re-run the local tests on that commit: 160 passed, 0 failed.
+- [ ] Use the approved files. Fingerprints (first 16 hex characters of SHA-256): `001_wine_reference_foundation.sql` `11c72574bccd5827`,
+      `001a_reference_permissions.sql` `c9232eb170451888`, `001_verify.sql` `ff1a93575ca6756a`, `001_rollback.sql` `af80fc11000f6fc1`,
+      `001a_rollback.sql` `cc997dca39ac806c`, `owner_role_check.sql` `e911b62ebfba298b`.
+- [ ] Run `owner_role_check.sql` (read-only) and confirm the points in `OWNER_ROLE_VERIFICATION.md` (DESIGN.md §8).
+- [ ] Re-run the local tests on that commit: 270 passed, 0 failed.
 
 **Run**
 - [ ] Paste `001_wine_reference_foundation.sql`, Run: expect "Success. No rows returned". Any error: stop; nothing was applied.
@@ -328,6 +337,10 @@ Nothing here happens until the owner approves in writing. Scripts run one at a t
 | `docs/reference/migration_001/001a_reference_permissions.sql` | The permissions step (separate approval) |
 | `docs/reference/migration_001/001_verify.sql` | Read-only checks for after the migration |
 | `docs/reference/migration_001/001_rollback.sql` | Rollback while the reference is empty |
+| `docs/reference/migration_001/001a_rollback.sql` | Takes the reference permissions back (run before 001_rollback) |
+| `docs/reference/migration_001/owner_role_check.sql` | Read-only check of the live Owner lookup and profile protections (for the owner to run) |
+| `docs/reference/migration_001/OWNER_ROLE_VERIFICATION.md` | What the Owner check must confirm, and what stays unverified |
+| `docs/reference/migration_001/CHANGE_REPORT_2_0B_3.md` | The Phase 2.0B.3 corrections and remaining risks |
 | `docs/reference/migration_001/TEST_REPORT.md` | The local test report with the full output |
 | `docs/reference/migration_001/tests/` | The local test harness (never for Supabase) |
 

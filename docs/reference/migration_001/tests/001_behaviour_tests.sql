@@ -76,7 +76,7 @@ select t.run('setup: a source and two versions, rights statements', 'postgres', 
      insert into wine_reference.rights_statements (id, licence_code, allows_quote) values
        ('b0000000-0000-0000-0000-000000000001', 'test-no-quote', false), ('b0000000-0000-0000-0000-000000000002', 'test-quote-ok', true);
      insert into wine_reference.source_versions (id, source_id, version_label, rights_id) values
-       ('51000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000001', 'v1', 'b0000000-0000-0000-0000-000000000001'),
+       ('51000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000001', 'v1', 'b0000000-0000-0000-0000-000000000002'),
        ('51000000-0000-0000-0000-000000000002', '50000000-0000-0000-0000-000000000001', 'v2', null)$q$);
 
 -- ------------------------------------------------------------------------------------------------ foreign keys and uniqueness
@@ -187,8 +187,14 @@ select t.run('setup: B approves CV2', 'authenticated', 'aaaaaaaa-0000-0000-0000-
   $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000002', 'approve')$q$);
 select t.run('publication: evidence from an unverified source version is not enough', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
   $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000002', 'publish')$q$, '23514');
-select t.run('setup: the source version is submitted by A and approved by B', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000a',
+select t.run('setup: A submits the source version', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000a',
   $q$select public.ref_review('source_versions', '51000000-0000-0000-0000-000000000001', 'submit')$q$);
+select t.run('approval: a source version cannot be approved before its source', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('source_versions', '51000000-0000-0000-0000-000000000001', 'approve')$q$, '23514');
+select t.run('setup: A submits the source and the quoting-allowed rights statement; B approves both', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000a',
+  $q$select public.ref_review('sources', '50000000-0000-0000-0000-000000000001', 'submit'); select public.ref_review('rights_statements', 'b0000000-0000-0000-0000-000000000002', 'submit')$q$);
+select t.run('setup: B approves the source and the rights statement', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('sources', '50000000-0000-0000-0000-000000000001', 'approve'); select public.ref_review('rights_statements', 'b0000000-0000-0000-0000-000000000002', 'approve')$q$);
 select t.run('setup: B approves the source version', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
   $q$select public.ref_review('source_versions', '51000000-0000-0000-0000-000000000001', 'approve')$q$);
 select t.run('publication: a claim about unpublished entities cannot be published', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
@@ -396,3 +402,245 @@ select t.run('owner setup: the Owner role is given back through the older profil
   $q$update public.profiles set role = 'admin' where id = 'aaaaaaaa-0000-0000-0000-00000000000d'$q$);
 select t.run('owner: the older admin path counts as Owner again (O approves own P5)', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000d',
   $q$select public.ref_review('entities', 'e0000000-0000-0000-0000-000000000033', 'approve')$q$);
+
+-- ================================================================================================ Phase 2.0B.3 corrections (2026-10-27)
+-- Fixtures: sources S2 (versions SV21, SV22), S3 (SV31, later SV32), S4 (SV41..SV43); rights R3 (quote ok), R4 (quote ok, no copying),
+-- R5 (left draft); places Q1..Q7. A writes and submits, B approves, publishes and retires. All made-up test data.
+select t.run('lifecycle setup: sources, versions, rights and places Q1..Q7 with names (by A)', 'postgres', 'aaaaaaaa-0000-0000-0000-00000000000a',
+  $q$insert into wine_reference.sources (id, kind, title) values
+       ('50000000-0000-0000-0000-000000000002', 'publication', 'Test source 2'), ('50000000-0000-0000-0000-000000000003', 'publication', 'Test source 3'),
+       ('50000000-0000-0000-0000-000000000004', 'publication', 'Test source 4');
+     insert into wine_reference.rights_statements (id, licence_code, allows_quote, allows_copy) values
+       ('b0000000-0000-0000-0000-000000000003', 'test-quote-3', true, false), ('b0000000-0000-0000-0000-000000000004', 'test-quote-no-copy', true, false),
+       ('b0000000-0000-0000-0000-000000000005', 'test-left-draft', true, true);
+     insert into wine_reference.source_versions (id, source_id, version_label) values
+       ('51000000-0000-0000-0000-000000000021', '50000000-0000-0000-0000-000000000002', 's2 v1'), ('51000000-0000-0000-0000-000000000022', '50000000-0000-0000-0000-000000000002', 's2 v2'),
+       ('51000000-0000-0000-0000-000000000031', '50000000-0000-0000-0000-000000000003', 's3 v1'), ('51000000-0000-0000-0000-000000000032', '50000000-0000-0000-0000-000000000003', 's3 v2'),
+       ('51000000-0000-0000-0000-000000000041', '50000000-0000-0000-0000-000000000004', 's4 v1');
+     insert into wine_reference.source_versions (id, source_id, version_label, rights_id) values
+       ('51000000-0000-0000-0000-000000000043', '50000000-0000-0000-0000-000000000004', 's4 v3', 'b0000000-0000-0000-0000-000000000005');
+     insert into wine_reference.entities (id, kind) select ('e0000000-0000-0000-0000-0000000000' || g)::uuid, 'place' from generate_series(41, 47) g;
+     insert into wine_reference.entity_names (id, entity_id, name, language, name_kind, is_preferred)
+       select ('a0000000-0000-0000-0000-0000000000' || g)::uuid, ('e0000000-0000-0000-0000-0000000000' || g)::uuid, 'Test place Q' || (g - 40), 'en', 'common', true
+         from generate_series(41, 46) g;
+     insert into wine_reference.entity_names (id, entity_id, name, language, name_kind) values
+       ('a0000000-0000-0000-0000-000000000047', 'e0000000-0000-0000-0000-000000000047', 'q7', 'en', 'shortcut')$q$);
+select t.run('lifecycle setup: A submits everything', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000a',
+  $q$select public.ref_review('sources', x, 'submit') from unnest(array['50000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000003','50000000-0000-0000-0000-000000000004']::uuid[]) x;
+     select public.ref_review('rights_statements', x, 'submit') from unnest(array['b0000000-0000-0000-0000-000000000003','b0000000-0000-0000-0000-000000000004']::uuid[]) x;
+     select public.ref_review('source_versions', ('51000000-0000-0000-0000-0000000000' || g)::uuid, 'submit') from unnest(array[21,22,31,32,41,43]) g;
+     select public.ref_review('entity_names', ('a0000000-0000-0000-0000-0000000000' || g)::uuid, 'submit') from generate_series(41, 47) g;
+     select public.ref_review('entities', ('e0000000-0000-0000-0000-0000000000' || g)::uuid, 'submit') from generate_series(41, 47) g$q$);
+select t.run('lifecycle setup: B approves sources, rights, the plain source versions, names; approves Q1..Q7 and publishes Q1..Q6', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('sources', x, 'approve') from unnest(array['50000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000003','50000000-0000-0000-0000-000000000004']::uuid[]) x;
+     select public.ref_review('rights_statements', x, 'approve') from unnest(array['b0000000-0000-0000-0000-000000000003','b0000000-0000-0000-0000-000000000004']::uuid[]) x;
+     select public.ref_review('source_versions', ('51000000-0000-0000-0000-0000000000' || g)::uuid, 'approve') from unnest(array[21,22,31,32,41]) g;
+     select public.ref_review('entity_names', ('a0000000-0000-0000-0000-0000000000' || g)::uuid, 'approve') from generate_series(41, 47) g;
+     select public.ref_review('entities', ('e0000000-0000-0000-0000-0000000000' || g)::uuid, 'approve') from generate_series(41, 47) g;
+     select public.ref_review('entities', ('e0000000-0000-0000-0000-0000000000' || g)::uuid, 'publish') from generate_series(41, 46) g$q$);
+
+-- ---------------------------------------------------------------- approval rules for source versions (rights and copies)
+select t.run('rights: a private copy under rights that do not allow copying is refused when written', 'postgres', 'aaaaaaaa-0000-0000-0000-00000000000a',
+  $q$insert into wine_reference.source_versions (id, source_id, version_label, rights_id, storage_path) values
+       ('51000000-0000-0000-0000-000000000042', '50000000-0000-0000-0000-000000000004', 's4 copy', 'b0000000-0000-0000-0000-000000000004', 'private/s4.pdf')$q$, '23514');
+select t.run('rights: a private copy under rights that are not yet verified is refused when written', 'postgres', 'aaaaaaaa-0000-0000-0000-00000000000a',
+  $q$insert into wine_reference.source_versions (id, source_id, version_label, rights_id, storage_path) values
+       ('51000000-0000-0000-0000-000000000044', '50000000-0000-0000-0000-000000000004', 's4 copy 2', 'b0000000-0000-0000-0000-000000000005', 'private/s4b.pdf')$q$, '23514');
+select t.run('approval: a source version whose rights statement is still a draft is refused', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('source_versions', '51000000-0000-0000-0000-000000000043', 'approve')$q$, '23514');
+
+-- ---------------------------------------------------------------- published claims X1..X5 (and their evidence and dependencies)
+-- X1: Q1 in Q2, evidence SV21 only.        X2: Q2 in Q3, evidence SV21 and SV31.        X3: Q3 in Q4, evidence SV22, depends on X2.
+-- X4: Q1 in Q4, evidence SV22, depends on X3 (so on X2 transitively).                       X5: Q5 in Q1, evidence SV41 with a quote under R3.
+select t.run('lifecycle setup: claims X1..X5 written by A', 'postgres', 'aaaaaaaa-0000-0000-0000-00000000000a',
+  $q$insert into wine_reference.claims (id, subject_entity_id, relationship_type, object_entity_id) values
+       ('c0000000-0000-0000-0000-000000000041', 'e0000000-0000-0000-0000-000000000041', 'part_of', 'e0000000-0000-0000-0000-000000000042'),
+       ('c0000000-0000-0000-0000-000000000042', 'e0000000-0000-0000-0000-000000000042', 'part_of', 'e0000000-0000-0000-0000-000000000043'),
+       ('c0000000-0000-0000-0000-000000000043', 'e0000000-0000-0000-0000-000000000043', 'part_of', 'e0000000-0000-0000-0000-000000000044'),
+       ('c0000000-0000-0000-0000-000000000044', 'e0000000-0000-0000-0000-000000000041', 'part_of', 'e0000000-0000-0000-0000-000000000044'),
+       ('c0000000-0000-0000-0000-000000000045', 'e0000000-0000-0000-0000-000000000045', 'part_of', 'e0000000-0000-0000-0000-000000000041');
+     insert into wine_reference.claim_versions (id, claim_id, version_no, risk_tier)
+       select ('f0000000-0000-0000-0000-0000000000' || g)::uuid, ('c0000000-0000-0000-0000-0000000000' || g)::uuid, 1, 2 from generate_series(41, 45) g;
+     insert into wine_reference.claim_evidence (claim_version_id, source_version_id, modality, locator) values
+       ('f0000000-0000-0000-0000-000000000041', '51000000-0000-0000-0000-000000000021', 'documentary', 'p. 1'),
+       ('f0000000-0000-0000-0000-000000000042', '51000000-0000-0000-0000-000000000021', 'documentary', 'p. 2'),
+       ('f0000000-0000-0000-0000-000000000042', '51000000-0000-0000-0000-000000000031', 'documentary', 'p. 3'),
+       ('f0000000-0000-0000-0000-000000000043', '51000000-0000-0000-0000-000000000022', 'documentary', 'p. 4'),
+       ('f0000000-0000-0000-0000-000000000044', '51000000-0000-0000-0000-000000000022', 'documentary', 'p. 5');
+     insert into wine_reference.claim_evidence (claim_version_id, source_version_id, modality, locator, quote, quote_rights_id) values
+       ('f0000000-0000-0000-0000-000000000045', '51000000-0000-0000-0000-000000000041', 'documentary', 'p. 6', 'a short test quote', 'b0000000-0000-0000-0000-000000000003');
+     insert into wine_reference.claim_version_dependencies (dependent_version_id, depends_on_version_id) values
+       ('f0000000-0000-0000-0000-000000000043', 'f0000000-0000-0000-0000-000000000042'),
+       ('f0000000-0000-0000-0000-000000000044', 'f0000000-0000-0000-0000-000000000043')$q$);
+select t.run('lifecycle setup: A submits X1..X5', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000a',
+  $q$select public.ref_review('claim_versions', ('f0000000-0000-0000-0000-0000000000' || g)::uuid, 'submit') from generate_series(41, 45) g$q$);
+select t.run('lifecycle setup: B approves X1..X5 and publishes them in dependency order', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('claim_versions', ('f0000000-0000-0000-0000-0000000000' || g)::uuid, 'approve') from generate_series(41, 45) g;
+     select public.ref_review('claim_versions', ('f0000000-0000-0000-0000-0000000000' || g)::uuid, 'publish') from unnest(array[41, 42, 43, 44, 45]) g$q$);
+select t.check('lifecycle: X1..X5 are all current after publication', 'postgres', null,
+  $q$select bool_and(wine_reference.is_current(('f0000000-0000-0000-0000-0000000000' || g)::uuid)) from generate_series(41, 45) g$q$);
+
+-- ---------------------------------------------------------------- correction 1: evidence lifecycle
+select t.run('evidence: B retires source version SV21', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('source_versions', '51000000-0000-0000-0000-000000000021', 'retire', 'test: withdrawn edition')$q$);
+select t.check('evidence: X1 (supported only by SV21) is suspended and no longer current', 'postgres', null,
+  $q$select (select suspended_at is not null from wine_reference.claim_versions where id = 'f0000000-0000-0000-0000-000000000041')
+        and not wine_reference.is_current('f0000000-0000-0000-0000-000000000041')
+        and not exists (select 1 from wine_reference.current_claim_versions where id = 'f0000000-0000-0000-0000-000000000041')$q$);
+select t.check('evidence: X2 (also supported by SV31) stays current: suspension is not over-eager', 'postgres', null,
+  $q$select wine_reference.is_current('f0000000-0000-0000-0000-000000000042')$q$);
+select t.check('evidence: the suspension is in the review history (decision suspend, actor B, the cause)', 'postgres', null,
+  $q$select exists (select 1 from wine_reference.review_events where target_id = 'f0000000-0000-0000-0000-000000000041' and decision = 'suspend'
+                      and actor = 'aaaaaaaa-0000-0000-0000-00000000000b' and note like 'Suspended automatically after retire source_versions%')$q$);
+select t.run('evidence: a suspended version cannot be published again', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000041', 'publish')$q$, '22023');
+select t.run('evidence: a suspension cannot be lifted by a plain update', 'postgres', null,
+  $q$update wine_reference.claim_versions set suspended_at = null, suspended_reason = null where id = 'f0000000-0000-0000-0000-000000000041'$q$, '42501');
+select t.run('evidence: B retires rights statement R3 (the quote''s licence)', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('rights_statements', 'b0000000-0000-0000-0000-000000000003', 'retire')$q$);
+select t.check('evidence: X5 (quote under R3) is suspended', 'postgres', null,
+  $q$select (select suspended_reason like '%quote%' from wine_reference.claim_versions where id = 'f0000000-0000-0000-0000-000000000045')$q$);
+select t.run('evidence: a replacement must be a verified version of the same source', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('source_versions', '51000000-0000-0000-0000-000000000031', 'retire', '', '51000000-0000-0000-0000-000000000041')$q$, '23514');
+select t.run('evidence: a replacement is only accepted with retire on an entity or a source version', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('entity_names', 'a0000000-0000-0000-0000-000000000046', 'retire', '', 'a0000000-0000-0000-0000-000000000045')$q$, '22023');
+select t.run('evidence: B supersedes SV31 with SV32 (retire with a replacement)', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('source_versions', '51000000-0000-0000-0000-000000000031', 'retire', 'test: new edition', '51000000-0000-0000-0000-000000000032')$q$);
+select t.check('evidence: SV31 records superseded_by SV32', 'postgres', null,
+  $q$select superseded_by = '51000000-0000-0000-0000-000000000032' and status = 'retired' from wine_reference.source_versions where id = '51000000-0000-0000-0000-000000000031'$q$);
+
+-- ---------------------------------------------------------------- correction 2: dependencies fail closed, transitively
+select t.check('dependencies: X2 lost its last current evidence and is suspended', 'postgres', null,
+  $q$select suspended_at is not null from wine_reference.claim_versions where id = 'f0000000-0000-0000-0000-000000000042'$q$);
+select t.check('dependencies: X3 (its own evidence still valid) is suspended because it depends on X2', 'postgres', null,
+  $q$select suspended_at is not null and suspended_reason like '%depends on%' from wine_reference.claim_versions where id = 'f0000000-0000-0000-0000-000000000043'$q$);
+select t.check('dependencies: X4 is suspended too, two steps away (transitive)', 'postgres', null,
+  $q$select suspended_at is not null and suspended_reason like '%depends on%' from wine_reference.claim_versions where id = 'f0000000-0000-0000-0000-000000000044'$q$);
+select t.check('dependencies: each suspension is a separate review event', 'postgres', null,
+  $q$select count(distinct target_id) = 3 from wine_reference.review_events where decision = 'suspend'
+       and target_id in ('f0000000-0000-0000-0000-000000000042', 'f0000000-0000-0000-0000-000000000043', 'f0000000-0000-0000-0000-000000000044')$q$);
+select t.run('dependencies setup: X6 (Q6 in Q4, evidence SV41) depends on the suspended X4; A writes and submits, B approves', 'postgres', 'aaaaaaaa-0000-0000-0000-00000000000a',
+  $q$insert into wine_reference.claims (id, subject_entity_id, relationship_type, object_entity_id) values ('c0000000-0000-0000-0000-000000000046', 'e0000000-0000-0000-0000-000000000046', 'part_of', 'e0000000-0000-0000-0000-000000000044');
+     insert into wine_reference.claim_versions (id, claim_id, version_no, risk_tier) values ('f0000000-0000-0000-0000-000000000046', 'c0000000-0000-0000-0000-000000000046', 1, 2);
+     insert into wine_reference.claim_evidence (claim_version_id, source_version_id, modality, locator) values ('f0000000-0000-0000-0000-000000000046', '51000000-0000-0000-0000-000000000041', 'documentary', 'p. 7');
+     insert into wine_reference.claim_version_dependencies (dependent_version_id, depends_on_version_id) values ('f0000000-0000-0000-0000-000000000046', 'f0000000-0000-0000-0000-000000000044')$q$);
+select t.run('dependencies setup: X6 submitted by A', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000a', $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000046', 'submit')$q$);
+select t.run('dependencies setup: X6 approved by B', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b', $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000046', 'approve')$q$);
+select t.run('dependencies: a version depending on a suspended version cannot be published', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000046', 'publish')$q$, '23514');
+-- a newer version of a dependency retires the old one, so the dependent is suspended (it must be re-reviewed against the new version)
+select t.run('dependencies setup: Y1 (Q2 in Q4, v1, evidence SV41) and Z1 (Q5 in Q4, depends on Y1) published; Y2 (v2) approved', 'postgres', 'aaaaaaaa-0000-0000-0000-00000000000a',
+  $q$insert into wine_reference.claims (id, subject_entity_id, relationship_type, object_entity_id) values
+       ('c0000000-0000-0000-0000-000000000047', 'e0000000-0000-0000-0000-000000000042', 'part_of', 'e0000000-0000-0000-0000-000000000044'),
+       ('c0000000-0000-0000-0000-000000000048', 'e0000000-0000-0000-0000-000000000045', 'part_of', 'e0000000-0000-0000-0000-000000000044');
+     insert into wine_reference.claim_versions (id, claim_id, version_no, risk_tier) values
+       ('f0000000-0000-0000-0000-000000000047', 'c0000000-0000-0000-0000-000000000047', 1, 2), ('f0000000-0000-0000-0000-000000000048', 'c0000000-0000-0000-0000-000000000048', 1, 2),
+       ('f0000000-0000-0000-0000-000000000049', 'c0000000-0000-0000-0000-000000000047', 2, 2);
+     insert into wine_reference.claim_evidence (claim_version_id, source_version_id, modality, locator) values
+       ('f0000000-0000-0000-0000-000000000047', '51000000-0000-0000-0000-000000000041', 'documentary', 'p. 8'),
+       ('f0000000-0000-0000-0000-000000000048', '51000000-0000-0000-0000-000000000041', 'documentary', 'p. 9'),
+       ('f0000000-0000-0000-0000-000000000049', '51000000-0000-0000-0000-000000000041', 'documentary', 'p. 10');
+     insert into wine_reference.claim_version_dependencies (dependent_version_id, depends_on_version_id) values ('f0000000-0000-0000-0000-000000000048', 'f0000000-0000-0000-0000-000000000047')$q$);
+select t.run('dependencies setup: Y1, Z1, Y2 submitted by A', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000a',
+  $q$select public.ref_review('claim_versions', ('f0000000-0000-0000-0000-0000000000' || g)::uuid, 'submit') from generate_series(47, 49) g$q$);
+select t.run('dependencies setup: B approves Y1, Z1, Y2 and publishes Y1 then Z1', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('claim_versions', ('f0000000-0000-0000-0000-0000000000' || g)::uuid, 'approve') from generate_series(47, 49) g;
+     select public.ref_review('claim_versions', ('f0000000-0000-0000-0000-0000000000' || g)::uuid, 'publish') from unnest(array[47, 48]) g$q$);
+select t.check('dependencies: Z1 is current while Y1 is the live version', 'postgres', null,
+  $q$select wine_reference.is_current('f0000000-0000-0000-0000-000000000048')$q$);
+select t.run('dependencies: B publishes Y2, which retires Y1', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000049', 'publish')$q$);
+select t.check('dependencies: Z1 (which depended on the retired Y1) is suspended; Y2 is current', 'postgres', null,
+  $q$select (select status = 'retired' from wine_reference.claim_versions where id = 'f0000000-0000-0000-0000-000000000047')
+        and (select suspended_at is not null from wine_reference.claim_versions where id = 'f0000000-0000-0000-0000-000000000048')
+        and wine_reference.is_current('f0000000-0000-0000-0000-000000000049')$q$);
+-- retiring an entity suspends what is said about it; retiring a whole source suspends what rests only on it
+select t.run('lifecycle: B retires entity Q2 (Y2 is about Q2)', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('entities', 'e0000000-0000-0000-0000-000000000042', 'retire')$q$);
+select t.check('lifecycle: Y2 is suspended because its subject was retired', 'postgres', null,
+  $q$select suspended_at is not null and suspended_reason like '%subject%' from wine_reference.claim_versions where id = 'f0000000-0000-0000-0000-000000000049'$q$);
+select t.run('lifecycle setup: W1 (Q6 in Q1, evidence SV22 only) published', 'postgres', 'aaaaaaaa-0000-0000-0000-00000000000a',
+  $q$insert into wine_reference.claims (id, subject_entity_id, relationship_type, object_entity_id) values ('c0000000-0000-0000-0000-000000000050', 'e0000000-0000-0000-0000-000000000046', 'part_of', 'e0000000-0000-0000-0000-000000000041');
+     insert into wine_reference.claim_versions (id, claim_id, version_no, risk_tier) values ('f0000000-0000-0000-0000-000000000050', 'c0000000-0000-0000-0000-000000000050', 1, 2);
+     insert into wine_reference.claim_evidence (claim_version_id, source_version_id, modality, locator) values ('f0000000-0000-0000-0000-000000000050', '51000000-0000-0000-0000-000000000022', 'documentary', 'p. 11')$q$);
+select t.run('lifecycle setup: W1 submitted by A', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000a', $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000050', 'submit')$q$);
+select t.run('lifecycle setup: W1 approved and published by B', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000050', 'approve'); select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000050', 'publish')$q$);
+select t.run('lifecycle: B retires the whole source S2', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('sources', '50000000-0000-0000-0000-000000000002', 'retire')$q$);
+select t.check('lifecycle: W1 (evidence only from a version of S2) is suspended', 'postgres', null,
+  $q$select suspended_at is not null from wine_reference.claim_versions where id = 'f0000000-0000-0000-0000-000000000050'$q$);
+select t.check('lifecycle: no published, unsuspended version anywhere is unsound (the verify script''s health check)', 'postgres', null,
+  $q$select not exists (select 1 from wine_reference.claim_versions v where v.status = 'verified' and v.published_at is not null
+                          and v.suspended_at is null and not wine_reference.is_current(v.id))$q$);
+select t.run('owner exception kept: O self-approves a claim resting on the superseded SV31, but cannot publish it', 'postgres', 'aaaaaaaa-0000-0000-0000-00000000000d',
+  $q$insert into wine_reference.claims (id, subject_entity_id, relationship_type, object_entity_id) values ('c0000000-0000-0000-0000-000000000051', 'e0000000-0000-0000-0000-000000000045', 'part_of', 'e0000000-0000-0000-0000-000000000046');
+     insert into wine_reference.claim_versions (id, claim_id, version_no, risk_tier) values ('f0000000-0000-0000-0000-000000000051', 'c0000000-0000-0000-0000-000000000051', 1, 2);
+     insert into wine_reference.claim_evidence (claim_version_id, source_version_id, modality, locator) values ('f0000000-0000-0000-0000-000000000051', '51000000-0000-0000-0000-000000000031', 'documentary', 'p. 12')$q$);
+select t.run('owner exception kept: O submits and self-approves it', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000d',
+  $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000051', 'submit'); select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000051', 'approve')$q$);
+select t.run('owner exception kept: O cannot publish on a superseded source version', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000d',
+  $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000051', 'publish')$q$, '23514');
+
+-- ---------------------------------------------------------------- correction 4: published entities keep a display name
+select t.run('names: retiring the only display name of a published entity (Q3) is refused', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('entity_names', 'a0000000-0000-0000-0000-000000000043', 'retire')$q$, '23514');
+select t.run('names setup: A adds a second name for Q3 and submits it; B approves', 'postgres', 'aaaaaaaa-0000-0000-0000-00000000000a',
+  $q$insert into wine_reference.entity_names (id, entity_id, name, language, name_kind) values ('a0000000-0000-0000-0000-000000000053', 'e0000000-0000-0000-0000-000000000043', 'Test place Q3 (label)', 'en', 'label')$q$);
+select t.run('names setup: submitted by A', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000a', $q$select public.ref_review('entity_names', 'a0000000-0000-0000-0000-000000000053', 'submit')$q$);
+select t.run('names setup: approved by B', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b', $q$select public.ref_review('entity_names', 'a0000000-0000-0000-0000-000000000053', 'approve')$q$);
+select t.run('names: with a second display name, the first can be retired', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('entity_names', 'a0000000-0000-0000-0000-000000000043', 'retire')$q$);
+select t.run('names: the remaining display name cannot be retired', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('entity_names', 'a0000000-0000-0000-0000-000000000053', 'retire')$q$, '23514');
+select t.run('names: an entity whose only verified name is a typing shortcut (Q7) cannot be published', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('entities', 'e0000000-0000-0000-0000-000000000047', 'publish')$q$, '23514');
+select t.run('names setup: owner turns the read switch on', 'postgres', null,
+  $q$update public.app_config set value = '1' where key = 'reference_enabled'$q$);
+select t.check('names: the read door still shows Q3 by its remaining name, never a retired one', 'anon', null,
+  $q$select exists (select 1 from public.ref_published_names('Test place Q3') where name = 'Test place Q3 (label)')
+        and not exists (select 1 from public.ref_published_names('Test place Q3') where name = 'Test place Q3')$q$);
+select t.run('names setup: owner turns the read switch off', 'postgres', null,
+  $q$update public.app_config set value = '0' where key = 'reference_enabled'$q$);
+
+-- ---------------------------------------------------------------- correction 3: approved records are frozen
+select t.run('frozen: an approved name''s text cannot be edited', 'postgres', null,
+  $q$update wine_reference.entity_names set name = 'Changed' where id = 'a0000000-0000-0000-0000-000000000053'$q$, '42501');
+select t.run('frozen: an approved name cannot be deleted', 'postgres', null,
+  $q$delete from wine_reference.entity_names where id = 'a0000000-0000-0000-0000-000000000053'$q$, '42501');
+select t.run('frozen: an approved source''s title cannot be edited', 'postgres', null,
+  $q$update wine_reference.sources set title = 'Changed' where id = '50000000-0000-0000-0000-000000000004'$q$, '42501');
+select t.run('frozen: an approved source version''s link cannot be edited', 'postgres', null,
+  $q$update wine_reference.source_versions set url = 'https://example.org/changed' where id = '51000000-0000-0000-0000-000000000041'$q$, '42501');
+select t.run('frozen: an approved source version''s fingerprint cannot be edited', 'postgres', null,
+  $q$update wine_reference.source_versions set content_sha256 = repeat('a', 64) where id = '51000000-0000-0000-0000-000000000041'$q$, '42501');
+select t.run('frozen: an approved rights statement''s permissions cannot be edited', 'postgres', null,
+  $q$update wine_reference.rights_statements set allows_copy = true where id = 'b0000000-0000-0000-0000-000000000004'$q$, '42501');
+select t.run('frozen: superseded_by cannot be set by a plain update', 'postgres', null,
+  $q$update wine_reference.source_versions set superseded_by = '51000000-0000-0000-0000-000000000032' where id = '51000000-0000-0000-0000-000000000041'$q$, '42501');
+select t.run('frozen: a new claim version cannot be inserted already suspended', 'postgres', null,
+  $q$insert into wine_reference.claim_versions (claim_id, version_no, risk_tier, suspended_at, suspended_reason) values ('c0000000-0000-0000-0000-000000000045', 9, 2, now(), 'x')$q$, '42501');
+select t.run('frozen: a claim''s object cannot change once a version left draft', 'postgres', null,
+  $q$update wine_reference.claims set object_entity_id = 'e0000000-0000-0000-0000-000000000046' where id = 'c0000000-0000-0000-0000-000000000045'$q$, '42501');
+select t.run('frozen setup: taxonomy node N1''s entity is submitted by A and approved by B', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000a',
+  $q$select public.ref_review('entities', 'e0000000-0000-0000-0000-000000000021', 'submit')$q$);
+select t.run('frozen setup: approved by B', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b', $q$select public.ref_review('entities', 'e0000000-0000-0000-0000-000000000021', 'approve')$q$);
+select t.run('frozen: an approved taxonomy node''s code cannot change', 'postgres', null,
+  $q$update wine_reference.taxonomy_nodes set code = 'TEST-N1X' where entity_id = 'e0000000-0000-0000-0000-000000000021'$q$, '42501');
+select t.run('frozen: its display order may still change', 'postgres', null,
+  $q$update wine_reference.taxonomy_nodes set sort_order = 5 where entity_id = 'e0000000-0000-0000-0000-000000000021'$q$);
+select t.run('frozen: a claim type in use cannot change its required evidence', 'postgres', null,
+  $q$update wine_reference.relationship_types set required_modality = 'label' where code = 'part_of'$q$, '42501');
+select t.run('frozen: a claim type in use cannot go back to proposed', 'postgres', null,
+  $q$update wine_reference.relationship_types set status = 'proposed' where code = 'part_of'$q$, '42501');
+select t.run('frozen: a claim type in use may change its wording', 'postgres', null,
+  $q$update wine_reference.relationship_types set label = 'Lies within' where code = 'part_of'$q$);
+select t.run('frozen: a draft name can still be edited', 'postgres', 'aaaaaaaa-0000-0000-0000-00000000000a',
+  $q$insert into wine_reference.entity_names (id, entity_id, name, language, name_kind) values ('a0000000-0000-0000-0000-000000000054', 'e0000000-0000-0000-0000-000000000044', 'Draft name', 'en', 'common');
+     update wine_reference.entity_names set name = 'Draft name, edited' where id = 'a0000000-0000-0000-0000-000000000054'$q$);
+select t.run('frozen setup: the draft name is submitted by A', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000a', $q$select public.ref_review('entity_names', 'a0000000-0000-0000-0000-000000000054', 'submit')$q$);
+select t.run('frozen: a submitted name cannot be edited', 'postgres', null,
+  $q$update wine_reference.entity_names set name = 'x' where id = 'a0000000-0000-0000-0000-000000000054'$q$, '42501');
+select t.run('frozen setup: B rejects it back to draft', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b', $q$select public.ref_review('entity_names', 'a0000000-0000-0000-0000-000000000054', 'reject', 'please fix')$q$);
+select t.run('frozen: a rejected (draft again) name can be edited', 'postgres', null,
+  $q$update wine_reference.entity_names set name = 'Draft name, fixed' where id = 'a0000000-0000-0000-0000-000000000054'$q$);
