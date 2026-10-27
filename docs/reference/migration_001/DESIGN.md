@@ -1,4 +1,4 @@
-# Migration 001: design (DRAFT, Phase 2.0B.2, 2026-10-26; amended the same day: Owner approval override)
+# Migration 001: design (DRAFT, Phase 2.0B.2, 2026-10-26; Owner approval override 2026-10-26; Phase 2.0B.3 corrections 2026-10-27, release "001 r3")
 
 **Status: a tested draft for the owner's approval. Nothing has been run on the live database.** Migration 001 creates the canonical
 foundation of the Wine Education Master Reference in a new private schema, `wine_reference`, and two functions in `public`. It changes no
@@ -8,12 +8,14 @@ existing table, row, view, function, setting or permission, and adds no wine con
 |---|---|
 | 1. Design document (this file) | `docs/reference/migration_001/DESIGN.md` |
 | 2. Physical schema and data dictionary | `DATA_DICTIONARY.md` (column tables generated from a tested install) |
-| 3. SQL migration draft | `001_wine_reference_foundation.sql`; the permissions step `001a_reference_permissions.sql` (approved separately) |
+| 3. SQL migration draft | `001_wine_reference_foundation.sql` (release "001 r3 (2026-10-27)"); the permissions step `001a_reference_permissions.sql` (approved separately) |
 | 4. Verification and negative tests | `001_verify.sql` (read-only, also for the live database after migration); `tests/001_behaviour_tests.sql` (local only); `tests/run_local_tests.sh` |
 | 5. Security and permissions review | section 4 below |
 | 6. Compatibility assessment | section 5 below |
-| 7. Local test results | `TEST_REPORT.md`: 160 passed, 0 failed, on a throwaway local PostgreSQL 16 (re-run in full after the amendment) |
-| 8. Rollback and forward recovery | section 6 below; `001_rollback.sql` |
+| 7. Local test results | `TEST_REPORT.md`: **270 passed, 0 failed**, on a throwaway local PostgreSQL 16 (re-run in full after the Phase 2.0B.3 corrections) |
+| 8. Rollback and forward recovery | section 6 below; `001a_rollback.sql`, then `001_rollback.sql` |
+| 11. Phase 2.0B.3 corrections and change report | section 4b below; `CHANGE_REPORT_2_0B_3.md` |
+| 12. Owner role verification | `OWNER_ROLE_VERIFICATION.md`; read-only `owner_role_check.sql` (for the owner to run) |
 | 9. Remaining owner decisions | section 7 below |
 | 10. Approval checklist for live execution | section 8 below |
 
@@ -186,6 +188,22 @@ claim version retires the old one; every decision is a `review_events` row and e
 
 ---
 
+## 4b. Phase 2.0B.3 corrections (2026-10-27, after the independent review)
+
+| # | Finding | Correction in the SQL | Tested |
+|---|---|---|---|
+| 1 | A published claim stayed "verified" after its source version was retired, superseded or invalidated | **One soundness rule** (`wine_reference.version_problems`) is used to publish, to suspend and to verify: subject and object published; supporting evidence from a verified, not superseded source version of a verified source; the required modality met by such evidence; every quote under verified rights that allow quoting; every dependency published and not suspended. After every retire, supersede (retire with a replacement) and publish, `ref_review` calls `suspend_unsound`: each published version that is no longer sound gets `suspended_at` and `suspended_reason` and a `suspend` row in `review_events`. `wine_reference.is_current` / the view `current_claim_versions` is what any future read must use | Retiring a source version, a whole source, a rights statement or an entity; superseding a source version; redundant evidence keeps a claim current; suspension recorded; a suspended version cannot be published again or un-suspended by hand |
+| 2 | No defined behaviour when a dependency is retired or invalid | **Fail closed, transitively.** `suspend_unsound` repeats until nothing changes, so every version that depends (at any depth) on a retired or suspended version is suspended; publishing a newer version of a dependency retires the old one and suspends its dependents (they are re-reviewed against the new version); publication refuses a dependency that is not current; `is_current` follows dependencies to any depth. **Suspension is final for that version**: a new version is written and reviewed | Chain X4 → X3 → X2: X2 loses its evidence, X3 and X4 are suspended; a newer dependency version suspends its dependent; publishing on a suspended dependency is refused |
+| 3 | Approved records could be edited without review | **One guard** (`guard_row`) on entities, names, sources, source versions, rights statements, taxonomy assignments and claim versions: lifecycle columns (status, publication, retirement, `superseded_by`, rights check, suspension) change only inside `ref_review`; every other column is frozen once the row leaves draft (submitted rows too); such rows are never deleted. Claim identities, taxonomy codes and parents, and claim types in use are frozen too (`freeze_claim`, `freeze_taxonomy`, `freeze_claim_type`). **Revision process:** write a new row, have it reviewed, retire the old one (with a replacement where it applies). Also: approving a source version needs its source approved and its rights verified; a private copy is refused when written unless under verified rights that allow copying | Edits and deletes of approved names, sources, source versions, rights; `superseded_by` and suspension by hand; claim identity; taxonomy code (order may change); claim type meaning and status; drafts and rejected rows stay editable |
+| 4 | Retiring names could leave a published entity with no display name | `has_display_name`: a verified name that is not a typing shortcut and has not ended. Publishing an entity needs one; retiring the **last** one of a published entity is refused (retire the entity, or approve another name first); the read door shows only entities that have one; the verify script lists any published entity without one (a name can still end by its own `valid_to` date: the read door then hides the entity rather than show it nameless) | Last name refused; second name allows it; shortcut-only entity cannot be published; read door shows the remaining name only |
+| 5 | The Owner lookup is unverified | `owner_role_check.sql` (read-only, for the owner) and `OWNER_ROLE_VERIFICATION.md` | Runs in a read-only transaction on the local stand-in |
+| 6 | Migration safety | Preflight in 001: stops, changing nothing, on an unexpected `ref_*` function in `public`; on `ref_*` without the schema, or the schema without its 001 registration; on a different **release** (`001 r3 (2026-10-27)`, stored in `schema_migrations.release`); on **structure drift** (`structure_fingerprint()` stored after each run and compared on replay). 001a: needs 001 at this release and the owner role row; stops if registered but partly undone; checks its own result. The verify script checks release, drift, health and 001a consistency. File SHA-256s are checked by the owner before running (section 8) | Each preflight case on its own database (nothing changed); 001a before 001; partial 001a caught by preflight and by verify |
+| 7 | Recovery of 001a | `001a_rollback.sql`: removes the four `ref_*` words from every role (other permissions kept, in order), unregisters 001a, checks its result; safe any time (removing permissions only takes abilities away). `001_rollback.sql` now refuses while any role holds a `ref_*` permission or 001a is registered | Rollback twice; 001 rollback refused first; full order 001a_rollback → 001_rollback; 001a re-run after rollback |
+
+**Unchanged:** the Owner approval override (still recorded as `owner_override`; the Owner is still refused publication on retired or superseded evidence or forbidden quotes: tested), every evidence and rights requirement, the two read and review doors, and the closed schema. `ref_review` gained an optional fifth argument, `p_replacement`.
+
+---
+
 ## 5. Compatibility assessment
 
 - **Existing database objects:** none changed. Tested by comparing the entire `public` schema before and after (tables, columns,
@@ -209,8 +227,10 @@ claim version retires the old one; every decision is a `review_events` row and e
 - **After content exists: forward recovery only.** Never drop. Fix with a new numbered migration (002 ...), retire rows instead of
   deleting them, and keep the review history. Before any later migration, export the reference's tables (SQL Editor, or the dashboard's
   backups: check what the project's plan includes).
-- **Undo `001a`** (permissions) if needed:
-  `update public.staff_roles set permissions = array(select p from unnest(permissions) p where p not in ('ref_edit','ref_review','ref_publish','ref_rights'));`
+- **Undo `001a`** (permissions): run `001a_rollback.sql`. It is safe at any time (taking permissions away cannot open anything:
+  `ref_review` then refuses every decision), safe to run twice, and touches only the four `ref_*` words in `staff_roles` and the `001a`
+  register row. **Full rollback order:** `001a_rollback.sql`, then `001_rollback.sql` (which refuses until 001a is undone).
+- **Never replay an edited 001.** Once 001 is live, any change is migration 002; the preflight refuses a different release.
 
 ---
 
@@ -227,6 +247,8 @@ claim version retires the old one; every decision is a `review_events` row and e
 9. **`privacy.html`:** whether staff records in the review history need a line (owner and lawyers).
 10. **Change log:** keep the reference's own, or later unify with `public.revisions`.
 11. **When to switch the reference on** (`app_config` `reference_enabled` = 1): not before there is published content and the owner says so.
+12. **Suspension policy (Phase 2.0B.3):** confirm that a suspended claim version is final (a new version is written and reviewed), rather than a "reinstate" decision.
+13. **Owner role check:** run `owner_role_check.sql` and confirm the points in `OWNER_ROLE_VERIFICATION.md` before approving the live run.
 
 ---
 
@@ -240,21 +262,23 @@ the owner, one at a time.
 - [ ] Confirm a recent backup exists (dashboard: Database, Backups), or note that the plan has none.
 - [ ] Confirm **Settings, API, Exposed schemas** does not list `wine_reference`; leave it unchanged.
 - [ ] Use the files from the repository's `main` branch at the approved commit. Fingerprints (first 16 hex of SHA-256) as committed:
-      `001_wine_reference_foundation.sql` `ae69fb54f1be71d7`, `001a_reference_permissions.sql` `8cf791d1e3d0256a`,
-      `001_verify.sql` `512247ba1d83ae50`, `001_rollback.sql` `210b650d5b103a2f` (after the Owner override amendment).
-- [ ] Re-run the local tests on that commit: `bash docs/reference/migration_001/tests/run_local_tests.sh` → 160 passed, 0 failed.
-- [ ] Read the live body of `public.my_staff_role_code()` once (read-only:
-      `select pg_get_functiondef('public.my_staff_role_code()'::regprocedure);`) and confirm it returns `'owner'` only for
-      `profiles.staff_role = 'owner'` or `profiles.role = 'admin'`, for the signed-in user (`auth.uid()`). If it differs, stop and send it.
+      `001_wine_reference_foundation.sql` `11c72574bccd5827`, `001a_reference_permissions.sql` `c9232eb170451888`,
+      `001_verify.sql` `ff1a93575ca6756a`, `001_rollback.sql` `af80fc11000f6fc1`, `001a_rollback.sql` `cc997dca39ac806c`,
+      `owner_role_check.sql` `e911b62ebfba298b` (release "001 r3 (2026-10-27)", after the Phase 2.0B.3 corrections).
+- [ ] Re-run the local tests on that commit: `bash docs/reference/migration_001/tests/run_local_tests.sh` → 270 passed, 0 failed.
+- [ ] Run `owner_role_check.sql` (read-only) and confirm every point in `OWNER_ROLE_VERIFICATION.md`, "What to confirm". If any
+      point fails, stop and send the result (keep the file private).
 
 **Run**
 - [ ] New query → paste the whole `001_wine_reference_foundation.sql` → Run. Expected: "Success. No rows returned". Any error: stop and
       send it; nothing was applied.
-- [ ] New query → paste `001_verify.sql` → Run. Expected: every row PASS.
+- [ ] New query → paste `001_verify.sql` → Run. Expected: every row PASS. (A preflight stop names its reason: an unexpected `ref_*`
+      function, a partial or foreign schema, a different release or drift. Nothing was changed; send the message.)
 - [ ] Open the app (main and `/vwm/`): Discover, Journal and Learn behave as before.
 
 **Then, separately**
-- [ ] Only after decision 5: run `001a_reference_permissions.sql`, then `001_verify.sql` again.
+- [ ] Only after decision 5: run `001a_reference_permissions.sql`, then `001_verify.sql` again (the 001a consistency rows must PASS).
+      To undo: `001a_rollback.sql`.
 - [ ] Keep `reference_enabled` absent or 0.
 - [ ] Tell the session; it records the date and result in `docs/HANDOFF.md` and `docs/reference/results/`.
 

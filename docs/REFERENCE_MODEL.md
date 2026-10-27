@@ -139,6 +139,9 @@ The reference adds **mapping rows** that point from its entities to legacy ids.
 
 - **Owner approval override (owner policy, 2026-10-26):** the Owner may approve their own work in every tier and publish it alone;
   everyone else keeps the two-person rule; each use is recorded (`docs/reference/migration_001/DESIGN.md` §4).
+- **Lifecycle (Phase 2.0B.3, 2026-10-27):** approved records are frozen (revise by a new record plus retirement); a published claim is
+  suspended automatically when its evidence, rights, entities or dependencies stop being valid, transitively; suspension is final for
+  that version (`docs/reference/migration_001/DESIGN.md` §4b).
 - **AI never decides:** a language model may *propose* a draft claim with its citation for a person to check; it never sets a status
   above draft, never publishes, and its drafts are marked as such.
 

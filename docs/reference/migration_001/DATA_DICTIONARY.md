@@ -1,4 +1,4 @@
-# Migration 001: physical schema and data dictionary (DRAFT, 2026-10-26)
+# Migration 001: physical schema and data dictionary (DRAFT, 2026-10-26; release "001 r3", 2026-10-27)
 
 The schema `wine_reference` as created by `001_wine_reference_foundation.sql`. **Not on the live database yet.** The column tables below are
 **generated from a tested local install** by `tests/dictionary.sql` (`DICT=... bash tests/run_local_tests.sh`), so they match the SQL
@@ -35,7 +35,21 @@ review_events (append-only, every status decision)      change_log (append-only,
 | `verified` + `published_at` | shown to players (entities and claim versions only) | `ref_review(..., 'publish')`, needs `ref_publish` and the publication rules |
 | `retired` | withdrawn; kept forever | `ref_review(..., 'retire')`, needs `ref_publish`; publishing a newer claim version retires the old one |
 
-`reject` sends a submitted row back to `draft`. A plain `update` of `status`, `published_at` or `retired_at` is refused.
+`reject` sends a submitted row back to `draft`. A plain `update` of any lifecycle column (`status`, `published_at`, `published_by`,
+`retired_at`, `superseded_by`, `checked_by`, `checked_at`, `suspended_at`, `suspended_reason`) is refused, and every other column is
+**frozen once the row leaves draft** (`guard_row`): to change approved content, write a new row, have it reviewed and retire the old one.
+
+**Suspended (claim versions only, Phase 2.0B.3).** A published version that stops being sound (its evidence's source version or source
+retired or superseded, a quote's rights retired, its subject or object retired, a dependency retired or suspended) is suspended
+automatically (`suspended_at`, `suspended_reason`, a `suspend` row in `review_events`, repeated until nothing changes, so it reaches every
+dependent). Suspension is final for that version. **Current** = verified, published, not suspended, sound, with every dependency current
+(`wine_reference.is_current`, view `wine_reference.current_claim_versions`).
+
+**Functions inside the schema** (owner only): `version_problems(id)` (the soundness rule), `is_current(id)`, `suspend_unsound(actor,
+cause)`, `has_display_name(entity)`, `structure_fingerprint()`, and the trigger functions `guard_row`, `start_as_draft`, `freeze_claim`,
+`freeze_taxonomy`, `freeze_claim_type`, `check_source_copy`, `check_claim`, `check_claim_version`, `check_taxonomy_node`,
+`check_taxonomy_domain`, `check_dependency`, `evidence_only_on_draft`, `dependency_only_on_draft`, `log_change`, `refuse_change`.
+**Doors in `public`:** `ref_published_names(query, language, limit)` and `ref_review(table, id, decision, note, replacement)`.
 
 **Owner approval override (owner policy, 2026-10-26).** "Approved by someone other than the author" has one exception: the person whose
 staff role is Owner (read server-side by `public.my_staff_role_code()`, checked on every call) may approve their own work. Each such
@@ -68,6 +82,7 @@ Controlled list of entity-to-value claim types. None seeded; each is an owner de
 - Check `attribute_types_status_check`: `CHECK (status = ANY (ARRAY['proposed'::text, 'active'::text, 'retired'::text]))`
 - Check `attribute_types_value_type_check`: `CHECK (value_type = ANY (ARRAY['text'::text, 'number'::text, 'date'::text, 'boolean'::text]))`
 - Primary key `attribute_types_pkey`: `PRIMARY KEY (code)`
+- Trigger `attribute_types_freeze` runs `wine_reference.freeze_claim_type`
 - Trigger `attribute_types_log` runs `wine_reference.log_change`
 
 ## `change_log`
@@ -154,7 +169,7 @@ This claim version holds only if that one holds (Phase 1.9 revision 6). No cycle
 
 ## `claim_versions`
 
-What a claim says, when it was true, its risk tier and status. Frozen once it leaves draft; one live published version per claim.
+What a claim says, when it was true, its risk tier and status. Frozen once it leaves draft; one live published version per claim; suspended automatically when it stops being sound.
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -179,6 +194,8 @@ What a claim says, when it was true, its risk tier and status. Frozen once it le
 | `published_at` | timestamp with time zone | null |  |
 | `published_by` | uuid | null |  |
 | `retired_at` | timestamp with time zone | null |  |
+| `suspended_at` | timestamp with time zone | null |  |
+| `suspended_reason` | text | null |  |
 
 **Keys and rules**
 
@@ -188,6 +205,8 @@ What a claim says, when it was true, its risk tier and status. Frozen once it le
 - Check `claim_versions_qualifiers_check`: `CHECK (jsonb_typeof(qualifiers) = 'object'::text AND octet_length(qualifiers::text) <= 4000)`
 - Check `claim_versions_retired_dates`: `CHECK ((status = 'retired'::verification_status) = (retired_at IS NOT NULL))`
 - Check `claim_versions_risk_tier_check`: `CHECK (risk_tier >= 1 AND risk_tier <= 3)`
+- Check `claim_versions_suspended_is_published`: `CHECK (suspended_at IS NULL OR published_at IS NOT NULL)`
+- Check `claim_versions_suspended_reason`: `CHECK ((suspended_at IS NULL) = (suspended_reason IS NULL))`
 - Check `claim_versions_valid_from_precision_check`: `CHECK (valid_from_precision = ANY (ARRAY['day'::text, 'month'::text, 'year'::text, 'decade'::text, 'unknown'::text]))`
 - Check `claim_versions_valid_to_precision_check`: `CHECK (valid_to_precision = ANY (ARRAY['day'::text, 'month'::text, 'year'::text, 'decade'::text, 'unknown'::text]))`
 - Check `claim_versions_value_text_check`: `CHECK (value_text IS NULL OR length(value_text) <= 2000)`
@@ -199,10 +218,9 @@ What a claim says, when it was true, its risk tier and status. Frozen once it le
 - Index `claim_versions_claim`: `USING btree (claim_id)`
 - Index `claim_versions_one_published`: `USING btree (claim_id) WHERE ((status = 'verified'::verification_status) AND (published_at IS NOT NULL))`
 - Trigger `claim_versions_check` runs `wine_reference.check_claim_version`
-- Trigger `claim_versions_freeze` runs `wine_reference.freeze_claim_version`
+- Trigger `claim_versions_guard` runs `wine_reference.guard_row`
 - Trigger `claim_versions_log` runs `wine_reference.log_change`
 - Trigger `claim_versions_start_draft` runs `wine_reference.start_as_draft`
-- Trigger `claim_versions_status_guard` runs `wine_reference.guard_status`
 
 ## `claims`
 
@@ -231,6 +249,7 @@ The stable identity of a statement: subject + relationship type + object, or sub
 - Index `claims_relationship`: `USING btree (relationship_type, subject_entity_id) WHERE (relationship_type IS NOT NULL)`
 - Index `claims_subject`: `USING btree (subject_entity_id)`
 - Trigger `claims_check` runs `wine_reference.check_claim`
+- Trigger `claims_freeze` runs `wine_reference.freeze_claim`
 - Trigger `claims_log` runs `wine_reference.log_change`
 
 ## `entities`
@@ -260,9 +279,9 @@ One permanent id per real-world thing. Status and publication are changed only t
 - Primary key `entities_pkey`: `PRIMARY KEY (id)`
 - Index `entities_kind`: `USING btree (kind)`
 - Index `entities_published`: `USING btree (kind) WHERE ((status = 'verified'::verification_status) AND (published_at IS NOT NULL))`
+- Trigger `entities_guard` runs `wine_reference.guard_row`
 - Trigger `entities_log` runs `wine_reference.log_change`
 - Trigger `entities_start_draft` runs `wine_reference.start_as_draft`
-- Trigger `entities_status_guard` runs `wine_reference.guard_status`
 
 ## `entity_kinds`
 
@@ -320,9 +339,9 @@ Every name of every entity, per language, kind and period (Phase 1.9 revision 5:
 - Index `entity_names_one`: `USING btree (entity_id, lower(name), language, name_kind, COALESCE(valid_from, '-infinity'::date))`
 - Index `entity_names_one_preferred`: `USING btree (entity_id, language) WHERE (is_preferred AND (valid_to IS NULL) AND (status <> 'retired'::verification_status))`
 - Index `entity_names_search`: `USING gin (lower(name) gin_trgm_ops)`
+- Trigger `entity_names_guard` runs `wine_reference.guard_row`
 - Trigger `entity_names_log` runs `wine_reference.log_change`
 - Trigger `entity_names_start_draft` runs `wine_reference.start_as_draft`
-- Trigger `entity_names_status_guard` runs `wine_reference.guard_status`
 
 ## `evidence_modalities`
 
@@ -380,6 +399,7 @@ Controlled list of entity-to-entity claim types. Proposed until the owner activa
 - Check `relationship_types_status_check`: `CHECK (status = ANY (ARRAY['proposed'::text, 'active'::text, 'retired'::text]))`
 - Foreign key `relationship_types_required_modality_fkey`: `FOREIGN KEY (required_modality) REFERENCES wine_reference.evidence_modalities(code)`
 - Primary key `relationship_types_pkey`: `PRIMARY KEY (code)`
+- Trigger `relationship_types_freeze` runs `wine_reference.freeze_claim_type`
 - Trigger `relationship_types_log` runs `wine_reference.log_change`
 
 ## `review_events`
@@ -401,7 +421,7 @@ Append-only history of every status decision (submit, approve, reject, publish, 
 
 **Keys and rules**
 
-- Check `review_events_decision_check`: `CHECK (decision = ANY (ARRAY['submit'::text, 'approve'::text, 'reject'::text, 'publish'::text, 'retire'::text]))`
+- Check `review_events_decision_check`: `CHECK (decision = ANY (ARRAY['submit'::text, 'approve'::text, 'reject'::text, 'publish'::text, 'retire'::text, 'suspend'::text]))`
 - Check `review_events_note_check`: `CHECK (length(note) <= 2000)`
 - Check `review_events_override_only_on_approve`: `CHECK (NOT owner_override OR decision = 'approve'::text)`
 - Check `review_events_target_table_check`: `CHECK (target_table = ANY (ARRAY['entities'::text, 'entity_names'::text, 'claim_versions'::text, 'sources'::text, 'source_versions'::text, 'rights_statements'::text, 'taxonomy_assignments'::text]))`
@@ -439,9 +459,9 @@ What a component may be used for: licence, holder, attribution, quote/copy/comme
 - Check `rights_statements_licence_url_check`: `CHECK (licence_url IS NULL OR licence_url ~ '^https?://'::text)`
 - Check `rights_statements_retired_dates`: `CHECK ((status = 'retired'::verification_status) = (retired_at IS NOT NULL))`
 - Primary key `rights_statements_pkey`: `PRIMARY KEY (id)`
+- Trigger `rights_statements_guard` runs `wine_reference.guard_row`
 - Trigger `rights_statements_log` runs `wine_reference.log_change`
 - Trigger `rights_statements_start_draft` runs `wine_reference.start_as_draft`
-- Trigger `rights_statements_status_guard` runs `wine_reference.guard_status`
 
 ## `schema_migrations`
 
@@ -454,6 +474,8 @@ Which reference migrations ran, when and by which database user.
 | `applied_at` | timestamp with time zone | not null | `now()` |
 | `applied_by` | text | not null | `CURRENT_USER` |
 | `notes` | text | null |  |
+| `release` | text | not null | `''::text` |
+| `structure_md5` | text | null |  |
 
 **Keys and rules**
 
@@ -511,9 +533,10 @@ The exact edition, page state or file of a source that was read, with its retrie
 - Primary key `source_versions_pkey`: `PRIMARY KEY (id)`
 - Unique `source_versions_source_id_version_label_key`: `UNIQUE (source_id, version_label)`
 - Index `source_versions_source`: `USING btree (source_id)`
+- Trigger `source_versions_copy` runs `wine_reference.check_source_copy`
+- Trigger `source_versions_guard` runs `wine_reference.guard_row`
 - Trigger `source_versions_log` runs `wine_reference.log_change`
 - Trigger `source_versions_start_draft` runs `wine_reference.start_as_draft`
-- Trigger `source_versions_status_guard` runs `wine_reference.guard_status`
 
 ## `sources`
 
@@ -543,9 +566,9 @@ A work that can be cited (regulation, book, register, producer document ...).
 - Check `sources_url_check`: `CHECK (url IS NULL OR url ~ '^https?://'::text)`
 - Foreign key `sources_kind_fkey`: `FOREIGN KEY (kind) REFERENCES wine_reference.source_kinds(code)`
 - Primary key `sources_pkey`: `PRIMARY KEY (id)`
+- Trigger `sources_guard` runs `wine_reference.guard_row`
 - Trigger `sources_log` runs `wine_reference.log_change`
 - Trigger `sources_start_draft` runs `wine_reference.start_as_draft`
-- Trigger `sources_status_guard` runs `wine_reference.guard_status`
 
 ## `taxonomy_assignments`
 
@@ -571,9 +594,9 @@ Which taxonomy nodes an entity belongs to (at most one primary).
 - Unique `taxonomy_assignments_id_key`: `UNIQUE (id)`
 - Index `taxonomy_assignments_node`: `USING btree (node_id)`
 - Index `taxonomy_assignments_one_primary`: `USING btree (entity_id) WHERE (is_primary AND (status <> 'retired'::verification_status))`
+- Trigger `taxonomy_assignments_guard` runs `wine_reference.guard_row`
 - Trigger `taxonomy_assignments_log` runs `wine_reference.log_change`
 - Trigger `taxonomy_assignments_start_draft` runs `wine_reference.start_as_draft`
-- Trigger `taxonomy_assignments_status_guard` runs `wine_reference.guard_status`
 
 ## `taxonomy_domains`
 
@@ -595,6 +618,7 @@ The approved knowledge domains (an entity each). Empty until the owners approved
 - Primary key `taxonomy_domains_pkey`: `PRIMARY KEY (entity_id)`
 - Unique `taxonomy_domains_code_key`: `UNIQUE (code)`
 - Trigger `taxonomy_domains_check` runs `wine_reference.check_taxonomy_domain`
+- Trigger `taxonomy_domains_freeze` runs `wine_reference.freeze_taxonomy`
 - Trigger `taxonomy_domains_log` runs `wine_reference.log_change`
 
 ## `taxonomy_nodes`
@@ -624,5 +648,6 @@ The approved taxonomy under each domain (an entity each). Same domain as its par
 - Index `taxonomy_nodes_domain`: `USING btree (domain_id)`
 - Index `taxonomy_nodes_parent`: `USING btree (parent_id)`
 - Trigger `taxonomy_nodes_check` runs `wine_reference.check_taxonomy_node`
+- Trigger `taxonomy_nodes_freeze` runs `wine_reference.freeze_taxonomy`
 - Trigger `taxonomy_nodes_log` runs `wine_reference.log_change`
 

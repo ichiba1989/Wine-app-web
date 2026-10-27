@@ -1,4 +1,4 @@
--- MIGRATION 001: Wine Education Master Reference, canonical foundation. DRAFT (Phase 2.0B.2, 2026-10-26). NOT RUN ON THE LIVE DATABASE.
+-- MIGRATION 001: Wine Education Master Reference, canonical foundation. DRAFT (Phase 2.0B.2, 2026-10-26; corrected in Phase 2.0B.3, 2026-10-27; release "001 r3"). NOT RUN ON THE LIVE DATABASE.
 --
 -- What it does: creates a NEW, PRIVATE schema `wine_reference` with the reference's foundation tables (entities, names, taxonomy, relationship
 -- and attribute types, sources and source versions, rights statements, claims and claim versions, claim evidence, claim-version
@@ -33,6 +33,42 @@ begin
   if to_regprocedure('auth.uid()') is null then raise exception 'Missing function auth.uid()'; end if;
 end $$;
 
+-- 0b. Preflight (Phase 2.0B.3 correction 6). RELEASE below names this exact version of the script; the owner also checks the file's
+--     SHA-256 against DESIGN.md before running it. The run stops, changing nothing, when:
+--       - a function named ref_* exists in public that this migration did not create (name clash);
+--       - public.ref_* exists but the schema does not, or the schema exists but migration 001 is not registered (partial or foreign);
+--       - a DIFFERENT release of 001 is registered (changes go in migration 002, never by replaying an edited 001);
+--       - the schema's structure no longer matches the fingerprint stored after the last run (someone changed it by hand: drift).
+do $$
+declare
+  c_release constant text := '001 r3 (2026-10-27)';
+  v_foreign text; v_ours boolean; v_release text; v_stored text;
+begin
+  select string_agg(p.proname || '(' || pg_catalog.oidvectortypes(p.proargtypes) || ')', ', ') into v_foreign
+    from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname like 'ref\_%'
+     and not (p.proname = 'ref_published_names' and pg_catalog.oidvectortypes(p.proargtypes) = 'text, text, integer')
+     and not (p.proname = 'ref_review' and pg_catalog.oidvectortypes(p.proargtypes) = 'text, uuid, text, text, uuid');
+  if v_foreign is not null then raise exception 'Preflight: unexpected function(s) in public: %. Stop and investigate.', v_foreign; end if;
+  select exists (select 1 from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+                  where n.nspname = 'public' and p.proname in ('ref_published_names', 'ref_review')) into v_ours;
+  if not exists (select 1 from pg_catalog.pg_namespace where nspname = 'wine_reference') then
+    if v_ours then raise exception 'Preflight: public.ref_* exists but schema wine_reference does not (partial or foreign deployment). Stop.'; end if;
+    return;   -- fresh install
+  end if;
+  if to_regclass('wine_reference.schema_migrations') is null then
+    raise exception 'Preflight: schema wine_reference exists without its migration register (foreign or partial). Stop.';
+  end if;
+  select release, structure_md5 into v_release, v_stored from wine_reference.schema_migrations where version = '001';
+  if not found then raise exception 'Preflight: schema wine_reference exists but migration 001 is not registered (partial or foreign). Stop.'; end if;
+  if v_release is distinct from c_release then
+    raise exception 'Preflight: release "%" of migration 001 is applied, this file is "%". Never replay an edited 001; write migration 002.', v_release, c_release;
+  end if;
+  if to_regprocedure('wine_reference.structure_fingerprint()') is null or wine_reference.structure_fingerprint() is distinct from v_stored then
+    raise exception 'Preflight: the schema wine_reference was changed by hand since migration 001 ran (structure drift). Stop and investigate.';
+  end if;
+end $$;
+
 -- =====================================================================================================================================
 -- 1. The private schema. Nobody but its owner (postgres) may use it. It is NOT to be added to the API's Exposed schemas.
 -- =====================================================================================================================================
@@ -52,7 +88,9 @@ create table if not exists wine_reference.schema_migrations (
   name        text not null,
   applied_at  timestamptz not null default now(),
   applied_by  text not null default current_user,
-  notes       text
+  notes       text,
+  release     text not null default '',     -- which release of the script was applied (checked on replay)
+  structure_md5 text                         -- fingerprint of the schema's structure after the run (checked on replay: drift)
 );
 
 -- =====================================================================================================================================
@@ -358,7 +396,11 @@ create table if not exists wine_reference.claim_versions (
   published_at           timestamptz,
   published_by           uuid,
   retired_at             timestamptz,
+  suspended_at           timestamptz,       -- set automatically when a published version stops being sound (evidence, rights, dependency, entity)
+  suspended_reason       text,
   unique (claim_id, version_no),
+  constraint claim_versions_suspended_is_published check (suspended_at is null or published_at is not null),
+  constraint claim_versions_suspended_reason check ((suspended_at is null) = (suspended_reason is null)),
   constraint claim_versions_dates check (valid_to is null or valid_from is null or valid_to >= valid_from),
   constraint claim_versions_not_self check (supersedes_version_id is null or supersedes_version_id <> id),
   constraint claim_versions_published_is_verified check (published_at is null or status in ('verified', 'retired')),
@@ -406,7 +448,7 @@ create table if not exists wine_reference.review_events (
   id           bigint generated always as identity primary key,
   target_table text not null check (target_table in ('entities', 'entity_names', 'claim_versions', 'sources', 'source_versions', 'rights_statements', 'taxonomy_assignments')),
   target_id    uuid not null,
-  decision     text not null check (decision in ('submit', 'approve', 'reject', 'publish', 'retire')),
+  decision     text not null check (decision in ('submit', 'approve', 'reject', 'publish', 'retire', 'suspend')),   -- suspend: automatic
   from_status  public.verification_status not null,
   to_status    public.verification_status not null,
   actor        uuid not null,
@@ -457,25 +499,80 @@ begin
   raise exception 'wine_reference.%: rows are never changed or deleted (append-only)', tg_table_name using errcode = '42501';
 end $$;
 
--- 11c. A claim version's content is frozen once it leaves draft; only the review function moves its status.
-create or replace function wine_reference.freeze_claim_version() returns trigger
+-- 11c. Lifecycle and immutability for every record that has a status (Phase 2.0B.3 correction 3).
+--      Lifecycle columns (status, publication, retirement, supersession, rights check, suspension) change ONLY inside public.ref_review,
+--      which sets a flag for the transaction. Every other column is frozen as soon as the row leaves draft: an approved (or submitted)
+--      name, source, source version, rights statement, claim version or assignment is never edited; it is replaced by a new row that goes
+--      through review, and the old one is retired. Rows that left draft are never deleted.
+create or replace function wine_reference.guard_row() returns trigger
 language plpgsql set search_path = '' as $$
+declare
+  k constant text[] := array['status', 'published_at', 'published_by', 'retired_at', 'superseded_by', 'checked_by', 'checked_at',
+                             'suspended_at', 'suspended_reason'];
+  v_old jsonb := to_jsonb(old); v_new jsonb; v_life boolean := false; x text;
+  v_flag boolean := coalesce(current_setting('wine_reference.in_review', true), '') = 'on';
 begin
   if tg_op = 'DELETE' then
-    if old.status <> 'draft' then raise exception 'Only a draft claim version can be deleted' using errcode = '42501'; end if;
+    if old.status <> 'draft' then
+      raise exception 'wine_reference.%: a row that left draft is never deleted; retire it instead', tg_table_name using errcode = '42501';
+    end if;
     return old;
   end if;
-  if old.status <> 'draft' and (
-       new.claim_id is distinct from old.claim_id or new.version_no is distinct from old.version_no or
-       new.value_text is distinct from old.value_text or new.value_number is distinct from old.value_number or
-       new.value_date is distinct from old.value_date or new.value_boolean is distinct from old.value_boolean or
-       new.qualifiers is distinct from old.qualifiers or new.valid_from is distinct from old.valid_from or
-       new.valid_to is distinct from old.valid_to or new.valid_from_precision is distinct from old.valid_from_precision or
-       new.valid_to_precision is distinct from old.valid_to_precision or new.risk_tier is distinct from old.risk_tier or
-       new.supersedes_version_id is distinct from old.supersedes_version_id or new.created_by is distinct from old.created_by) then
-    raise exception 'A claim version can only be edited while it is a draft; make a new version instead' using errcode = '42501';
+  v_new := to_jsonb(new);
+  foreach x in array k loop
+    if (v_new -> x) is distinct from (v_old -> x) then v_life := true; end if;
+  end loop;
+  if v_life and not v_flag then
+    raise exception 'Status, publication, retirement, supersession and suspension change only through public.ref_review' using errcode = '42501';
+  end if;
+  if old.status <> 'draft' and (v_new - k) is distinct from (v_old - k) then
+    raise exception 'wine_reference.%: this row is % and frozen; make a new row and retire this one', tg_table_name, old.status using errcode = '42501';
   end if;
   return new;
+end $$;
+
+-- A claim's identity (subject, type, object) is frozen once any of its versions left draft.
+create or replace function wine_reference.freeze_claim() returns trigger
+language plpgsql set search_path = '' as $$
+begin
+  if exists (select 1 from wine_reference.claim_versions v where v.claim_id = old.id and v.status <> 'draft') then
+    if tg_op = 'DELETE' or (to_jsonb(new) - 'note') is distinct from (to_jsonb(old) - 'note') then
+      raise exception 'A claim whose versions left draft keeps its subject, type and object; make a new claim' using errcode = '42501';
+    end if;
+  end if;
+  return coalesce(new, old);
+end $$;
+
+-- A taxonomy domain's or node's code, parent, domain and source are frozen once its entity left draft (sort order may change).
+create or replace function wine_reference.freeze_taxonomy() returns trigger
+language plpgsql set search_path = '' as $$
+begin
+  if (select status from wine_reference.entities where id = old.entity_id) <> 'draft' then
+    if tg_op = 'DELETE' or (to_jsonb(new) - 'sort_order') is distinct from (to_jsonb(old) - 'sort_order') then
+      raise exception 'This taxonomy row''s entity left draft; its code, parent and domain are frozen' using errcode = '42501';
+    end if;
+  end if;
+  return coalesce(new, old);
+end $$;
+
+-- A claim type that claims already use keeps its meaning: only its label, description and retirement may change.
+create or replace function wine_reference.freeze_claim_type() returns trigger
+language plpgsql set search_path = '' as $$
+declare v_used boolean;
+begin
+  if tg_table_name = 'relationship_types' then
+    select exists (select 1 from wine_reference.claims c where c.relationship_type = old.code) into v_used;
+  else
+    select exists (select 1 from wine_reference.claims c where c.attribute_type = old.code) into v_used;
+  end if;
+  if v_used then
+    if tg_op = 'DELETE' then raise exception 'Claim type % is in use and cannot be deleted', old.code using errcode = '42501'; end if;
+    if (to_jsonb(new) - array['label', 'description', 'status']) is distinct from (to_jsonb(old) - array['label', 'description', 'status'])
+       or (new.status = 'proposed' and old.status <> 'proposed') then
+      raise exception 'Claim type % is in use: only its label, description and retirement may change', old.code using errcode = '42501';
+    end if;
+  end if;
+  return coalesce(new, old);
 end $$;
 
 -- 11d. Evidence and dependencies can only be added to, or removed from, a draft claim version.
@@ -598,6 +695,18 @@ begin
   return new;
 end $$;
 
+-- 11g2. A private copy of a source is recorded only under verified rights that allow copying (checked when written, and again
+--       at approval; if the rights are retired later, the verify script lists the copy so it can be removed).
+create or replace function wine_reference.check_source_copy() returns trigger
+language plpgsql set search_path = '' as $$
+begin
+  if new.storage_path is not null and not exists (select 1 from wine_reference.rights_statements rs
+                                                    where rs.id = new.rights_id and rs.status = 'verified' and rs.allows_copy) then
+    raise exception 'A private copy needs verified rights that allow copying' using errcode = '23514';
+  end if;
+  return new;
+end $$;
+
 -- 11h. Claim-version dependencies have no cycles.
 create or replace function wine_reference.check_dependency() returns trigger
 language plpgsql set search_path = '' as $$
@@ -613,26 +722,13 @@ begin
   return new;
 end $$;
 
--- 11i. Status, publication and retirement change ONLY through public.ref_review (which sets a flag for the transaction),
---      never by a plain update, so every change of status has a review event.
-create or replace function wine_reference.guard_status() returns trigger
-language plpgsql set search_path = '' as $$
-begin
-  if (new.status is distinct from old.status
-      or (to_jsonb(new) ->> 'published_at') is distinct from (to_jsonb(old) ->> 'published_at')
-      or (to_jsonb(new) ->> 'retired_at') is distinct from (to_jsonb(old) ->> 'retired_at'))
-     and coalesce(current_setting('wine_reference.in_review', true), '') <> 'on' then
-    raise exception 'Status and publication change only through public.ref_review' using errcode = '42501';
-  end if;
-  return new;
-end $$;
-
--- New rows always start as draft, unpublished (except the controlled vocabularies, which have no status).
+-- 11i. New rows always start as draft, with no lifecycle values (status and publication change only through public.ref_review).
 create or replace function wine_reference.start_as_draft() returns trigger
 language plpgsql set search_path = '' as $$
+declare v jsonb := to_jsonb(new);
 begin
   if coalesce(current_setting('wine_reference.in_review', true), '') <> 'on' then
-    if new.status <> 'draft' or (to_jsonb(new) ->> 'published_at') is not null then
+    if new.status <> 'draft' or coalesce(v ->> 'published_at', v ->> 'retired_at', v ->> 'superseded_by', v ->> 'suspended_at', v ->> 'checked_at') is not null then
       raise exception 'New rows start as draft; use public.ref_review to move them on' using errcode = '42501';
     end if;
   end if;
@@ -651,7 +747,8 @@ begin
   end loop;
   foreach t in array array['entities', 'entity_names', 'taxonomy_assignments', 'rights_statements', 'sources', 'source_versions', 'claim_versions'] loop
     execute format('drop trigger if exists %I on wine_reference.%I', t || '_status_guard', t);
-    execute format('create trigger %I before update on wine_reference.%I for each row execute function wine_reference.guard_status()', t || '_status_guard', t);
+    execute format('drop trigger if exists %I on wine_reference.%I', t || '_guard', t);
+    execute format('create trigger %I before update or delete on wine_reference.%I for each row execute function wine_reference.guard_row()', t || '_guard', t);
     execute format('drop trigger if exists %I on wine_reference.%I', t || '_start_draft', t);
     execute format('create trigger %I before insert on wine_reference.%I for each row execute function wine_reference.start_as_draft()', t || '_start_draft', t);
   end loop;
@@ -660,8 +757,19 @@ begin
     execute format('create trigger %I before update or delete on wine_reference.%I for each row execute function wine_reference.refuse_change()', t || '_append_only', t);
   end loop;
 end $$;
-drop trigger if exists claim_versions_freeze on wine_reference.claim_versions;
-create trigger claim_versions_freeze before update or delete on wine_reference.claim_versions for each row execute function wine_reference.freeze_claim_version();
+drop trigger if exists claim_versions_freeze on wine_reference.claim_versions;   -- replaced by claim_versions_guard (guard_row)
+drop trigger if exists claims_freeze on wine_reference.claims;
+create trigger claims_freeze before update or delete on wine_reference.claims for each row execute function wine_reference.freeze_claim();
+drop trigger if exists taxonomy_nodes_freeze on wine_reference.taxonomy_nodes;
+create trigger taxonomy_nodes_freeze before update or delete on wine_reference.taxonomy_nodes for each row execute function wine_reference.freeze_taxonomy();
+drop trigger if exists taxonomy_domains_freeze on wine_reference.taxonomy_domains;
+create trigger taxonomy_domains_freeze before update or delete on wine_reference.taxonomy_domains for each row execute function wine_reference.freeze_taxonomy();
+drop trigger if exists relationship_types_freeze on wine_reference.relationship_types;
+create trigger relationship_types_freeze before update or delete on wine_reference.relationship_types for each row execute function wine_reference.freeze_claim_type();
+drop trigger if exists attribute_types_freeze on wine_reference.attribute_types;
+create trigger attribute_types_freeze before update or delete on wine_reference.attribute_types for each row execute function wine_reference.freeze_claim_type();
+drop function if exists wine_reference.freeze_claim_version();
+drop function if exists wine_reference.guard_status();
 drop trigger if exists claim_evidence_draft_only on wine_reference.claim_evidence;
 create trigger claim_evidence_draft_only before insert or update or delete on wine_reference.claim_evidence for each row execute function wine_reference.evidence_only_on_draft();
 drop trigger if exists claim_version_dependencies_draft_only on wine_reference.claim_version_dependencies;
@@ -674,8 +782,143 @@ drop trigger if exists claim_versions_check on wine_reference.claim_versions;
 create trigger claim_versions_check before insert or update on wine_reference.claim_versions for each row execute function wine_reference.check_claim_version();
 drop trigger if exists taxonomy_nodes_check on wine_reference.taxonomy_nodes;
 create trigger taxonomy_nodes_check before insert or update on wine_reference.taxonomy_nodes for each row execute function wine_reference.check_taxonomy_node();
+drop trigger if exists source_versions_copy on wine_reference.source_versions;
+create trigger source_versions_copy before insert or update on wine_reference.source_versions for each row execute function wine_reference.check_source_copy();
 drop trigger if exists taxonomy_domains_check on wine_reference.taxonomy_domains;
 create trigger taxonomy_domains_check before insert or update on wine_reference.taxonomy_domains for each row execute function wine_reference.check_taxonomy_domain();
+
+-- 11j. Is a claim version sound? ONE rule, used to publish, to suspend automatically, and by the verify script (Phase 2.0B.3
+--      corrections 1 and 2). It returns the list of problems (empty = sound):
+--        the subject and object are published, not retired, not superseded;
+--        at least one SUPPORTING piece of evidence comes from a source version that is verified (not retired, not superseded) of a
+--        source that is verified; the claim type's required modality is met by such evidence;
+--        every quote has a verified rights statement that allows quoting;
+--        every version it depends on is published, verified and not suspended.
+create or replace function wine_reference.version_problems(p_id uuid) returns text[]
+language plpgsql stable set search_path = '' as $$
+declare c record; p text[] := '{}';
+begin
+  select v.id, k.subject_entity_id, k.object_entity_id, k.relationship_type into c
+    from wine_reference.claim_versions v join wine_reference.claims k on k.id = v.claim_id where v.id = p_id;
+  if c.id is null then return array['no such claim version']; end if;
+  if not exists (select 1 from wine_reference.entities e where e.id = c.subject_entity_id and e.status = 'verified'
+                   and e.published_at is not null and e.superseded_by is null) then
+    p := array_append(p, 'its subject is not a published entity');
+  end if;
+  if c.object_entity_id is not null and not exists (select 1 from wine_reference.entities e where e.id = c.object_entity_id
+                   and e.status = 'verified' and e.published_at is not null and e.superseded_by is null) then
+    p := array_append(p, 'its object is not a published entity');
+  end if;
+  if not exists (select 1 from wine_reference.claim_evidence ev
+                   join wine_reference.source_versions sv on sv.id = ev.source_version_id
+                   join wine_reference.sources s on s.id = sv.source_id
+                  where ev.claim_version_id = p_id and ev.role = 'supports'
+                    and sv.status = 'verified' and sv.superseded_by is null and s.status = 'verified') then
+    p := array_append(p, 'no supporting evidence from a verified, current source version of a verified source');
+  elsif c.relationship_type is not null and exists (select 1 from wine_reference.relationship_types rt where rt.code = c.relationship_type and rt.required_modality is not null)
+     and not exists (select 1 from wine_reference.claim_evidence ev
+                       join wine_reference.relationship_types rt on rt.code = c.relationship_type
+                       join wine_reference.source_versions sv on sv.id = ev.source_version_id
+                       join wine_reference.sources s on s.id = sv.source_id
+                      where ev.claim_version_id = p_id and ev.role = 'supports' and ev.modality = rt.required_modality
+                        and sv.status = 'verified' and sv.superseded_by is null and s.status = 'verified') then
+    p := array_append(p, 'no current evidence of the required modality');
+  end if;
+  if exists (select 1 from wine_reference.claim_evidence ev left join wine_reference.rights_statements rs on rs.id = ev.quote_rights_id
+              where ev.claim_version_id = p_id and ev.quote is not null and not (rs.status = 'verified' and rs.allows_quote)) then
+    p := array_append(p, 'a quote has no verified rights statement that allows quoting');
+  end if;
+  if exists (select 1 from wine_reference.claim_version_dependencies d join wine_reference.claim_versions dv on dv.id = d.depends_on_version_id
+              where d.dependent_version_id = p_id
+                and not (dv.status = 'verified' and dv.published_at is not null and dv.suspended_at is null)) then
+    p := array_append(p, 'a version it depends on is not published, or was retired or suspended');
+  end if;
+  return p;
+end $$;
+
+-- Current = published, verified, not suspended, sound, and everything it depends on is current too (followed to any depth; the
+-- dependency graph has no cycles, and the depth limit is a second guard). This is what any future read door must use.
+create or replace function wine_reference.is_current(p_id uuid, p_depth integer default 0) returns boolean
+language plpgsql stable set search_path = '' as $$
+declare d uuid;
+begin
+  if p_depth > 50 then return false; end if;
+  if not exists (select 1 from wine_reference.claim_versions v where v.id = p_id and v.status = 'verified'
+                   and v.published_at is not null and v.suspended_at is null) then return false; end if;
+  if cardinality(wine_reference.version_problems(p_id)) > 0 then return false; end if;
+  for d in select depends_on_version_id from wine_reference.claim_version_dependencies where dependent_version_id = p_id loop
+    if not wine_reference.is_current(d, p_depth + 1) then return false; end if;
+  end loop;
+  return true;
+end $$;
+
+create or replace view wine_reference.current_claim_versions as
+  select v.* from wine_reference.claim_versions v where wine_reference.is_current(v.id);
+
+-- Fail closed: after anything is retired, superseded or published, every published version that is no longer sound is suspended, and
+-- the step repeats until nothing changes, so versions that depend on a suspended one are suspended too (transitively). Suspension is
+-- final for that version: it is never lifted automatically; a new version is written and reviewed instead.
+create or replace function wine_reference.suspend_unsound(p_actor uuid, p_cause text) returns integer
+language plpgsql set search_path = '' as $$
+declare n integer; total integer := 0;
+begin
+  perform set_config('wine_reference.in_review', 'on', true);
+  loop
+    with bad as (
+      select v.id, wine_reference.version_problems(v.id) as pr from wine_reference.claim_versions v
+       where v.status = 'verified' and v.published_at is not null and v.suspended_at is null
+    ), upd as (
+      update wine_reference.claim_versions c set suspended_at = now(), suspended_reason = left(array_to_string(b.pr, '; '), 500)
+        from bad b where c.id = b.id and cardinality(b.pr) > 0
+      returning c.id, c.suspended_reason
+    )
+    insert into wine_reference.review_events (target_table, target_id, decision, from_status, to_status, actor, note)
+    select 'claim_versions', u.id, 'suspend', 'verified', 'verified', p_actor,
+           left('Suspended automatically after ' || p_cause || ': ' || u.suspended_reason, 2000) from upd u;
+    get diagnostics n = row_count;
+    total := total + n;
+    exit when n = 0;
+  end loop;
+  return total;
+end $$;
+
+-- A fingerprint of the schema's structure (tables, columns, constraints, indexes, triggers, functions and their bodies, views, grants,
+-- row-level security), stored after each run and compared on a replay: a difference means someone changed the schema by hand (drift).
+create or replace function wine_reference.structure_fingerprint() returns text
+language sql stable set search_path = '' as $$
+  select md5(string_agg(line, E'\n' order by line)) from (
+    select 'table ' || c.relname || ' ' || c.relkind::text || ' rls=' || c.relrowsecurity::text || ' acl=' || coalesce(c.relacl::text, '') as line
+      from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace where n.nspname = 'wine_reference' and c.relkind in ('r', 'v')
+    union all
+    select 'column ' || c.relname || '.' || a.attname || ' ' || pg_catalog.format_type(a.atttypid, a.atttypmod) || ' ' || a.attnotnull || ' ' ||
+           coalesce(pg_catalog.pg_get_expr(d.adbin, d.adrelid), '')
+      from pg_catalog.pg_attribute a join pg_catalog.pg_class c on c.oid = a.attrelid join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+      left join pg_catalog.pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum
+     where n.nspname = 'wine_reference' and c.relkind in ('r', 'v') and a.attnum > 0 and not a.attisdropped
+    union all
+    select 'constraint ' || c.relname || '.' || con.conname || ' ' || pg_catalog.pg_get_constraintdef(con.oid)
+      from pg_catalog.pg_constraint con join pg_catalog.pg_class c on c.oid = con.conrelid join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'wine_reference'
+    union all
+    select 'index ' || pg_catalog.pg_get_indexdef(i.indexrelid)
+      from pg_catalog.pg_index i join pg_catalog.pg_class c on c.oid = i.indrelid join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'wine_reference'
+    union all
+    select 'trigger ' || pg_catalog.pg_get_triggerdef(t.oid)
+      from pg_catalog.pg_trigger t join pg_catalog.pg_class c on c.oid = t.tgrelid join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'wine_reference' and not t.tgisinternal
+    union all
+    select 'function ' || n.nspname || '.' || p.proname || '(' || pg_catalog.oidvectortypes(p.proargtypes) || ') ' || p.prosecdef || ' ' ||
+           coalesce(array_to_string(p.proconfig, ','), '') || ' ' || coalesce(p.proacl::text, '') || ' ' || md5(p.prosrc)
+      from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'wine_reference' or (n.nspname = 'public' and p.proname in ('ref_review', 'ref_published_names'))
+    union all
+    select 'view ' || c.relname || ' ' || pg_catalog.pg_get_viewdef(c.oid)
+      from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace where n.nspname = 'wine_reference' and c.relkind = 'v'
+    union all
+    select 'schema acl ' || coalesce(n.nspacl::text, '') from pg_catalog.pg_namespace n where n.nspname = 'wine_reference'
+  ) x
+$$;
 
 -- Row-level security on every table, with NO policies: only the owner (and roles that bypass RLS) can touch rows. Defence in depth:
 -- the schema is already closed to the browser's roles.
@@ -696,6 +939,15 @@ revoke all on all sequences in schema wine_reference from public;
 -- 12. The two doors in public. Both SECURITY DEFINER, owned by postgres, with an empty search_path (every name written in full).
 -- =====================================================================================================================================
 
+-- A current display name: verified, not a typing shortcut, not ended (valid_to in the future or open). (Phase 2.0B.3 correction 4)
+create or replace function wine_reference.has_display_name(p_entity uuid, p_except uuid default null) returns boolean
+language sql stable set search_path = '' as $$
+  select exists (select 1 from wine_reference.entity_names n
+                  where n.entity_id = p_entity and n.status = 'verified' and n.name_kind <> 'shortcut'
+                    and (n.valid_to is null or n.valid_to >= current_date) and (p_except is null or n.id <> p_except))
+$$;
+revoke all on function wine_reference.has_display_name(uuid, uuid) from public;
+
 -- 12a. Read: published entities with their verified names. Returns nothing while app_config 'reference_enabled' is absent or 0.
 create or replace function public.ref_published_names(p_query text default null, p_language text default null, p_limit integer default 50)
 returns table (entity_id uuid, kind text, name text, language text, name_kind text, is_preferred boolean)
@@ -706,6 +958,7 @@ language sql stable security definer set search_path = '' as $$
    where public.cfg_number('reference_enabled', 0) >= 1
      and e.status = 'verified' and e.published_at is not null and e.superseded_by is null
      and n.status = 'verified' and n.name_kind <> 'shortcut'
+     and wine_reference.has_display_name(e.id)          -- fail closed: an entity with no current display name is not shown
      and (p_language is null or n.language = p_language)
      and (p_query is null or lower(n.name) like '%' || lower(left(p_query, 100)) || '%')
    order by e.id, n.is_preferred desc, n.name
@@ -714,15 +967,18 @@ $$;
 revoke all on function public.ref_published_names(text, text, integer) from public, anon, authenticated, service_role;
 grant execute on function public.ref_published_names(text, text, integer) to anon, authenticated;
 
--- 12b. Review: the only way to change status, publish or retire. Checks the app's permissions, the two-person rule and the
---      publication rules, then writes a review event (append-only). Staff only; nothing here is open to signed-out visitors.
-create or replace function public.ref_review(p_table text, p_id uuid, p_decision text, p_note text default '')
+-- 12b. Review: the only way to change status, publish, retire or supersede. Checks the app's permissions, the two-person rule (with
+--      the Owner exemption), the approval, publication and retirement rules, writes a review event (append-only), and then suspends
+--      whatever stopped being sound (fail closed). Staff only; nothing here is open to signed-out visitors.
+--      p_replacement: only with 'retire' on an entity or a source version: the verified row that replaces it (recorded as superseded_by).
+drop function if exists public.ref_review(text, uuid, text, text);
+create or replace function public.ref_review(p_table text, p_id uuid, p_decision text, p_note text default '', p_replacement uuid default null)
 returns text language plpgsql security definer set search_path = '' as $$
 declare
   v_actor uuid := auth.uid();
   v_from public.verification_status; v_to public.verification_status; v_creator uuid; v_published timestamptz;
   v_has_published boolean; v_perm text; v_override boolean := false;
-  v_cv record; v_ok boolean;
+  v_problems text[]; r record;
 begin
   if v_actor is null then raise exception 'Sign in first' using errcode = '42501'; end if;
   if p_table not in ('entities', 'entity_names', 'claim_versions', 'sources', 'source_versions', 'rights_statements', 'taxonomy_assignments') then
@@ -733,6 +989,9 @@ begin
   end if;
   v_has_published := p_table in ('entities', 'claim_versions');
   if p_decision = 'publish' and not v_has_published then raise exception 'Only entities and claim versions are published' using errcode = '22023'; end if;
+  if p_replacement is not null and not (p_decision = 'retire' and p_table in ('entities', 'source_versions')) then
+    raise exception 'A replacement is only given when retiring an entity or a source version' using errcode = '22023';
+  end if;
 
   -- the application permission each decision needs (rights statements need ref_rights to approve)
   v_perm := case p_decision when 'submit' then 'ref_edit' when 'approve' then case when p_table = 'rights_statements' then 'ref_rights' else 'ref_review' end
@@ -752,6 +1011,10 @@ begin
     when p_decision = 'retire'  and v_from in ('verified', 'pending_review', 'draft') then 'retired'
     else null end;
   if v_to is null then raise exception 'Cannot % a row that is %', p_decision, v_from using errcode = '22023'; end if;
+  if p_decision = 'publish' and p_table = 'claim_versions'
+     and exists (select 1 from wine_reference.claim_versions where id = p_id and suspended_at is not null) then
+    raise exception 'A suspended version is never published again; write a new version' using errcode = '22023';
+  end if;
 
   -- two-person rule: nobody approves their own work; an unknown author (a row typed in the SQL editor) cannot be approved here.
   -- Owner exemption (owner policy 2026-10-26): the person whose staff role is Owner may approve anyway. The role is read server-side by
@@ -765,42 +1028,49 @@ begin
     end if;
   end if;
 
-  -- publication rules
-  if p_decision = 'publish' and p_table = 'entities' then
-    if not exists (select 1 from wine_reference.entity_names n where n.entity_id = p_id and n.status = 'verified') then
-      raise exception 'An entity needs at least one verified name before it is published' using errcode = '23514';
+  -- approval rules: a source version is approved only with its source approved and its rights statement (if any) verified; a private
+  -- copy only under verified rights that allow copying
+  if p_decision = 'approve' and p_table = 'source_versions' then
+    select sv.storage_path, sv.rights_id, s.status as source_status, rs.status as rights_status, rs.allows_copy into r
+      from wine_reference.source_versions sv join wine_reference.sources s on s.id = sv.source_id
+      left join wine_reference.rights_statements rs on rs.id = sv.rights_id where sv.id = p_id;
+    if r.source_status <> 'verified' then raise exception 'Approve the source before its versions' using errcode = '23514'; end if;
+    if r.rights_id is not null and r.rights_status is distinct from 'verified' then
+      raise exception 'The rights statement of this source version is not verified' using errcode = '23514';
+    end if;
+    if r.storage_path is not null and not (r.rights_status = 'verified' and r.allows_copy) then
+      raise exception 'A private copy needs verified rights that allow copying' using errcode = '23514';
     end if;
   end if;
+
+  -- retirement rules: a published entity always keeps a current display name; a replacement must be verified and of the same kind
+  if p_decision = 'retire' and p_table = 'entity_names' then
+    select n.entity_id, e.status as entity_status, e.published_at into r
+      from wine_reference.entity_names n join wine_reference.entities e on e.id = n.entity_id where n.id = p_id;
+    if r.entity_status = 'verified' and r.published_at is not null and not wine_reference.has_display_name(r.entity_id, p_id) then
+      raise exception 'This is the published entity''s last current display name: approve another name first, or retire the entity' using errcode = '23514';
+    end if;
+  end if;
+  if p_replacement is not null then
+    if p_replacement = p_id then raise exception 'A row cannot replace itself' using errcode = '22023'; end if;
+    if p_table = 'entities' and not exists (select 1 from wine_reference.entities a join wine_reference.entities b on b.kind = a.kind
+                                             where a.id = p_id and b.id = p_replacement and b.status = 'verified' and b.superseded_by is null) then
+      raise exception 'The replacement must be a verified entity of the same kind' using errcode = '23514';
+    end if;
+    if p_table = 'source_versions' and not exists (select 1 from wine_reference.source_versions a join wine_reference.source_versions b on b.source_id = a.source_id
+                                                    where a.id = p_id and b.id = p_replacement and b.status = 'verified' and b.superseded_by is null) then
+      raise exception 'The replacement must be a verified version of the same source' using errcode = '23514';
+    end if;
+  end if;
+
+  -- publication rules
+  if p_decision = 'publish' and p_table = 'entities' and not wine_reference.has_display_name(p_id) then
+    raise exception 'An entity needs a current display name (a verified name that is not a typing shortcut) before it is published' using errcode = '23514';
+  end if;
   if p_decision = 'publish' and p_table = 'claim_versions' then
-    select cv.*, c.subject_entity_id, c.object_entity_id, c.relationship_type into v_cv
-      from wine_reference.claim_versions cv join wine_reference.claims c on c.id = cv.claim_id where cv.id = p_id;
-    -- evidence: at least one supporting piece from a verified source version
-    if not exists (select 1 from wine_reference.claim_evidence ev join wine_reference.source_versions sv on sv.id = ev.source_version_id
-                    where ev.claim_version_id = p_id and ev.role = 'supports' and sv.status = 'verified') then
-      raise exception 'A claim needs supporting evidence from a verified source version before it is published' using errcode = '23514';
-    end if;
-    -- the type's required modality (e.g. genetic evidence for grape parentage)
-    if v_cv.relationship_type is not null then
-      select not exists (select 1 from wine_reference.relationship_types rt where rt.code = v_cv.relationship_type and rt.required_modality is not null)
-          or exists (select 1 from wine_reference.claim_evidence ev join wine_reference.relationship_types rt on rt.code = v_cv.relationship_type
-                      join wine_reference.source_versions sv on sv.id = ev.source_version_id
-                      where ev.claim_version_id = p_id and ev.role = 'supports' and ev.modality = rt.required_modality and sv.status = 'verified')
-        into v_ok;
-      if not v_ok then raise exception 'This kind of claim needs evidence of its required modality' using errcode = '23514'; end if;
-    end if;
-    -- quotes may only be shown where their rights allow quoting and the rights statement is verified
-    if exists (select 1 from wine_reference.claim_evidence ev left join wine_reference.rights_statements rs on rs.id = ev.quote_rights_id
-                where ev.claim_version_id = p_id and ev.quote is not null and not (rs.status = 'verified' and rs.allows_quote)) then
-      raise exception 'A quote in the evidence has no verified rights statement that allows quoting' using errcode = '23514';
-    end if;
-    -- the subject (and object) must be published, and everything it depends on must be the live published version
-    if not exists (select 1 from wine_reference.entities e where e.id = v_cv.subject_entity_id and e.status = 'verified' and e.published_at is not null)
-       or (v_cv.object_entity_id is not null and not exists (select 1 from wine_reference.entities e where e.id = v_cv.object_entity_id and e.status = 'verified' and e.published_at is not null)) then
-      raise exception 'Publish the entities a claim is about first' using errcode = '23514';
-    end if;
-    if exists (select 1 from wine_reference.claim_version_dependencies d join wine_reference.claim_versions dv on dv.id = d.depends_on_version_id
-                where d.dependent_version_id = p_id and not (dv.status = 'verified' and dv.published_at is not null)) then
-      raise exception 'A claim version it depends on is not published' using errcode = '23514';
+    v_problems := wine_reference.version_problems(p_id);
+    if cardinality(v_problems) > 0 then
+      raise exception 'Cannot publish this claim version: %', array_to_string(v_problems, '; ') using errcode = '23514';
     end if;
   end if;
 
@@ -808,25 +1078,34 @@ begin
   if p_decision = 'publish' and p_table = 'claim_versions' then
     -- the previous live version of the same claim is retired in the same step
     update wine_reference.claim_versions set status = 'retired', retired_at = now()
-     where claim_id = v_cv.claim_id and id <> p_id and status = 'verified' and published_at is not null;
+     where claim_id = (select claim_id from wine_reference.claim_versions where id = p_id)
+       and id <> p_id and status = 'verified' and published_at is not null;
   end if;
   if p_decision = 'publish' then
     execute format('update wine_reference.%I set published_at = now(), published_by = $2 where id = $1', p_table) using p_id, v_actor;
   elsif p_decision = 'retire' then
     execute format('update wine_reference.%I set status = ''retired'', retired_at = now() where id = $1', p_table) using p_id;
+    if p_replacement is not null then
+      execute format('update wine_reference.%I set superseded_by = $2 where id = $1', p_table) using p_id, p_replacement;
+    end if;
   elsif p_table = 'rights_statements' and p_decision = 'approve' then
     update wine_reference.rights_statements set status = v_to, checked_by = v_actor, checked_at = now() where id = p_id;
   else
     execute format('update wine_reference.%I set status = $2 where id = $1', p_table) using p_id, v_to;
   end if;
-  perform set_config('wine_reference.in_review', 'off', true);
 
   insert into wine_reference.review_events (target_table, target_id, decision, from_status, to_status, actor, note, owner_override)
   values (p_table, p_id, p_decision, v_from, v_to, v_actor, left(coalesce(p_note, ''), 2000), v_override);
+
+  -- fail closed: whatever this retirement, supersession or publication made unsound is suspended now (transitively)
+  if p_decision in ('retire', 'publish') then
+    perform wine_reference.suspend_unsound(v_actor, p_decision || ' ' || p_table || ' ' || p_id::text);
+  end if;
+  perform set_config('wine_reference.in_review', 'off', true);
   return v_to::text;
 end $$;
-revoke all on function public.ref_review(text, uuid, text, text) from public, anon, authenticated, service_role;
-grant execute on function public.ref_review(text, uuid, text, text) to authenticated;
+revoke all on function public.ref_review(text, uuid, text, text, uuid) from public, anon, authenticated, service_role;
+grant execute on function public.ref_review(text, uuid, text, text, uuid) to authenticated;
 
 
 -- Table descriptions (read by the data dictionary generator).
@@ -846,7 +1125,7 @@ comment on table wine_reference.attribute_types is 'Controlled list of entity-to
 comment on table wine_reference.sources is 'A work that can be cited (regulation, book, register, producer document ...).';
 comment on table wine_reference.source_versions is 'The exact edition, page state or file of a source that was read, with its retrieval date, fingerprint and rights.';
 comment on table wine_reference.claims is 'The stable identity of a statement: subject + relationship type + object, or subject + attribute type.';
-comment on table wine_reference.claim_versions is 'What a claim says, when it was true, its risk tier and status. Frozen once it leaves draft; one live published version per claim.';
+comment on table wine_reference.claim_versions is 'What a claim says, when it was true, its risk tier and status. Frozen once it leaves draft; one live published version per claim; suspended automatically when it stops being sound.';
 comment on table wine_reference.claim_version_dependencies is 'This claim version holds only if that one holds (Phase 1.9 revision 6). No cycles.';
 comment on table wine_reference.claim_evidence is 'Where a claim version is supported or contradicted: source version, locator, modality, optional quote with its rights.';
 comment on table wine_reference.review_events is 'Append-only history of every status decision (submit, approve, reject, publish, retire); owner_override marks the Owner approving without a second person.';
@@ -855,8 +1134,10 @@ comment on table wine_reference.change_log is 'Append-only before/after record o
 -- =====================================================================================================================================
 -- 13. Register this migration.
 -- =====================================================================================================================================
-insert into wine_reference.schema_migrations (version, name, notes)
-values ('001', 'wine_reference foundation', 'Phase 2.0B.2 draft; schema, entities, names, taxonomy, claim types, sources, rights, claims, evidence, review, change log')
+insert into wine_reference.schema_migrations (version, name, notes, release)
+values ('001', 'wine_reference foundation', 'Phase 2.0B.3 draft; schema, entities, names, taxonomy, claim types, sources, rights, claims, evidence, review, change log',
+        '001 r3 (2026-10-27)')
 on conflict (version) do nothing;
+update wine_reference.schema_migrations set structure_md5 = wine_reference.structure_fingerprint() where version = '001';
 
 commit;
