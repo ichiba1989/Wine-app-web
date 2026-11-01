@@ -1,0 +1,42 @@
+--- 001_wine_reference_foundation.sql
++++ 001_wine_reference_foundation.sql (r4 + proposed P1, P2)
+@@ -811,6 +811,26 @@
+ drop trigger if exists taxonomy_domains_check on wine_reference.taxonomy_domains;
+ create trigger taxonomy_domains_check before insert or update on wine_reference.taxonomy_domains for each row execute function wine_reference.check_taxonomy_domain();
+ 
++-- PROPOSED PATCH P1 (Phase 2.0B.4 staging, NOT APPROVED): take the editorial lock at the START of every write statement on an editorial
++-- table, before any row is locked. Without it a direct write (the owner's SQL editor) can lock a row first and the editorial lock second,
++-- while public.ref_review takes them in the other order: PostgreSQL then reports a deadlock and cancels one of the two (probes D1, D3).
++create or replace function wine_reference.lock_before_write() returns trigger
++language plpgsql set search_path = '' as $$
++begin
++  perform wine_reference.editorial_lock();
++  return null;
++end $$;
++do $$
++declare t text;
++begin
++  foreach t in array array['entities', 'entity_names', 'taxonomy_domains', 'taxonomy_nodes', 'taxonomy_assignments', 'relationship_types',
++                           'attribute_types', 'rights_statements', 'sources', 'source_versions', 'claims', 'claim_versions',
++                           'claim_version_dependencies', 'claim_evidence', 'entity_kinds', 'name_kinds', 'source_kinds', 'evidence_modalities'] loop
++    execute format('drop trigger if exists %I on wine_reference.%I', t || '_lock_first', t);
++    execute format('create trigger %I before insert or update or delete on wine_reference.%I for each statement execute function wine_reference.lock_before_write()', t || '_lock_first', t);
++  end loop;
++end $$;
++
+ -- 11j. Is a claim version sound? ONE rule, used to publish, to suspend automatically, and by the verify script (Phase 2.0B.3
+ --      corrections 1 and 2). It returns the list of problems (empty = sound):
+ --        the subject and object are published, not retired, not superseded;
+@@ -1106,6 +1126,12 @@
+   perform set_config('wine_reference.in_review', 'on', true);
+   if p_decision = 'publish' and p_table = 'claim_versions' then
+     -- the previous live version of the same claim is retired in the same step
++    -- PROPOSED PATCH P2 (Phase 2.0B.4 staging, NOT APPROVED): that retirement is a decision too, so it gets its own review event
++    insert into wine_reference.review_events (target_table, target_id, decision, from_status, to_status, actor, note, owner_override)
++    select 'claim_versions', v.id, 'retire', 'verified', 'retired', v_actor, 'replaced by the publication of version ' || p_id::text, false
++      from wine_reference.claim_versions v
++     where v.claim_id = (select claim_id from wine_reference.claim_versions where id = p_id)
++       and v.id <> p_id and v.status = 'verified' and v.published_at is not null;
+     update wine_reference.claim_versions set status = 'retired', retired_at = now()
+      where claim_id = (select claim_id from wine_reference.claim_versions where id = p_id)
+        and id <> p_id and status = 'verified' and published_at is not null;
