@@ -11,3 +11,6 @@ on the website (the publishing workflow only copies `main` and `vwm`), and nothi
   `1f259ca`), staging work committed on `main` at `ee2c8c2`. 262 files; open `MANIFEST.md` (SHA-256 of every file) and
   `reports/STAGING_TEST_REPORT.md` first. 423 checks passed, 0 failed on local Supabase; a proposed, unapproved patch is in
   `staging/proposed/`. ZIP SHA-256: `21143772a133d948253960d01a792e45186e93a2bf341e4b8550ab646c547a04`.
+- `Wine_Reference_Phase_2_0B_5_r5_Review.zip` (2026-11-01): Migration 001 **release candidate r5** (not approved, not run live), from
+  `main` at `fb9ee00`. 154 files; open `MANIFEST.md` and `reports/CHANGE_REPORT_2_0B_5.md` first. Local 353 passed, 0 failed; local
+  Supabase 335 + 20 + 113 passed, 0 failed. ZIP SHA-256: `583852153ee532d3833195774caa8d3e353e9dc51ffa5aad4583ef809e3f3231`.
