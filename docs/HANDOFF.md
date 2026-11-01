@@ -3,6 +3,17 @@
 Read `CLAUDE.md` first: every owner decision is written there with its date (conventions 1–27 and the domain model). This page holds only
 what is waiting and how the work is done.
 
+## Standing instruction from the owner (2026-11-01)
+
+At the end of **every** completed task: give the deliverable (if any), a short plain-language summary, and **one self-contained, copyable
+text box** in a single fenced plain-text block titled `CHATGPT HANDOFF — <phase or task>` (the owner pastes it into ChatGPT). It must
+state: project and phase; repository, branch and commit; what was done; files created or changed; deliverable name and where to download
+it; test results (newly run vs. previously reported); security findings and unresolved risks; whether any live database or application
+change happened; decisions the owner must make; the recommended next step. If a task fails, still give the box and say what failed.
+
+Latest review package: `review_packages/Wine_Reference_Phase_2_0B_3_Security_Review.zip` on branch `claude/wine-app-setup-35g1ne`
+(Migration 001 r3, built from main `9fd5081` on 2026-11-01; not on the website).
+
 ## Where things stand
 
 - **Branches.** Main working branch `main` (renamed on 2026-10-19 from `claude/wine-discovery-architecture-3pithw`; the old `main` is frozen as `archive/old-main`) (the app at the site's address) and `vwm` (Vintage Wine
