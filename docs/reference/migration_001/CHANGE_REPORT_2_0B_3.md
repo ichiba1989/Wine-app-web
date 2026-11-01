@@ -1,7 +1,7 @@
 # Change report: Phase 2.0B.3 corrections to Migration 001 (2026-10-27)
 
 **Status:** corrections made in the repository and tested on a throwaway local PostgreSQL 16: **270 passed, 0 failed**. Nothing was run on
-the live database. Migration 001 is now release **"001 r3 (2026-10-27)"**. Details: `DESIGN.md` section 4b; tests: `TEST_REPORT.md`.
+the live database. Migration 001 was release **"001 r3 (2026-10-27)"**; after the final review follow-up below it is **"001 r4 (2026-11-01)"**. Details: `DESIGN.md` section 4b; tests: `TEST_REPORT.md`.
 
 ## The corrections
 
@@ -54,3 +54,26 @@ the live database. Migration 001 is now release **"001 r3 (2026-10-27)"**. Detai
    database.
 7. Still pending from earlier: the 14 domains, the subdomain taxonomy, the Phase 1.9 document, and the owner decisions in DESIGN.md
    section 7. The security review ZIP on the branch `claude/wine-app-setup-35g1ne` predates these corrections.
+
+## Final review follow-up (2026-11-01, release "001 r4")
+
+**Result: 294 passed, 0 failed** (full local suite, including 13 concurrency checks). The same suite against the unchanged r3 SQL:
+**278 passed, 16 failed** (the 5 new name checks and 11 concurrency checks), which shows the tests catch both issues.
+
+1. **Names valid today.** `ref_published_names` now returns only names that are themselves valid today (started and not ended); before,
+   an entity with one current name also returned its ended (and not-yet-started) names. `has_display_name` now checks the start date too.
+   Regression tests added.
+2. **Concurrent editorial transactions.** Reproduced with two real sessions on r3: 11 of 12 races broke an integrity rule (claims
+   published on evidence, rights, dependencies or entities being retired stayed current; a published entity lost its last name; cycles
+   in places and dependencies were stored; evidence reached a submitted version). **Correction:** one transaction-level editorial lock,
+   taken first by `ref_review` and by every trigger that checks other rows; the private-copy check takes a shared row lock on its rights
+   statement instead (avoids a deadlock). On r4 all 13 concurrency checks pass, including an Owner self-approval racing a rejection.
+   Strategy and limits: `DESIGN.md` section 4c.
+3. **Supabase staging.** Possible without production credentials: a local Supabase stack via the Supabase command-line tool (recommended;
+   needs approval for the tool and several GB of images; the Docker engine is not running in the work container) or an owner-created empty
+   hosted project. Not done. `STAGING_ASSESSMENT.md`.
+
+**Unchanged:** the Owner approval override and its audit, transitive suspension, rights checks, review history, the closed schema.
+
+**Remaining risks added:** all editorial decisions are serialised (a long editorial transaction makes others wait); the advisory-lock
+key must stay unique in the database; concurrency was tested with two sessions on local PostgreSQL, not under load or on Supabase.

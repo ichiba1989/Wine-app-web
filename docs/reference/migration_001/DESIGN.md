@@ -1,4 +1,4 @@
-# Migration 001: design (DRAFT, Phase 2.0B.2, 2026-10-26; Owner approval override 2026-10-26; Phase 2.0B.3 corrections 2026-10-27, release "001 r3")
+# Migration 001: design (DRAFT, Phase 2.0B.2, 2026-10-26; Owner approval override 2026-10-26; Phase 2.0B.3 corrections 2026-10-27; final review follow-up 2026-11-01, release "001 r4")
 
 **Status: a tested draft for the owner's approval. Nothing has been run on the live database.** Migration 001 creates the canonical
 foundation of the Wine Education Master Reference in a new private schema, `wine_reference`, and two functions in `public`. It changes no
@@ -8,13 +8,15 @@ existing table, row, view, function, setting or permission, and adds no wine con
 |---|---|
 | 1. Design document (this file) | `docs/reference/migration_001/DESIGN.md` |
 | 2. Physical schema and data dictionary | `DATA_DICTIONARY.md` (column tables generated from a tested install) |
-| 3. SQL migration draft | `001_wine_reference_foundation.sql` (release "001 r3 (2026-10-27)"); the permissions step `001a_reference_permissions.sql` (approved separately) |
+| 3. SQL migration draft | `001_wine_reference_foundation.sql` (release "001 r4 (2026-11-01)"); the permissions step `001a_reference_permissions.sql` (approved separately) |
 | 4. Verification and negative tests | `001_verify.sql` (read-only, also for the live database after migration); `tests/001_behaviour_tests.sql` (local only); `tests/run_local_tests.sh` |
 | 5. Security and permissions review | section 4 below |
 | 6. Compatibility assessment | section 5 below |
-| 7. Local test results | `TEST_REPORT.md`: **270 passed, 0 failed**, on a throwaway local PostgreSQL 16 (re-run in full after the Phase 2.0B.3 corrections) |
+| 7. Local test results | `TEST_REPORT.md`: **294 passed, 0 failed** (including 13 concurrent-transaction checks), on a throwaway local PostgreSQL 16, re-run in full after the final review follow-up |
 | 8. Rollback and forward recovery | section 6 below; `001a_rollback.sql`, then `001_rollback.sql` |
 | 11. Phase 2.0B.3 corrections and change report | section 4b below; `CHANGE_REPORT_2_0B_3.md` |
+| 13. Locking strategy and concurrency | section 4c below; `tests/concurrency_tests.sh` |
+| 14. Supabase staging assessment | `STAGING_ASSESSMENT.md` |
 | 12. Owner role verification | `OWNER_ROLE_VERIFICATION.md`; read-only `owner_role_check.sql` (for the owner to run) |
 | 9. Remaining owner decisions | section 7 below |
 | 10. Approval checklist for live execution | section 8 below |
@@ -204,6 +206,49 @@ claim version retires the old one; every decision is a `review_events` row and e
 
 ---
 
+## 4c. Final review follow-up (2026-11-01): names valid today, and concurrent editorial transactions (release "001 r4")
+
+**Names.** `ref_published_names` returned every verified name of an entity that had *some* current display name, so an ended name (and a
+name whose start date is still to come) could be returned. Now **each returned name must itself be valid today** (`valid_from` empty or
+today or earlier, `valid_to` empty or today or later), and `has_display_name` checks the start date too (an entity whose names have all
+ended or not yet started cannot be published, and its last name valid today cannot be retired). Regression tests: an ended and a future
+name of an entity with a current name are not returned; exactly one name is returned; publication and retirement follow the same rule.
+
+**Concurrency: the finding.** Every check in r3 read the current state with PostgreSQL's default isolation (READ COMMITTED) and locked only
+the row being decided. Two editorial transactions running at the same time could each check a state the other was changing. Reproduced
+on r3 with two real sessions (`tests/concurrency_tests.sh`: session 1 decides and holds its transaction open 1.5 s; session 2 starts
+0.4 s later): **11 of 12 checks failed**: a claim published on a source version, a rights statement, a dependency or an entity that was
+being retired stayed current and unsuspended (both orders); two concurrent retirements left a published entity with no display name;
+both halves of a `part_of` cycle and of a dependency cycle were stored; evidence was added to a version that had just been submitted.
+
+**The locking strategy (smallest safe correction).**
+- **One editorial lock** (`wine_reference.editorial_lock()`, a transaction-level advisory lock, `pg_advisory_xact_lock(20261101, 1)`).
+  `ref_review` takes it first, before any row lock; the triggers that check **other** rows take it too: `check_claim` (cycles, kinds,
+  active types), `check_dependency` (cycles), `draft_version_only` (evidence and dependencies only on drafts), `check_taxonomy_node`,
+  `freeze_claim`, `freeze_taxonomy`, `freeze_claim_type`. Such transactions therefore run one after another; after waiting, each statement
+  takes a fresh snapshot (READ COMMITTED), so it sees what the previous decision committed. The automatic suspension runs inside the same
+  locked transaction, so it sees publications that committed just before.
+- **Row locks kept:** `ref_review` still locks the row it decides (`for update`); plain edits of one row are serialised by PostgreSQL's
+  own row locking (an edit waiting on a submit re-checks the submitted row and is refused).
+- **The private-copy check** (`check_source_copy`) takes a shared row lock on its rights statement instead of the editorial lock (the
+  editorial lock there could deadlock with `ref_review` on the same source-version row): a concurrent retirement of those rights either
+  waits for it or is already visible to it.
+- **Reads never take the lock** (`ref_published_names`, `is_current`, the verify script).
+- **Result on r4:** 13 of 13 concurrency checks pass (the 12 above plus an Owner self-approval racing a rejection); in each, session 2
+  waited about 1.1 s for session 1, then either completed safely or was refused with the right reason; the review history records each
+  decision once (the C1a retirement recorded one automatic suspension).
+
+**Limitations that remain.**
+- All editorial decisions are serialised: fine for a small team; a long editorial transaction (for example many `ref_review` calls in
+  one SQL Editor transaction) holds the lock until it ends and makes others wait. Calls through the API are one transaction each.
+- A writer that bypasses both `ref_review` and the triggers (only the database owner, by disabling triggers) is not protected; that is
+  outside any database rule.
+- The advisory-lock key `(20261101, 1)` must not be reused by anything else in the database (nothing in the app uses advisory locks).
+- Tested with two sessions and fixed timings on local PostgreSQL 16, not under load and not on Supabase (`STAGING_ASSESSMENT.md`).
+- A private copy whose rights are retired after it was written is still only listed by the verify script.
+
+---
+
 ## 5. Compatibility assessment
 
 - **Existing database objects:** none changed. Tested by comparing the entire `public` schema before and after (tables, columns,
@@ -262,10 +307,12 @@ the owner, one at a time.
 - [ ] Confirm a recent backup exists (dashboard: Database, Backups), or note that the plan has none.
 - [ ] Confirm **Settings, API, Exposed schemas** does not list `wine_reference`; leave it unchanged.
 - [ ] Use the files from the repository's `main` branch at the approved commit. Fingerprints (first 16 hex of SHA-256) as committed:
-      `001_wine_reference_foundation.sql` `11c72574bccd5827`, `001a_reference_permissions.sql` `c9232eb170451888`,
-      `001_verify.sql` `ff1a93575ca6756a`, `001_rollback.sql` `af80fc11000f6fc1`, `001a_rollback.sql` `cc997dca39ac806c`,
-      `owner_role_check.sql` `e911b62ebfba298b` (release "001 r3 (2026-10-27)", after the Phase 2.0B.3 corrections).
-- [ ] Re-run the local tests on that commit: `bash docs/reference/migration_001/tests/run_local_tests.sh` → 270 passed, 0 failed.
+      `001_wine_reference_foundation.sql` `4493d49c5db0cd71`, `001a_reference_permissions.sql` `0a5878c04707e084`,
+      `001_verify.sql` `3951eeb9bc39b18d`, `001_rollback.sql` `af80fc11000f6fc1`, `001a_rollback.sql` `cc997dca39ac806c`,
+      `owner_role_check.sql` `e911b62ebfba298b` (release "001 r4 (2026-11-01)", after the final review follow-up).
+- [ ] Re-run the local tests on that commit: `bash docs/reference/migration_001/tests/run_local_tests.sh` → 294 passed, 0 failed
+      (this includes the 13 concurrency checks).
+- [ ] Optional, needs approval (new tool, large downloads): a disposable local Supabase stack test (`STAGING_ASSESSMENT.md`, option A).
 - [ ] Run `owner_role_check.sql` (read-only) and confirm every point in `OWNER_ROLE_VERIFICATION.md`, "What to confirm". If any
       point fails, stop and send the result (keep the file private).
 

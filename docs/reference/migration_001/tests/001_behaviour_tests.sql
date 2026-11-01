@@ -644,3 +644,38 @@ select t.run('frozen: a submitted name cannot be edited', 'postgres', null,
 select t.run('frozen setup: B rejects it back to draft', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b', $q$select public.ref_review('entity_names', 'a0000000-0000-0000-0000-000000000054', 'reject', 'please fix')$q$);
 select t.run('frozen: a rejected (draft again) name can be edited', 'postgres', null,
   $q$update wine_reference.entity_names set name = 'Draft name, fixed' where id = 'a0000000-0000-0000-0000-000000000054'$q$);
+
+-- ================================================================================================ final review (2026-11-01): names valid today
+-- Q8 is a published place with three verified names: one current, one that ENDED (valid_to in the past), one not yet started
+-- (valid_from in the future). The read door must return only the current one, even though the entity itself has a display name.
+select t.run('names (final) setup: Q8 with a current, an ended and a future name (by A)', 'postgres', 'aaaaaaaa-0000-0000-0000-00000000000a',
+  $q$insert into wine_reference.entities (id, kind) values ('e0000000-0000-0000-0000-000000000048', 'place'), ('e0000000-0000-0000-0000-000000000049', 'place');
+     insert into wine_reference.entity_names (id, entity_id, name, language, name_kind, is_preferred, valid_from, valid_to) values
+       ('a0000000-0000-0000-0000-000000000061', 'e0000000-0000-0000-0000-000000000048', 'Zeta current', 'en', 'common', true, null, null),
+       ('a0000000-0000-0000-0000-000000000062', 'e0000000-0000-0000-0000-000000000048', 'Zeta ended', 'en', 'historical', false, '1990-01-01', current_date - 1),
+       ('a0000000-0000-0000-0000-000000000063', 'e0000000-0000-0000-0000-000000000048', 'Zeta future', 'en', 'official', false, current_date + 30, null),
+       ('a0000000-0000-0000-0000-000000000064', 'e0000000-0000-0000-0000-000000000049', 'Eta ended only', 'en', 'common', true, '1990-01-01', current_date - 1),
+       ('a0000000-0000-0000-0000-000000000065', 'e0000000-0000-0000-0000-000000000049', 'Eta future only', 'en', 'label', false, current_date + 30, null)$q$);
+select t.run('names (final) setup: A submits the names and Q8, Q9', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000a',
+  $q$select public.ref_review('entity_names', ('a0000000-0000-0000-0000-0000000000' || g)::uuid, 'submit') from generate_series(61, 65) g;
+     select public.ref_review('entities', x, 'submit') from unnest(array['e0000000-0000-0000-0000-000000000048', 'e0000000-0000-0000-0000-000000000049']::uuid[]) x$q$);
+select t.run('names (final) setup: B approves them and publishes Q8', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('entity_names', ('a0000000-0000-0000-0000-0000000000' || g)::uuid, 'approve') from generate_series(61, 65) g;
+     select public.ref_review('entities', x, 'approve') from unnest(array['e0000000-0000-0000-0000-000000000048', 'e0000000-0000-0000-0000-000000000049']::uuid[]) x;
+     select public.ref_review('entities', 'e0000000-0000-0000-0000-000000000048', 'publish')$q$);
+select t.run('names (final) setup: owner turns the read switch on', 'postgres', null,
+  $q$update public.app_config set value = '1' where key = 'reference_enabled'$q$);
+select t.check('names (final): the read door returns Q8''s current name', 'anon', null,
+  $q$select exists (select 1 from public.ref_published_names('Zeta') where name = 'Zeta current')$q$);
+select t.check('names (final): REGRESSION: an ended name of an entity that has a current name is not returned', 'anon', null,
+  $q$select not exists (select 1 from public.ref_published_names('Zeta') where name = 'Zeta ended')$q$);
+select t.check('names (final): REGRESSION: a name that has not started yet is not returned', 'anon', null,
+  $q$select not exists (select 1 from public.ref_published_names('Zeta') where name = 'Zeta future')$q$);
+select t.check('names (final): exactly one Zeta name is returned', 'anon', null,
+  $q$select count(*) = 1 from public.ref_published_names('Zeta')$q$);
+select t.run('names (final) setup: owner turns the read switch off', 'postgres', null,
+  $q$update public.app_config set value = '0' where key = 'reference_enabled'$q$);
+select t.run('names (final): an entity whose names have all ended or not started (Q9) cannot be published', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('entities', 'e0000000-0000-0000-0000-000000000049', 'publish')$q$, '23514');
+select t.run('names (final): retiring Q8''s current name is refused although an ended and a future name remain', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('entity_names', 'a0000000-0000-0000-0000-000000000061', 'retire')$q$, '23514');

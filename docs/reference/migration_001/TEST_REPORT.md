@@ -1,13 +1,35 @@
-# Migration 001: local test report (2026-10-27, release "001 r3", after the Phase 2.0B.3 corrections)
+# Migration 001: local test report (2026-11-01, release "001 r4", after the final review follow-up)
 
-**Result: 270 passed, 0 failed**, on a throwaway local PostgreSQL 16.15 database in the cloud work container, re-run in full from scratch
-after the corrections. **Nothing was run on the live Supabase database.** Re-run at any time with
-`bash docs/reference/migration_001/tests/run_local_tests.sh` (it starts its own database and deletes it afterwards).
+**Result: 294 passed, 0 failed**, on a throwaway local PostgreSQL 16.15 database in the cloud work container, re-run in full from scratch
+on 2026-11-01. It includes **13 concurrent-transaction checks** (`tests/concurrency_tests.sh`, run as part of the suite). **Nothing was
+run on the live Supabase database.** Re-run at any time with `bash docs/reference/migration_001/tests/run_local_tests.sh`.
 
-History: 127 (first draft) → 160 (Owner approval override) → 270 (Phase 2.0B.3 corrections). The 270 includes the earlier tests,
-adapted where a rule became stricter (a source version is now approved only after its source and its rights statement), and a fix to the
-runner itself: two loops ran in a sub-shell, so their results printed but did not reach the totals (only verify-after-tests rows and
-test-file errors were affected; none had failed). The PASS lines now equal the total.
+History: 127 (first draft) → 160 (Owner approval override) → 270 (Phase 2.0B.3 corrections, r3) → 294 (final review follow-up, r4:
+5 name checks for names valid today, 6 more name checks and setup steps, 13 concurrency checks). **Proof that the new tests catch the
+issues:** the same 294-check suite run against the unchanged r3 SQL gives **278 passed, 16 failed** (the 5 name-validity checks and
+11 concurrency checks); the concurrency harness alone on r3: 1 passed, 11 failed (before C10 was added).
+
+## Concurrency test method
+
+Each scenario runs on a fresh copy of a fixture database (`tests/concurrency_fixture.sql`: published places, a verified source with two
+versions, a rights statement that allows quoting, approved but unpublished claim versions, one published version with a dependent, two
+drafts, and an Owner with a submitted name). Session 1 opens a transaction, makes its decision and holds the transaction open 1.5 s;
+session 2 starts 0.4 s later with a conflicting decision; afterwards the integrity rules are checked. Isolation: PostgreSQL's default,
+READ COMMITTED, as on Supabase. On r4, session 2 waited about 1.1 s in every scenario (the editorial lock), then completed safely or was
+refused with the right reason.
+
+| Check | Race | r3 | r4 |
+|---|---|---|---|
+| C1a / C1b | publish a claim version / retire the source version that is its only evidence (both orders) | FAIL / FAIL | PASS (retire then suspends it) / PASS (publish refused) |
+| C2a / C2b | publish a version with a quote / retire the quote's rights statement (both orders) | FAIL / FAIL | PASS / PASS |
+| C3a / C3b | publish a dependent version / retire the version it depends on (both orders) | FAIL / FAIL | PASS / PASS |
+| C4a | publish a claim / retire the entity it is about | FAIL | PASS |
+| C5 | two editors retire the two display names of a published entity | FAIL (no name left) | PASS (second refused) |
+| C6 | two editors add the two halves of a `part_of` cycle | FAIL (cycle stored) | PASS |
+| C7 | two editors add the two halves of a dependency cycle | FAIL (cycle stored) | PASS |
+| C8 | a version is submitted while evidence is added to it | FAIL (evidence on a submitted version) | PASS (evidence refused) |
+| C9 | evidence added first, then the submit | PASS | PASS |
+| C10 | the Owner self-approves while an editor rejects the same row | (added on r4) | PASS (approval stands, one `owner_override` event; late rejection refused) |
 
 ## What the run does
 
@@ -24,6 +46,8 @@ test-file errors were affected; none had failed). The PASS lines now equal the t
 | **Correction 5** | `owner_role_check.sql` runs in a read-only transaction and reports the role lookup, profile grants and role counts |
 | **Correction 6** | On fresh databases: an unexpected `ref_*` function, `ref_review` without the schema, hand-made drift, a different release and a missing registration each stop the migration with nothing changed; 001a stops before 001 and when partly undone; verify reports a partial 001a |
 | **Correction 7** | `001a_rollback.sql` runs twice, removes every `ref_*` permission from every role (others kept, in order) and unregisters 001a; `001_rollback.sql` refuses until then; the full order works; 001a re-runs after its rollback |
+| **Final review: names valid today** | An ended name and a not-yet-started name of an entity with a current name are not returned; exactly one name returned; an entity whose names have all ended or not started cannot be published; its last name valid today cannot be retired |
+| **Final review: concurrency** | The 13 checks in the table above |
 | Rollback, permissions, dependencies | Rollback refused with content and clean when empty; 001a runs twice; a missing live function stops the migration |
 
 ## Limits of this test (what it does not prove)
@@ -32,9 +56,8 @@ test-file errors were affected; none had failed). The PASS lines now equal the t
   row-level security). Supabase's event triggers and the dashboard's Exposed schemas setting are not present locally.
 - `has_permission()`, `my_staff_role_code()` and `auth.uid()` are stand-ins written from the documented rules; the live bodies are not in
   the repository (`OWNER_ROLE_VERIFICATION.md`, `owner_role_check.sql`).
-- Concurrency (two reviewers acting at the same moment) and speed with real volumes were not tested; the soundness and suspension
-  checks scan every published version on each retire or publish, which is fine at the expected size but should be revisited with
-  migration 002.
+- Concurrency was tested with two sessions and fixed timings, not under load; speed with real volumes was not tested (the soundness
+  and suspension checks scan every published version on each retire or publish; fine at the expected size, to revisit with 002).
 - Time-based expiry of names (`valid_to` passing) cannot be simulated without changing the clock; the read door and the verify script
   handle it, but no test moves time.
 
@@ -43,7 +66,7 @@ test-file errors were affected; none had failed). The PASS lines now equal the t
 ```
 PASS  fresh install runs without error
 PASS  replay (second run) runs without error
-PASS  replay changes no structure (628 objects identical)
+PASS  replay changes no structure (629 objects identical)
 PASS  replay adds no duplicate rows (migrations/kinds/relationship types/name kinds = 1/9/6/8)
 PASS  backward compatibility: public schema unchanged except the 2 new ref_* functions
 PASS  backward compatibility: existing rows untouched (wines/vintages/app_config = 5/5/0)
@@ -57,7 +80,7 @@ PASS  verify: health: every private source copy is under verified rights that al
 PASS  verify: health: every published entity has a current display name | 
 PASS  verify: health: every published, unsuspended claim version is current (sound, with current dependencies) | 
 PASS  verify: migration 001 is registered | 
-PASS  verify: migration 001 release is "001 r3 (2026-10-27)" | 
+PASS  verify: migration 001 release is "001 r4 (2026-11-01)" | 
 PASS  verify: no function in the schema is executable by anon, authenticated or PUBLIC | 
 PASS  verify: no policies on the schema's tables (only the owner reaches rows) | 
 PASS  verify: no structure drift: the schema matches the fingerprint stored by the migration | 
@@ -280,12 +303,23 @@ PASS  frozen setup: the draft name is submitted by A
 PASS  frozen: a submitted name cannot be edited  -> refused: 42501: wine_reference.entity_names: this row is pending_review and frozen; make a new row and retire this one
 PASS  frozen setup: B rejects it back to draft
 PASS  frozen: a rejected (draft again) name can be edited
+PASS  names (final) setup: Q8 with a current, an ended and a future name (by A)
+PASS  names (final) setup: A submits the names and Q8, Q9
+PASS  names (final) setup: B approves them and publishes Q8
+PASS  names (final) setup: owner turns the read switch on
+PASS  names (final): the read door returns Q8's current name
+PASS  names (final): REGRESSION: an ended name of an entity that has a current name is not returned
+PASS  names (final): REGRESSION: a name that has not started yet is not returned
+PASS  names (final): exactly one Zeta name is returned
+PASS  names (final) setup: owner turns the read switch off
+PASS  names (final): an entity whose names have all ended or not started (Q9) cannot be published  -> refused: 23514: An entity needs a current display name (a verified name that is not a typing shortcut) before it is published
+PASS  names (final): retiring Q8's current name is refused although an ended and a future name remain  -> refused: 23514: This is the published entity's last current display name: approve another name first, or retire the entity
 PASS  verify after tests: 001a consistency: if registered, the Owner role holds all four ref_* permissions; if not, no role holds any | 001a not registered
 PASS  verify after tests: 001a consistency: no role other than owner (or editor, if the owner chose it) holds a ref_* permission | 
 PASS  verify after tests: health: every private source copy is under verified rights that allow copying | 
 PASS  verify after tests: health: every published entity has a current display name | 
 PASS  verify after tests: health: every published, unsuspended claim version is current (sound, with current dependencies) | 
-PASS  verify after tests: migration 001 release is "001 r3 (2026-10-27)" | 
+PASS  verify after tests: migration 001 release is "001 r4 (2026-11-01)" | 
 PASS  verify after tests: no structure drift: the schema matches the fingerprint stored by the migration | 
 PASS  owner_role_check.sql runs read-only and reports the role lookup, profiles grants and role counts
 PASS  rollback refuses while the reference holds content
@@ -311,5 +345,18 @@ PASS  001a_rollback runs, and runs again
 PASS  001a_rollback removed every ref_* permission from every role (other permissions kept, in order) and unregistered 001a
 PASS  001a runs again cleanly after its rollback
 PASS  full rollback order works: 001a_rollback, then 001_rollback
-TOTAL: 270 passed, 0 failed  (PostgreSQL 16.15, local throwaway database)
+PASS  concurrency: C1a publish F1 (holding) while V1 (its only evidence) is retired: no unsound claim stays current
+PASS  concurrency: C1b retire V1 (holding) while F1 is published: no unsound claim stays current
+PASS  concurrency: C2a publish F2 (quote under R, holding) while R is retired
+PASS  concurrency: C2b retire R (holding) while F2 is published
+PASS  concurrency: C3a publish F4 (depends on F3, holding) while F3 is retired
+PASS  concurrency: C3b retire F3 (holding) while F4 is published
+PASS  concurrency: C4a publish F5 (about E1, holding) while E1 is retired
+PASS  concurrency: C5 concurrent retirement of both display names of published E3: it keeps one
+PASS  concurrency: C6 concurrent halves of a part_of cycle: at most one is stored
+PASS  concurrency: C7 concurrent halves of a dependency cycle: at most one is stored
+PASS  concurrency: C8 evidence added while the version is being submitted is refused (submitted content stays frozen)
+PASS  concurrency: C9 evidence added first is included when the submit follows
+PASS  concurrency: C10 Owner self-approval (holding) while an editor rejects the same row: the approval stands, recorded once as owner_override; the late rejection is refused
+TOTAL: 294 passed, 0 failed  (PostgreSQL 16.15, local throwaway database)
 ```

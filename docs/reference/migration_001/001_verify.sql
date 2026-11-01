@@ -55,8 +55,8 @@ checks(name, ok, detail) as (
          and not has_function_privilege('anon', 'public.ref_review(text,uuid,text,text,uuid)', 'EXECUTE')
          and not has_function_privilege('service_role', 'public.ref_review(text,uuid,text,text,uuid)', 'EXECUTE'), ''
   union all
-  select 'migration 001 release is "001 r3 (2026-10-27)"',
-         (select release from wine_reference.schema_migrations where version = '001') = '001 r3 (2026-10-27)', ''
+  select 'migration 001 release is "001 r4 (2026-11-01)"',
+         (select release from wine_reference.schema_migrations where version = '001') = '001 r4 (2026-11-01)', ''
   union all
   select 'no structure drift: the schema matches the fingerprint stored by the migration',
          (select structure_md5 from wine_reference.schema_migrations where version = '001') = wine_reference.structure_fingerprint(), ''

@@ -1,4 +1,4 @@
--- MIGRATION 001: Wine Education Master Reference, canonical foundation. DRAFT (Phase 2.0B.2, 2026-10-26; corrected in Phase 2.0B.3, 2026-10-27; release "001 r3"). NOT RUN ON THE LIVE DATABASE.
+-- MIGRATION 001: Wine Education Master Reference, canonical foundation. DRAFT (Phase 2.0B.2, 2026-10-26; corrected in Phase 2.0B.3, 2026-10-27 and 2026-11-01; release "001 r4"). NOT RUN ON THE LIVE DATABASE.
 --
 -- What it does: creates a NEW, PRIVATE schema `wine_reference` with the reference's foundation tables (entities, names, taxonomy, relationship
 -- and attribute types, sources and source versions, rights statements, claims and claim versions, claim evidence, claim-version
@@ -41,7 +41,7 @@ end $$;
 --       - the schema's structure no longer matches the fingerprint stored after the last run (someone changed it by hand: drift).
 do $$
 declare
-  c_release constant text := '001 r3 (2026-10-27)';
+  c_release constant text := '001 r4 (2026-11-01)';
   v_foreign text; v_ours boolean; v_release text; v_stored text;
 begin
   select string_agg(p.proname || '(' || pg_catalog.oidvectortypes(p.proargtypes) || ')', ', ') into v_foreign
@@ -476,6 +476,18 @@ create index if not exists change_log_row on wine_reference.change_log (table_na
 -- 11. Rules enforced in the database (triggers). Functions here are owned by postgres and not executable by anyone else.
 -- =====================================================================================================================================
 
+-- 11. (lock) The editorial lock (Phase 2.0B.3 final review, 2026-11-01). Every editorial decision (public.ref_review) and every rule
+--      that checks OTHER rows (cycles, draft-only evidence and dependencies, frozen claim identities, taxonomy, claim types) takes this
+--      one transaction-level lock first, so such transactions run one after another and each sees what the previous one committed
+--      (PostgreSQL's default READ COMMITTED takes a fresh snapshot for each statement after the wait). Without it, two concurrent
+--      transactions could each check a state the other was changing (tested: tests/concurrency_tests.sh). Released at commit or
+--      rollback; taken before any row lock in ref_review, so it cannot deadlock with it. Editorial volume is small, so serialising it
+--      costs little; reads (ref_published_names) never take it.
+create or replace function wine_reference.editorial_lock() returns void
+language sql set search_path = '' as $$
+  select pg_catalog.pg_advisory_xact_lock(20261101, 1)
+$$;
+
 -- 11a. Change log for every content table.
 create or replace function wine_reference.log_change() returns trigger
 language plpgsql security definer set search_path = '' as $$
@@ -535,6 +547,7 @@ end $$;
 create or replace function wine_reference.freeze_claim() returns trigger
 language plpgsql set search_path = '' as $$
 begin
+  perform wine_reference.editorial_lock();
   if exists (select 1 from wine_reference.claim_versions v where v.claim_id = old.id and v.status <> 'draft') then
     if tg_op = 'DELETE' or (to_jsonb(new) - 'note') is distinct from (to_jsonb(old) - 'note') then
       raise exception 'A claim whose versions left draft keeps its subject, type and object; make a new claim' using errcode = '42501';
@@ -547,6 +560,7 @@ end $$;
 create or replace function wine_reference.freeze_taxonomy() returns trigger
 language plpgsql set search_path = '' as $$
 begin
+  perform wine_reference.editorial_lock();
   if (select status from wine_reference.entities where id = old.entity_id) <> 'draft' then
     if tg_op = 'DELETE' or (to_jsonb(new) - 'sort_order') is distinct from (to_jsonb(old) - 'sort_order') then
       raise exception 'This taxonomy row''s entity left draft; its code, parent and domain are frozen' using errcode = '42501';
@@ -560,6 +574,7 @@ create or replace function wine_reference.freeze_claim_type() returns trigger
 language plpgsql set search_path = '' as $$
 declare v_used boolean;
 begin
+  perform wine_reference.editorial_lock();
   if tg_table_name = 'relationship_types' then
     select exists (select 1 from wine_reference.claims c where c.relationship_type = old.code) into v_used;
   else
@@ -579,6 +594,7 @@ end $$;
 create or replace function wine_reference.draft_version_only(p_version uuid) returns void
 language plpgsql set search_path = '' as $$
 begin
+  perform wine_reference.editorial_lock();
   if (select status from wine_reference.claim_versions where id = p_version) is distinct from 'draft' then
     raise exception 'Evidence and dependencies can only change while the claim version is a draft' using errcode = '42501';
   end if;
@@ -603,6 +619,7 @@ create or replace function wine_reference.check_claim() returns trigger
 language plpgsql set search_path = '' as $$
 declare r record; v_subject text; v_object text; v_cycle boolean;
 begin
+  perform wine_reference.editorial_lock();
   select kind into v_subject from wine_reference.entities where id = new.subject_entity_id;
   if new.relationship_type is not null then
     select * into r from wine_reference.relationship_types where code = new.relationship_type;
@@ -667,6 +684,7 @@ create or replace function wine_reference.check_taxonomy_node() returns trigger
 language plpgsql set search_path = '' as $$
 declare v_parent_domain uuid; v_cycle boolean;
 begin
+  perform wine_reference.editorial_lock();
   if new.parent_id is not null then
     select domain_id into v_parent_domain from wine_reference.taxonomy_nodes where entity_id = new.parent_id;
     if v_parent_domain is distinct from new.domain_id then
@@ -700,6 +718,11 @@ end $$;
 create or replace function wine_reference.check_source_copy() returns trigger
 language plpgsql set search_path = '' as $$
 begin
+  -- a shared row lock on the rights statement (not the editorial lock, which could deadlock with ref_review on this row): a concurrent
+  -- retirement of those rights either waits for this transaction or has already committed and is seen here
+  if new.storage_path is not null then
+    perform 1 from wine_reference.rights_statements rs where rs.id = new.rights_id for share;
+  end if;
   if new.storage_path is not null and not exists (select 1 from wine_reference.rights_statements rs
                                                     where rs.id = new.rights_id and rs.status = 'verified' and rs.allows_copy) then
     raise exception 'A private copy needs verified rights that allow copying' using errcode = '23514';
@@ -712,6 +735,7 @@ create or replace function wine_reference.check_dependency() returns trigger
 language plpgsql set search_path = '' as $$
 declare v_cycle boolean;
 begin
+  perform wine_reference.editorial_lock();
   with recursive down(id) as (
     select depends_on_version_id from wine_reference.claim_version_dependencies where dependent_version_id = new.depends_on_version_id
     union
@@ -939,16 +963,18 @@ revoke all on all sequences in schema wine_reference from public;
 -- 12. The two doors in public. Both SECURITY DEFINER, owned by postgres, with an empty search_path (every name written in full).
 -- =====================================================================================================================================
 
--- A current display name: verified, not a typing shortcut, not ended (valid_to in the future or open). (Phase 2.0B.3 correction 4)
+-- A current display name: verified, not a typing shortcut, and valid today (started, not ended). (Phase 2.0B.3 correction 4; the
+-- start date was added on 2026-11-01)
 create or replace function wine_reference.has_display_name(p_entity uuid, p_except uuid default null) returns boolean
 language sql stable set search_path = '' as $$
   select exists (select 1 from wine_reference.entity_names n
                   where n.entity_id = p_entity and n.status = 'verified' and n.name_kind <> 'shortcut'
+                    and (n.valid_from is null or n.valid_from <= current_date)
                     and (n.valid_to is null or n.valid_to >= current_date) and (p_except is null or n.id <> p_except))
 $$;
 revoke all on function wine_reference.has_display_name(uuid, uuid) from public;
 
--- 12a. Read: published entities with their verified names. Returns nothing while app_config 'reference_enabled' is absent or 0.
+-- 12a. Read: published entities with their verified names that are valid today. Returns nothing while app_config 'reference_enabled' is absent or 0.
 create or replace function public.ref_published_names(p_query text default null, p_language text default null, p_limit integer default 50)
 returns table (entity_id uuid, kind text, name text, language text, name_kind text, is_preferred boolean)
 language sql stable security definer set search_path = '' as $$
@@ -958,6 +984,8 @@ language sql stable security definer set search_path = '' as $$
    where public.cfg_number('reference_enabled', 0) >= 1
      and e.status = 'verified' and e.published_at is not null and e.superseded_by is null
      and n.status = 'verified' and n.name_kind <> 'shortcut'
+     and (n.valid_from is null or n.valid_from <= current_date)   -- each returned name must itself be valid today (2026-11-01
+     and (n.valid_to is null or n.valid_to >= current_date)       --   review: an ended or not-yet-started name is never returned)
      and wine_reference.has_display_name(e.id)          -- fail closed: an entity with no current display name is not shown
      and (p_language is null or n.language = p_language)
      and (p_query is null or lower(n.name) like '%' || lower(left(p_query, 100)) || '%')
@@ -981,6 +1009,7 @@ declare
   v_problems text[]; r record;
 begin
   if v_actor is null then raise exception 'Sign in first' using errcode = '42501'; end if;
+  perform wine_reference.editorial_lock();   -- decisions run one at a time (see 11, the editorial lock)
   if p_table not in ('entities', 'entity_names', 'claim_versions', 'sources', 'source_versions', 'rights_statements', 'taxonomy_assignments') then
     raise exception 'Unknown table %', p_table using errcode = '22023';
   end if;
@@ -1136,7 +1165,7 @@ comment on table wine_reference.change_log is 'Append-only before/after record o
 -- =====================================================================================================================================
 insert into wine_reference.schema_migrations (version, name, notes, release)
 values ('001', 'wine_reference foundation', 'Phase 2.0B.3 draft; schema, entities, names, taxonomy, claim types, sources, rights, claims, evidence, review, change log',
-        '001 r3 (2026-10-27)')
+        '001 r4 (2026-11-01)')
 on conflict (version) do nothing;
 update wine_reference.schema_migrations set structure_md5 = wine_reference.structure_fingerprint() where version = '001';
 
