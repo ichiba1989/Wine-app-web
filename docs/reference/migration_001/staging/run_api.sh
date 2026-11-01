@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # STAGING ONLY (Phase 2.0B.4). Realistic run on the disposable LOCAL Supabase stack: a fresh database with the documented app structures
-# (prereq_realistic.sql, tied to real Auth users), the exact migration 001 r4, its verify script, 001a, verify again, the security
+# (prereq_realistic.sql, tied to real Auth users), the exact migration 001 (release under test), its verify script, 001a, verify again, the security
 # inventory, then api_tests.py (real sign-ins, real tokens, the Data API and GraphQL).
 # Needs SB_ENV_FILE (the local stack's own keys, from `supabase status -o env`, kept chmod 600 outside the repository). The scratch
 # project has enable_anonymous_sign_ins = true (production lets guests sign in anonymously).
@@ -8,7 +8,7 @@
 : "${SB_ENV_FILE:?set SB_ENV_FILE}"; OUT="${OUT:-/tmp/sb_api}"; mkdir -p "$OUT"
 fresh realistic
 snapshot public > "$OUT/public_before.txt"
-PSQL_FILE "$FOUNDATION" > "$OUT/install.log" 2>&1 && ok "migration 001 r4 installs on the realistic database" || { bad "install: $(tail -3 $OUT/install.log)"; exit 1; }
+PSQL_FILE "$FOUNDATION" > "$OUT/install.log" 2>&1 && ok "migration 001 (release under test) installs on the realistic database" || { bad "install: $(tail -3 $OUT/install.log)"; exit 1; }
 snapshot public > "$OUT/public_after.txt"
 ADDED=$(diff "$OUT/public_before.txt" "$OUT/public_after.txt" | grep '^>' | sed 's/^> //'); REMOVED=$(diff "$OUT/public_before.txt" "$OUT/public_after.txt" | grep '^<')
 [ -z "$REMOVED" ] && [ "$(echo "$ADDED" | grep -vc '^function ref_')" = "0" ] && ok "public schema unchanged except the 2 ref_* functions (realistic profiles, policies and grants untouched)" || bad "public changed: [$REMOVED] [$ADDED]"

@@ -1,4 +1,4 @@
--- MIGRATION 001: Wine Education Master Reference, canonical foundation. DRAFT (Phase 2.0B.2, 2026-10-26; corrected in Phase 2.0B.3, 2026-10-27 and 2026-11-01; release "001 r4"). NOT RUN ON THE LIVE DATABASE.
+-- MIGRATION 001: Wine Education Master Reference, canonical foundation. DRAFT (Phase 2.0B.2, 2026-10-26; corrected in Phase 2.0B.3, 2026-10-27 and 2026-11-01; release "001 r5" release candidate, Phase 2.0B.5, 2026-11-01). NOT RUN ON THE LIVE DATABASE.
 --
 -- What it does: creates a NEW, PRIVATE schema `wine_reference` with the reference's foundation tables (entities, names, taxonomy, relationship
 -- and attribute types, sources and source versions, rights statements, claims and claim versions, claim evidence, claim-version
@@ -41,7 +41,7 @@ end $$;
 --       - the schema's structure no longer matches the fingerprint stored after the last run (someone changed it by hand: drift).
 do $$
 declare
-  c_release constant text := '001 r4 (2026-11-01)';
+  c_release constant text := '001 r5 (2026-11-01)';
   v_foreign text; v_ours boolean; v_release text; v_stored text;
 begin
   select string_agg(p.proname || '(' || pg_catalog.oidvectortypes(p.proargtypes) || ')', ', ') into v_foreign
@@ -481,8 +481,10 @@ create index if not exists change_log_row on wine_reference.change_log (table_na
 --      one transaction-level lock first, so such transactions run one after another and each sees what the previous one committed
 --      (PostgreSQL's default READ COMMITTED takes a fresh snapshot for each statement after the wait). Without it, two concurrent
 --      transactions could each check a state the other was changing (tested: tests/concurrency_tests.sh). Released at commit or
---      rollback; taken before any row lock in ref_review, so it cannot deadlock with it. Editorial volume is small, so serialising it
---      costs little; reads (ref_published_names) never take it.
+--      rollback; taken before any row lock in ref_review and, since release r5, by a statement-level trigger at the start of every
+--      direct write statement on an editorial table (11c2, before that statement locks any row), so the two paths take the locks in the
+--      same order and cannot deadlock (Phase 2.0B.4 finding S-1). Editorial volume is small, so serialising it costs little; reads
+--      (ref_published_names) never take it.
 create or replace function wine_reference.editorial_lock() returns void
 language sql set search_path = '' as $$
   select pg_catalog.pg_advisory_xact_lock(20261101, 1)
@@ -811,6 +813,45 @@ create trigger source_versions_copy before insert or update on wine_reference.so
 drop trigger if exists taxonomy_domains_check on wine_reference.taxonomy_domains;
 create trigger taxonomy_domains_check before insert or update on wine_reference.taxonomy_domains for each row execute function wine_reference.check_taxonomy_domain();
 
+-- 11c2. Lock order and TRUNCATE (release r5, Phase 2.0B.5; staging findings S-1 and S-5).
+--   * Every INSERT, UPDATE or DELETE statement on an editorial table takes the editorial lock FIRST, in a BEFORE ... FOR EACH STATEMENT
+--     trigger, which runs before the statement reads or locks any row. Row triggers run only after PostgreSQL has locked the row, so the
+--     lock they take came second; a direct write (the owner's SQL editor) could then hold a row while waiting for the editorial lock that
+--     ref_review held while waiting for that row: a deadlock (reproduced on Supabase, probes D1 and D3). The lock is transaction-scoped
+--     and re-entrant, so ref_review's own writes and the row triggers that take it again are unaffected. The function only waits for the
+--     lock: it reads and writes nothing, runs with the caller's rights and is executable by nobody else (revoked below, 12).
+--   * TRUNCATE is refused on every reference table: it skips row triggers, so it would get round the frozen rows and the append-only
+--     review history and change log. Removing content is never done that way (DESIGN.md, forward recovery; the rollback drops the schema).
+create or replace function wine_reference.lock_before_write() returns trigger
+language plpgsql set search_path = '' as $$
+begin
+  perform wine_reference.editorial_lock();
+  return null;
+end $$;
+create or replace function wine_reference.refuse_truncate() returns trigger
+language plpgsql set search_path = '' as $$
+begin
+  raise exception 'wine_reference.%: TRUNCATE is not allowed on the reference (it skips the row rules); retire rows instead', tg_table_name
+    using errcode = '42501';
+end $$;
+do $$
+declare t text;
+begin
+  foreach t in array array['entities', 'entity_names', 'taxonomy_domains', 'taxonomy_nodes', 'taxonomy_assignments', 'relationship_types',
+                           'attribute_types', 'rights_statements', 'sources', 'source_versions', 'claims', 'claim_versions',
+                           'claim_version_dependencies', 'claim_evidence', 'entity_kinds', 'name_kinds', 'source_kinds', 'evidence_modalities'] loop
+    execute format('drop trigger if exists %I on wine_reference.%I', t || '_lock_first', t);
+    execute format('create trigger %I before insert or update or delete on wine_reference.%I for each statement execute function wine_reference.lock_before_write()', t || '_lock_first', t);
+  end loop;
+  foreach t in array array['entities', 'entity_names', 'taxonomy_domains', 'taxonomy_nodes', 'taxonomy_assignments', 'relationship_types',
+                           'attribute_types', 'rights_statements', 'sources', 'source_versions', 'claims', 'claim_versions',
+                           'claim_version_dependencies', 'claim_evidence', 'entity_kinds', 'name_kinds', 'source_kinds', 'evidence_modalities',
+                           'review_events', 'change_log'] loop
+    execute format('drop trigger if exists %I on wine_reference.%I', t || '_no_truncate', t);
+    execute format('create trigger %I before truncate on wine_reference.%I for each statement execute function wine_reference.refuse_truncate()', t || '_no_truncate', t);
+  end loop;
+end $$;
+
 -- 11j. Is a claim version sound? ONE rule, used to publish, to suspend automatically, and by the verify script (Phase 2.0B.3
 --      corrections 1 and 2). It returns the list of problems (empty = sound):
 --        the subject and object are published, not retired, not superseded;
@@ -1096,6 +1137,20 @@ begin
   if p_decision = 'publish' and p_table = 'entities' and not wine_reference.has_display_name(p_id) then
     raise exception 'An entity needs a current display name (a verified name that is not a typing shortcut) before it is published' using errcode = '23514';
   end if;
+  -- forward-only publication (release r5, staging finding S-3): a version is not published while a NEWER version of the same claim
+  -- (higher version_no) is published and not retired, live or suspended. Normal publication moves forward and replaces the older live
+  -- version automatically. Bringing older content back is deliberate: retire the newer version first (its own recorded decision), or
+  -- write the older content as a new version. Owner policy to confirm (DESIGN.md section 7, decision 14).
+  if p_decision = 'publish' and p_table = 'claim_versions' then
+    select n.version_no as newer_no, o.version_no as this_no into r
+      from wine_reference.claim_versions o join wine_reference.claim_versions n on n.claim_id = o.claim_id
+     where o.id = p_id and n.id <> o.id and n.version_no > o.version_no and n.status = 'verified' and n.published_at is not null
+     order by n.version_no desc limit 1;
+    if r.newer_no is not null then
+      raise exception 'Version % of this claim is newer and published: retire it first if version % is meant to come back, or write the content as a new version', r.newer_no, r.this_no
+        using errcode = '23514';
+    end if;
+  end if;
   if p_decision = 'publish' and p_table = 'claim_versions' then
     v_problems := wine_reference.version_problems(p_id);
     if cardinality(v_problems) > 0 then
@@ -1105,7 +1160,14 @@ begin
 
   perform set_config('wine_reference.in_review', 'on', true);
   if p_decision = 'publish' and p_table = 'claim_versions' then
-    -- the previous live version of the same claim is retired in the same step
+    -- the previous live version of the same claim is retired in the same step. That retirement is a decision too: it gets its own
+    -- review event, attributed to the person publishing, naming the version that replaced it (release r5, staging finding S-2). The
+    -- unique index allows at most one such version, and it is retired here, so the event is written once.
+    insert into wine_reference.review_events (target_table, target_id, decision, from_status, to_status, actor, note, owner_override)
+    select 'claim_versions', v.id, 'retire', 'verified', 'retired', v_actor, 'replaced by the publication of version ' || p_id::text, false
+      from wine_reference.claim_versions v
+     where v.claim_id = (select claim_id from wine_reference.claim_versions where id = p_id)
+       and v.id <> p_id and v.status = 'verified' and v.published_at is not null;
     update wine_reference.claim_versions set status = 'retired', retired_at = now()
      where claim_id = (select claim_id from wine_reference.claim_versions where id = p_id)
        and id <> p_id and status = 'verified' and published_at is not null;
@@ -1157,15 +1219,15 @@ comment on table wine_reference.claims is 'The stable identity of a statement: s
 comment on table wine_reference.claim_versions is 'What a claim says, when it was true, its risk tier and status. Frozen once it leaves draft; one live published version per claim; suspended automatically when it stops being sound.';
 comment on table wine_reference.claim_version_dependencies is 'This claim version holds only if that one holds (Phase 1.9 revision 6). No cycles.';
 comment on table wine_reference.claim_evidence is 'Where a claim version is supported or contradicted: source version, locator, modality, optional quote with its rights.';
-comment on table wine_reference.review_events is 'Append-only history of every status decision (submit, approve, reject, publish, retire); owner_override marks the Owner approving without a second person.';
+comment on table wine_reference.review_events is 'Append-only history of every status decision (submit, approve, reject, publish, retire, and the automatic retire on replacement and suspend); owner_override marks the Owner approving without a second person.';
 comment on table wine_reference.change_log is 'Append-only before/after record of every insert, update and delete in the reference tables.';
 
 -- =====================================================================================================================================
 -- 13. Register this migration.
 -- =====================================================================================================================================
 insert into wine_reference.schema_migrations (version, name, notes, release)
-values ('001', 'wine_reference foundation', 'Phase 2.0B.3 draft; schema, entities, names, taxonomy, claim types, sources, rights, claims, evidence, review, change log',
-        '001 r4 (2026-11-01)')
+values ('001', 'wine_reference foundation', 'release r5 candidate (Phase 2.0B.5); schema, entities, names, taxonomy, claim types, sources, rights, claims, evidence, review, change log',
+        '001 r5 (2026-11-01)')
 on conflict (version) do nothing;
 update wine_reference.schema_migrations set structure_md5 = wine_reference.structure_fingerprint() where version = '001';
 

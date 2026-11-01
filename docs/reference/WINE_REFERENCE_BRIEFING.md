@@ -1,11 +1,14 @@
 # Wine Education Master Reference: complete briefing
 
-**As of 2026-11-01 (updated for the Owner approval override, the Phase 2.0B.3 corrections and the final review follow-up).** One document that covers the whole effort so far, written to be read on its own (no access to the code needed).
+**As of 2026-11-01 (updated for the Owner approval override, the Phase 2.0B.3 corrections, the final review follow-up, the local Supabase staging run and release candidate r5).** One document that covers the whole effort so far, written to be read on its own (no access to the code needed).
 Repository: `ichiba1989/Wine-app-web`, branch `main` (latest commit at writing: `76032a4`); the venue version `vwm` has the same documents.
 
 **Status in one paragraph.** The reference has been audited, the live database has been inspected (read-only), a reference model has
 been drafted, and **migration 001** (the database foundation) has been designed, written as SQL and **tested on a throwaway local
-database: 294 tests passed, 0 failed** (re-run in full after the final review follow-up; release "001 r4"; includes 13 concurrency checks). **Nothing has been run on the live database and nothing in the app has changed.** The next step
+database: 353 tests passed, 0 failed** (release candidate "001 r5", 2026-11-01; includes 20 concurrency checks), and validated on a
+disposable **local Supabase stack** (real sign-in, Data API and GraphQL; `migration_001/STAGING_TEST_REPORT.md`). r5 corrects the two
+small defects the Supabase run found (a lock-order deadlock between SQL-editor edits and decisions; a missing audit row when publishing
+replaces an older version), refuses TRUNCATE, and adds a forward-only publication rule that the owner must confirm. **Nothing has been run on the live database and nothing in the app has changed.** The next step
 needs the owner: the decisions in section 10 and written approval, then the checklist in section 11.
 
 ---
@@ -61,6 +64,8 @@ real bottle photographs only; third-party data only with a checked licence; data
 | 2.0B.2 | Migration 001 designed, written, tested locally | `docs/reference/migration_001/`: 160 of 160 tests passed; not run live |
 | 2.0B.3 | Independent review; corrections: evidence lifecycle, dependencies, frozen approved records, display names, Owner role check, migration safety, 001a recovery | 270 of 270 tests passed; not run live (`CHANGE_REPORT_2_0B_3.md`) |
 | 2.0B.3 final | Names valid today in the read door; an editorial lock against concurrent-transaction races; Supabase staging assessed | 294 of 294 passed (r4); not run live |
+| 2.0B.4 | r4 run unchanged on a disposable local Supabase stack | 423 checks passed; found a lock-order deadlock (S-1), a missing audit row (S-2), an older version able to replace a newer one (S-3), decision time growing with volume (S-4) |
+| 2.0B.5 | Release candidate r5: S-1, S-2 and TRUNCATE corrected, forward-only rule for S-3 (owner to confirm), S-4 documented | 353 of 353 local; Supabase results in `migration_001/STAGING_TEST_REPORT.md`; not run live, not yet approved |
 
 ---
 
@@ -281,7 +286,12 @@ what it created. Once content exists: never drop; fix forward with a new migrati
 9. Whether `privacy.html` needs a line about staff records (owner and lawyers).
 10. Keep the reference's own change log, or later unify with the existing `revisions` table.
 11. When to switch the reference on (not before there is published content).
-12. Also open from earlier: the definitions of product / edition / release / release event (and where bottle format belongs); whether to add an expert level; CMS/WSET permission; whether licensed source copies may be kept in a private bucket; the six accent-only producer duplicates; the parked feature's open setting; the `claude_readonly` role.
+12. Older claim versions (release r5): confirm the forward-only rule (an older version is not published while a newer one is live or
+    suspended; to bring it back, retire the newer one first, recorded), or choose stricter (never) or looser (r4 behaviour).
+13. Accept that each publish or retire takes longer as the reference grows (about 0.7 s at 10,000 published versions) and plan a
+    narrower check in a later migration.
+14. Approve release candidate r5 in place of r4.
+15. Also open from earlier: the definitions of product / edition / release / release event (and where bottle format belongs); whether to add an expert level; CMS/WSET permission; whether licensed source copies may be kept in a private bucket; the six accent-only producer duplicates; the parked feature's open setting; the `claude_readonly` role.
 
 ---
 
@@ -293,11 +303,11 @@ Nothing here happens until the owner approves in writing. Scripts run one at a t
 - [ ] Owner approves the design, including decisions 1, 3 and 5.
 - [ ] A recent database backup exists (dashboard: Database, Backups), or note that the plan has none.
 - [ ] Settings, API, Exposed schemas does **not** list `wine_reference`; leave it unchanged.
-- [ ] Use the approved files. Fingerprints (first 16 hex characters of SHA-256): `001_wine_reference_foundation.sql` `4493d49c5db0cd71`,
-      `001a_reference_permissions.sql` `0a5878c04707e084`, `001_verify.sql` `3951eeb9bc39b18d`, `001_rollback.sql` `af80fc11000f6fc1`,
-      `001a_rollback.sql` `cc997dca39ac806c`, `owner_role_check.sql` `e911b62ebfba298b`.
+- [ ] Use the approved files. Fingerprints (first 16 hex characters of SHA-256): `001_wine_reference_foundation.sql` `62b801e9f82929e1`,
+      `001a_reference_permissions.sql` `0f7b14de0152c2a8`, `001_verify.sql` `d23b64fdc065a9ea`, `001_rollback.sql` `af80fc11000f6fc1`,
+      `001a_rollback.sql` `cc997dca39ac806c`, `owner_role_check.sql` `e911b62ebfba298b` (release candidate r5).
 - [ ] Run `owner_role_check.sql` (read-only) and confirm the points in `OWNER_ROLE_VERIFICATION.md` (DESIGN.md §8).
-- [ ] Re-run the local tests on that commit: 294 passed, 0 failed.
+- [ ] Re-run the local tests on that commit: 353 passed, 0 failed.
 
 **Run**
 - [ ] Paste `001_wine_reference_foundation.sql`, Run: expect "Success. No rows returned". Any error: stop; nothing was applied.

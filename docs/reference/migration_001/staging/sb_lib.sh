@@ -7,7 +7,7 @@ set -u
 : "${SB_PROJECT_DIR:?set SB_PROJECT_DIR to the scratch Supabase project folder}"; : "${SB_CLI:?set SB_CLI to the supabase command}"
 CTR="supabase_db_$(sed -n 's/^project_id *= *"\(.*\)"/\1/p' "$SB_PROJECT_DIR/supabase/config.toml")"
 STAGING="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; MIG="$(dirname "$STAGING")"; TESTS="$MIG/tests"
-FOUNDATION="${FOUNDATION:-$MIG/001_wine_reference_foundation.sql}"   # the migration under test (default: the committed r4 file)
+FOUNDATION="${FOUNDATION:-$MIG/001_wine_reference_foundation.sql}"   # the migration under test (default: the committed release file)
 
 # Safety: refuse to run if the scratch project was ever linked to a hosted project, or if the container is not a local one.
 if [ -e "$SB_PROJECT_DIR/supabase/.temp/project-ref" ]; then echo "REFUSING: the scratch project is linked to a hosted project"; exit 3; fi

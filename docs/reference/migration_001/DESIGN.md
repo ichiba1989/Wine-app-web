@@ -1,4 +1,4 @@
-# Migration 001: design (DRAFT, Phase 2.0B.2, 2026-10-26; Owner approval override 2026-10-26; Phase 2.0B.3 corrections 2026-10-27; final review follow-up 2026-11-01, release "001 r4")
+# Migration 001: design (DRAFT, Phase 2.0B.2, 2026-10-26; Owner approval override 2026-10-26; Phase 2.0B.3 corrections 2026-10-27; final review follow-up 2026-11-01, release "001 r4"; staging corrections 2026-11-01, release candidate "001 r5")
 
 **Status: a tested draft for the owner's approval. Nothing has been run on the live database.** Migration 001 creates the canonical
 foundation of the Wine Education Master Reference in a new private schema, `wine_reference`, and two functions in `public`. It changes no
@@ -8,7 +8,7 @@ existing table, row, view, function, setting or permission, and adds no wine con
 |---|---|
 | 1. Design document (this file) | `docs/reference/migration_001/DESIGN.md` |
 | 2. Physical schema and data dictionary | `DATA_DICTIONARY.md` (column tables generated from a tested install) |
-| 3. SQL migration draft | `001_wine_reference_foundation.sql` (release "001 r4 (2026-11-01)"); the permissions step `001a_reference_permissions.sql` (approved separately) |
+| 3. SQL migration draft | `001_wine_reference_foundation.sql` (release candidate "001 r5 (2026-11-01)"; not approved yet); the permissions step `001a_reference_permissions.sql` (approved separately) |
 | 4. Verification and negative tests | `001_verify.sql` (read-only, also for the live database after migration); `tests/001_behaviour_tests.sql` (local only); `tests/run_local_tests.sh` |
 | 5. Security and permissions review | section 4 below |
 | 6. Compatibility assessment | section 5 below |
@@ -244,8 +244,47 @@ both halves of a `part_of` cycle and of a dependency cycle were stored; evidence
 - A writer that bypasses both `ref_review` and the triggers (only the database owner, by disabling triggers) is not protected; that is
   outside any database rule.
 - The advisory-lock key `(20261101, 1)` must not be reused by anything else in the database (nothing in the app uses advisory locks).
-- Tested with two sessions and fixed timings on local PostgreSQL 16, not under load and not on Supabase (`STAGING_ASSESSMENT.md`).
+- Tested with two sessions and fixed timings on local PostgreSQL 16 and (Phase 2.0B.4) on a local Supabase stack; not under load.
+- *Superseded in r5 (section 4d):* direct table writes took the lock only inside row triggers, after the row was locked, and could
+  deadlock with `ref_review` (found on Supabase, Phase 2.0B.4, S-1).
 - A private copy whose rights are retired after it was written is still only listed by the verify script.
+
+---
+
+## 4d. Release candidate r5 (Phase 2.0B.5, 2026-11-01): the staging findings
+
+The Phase 2.0B.4 local Supabase run (`STAGING_TEST_REPORT.md`) found two small defects and two policy points. r5 corrects the defects,
+adds the smallest forward-only rule for the first policy point (owner to confirm, decision 14), and documents the second (decision 15).
+Details and test evidence: `CHANGE_REPORT_2_0B_5.md`.
+
+- **S-1, lock order (corrected).** Every INSERT, UPDATE or DELETE statement on the 18 editorial tables now takes the editorial lock in a
+  `BEFORE ... FOR EACH STATEMENT` trigger (`<table>_lock_first`, function `lock_before_write()`), which PostgreSQL runs before the
+  statement reads or locks any row. Direct writes and `ref_review` therefore take the editorial lock before any row lock, in the same
+  order, and the D1 and D3 deadlocks no longer occur (both now wait about 1 s and commit). The lock is re-entrant inside a transaction,
+  so `ref_review`'s own writes and the row triggers that take it again are unaffected; the function reads and writes nothing, is not
+  security definer, and nobody but the owner may execute it. Remaining edge (documented, not a defect of the rule): a transaction that
+  first locks rows with a plain `SELECT ... FOR UPDATE` and only then writes can still wait in the other order; PostgreSQL then detects
+  and cancels one side, as before.
+- **S-5, TRUNCATE (found while checking S-1's coverage; corrected).** TRUNCATE skips row triggers, so it would have got round frozen rows
+  and the append-only `review_events` and `change_log`. It is now refused on the 20 reference tables (all but `schema_migrations`);
+  the rollback drops the schema and never truncates.
+- **S-2, audit of the automatic retirement (corrected).** When `ref_review` publishes a claim version and retires the previous live
+  version of the same claim, it now writes a `retire` review event for that version: actor = the person publishing, note "replaced by the
+  publication of version <id>", `owner_override` false, written just before the publish event in the same transaction. At most one such
+  version exists (the unique index), so the event is written once. `change_log` is unchanged and still records the row change.
+- **S-3, older versions (smallest rule; owner to confirm).** `ref_review` refuses to publish a claim version while a **newer** version
+  (higher `version_no`) of the same claim is published and not retired, live or suspended. Normal publication moves forward and replaces
+  the older live version (S-2). Bringing older content back stays possible with the decisions that already exist, each recorded: retire
+  the newer version first (its own review event, with a note), then publish the older approved one; or write the older content as a
+  new version. No new workflow or status was added. A version that was published and retired can never be published again (unchanged).
+- **S-4, scaling (not changed).** Publish and retire re-check every published version (`suspend_unsound`): about 0.7 s per publish and
+  1.4 s per transitive suspension at 10,000 published versions (Phase 2.0B.4 measurements, repeated on r5). Not optimized in this phase;
+  a later migration should narrow the sweep before the reference approaches tens of thousands of published versions (decision 15).
+- **Release label** `001 r5 (2026-11-01)` in the foundation, 001a's preflight and the verify script. The verify script gained four
+  checks (the 18 lock triggers, the 20 TRUNCATE triggers, every published-then-retired version has a retire event, none has two).
+  The rollback scripts are unchanged (the schema drop removes the new triggers and functions with it).
+- **r4 was never run live.** r5 replaces it as the candidate; a database that holds r4 (only local or staging copies) is rolled back and
+  re-installed, since the preflight refuses a different release.
 
 ---
 
@@ -294,6 +333,13 @@ both halves of a `part_of` cycle and of a dependency cycle were stored; evidence
 11. **When to switch the reference on** (`app_config` `reference_enabled` = 1): not before there is published content and the owner says so.
 12. **Suspension policy (Phase 2.0B.3):** confirm that a suspended claim version is final (a new version is written and reviewed), rather than a "reinstate" decision.
 13. **Owner role check:** run `owner_role_check.sql` and confirm the points in `OWNER_ROLE_VERIFICATION.md` before approving the live run.
+14. **Older claim versions (r5, S-3):** confirm the forward-only rule as built (an older version is not published while a newer one is
+    published and not retired; restoring is "retire the newer one, then publish the older one", both recorded), or choose instead:
+    (a) stricter: once a newer version has ever been published, an older one never is (restoration only as a new version); or
+    (b) looser: drop the rule (r4 behaviour). Changing it after the live run means migration 002.
+15. **Scaling (r5, S-4):** accept the measured decision times for now and plan a narrower suspension sweep in a later migration before
+    the reference reaches tens of thousands of published versions.
+16. **Approve release candidate r5** (sections 4d and 8) in place of r4.
 
 ---
 
@@ -307,12 +353,12 @@ the owner, one at a time.
 - [ ] Confirm a recent backup exists (dashboard: Database, Backups), or note that the plan has none.
 - [ ] Confirm **Settings, API, Exposed schemas** does not list `wine_reference`; leave it unchanged.
 - [ ] Use the files from the repository's `main` branch at the approved commit. Fingerprints (first 16 hex of SHA-256) as committed:
-      `001_wine_reference_foundation.sql` `4493d49c5db0cd71`, `001a_reference_permissions.sql` `0a5878c04707e084`,
-      `001_verify.sql` `3951eeb9bc39b18d`, `001_rollback.sql` `af80fc11000f6fc1`, `001a_rollback.sql` `cc997dca39ac806c`,
-      `owner_role_check.sql` `e911b62ebfba298b` (release "001 r4 (2026-11-01)", after the final review follow-up).
-- [ ] Re-run the local tests on that commit: `bash docs/reference/migration_001/tests/run_local_tests.sh` → 294 passed, 0 failed
-      (this includes the 13 concurrency checks).
-- [ ] Optional, needs approval (new tool, large downloads): a disposable local Supabase stack test (`STAGING_ASSESSMENT.md`, option A).
+      `001_wine_reference_foundation.sql` `62b801e9f82929e1`, `001a_reference_permissions.sql` `0f7b14de0152c2a8`,
+      `001_verify.sql` `d23b64fdc065a9ea`, `001_rollback.sql` `af80fc11000f6fc1`, `001a_rollback.sql` `cc997dca39ac806c`,
+      `owner_role_check.sql` `e911b62ebfba298b` (release candidate "001 r5 (2026-11-01)", Phase 2.0B.5; the last three unchanged since r4).
+- [ ] Re-run the local tests on that commit: `bash docs/reference/migration_001/tests/run_local_tests.sh` → 353 passed, 0 failed
+      (this includes the r5 regression tests and 20 concurrency checks, among them the deadlock probes D1-D3).
+- [ ] Local Supabase stack test (done for r4 in Phase 2.0B.4 and for r5 in Phase 2.0B.5: `STAGING_TEST_REPORT.md`); repeat if the files change.
 - [ ] Run `owner_role_check.sql` (read-only) and confirm every point in `OWNER_ROLE_VERIFICATION.md`, "What to confirm". If any
       point fails, stop and send the result (keep the file private).
 
