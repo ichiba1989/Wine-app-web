@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# STAGING ONLY (Phase 2.0B.4). Real-API tests of migration 001 r4 on the disposable LOCAL Supabase stack: genuine Supabase Auth users
+# STAGING ONLY (Phase 2.0B.4). Real-API tests of migration 001 (r4 in Phase 2.0B.4, r5 in 2.0B.5) on the disposable LOCAL Supabase stack: genuine Supabase Auth users
 # (GoTrue sign-up and anonymous sign-in), their real access tokens, the Data API (PostgREST through the local gateway) and GraphQL.
 # Draft content is written the way it is in production, by the database owner (here docker exec psql as postgres, the SQL editor's
 # role), with the author recorded through request.jwt.claim.sub; every DECISION goes through the Data API with a real token.

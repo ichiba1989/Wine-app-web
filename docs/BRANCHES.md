@@ -31,7 +31,8 @@ _(nothing: `vwm` has all of main as of 2026-11-01)_
 - 2026-10-26 (latest): main's **migration 001 draft** (`docs/reference/migration_001/`: design, data dictionary, SQL, tests, report;
   documents and SQL only, not run live) merged into `vwm`.
 - 2026-10-26: main's **reference briefing** (`docs/reference/WINE_REFERENCE_BRIEFING.md`, one document for passing on) merged into `vwm`.
-- 2026-11-01 (latest): main's **local Supabase staging validation** of migration 001 r4 (`docs/reference/migration_001/staging/`, `STAGING_TEST_REPORT.md`, `STAGING_CHANGE_REPORT.md`; test scripts and documents only, r4 unchanged, nothing run live) merged into `vwm`.
+- 2026-11-01 (latest): main's **migration 001 release candidate r5** (SQL drafts, tests, staging runners and documents under `docs/reference/migration_001/`; not run live, not approved) merged into `vwm`.
+- 2026-11-01 (later): main's **local Supabase staging validation** of migration 001 r4 (`docs/reference/migration_001/staging/`, `STAGING_TEST_REPORT.md`, `STAGING_CHANGE_REPORT.md`; test scripts and documents only, r4 unchanged, nothing run live) merged into `vwm`.
 - 2026-11-01: main's **final review follow-up** to migration 001 (release r4: names valid today, editorial lock, concurrency tests, staging assessment; SQL drafts and documents, not run live) merged into `vwm`.
 - 2026-11-01: main's **hand-off note** (the owner's standing ChatGPT-handoff instruction; documentation only) merged into `vwm`.
 - 2026-10-27: main's **Phase 2.0B.3 corrections** to migration 001 (SQL drafts, tests, documents; not run live) merged into `vwm`.

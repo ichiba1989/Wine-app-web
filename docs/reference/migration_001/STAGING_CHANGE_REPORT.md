@@ -1,5 +1,10 @@
 # Staging change report (Phase 2.0B.4, 2026-11-01)
 
+> **Superseded (Phase 2.0B.5):** the proposed patch P1 + P2 below was reviewed and applied, with a TRUNCATE refusal and a
+> forward-only publication rule, in release candidate **001 r5**; see `CHANGE_REPORT_2_0B_5.md`. This page is kept as the record of the
+> r4 staging run. `staging/proposed/` keeps the original diff against r4; `staging/fixture_extra.sql` was folded into
+> `tests/concurrency_fixture.sql`.
+
 **Bottom line:**
 - **Migration 001 r4 was not changed.** The tested files are exactly those of commit `1f259ca`.
 - The staging run turned up **two small defects** (S-1, S-2). A **proposed patch** for both was tested on a copy only. It is **not

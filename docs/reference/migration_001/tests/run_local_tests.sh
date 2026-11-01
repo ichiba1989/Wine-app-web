@@ -136,6 +136,19 @@ P=$(AS "$PSQL -d p1a -At -c \"select (select count(*) from public.staff_roles wh
 AS "$PSQL -d p1a -f $WORK/001a_reference_permissions.sql" >/dev/null 2>&1 && ok "001a runs again cleanly after its rollback" || bad "001a after rollback failed"
 AS "$PSQL -d p1a -f $WORK/001a_rollback.sql" >/dev/null 2>&1; if AS "$PSQL -d p1a -f $WORK/001_rollback.sql" >/dev/null 2>&1; then ok "full rollback order works: 001a_rollback, then 001_rollback"; else bad "001_rollback after 001a_rollback failed"; fi
 
+# ---------------------------------------------------------------- release r5 regression tests (Phase 2.0B.5): lock order, retire event,
+# forward-only publication, TRUNCATE; on a fresh database with the concurrency fixture; then the verify script's audit rows
+AS "$BIN/createdb -h $WORK -p 5498 -U postgres r5test"
+AS "$PSQL -d r5test -f $WORK/stub_supabase.sql" >/dev/null && AS "$PSQL -d r5test -f $WORK/001_wine_reference_foundation.sql" >/dev/null 2>&1 \
+  && AS "$PSQL -d r5test -f $WORK/concurrency_fixture.sql" >/dev/null 2>&1 || bad "r5 test database setup failed"
+AS "$BIN/psql -X -q -h $WORK -p 5498 -U postgres -d r5test -f $WORK/001_r5_tests.sql" > "$WORK/r5.log" 2>&1
+while IFS='|' read -r passed label detail; do
+  if [ "$passed" = "t" ]; then if [ "$detail" = "ok" ] || [ "$detail" = "true" ]; then ok "$label"; else ok "$label  -> refused: $detail"; fi; else bad "$label  [$detail]"; fi
+done < <(AS "$PSQL -d r5test -At -F '|' -c \"select passed, label, detail from t.results order by n\"")
+while read -r l; do bad "r5 test file error: $l"; done < <(grep -i "error" "$WORK/r5.log" | head -3)
+while IFS= read -r line; do case "$line" in PASS*) ok "verify after r5 tests: ${line#PASS | }";; *) bad "verify after r5 tests: $line";; esac; done \
+  < <(AS "$PSQL -d r5test -At -F ' | ' -f $WORK/001_verify.sql" | grep -E "release|drift|health: every published, unsuspended|audit|lock at the start|TRUNCATE")
+
 # ---------------------------------------------------------------- concurrent editorial transactions (final review, 2026-11-01)
 # tests/concurrency_tests.sh starts its own throwaway server; each of its checks is counted here.
 while IFS= read -r line; do case "$line" in "PASS  "*) ok "concurrency: ${line#PASS  }";; "FAIL  "*) bad "concurrency: ${line#FAIL  }";; esac; done \

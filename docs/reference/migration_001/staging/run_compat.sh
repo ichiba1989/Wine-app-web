@@ -97,5 +97,16 @@ N=$(q "$APP"); snapshot public > "$OUT/p4_after_all.txt"
 [ "$N" = "$N0" ] && ok "after both rollbacks the existing app rows are as before (staff_roles/profiles/wines/vintages/app_config/role functions = $N)" || bad "app rows after rollback: $N0 -> $N"
 diff -q "$OUT/p4_before_all.txt" "$OUT/p4_after_all.txt" >/dev/null && ok "after both rollbacks the public schema is exactly as before 001" || bad "public differs: $(diff $OUT/p4_before_all.txt $OUT/p4_after_all.txt | head -4)"
 
+# ------------------------------------------------ release r5 regression tests (tests/001_r5_tests.sql) on a fresh database, then verify
+fresh compat
+PSQL_FILE "$FOUNDATION" >/dev/null 2>&1 && PSQL_FILE "$TESTS/concurrency_fixture.sql" >/dev/null 2>&1 || bad "r5 test database setup failed"
+docker exec -i "$CTR" psql -X -q -U postgres -d postgres < "$TESTS/001_r5_tests.sql" > "$OUT/r5.log" 2>&1
+while IFS='|' read -r passed label detail; do
+  if [ "$passed" = "t" ]; then if [ "$detail" = "ok" ] || [ "$detail" = "true" ]; then ok "$label"; else ok "$label  -> refused: $detail"; fi; else bad "$label  [$detail]"; fi
+done < <(PSQL -At -F '|' -c "select passed, label, detail from t.results order by n")
+while read -r l; do bad "r5 test file error: $l"; done < <(grep -i "error" "$OUT/r5.log" | head -3)
+while IFS= read -r line; do case "$line" in PASS*) ok "verify after r5 tests: ${line#PASS | }";; *) bad "verify after r5 tests: $line";; esac; done \
+  < <(PSQL_FILE "$MIG/001_verify.sql" -At -F ' | ' | grep -E "release|drift|health: every published, unsuspended|audit|lock at the start|TRUNCATE")
+
 echo; echo "SUPABASE COMPAT TOTAL: $PASS passed, $FAIL failed  (local Supabase, $(q "select setting from pg_settings where name='server_version'"))"
 [ "$FAIL" = "0" ]

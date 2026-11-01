@@ -1,5 +1,7 @@
 # Migration 001 r4 on a local Supabase stack: staging test report (Phase 2.0B.4, 2026-11-01)
 
+> **Update (Phase 2.0B.5):** the release candidate r5 was run on the same stack; see section 12.
+
 **Summary.** Migration 001 r4 was run unchanged on a disposable Supabase stack inside the cloud work container (PostgreSQL 17.11 as
 Supabase builds it, real Supabase Auth, the Data API (PostgREST) and GraphQL). It installed, replayed, verified and rolled back cleanly,
 and every security, lifecycle, concurrency and rollback test passed: **423 checks, 0 failures** (283 compatibility, 27 concurrency, 113
@@ -255,3 +257,28 @@ every trigger still runs. The measured operations go through `ref_review` as in 
   - `fixture_extra.sql` (for C11 and D3) and the read-only `security_inventory.sql`;
   - `proposed/`: the proposed patch.
 - **Outputs:** in the review ZIP (`results/`). They contain test identifiers only, no keys.
+
+## 12. Release candidate r5 on the same stack (Phase 2.0B.5, 2026-11-01)
+
+**Set-up.**
+- The local stack was started again in a new session: Docker 29.9.2, the same CLI and project.
+- The images came straight from Docker Hub this time, with the **same digests** as in section 1.
+- The r5 files were tested exactly as committed: foundation `62b801e9f82929e1`, 001a `0f7b14de0152c2a8`, verify `d23b64fdc065a9ea`;
+  the rollbacks and `owner_role_check.sql` are unchanged.
+- Every database was again a fresh `supabase db reset --local`.
+
+| Suite | r4 (sections 4 to 8) | r5 |
+|---|---|---|
+| Compatibility (`run_compat.sh`), now with the r5 regression tests (`tests/001_r5_tests.sql`) and their verify rows | 283 passed, 0 failed | **335 passed, 0 failed** (283 + 4 new verify rows + 41 regression checks + 7 verify rows after them) |
+| Concurrency (`run_concurrency.sh`): all scenarios now come from `tests/concurrency_tests.sh` | 27 passed; D1 and D3 deadlocked | **20 passed, 0 failed, no deadlock** (C1–C10, C11a, C11b, C12, D1 ×2, D2, D3) |
+| Real Auth and Data API (`run_api.sh`) | 113 passed, 0 failed | **113 passed, 0 failed**; verify 28 of 28 after 001 and after 001a; API waits still cut off at 8.0 s |
+| Performance (`run_perf.sh`): publish / retire / transitive suspension at 10,000 (ms) | 751 / 706 / 1,472 | 747 / 756 / 1,376 (single runs; same order as r4) |
+
+**r5 results in plain words.**
+- **S-1:** the owner's SQL edits and decisions now wait for each other instead of deadlocking.
+- **S-2:** a replaced version has its retire event, attributed to the publisher of the new one.
+- **S-3:** an older version publishing after a newer one is refused (C11b).
+- **TRUNCATE** is refused.
+- Nothing else in the security, lifecycle or rollback results changed.
+
+Details: `CHANGE_REPORT_2_0B_5.md`.

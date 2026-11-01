@@ -55,8 +55,31 @@ checks(name, ok, detail) as (
          and not has_function_privilege('anon', 'public.ref_review(text,uuid,text,text,uuid)', 'EXECUTE')
          and not has_function_privilege('service_role', 'public.ref_review(text,uuid,text,text,uuid)', 'EXECUTE'), ''
   union all
-  select 'migration 001 release is "001 r4 (2026-11-01)"',
-         (select release from wine_reference.schema_migrations where version = '001') = '001 r4 (2026-11-01)', ''
+  select 'migration 001 release is "001 r5 (2026-11-01)"',
+         (select release from wine_reference.schema_migrations where version = '001') = '001 r5 (2026-11-01)', ''
+  union all
+  select 'every editorial table takes the editorial lock at the start of each write statement (18 statement triggers)',
+         (select count(*) from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_namespace n on n.oid = c.relnamespace
+           where n.nspname = 'wine_reference' and not t.tgisinternal and t.tgname like '%\_lock\_first'
+             and t.tgfoid = 'wine_reference.lock_before_write()'::regprocedure
+             and (t.tgtype & 1) = 0 and (t.tgtype & 2) = 2 and (t.tgtype & 28) = 28) = 18, ''
+  union all
+  select 'TRUNCATE is refused on every reference table except the migration register (20 triggers)',
+         (select count(*) from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_namespace n on n.oid = c.relnamespace
+           where n.nspname = 'wine_reference' and not t.tgisinternal and t.tgfoid = 'wine_reference.refuse_truncate()'::regprocedure
+             and (t.tgtype & 32) = 32) = 20, ''
+  union all
+  select 'audit: every claim version retired after publication has a retire event in review_events',
+         not exists (select 1 from wine_reference.claim_versions v where v.status = 'retired' and v.published_at is not null
+                      and not exists (select 1 from wine_reference.review_events e where e.target_table = 'claim_versions'
+                                       and e.target_id = v.id and e.decision = 'retire')),
+         coalesce((select string_agg(v.id::text, ', ') from wine_reference.claim_versions v where v.status = 'retired' and v.published_at is not null
+                    and not exists (select 1 from wine_reference.review_events e where e.target_table = 'claim_versions'
+                                     and e.target_id = v.id and e.decision = 'retire')), '')
+  union all
+  select 'audit: no claim version has more than one retire event',
+         not exists (select 1 from wine_reference.review_events where target_table = 'claim_versions' and decision = 'retire'
+                      group by target_id having count(*) > 1), ''
   union all
   select 'no structure drift: the schema matches the fingerprint stored by the migration',
          (select structure_md5 from wine_reference.schema_migrations where version = '001') = wine_reference.structure_fingerprint(), ''

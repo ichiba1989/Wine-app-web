@@ -96,6 +96,51 @@ pair c10 "$(staff $U_O "select public.ref_review('entity_names', 'a0000000-0000-
          "$(staff $U_B "select public.ref_review('entity_names', 'a0000000-0000-0000-0000-000000000044', 'reject');")"
 N=$(q c10 "select (select status::text from wine_reference.entity_names where id = 'a0000000-0000-0000-0000-000000000044') || ' ' || (select count(*) from wine_reference.review_events where target_id = 'a0000000-0000-0000-0000-000000000044' and decision = 'approve' and owner_override) || ' ' || (select count(*) from wine_reference.review_events where target_id = 'a0000000-0000-0000-0000-000000000044' and decision = 'reject')")
 [ "$N" = "verified 1 0" ] && ok "C10 Owner self-approval (holding) while an editor rejects the same row: the approval stands, recorded once as owner_override; the late rejection is refused" || bad "C10 unexpected result ($N)"; report c10
+# 12-14 (release r5, from the Phase 2.0B.4 staging run): two versions of the SAME claim published at the same time (K2: F2 = v1,
+# F11 = v3, both approved and unpublished), the same version published twice, and the lock-order probes D1-D3.
+F2=f0000000-0000-0000-0000-000000000002; F11=f0000000-0000-0000-0000-000000000011; K2=c0000000-0000-0000-0000-000000000002
+c11_state() { q $1 "select (select count(*) from wine_reference.claim_versions where claim_id = '$K2' and status = 'verified' and published_at is not null)
+   ||' '||(select count(*) from wine_reference.current_claim_versions where claim_id = '$K2')
+   ||' '||(select status::text||','||(published_at is not null)::text from wine_reference.claim_versions where id = '$F2')
+   ||' '||(select status::text||','||(published_at is not null)::text from wine_reference.claim_versions where id = '$F11')
+   ||' '||(select count(*) from wine_reference.review_events where decision = 'publish' and target_id in ('$F2', '$F11'))
+   ||' '||(select count(*) from wine_reference.review_events where decision = 'retire' and target_id = '$F2')
+   ||' '||(select count(*) from wine_reference.change_log where table_name = 'claim_versions' and after ->> 'id' = '$F2' and after ->> 'status' = 'retired')"; }
+# 12a. v1 first (holding), then v3: both publish one after the other; v1 is retired with ONE retire event attributed to the second publisher
+pair c11a "$(staff $U_B "select public.ref_review('claim_versions', '$F2', 'publish');")" "$(staff $U_C "select public.ref_review('claim_versions', '$F11', 'publish');")"
+N=$(c11_state c11a); A=$(q c11a "select count(*) from wine_reference.review_events where decision = 'retire' and target_id = '$F2' and actor = '$U_C' and note = 'replaced by the publication of version $F11'")
+[ "$S1" = "0" ] && [ "$S2" = "0" ] && [ "$N" = "1 1 retired,true verified,true 2 1 1" ] && [ "$A" = "1" ] \
+  && ok "C11a v1 and v3 of one claim published at once: v3 live and current, v1 retired; one retire event (by the publisher of v3, naming v3) and the change_log row" \
+  || bad "C11a [live current v1 v3 publish-events retire-events change_log] = $N, attributed $A, exits $S1/$S2"; report c11a
+# 12b. v3 first (holding), then v1: the older version is refused (forward-only rule); v3 stays live; nothing retired
+pair c11b "$(staff $U_B "select public.ref_review('claim_versions', '$F11', 'publish');")" "$(staff $U_C "select public.ref_review('claim_versions', '$F2', 'publish');")"
+N=$(c11_state c11b)
+[ "$S1" = "0" ] && [ "$S2" != "0" ] && [ "$N" = "1 1 verified,false verified,true 1 0 0" ] && grep -q "is newer and published" "$WORK/c11b.2.log" \
+  && ok "C11b v3 published, then v1 at the same time: v1 refused (newer version live), v3 stays the one current version" \
+  || bad "C11b [live current v1 v3 publish-events retire-events change_log] = $N, exits $S1/$S2"; report c11b
+# 13. the same version published twice at once: one publication, the second refused
+pair c12 "$(staff $U_B "select public.ref_review('claim_versions', '$F2', 'publish');")" "$(staff $U_C "select public.ref_review('claim_versions', '$F2', 'publish');")"
+N=$(q c12 "select count(*) from wine_reference.review_events where decision = 'publish' and target_id = '$F2'")
+[ "$S1" = "0" ] && [ "$S2" != "0" ] && [ "$N" = "1" ] && ok "C12 the same version published twice at once: one publication, the second refused" || bad "C12 exits $S1/$S2, publish events $N"; report c12
+# 14. lock-order probes: a direct write by the database owner (row first, then something that needs the editorial lock) against
+#     ref_review (editorial lock first, then the row). On r4 D1 and D3 deadlocked; from r5 the write statement takes the lock first.
+F9=f0000000-0000-0000-0000-000000000009; V1=51000000-0000-0000-0000-000000000001; R2=b0000000-0000-0000-0000-000000000002
+no_deadlock() {   # $1 name, $2 label
+  if grep -q "deadlock detected" "$WORK/$1.1.log" "$WORK/$1.2.log"; then bad "$2: DEADLOCK"
+  elif [ "$S1" = "0" ] && [ "$S2" = "0" ] && [ "$(q $1 "$UNSOUND")" = "0" ]; then ok "$2: no deadlock, both transactions committed, nothing unsound"
+  else bad "$2: exits $S1/$S2"; fi; report $1
+}
+pair d1 "$(owner $U_A "update wine_reference.claim_versions set change_note = 'edited' where id = '$F9'; select pg_sleep(1); insert into wine_reference.claim_evidence (claim_version_id, source_version_id, modality, locator) values ('$F9', '$V1', 'documentary', 'd1');")" \
+        "$(staff $U_A "select public.ref_review('claim_versions', '$F9', 'submit');")"
+no_deadlock d1 "D1 the owner edits a draft version, then adds evidence, while it is submitted"
+N=$(q d1 "select (select status::text from wine_reference.claim_versions where id = '$F9')||' '||(select count(*) from wine_reference.claim_evidence where claim_version_id = '$F9')")
+[ "$N" = "pending_review 1" ] && ok "D1 the submit waited for the owner's edit and includes its evidence" || bad "D1 outcome $N"
+pair d2 "$(owner $U_A "update wine_reference.claims set object_entity_id = object_entity_id where id = 'c0000000-0000-0000-0000-000000000009'; select pg_sleep(1); insert into wine_reference.claim_evidence (claim_version_id, source_version_id, modality, locator) values ('$F9', '$V1', 'documentary', 'd2');")" \
+        "$(staff $U_A "select public.ref_review('claim_versions', '$F9', 'submit');")"
+no_deadlock d2 "D2 the owner touches a draft claim, then adds evidence, while its version is submitted"
+pair d3 "$(owner $U_A "insert into wine_reference.source_versions (source_id, version_label, rights_id, storage_path) values ('50000000-0000-0000-0000-000000000001', 'v3', '$R2', 'private/x.pdf'); select pg_sleep(1); insert into wine_reference.claim_evidence (claim_version_id, source_version_id, modality, locator) values ('$F9', '$V1', 'documentary', 'd3');")" \
+        "$(staff $U_C "select public.ref_review('rights_statements', '$R2', 'retire');")"
+no_deadlock d3 "D3 the owner records a private copy under R2, then adds evidence, while R2 is retired"
 # 11. the review history stays complete and the Owner override untouched by the locking (one approve recorded per decision)
 N=$(q c1a "select count(*) from wine_reference.review_events where decision = 'suspend'")
 echo "      (C1a: $N automatic suspension event(s) recorded)"

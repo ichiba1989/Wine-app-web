@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # STAGING ONLY (Phase 2.0B.4). Performance smoke test on the LOCAL Supabase database at 100, 1,000 and 10,000 published claim versions
-# (SIZES to change). Each size on a fresh database (supabase db reset --local), compat stand-ins, migration 001 r4, then perf.sql.
+# (SIZES to change). Each size on a fresh database (supabase db reset --local), compat stand-ins, migration 001 (release under test), then perf.sql.
 # Prints METRIC lines and the host's hardware. Smoke test only: one run per size, no warm-up, a 4-CPU shared container.
 . "$(dirname "$0")/sb_lib.sh"
 OUT="${OUT:-/tmp/sb_perf}"; mkdir -p "$OUT"
