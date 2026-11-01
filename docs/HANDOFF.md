@@ -13,6 +13,7 @@ change happened; decisions the owner must make; the recommended next step. If a 
 
 Latest review package: `review_packages/Wine_Reference_Phase_2_0B_3_Security_Review.zip` on branch `claude/wine-app-setup-35g1ne`
 (Migration 001 **r4**, rebuilt after the final review follow-up on 2026-11-01; not on the website).
+**Local Supabase staging (Phase 2.0B.4, 2026-11-01):** r4 unchanged, run on a disposable local Supabase stack (real Auth, Data API, GraphQL): 423 checks passed, 0 failed, plus performance at 100 / 1,000 / 10,000; results in `docs/reference/migration_001/STAGING_TEST_REPORT.md`. Two small defects (a lock-order deadlock between SQL-editor writes and decisions; the automatic retirement on publish has no review event) have a **proposed, unapproved** patch in `STAGING_CHANGE_REPORT.md` / `staging/proposed/`; two owner decisions (older version replacing a newer one; decision time grows with the published total). Review package: `review_packages/Wine_Reference_Phase_2_0B_4_Staging_Review.zip` on `claude/wine-app-setup-35g1ne`. **Waiting for the owner and ChatGPT; nothing deployed, `reference_enabled` untouched.**
 **Final review follow-up (2026-11-01, release "001 r4"):** the read door returns only names valid today; an editorial transaction lock fixes 11 reproduced concurrent-transaction races (`tests/concurrency_tests.sh`); Supabase staging assessed (`docs/reference/migration_001/STAGING_ASSESSMENT.md`, needs approval). Suite: 294 passed, 0 failed.
 
 ## Where things stand
