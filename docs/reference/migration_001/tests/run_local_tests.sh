@@ -136,5 +136,10 @@ P=$(AS "$PSQL -d p1a -At -c \"select (select count(*) from public.staff_roles wh
 AS "$PSQL -d p1a -f $WORK/001a_reference_permissions.sql" >/dev/null 2>&1 && ok "001a runs again cleanly after its rollback" || bad "001a after rollback failed"
 AS "$PSQL -d p1a -f $WORK/001a_rollback.sql" >/dev/null 2>&1; if AS "$PSQL -d p1a -f $WORK/001_rollback.sql" >/dev/null 2>&1; then ok "full rollback order works: 001a_rollback, then 001_rollback"; else bad "001_rollback after 001a_rollback failed"; fi
 
+# ---------------------------------------------------------------- concurrent editorial transactions (final review, 2026-11-01)
+# tests/concurrency_tests.sh starts its own throwaway server; each of its checks is counted here.
+while IFS= read -r line; do case "$line" in "PASS  "*) ok "concurrency: ${line#PASS  }";; "FAIL  "*) bad "concurrency: ${line#FAIL  }";; esac; done \
+  < <(bash "$HERE/concurrency_tests.sh" "$MIG/001_wine_reference_foundation.sql" 2>&1)
+
 echo; echo "TOTAL: $PASS passed, $FAIL failed  (PostgreSQL $($BIN/postgres --version | awk '{print $3}'), local throwaway database)"
 [ "$FAIL" = "0" ]

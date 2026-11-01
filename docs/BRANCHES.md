@@ -31,6 +31,7 @@ _(nothing: `vwm` has all of main as of 2026-10-26)_
 - 2026-10-26 (latest): main's **migration 001 draft** (`docs/reference/migration_001/`: design, data dictionary, SQL, tests, report;
   documents and SQL only, not run live) merged into `vwm`.
 - 2026-10-26: main's **reference briefing** (`docs/reference/WINE_REFERENCE_BRIEFING.md`, one document for passing on) merged into `vwm`.
+- 2026-11-01: main's **final review follow-up** to migration 001 (release r4: names valid today, editorial lock, concurrency tests, staging assessment; SQL drafts and documents, not run live) merged into `vwm`.
 - 2026-11-01: main's **hand-off note** (the owner's standing ChatGPT-handoff instruction; documentation only) merged into `vwm`.
 - 2026-10-27: main's **Phase 2.0B.3 corrections** to migration 001 (SQL drafts, tests, documents; not run live) merged into `vwm`.
 - 2026-10-26: main's **Owner approval override amendment** to migration 001 (SQL drafts, tests, documents; not run live) merged into `vwm`.

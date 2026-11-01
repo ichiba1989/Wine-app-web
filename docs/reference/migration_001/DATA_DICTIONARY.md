@@ -1,4 +1,4 @@
-# Migration 001: physical schema and data dictionary (DRAFT, 2026-10-26; release "001 r3", 2026-10-27)
+# Migration 001: physical schema and data dictionary (DRAFT, 2026-10-26; release "001 r4", 2026-11-01)
 
 The schema `wine_reference` as created by `001_wine_reference_foundation.sql`. **Not on the live database yet.** The column tables below are
 **generated from a tested local install** by `tests/dictionary.sql` (`DICT=... bash tests/run_local_tests.sh`), so they match the SQL
@@ -45,8 +45,8 @@ automatically (`suspended_at`, `suspended_reason`, a `suspend` row in `review_ev
 dependent). Suspension is final for that version. **Current** = verified, published, not suspended, sound, with every dependency current
 (`wine_reference.is_current`, view `wine_reference.current_claim_versions`).
 
-**Functions inside the schema** (owner only): `version_problems(id)` (the soundness rule), `is_current(id)`, `suspend_unsound(actor,
-cause)`, `has_display_name(entity)`, `structure_fingerprint()`, and the trigger functions `guard_row`, `start_as_draft`, `freeze_claim`,
+**Functions inside the schema** (owner only): `editorial_lock()` (the transaction-level editorial lock, DESIGN.md 4c), `version_problems(id)` (the soundness rule), `is_current(id)`, `suspend_unsound(actor,
+cause)`, `has_display_name(entity)` (a verified, non-shortcut name valid today), `structure_fingerprint()`, and the trigger functions `guard_row`, `start_as_draft`, `freeze_claim`,
 `freeze_taxonomy`, `freeze_claim_type`, `check_source_copy`, `check_claim`, `check_claim_version`, `check_taxonomy_node`,
 `check_taxonomy_domain`, `check_dependency`, `evidence_only_on_draft`, `dependency_only_on_draft`, `log_change`, `refuse_change`.
 **Doors in `public`:** `ref_published_names(query, language, limit)` and `ref_review(table, id, decision, note, replacement)`.

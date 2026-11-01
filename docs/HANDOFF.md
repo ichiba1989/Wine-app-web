@@ -12,7 +12,8 @@ it; test results (newly run vs. previously reported); security findings and unre
 change happened; decisions the owner must make; the recommended next step. If a task fails, still give the box and say what failed.
 
 Latest review package: `review_packages/Wine_Reference_Phase_2_0B_3_Security_Review.zip` on branch `claude/wine-app-setup-35g1ne`
-(Migration 001 r3, built from main `9fd5081` on 2026-11-01; not on the website).
+(Migration 001 **r4**, rebuilt after the final review follow-up on 2026-11-01; not on the website).
+**Final review follow-up (2026-11-01, release "001 r4"):** the read door returns only names valid today; an editorial transaction lock fixes 11 reproduced concurrent-transaction races (`tests/concurrency_tests.sh`); Supabase staging assessed (`docs/reference/migration_001/STAGING_ASSESSMENT.md`, needs approval). Suite: 294 passed, 0 failed.
 
 ## Where things stand
 
