@@ -3,7 +3,6 @@
 // still decides what anyone may change. The rules at the top (rows, search, sort, checks, coverage) are pure: no page, no network.
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
 import { esc } from "./logic.js?v=23";
-import { rankAppellationFor } from "./rankaoc.js?v=1";
 import { REACH_CHOICES } from "./wineinfo.js?v=37";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=4";
 import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=15";
@@ -12,6 +11,7 @@ import { FIELDS, TAG_LIST, fieldsFor, optionsOf } from "./tasting.js?v=19";
 import { centsToField } from "./pricing.js?v=3";
 import { ASSIGNABLE_ROLES, ROLES, PERMISSIONS, staffRows, filterStaff, rowActions } from "./access.js?v=4";
 import { plainKey } from "./text.js?v=2";
+import { rankAppellationFor } from "./rankaoc.js?v=1";
 import { placeChecks } from "./geo.js?v=9";
 import { WINE_KINDS, FOODS, RATING_ORDER, RATING_LABEL, kindById, fitOf, ratingOf } from "./foods.js?v=3";
 export { placeChecks };   // used by app.js through the lazily loaded Owner module
