@@ -39,7 +39,9 @@ revisions · 14 Where the tables live (namespace options) · 15 Open questions
 - **How they will be stored [Proposal]:** domains and subdomains are rows (a code, a name per language, a parent, an order, a status), not
   code. An entity, a claim or an entry is tagged with one or more subdomains. Changing the taxonomy later never changes an entity's id.
 - **To import them:** the owner supplies the list (a document or a spreadsheet); it is committed as given under `docs/reference/` with its
-  date and source, and only then turned into seed rows.
+  date and source, and only then turned into seed rows. **Since migration 003 (2026-11-08)** the Owner page's Reference tab, Subject
+  areas, imports it directly: paste the table (domain, code, parent, sort, name:xx per language), Check, Import (`ref_tools`
+  `import_taxonomy`, with the approved document as the source version).
 
 ## 3. Canonical identity principles [Proposal]
 

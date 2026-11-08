@@ -151,7 +151,8 @@ check(st == 200, "the Owner confirms it", (st, js))
 check(sql(f"select status || '|' || basis || '|' || (decided_by = '{OWNER_U}')::text from wine_reference.legacy_links where id = '{LINK}'") == "confirmed|old catalog, not verified|true", "confirmed, still marked old catalog, not verified, with who decided")
 st, js = draft(OWNER_T, "create_entity", {"kind": "producer", "name": "Stand-in Cellars", "language": "fr"}); SC2 = js["entity_id"]
 st, js = draft(OWNER_T, "link_catalog", {"catalog_table": "producers", "catalog_id": row["catalog_id"], "entity_id": SC2})
-LINK2 = js["link_id"]; st, js = draft(OWNER_T, "decide_link", {"id": LINK2, "status": "confirmed"})
+if st == 200:   # 002 alone refuses at the confirmation; with migration 003 the suggestion itself is refused already
+    LINK2 = js["link_id"]; st, js = draft(OWNER_T, "decide_link", {"id": LINK2, "status": "confirmed"})
 check(st >= 400, "a second confirmed entity for the same catalog row is refused", (st, js))
 st, js = staff(OWNER_T, "suggestions", {"table": "producers"})
 check(all(r["name"] != "Stand-in Cellars" for r in js["rows"]), "a confirmed catalog row leaves the report", js["rows"][:3])

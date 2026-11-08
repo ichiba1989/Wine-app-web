@@ -25,6 +25,7 @@ needs the owner: the decisions in section 10 and written approval, then the chec
 8. Migration 001: what it builds
 9. Security, compatibility, tests and recovery
 9a. Migration 002
+9b. Migration 003
 10. Decisions the owner still has to make
 11. Checklist for running migration 001 on the live database
 12. What is missing (dependencies)
@@ -293,6 +294,28 @@ What 002 adds, which is exactly what DESIGN.md §3 put off to 002:
   and has at most one confirmed per row. The catalog is never changed.
 
 `reference_enabled` stays at 0.
+
+## 9b. Migration 003 (2026-11-08): subject areas, wine identity from the old catalog, catalog matching
+
+**Status:** tested locally (116 passed, 0 failed); **not run on production** (`docs/reference/migration_003/DEPLOY_003.md`; design in
+`README.md` there).
+
+**Built:**
+- The subject-area import: paste the approved list, check it, import it. Stable codes, hierarchy, names in every language, the
+  approved document as the source, safe to repeat.
+- Product and edition drafts per old vintage, with "unidentified non-vintage" editions and facts only where the type is switched on.
+- Catalog matching:
+  - coverage per table;
+  - same-name suggestions;
+  - drafts from rows;
+  - "Confirm the unambiguous ones";
+  - undo and reopen;
+  - database rules on every link: right kind, row exists, one confirmed link per row, auto-reject of competing suggestions.
+
+**Recommended to switch on now (the owner decides):** `part_of`, `product_of`, `defined_by_place`, `edition_of`, `harvest_year`,
+`nv_identifier`. `bottle_format_ml` stays proposed until the owner decides where it belongs.
+
+**Not included:** the 14 domains and the subdomains themselves (the owner's list).
 
 ## 10. Decisions the owner still has to make
 
