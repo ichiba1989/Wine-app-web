@@ -20,3 +20,6 @@ on the website (the publishing workflow only copies `main` and `vwm`), and nothi
 - `Wine_App_Security_Hardening_Release2.zip` (2026-11-08): **privilege hardening release 2, final and tested, NOT deployed**, from
   `main` at `49f9eb4`. 43 files; open `DEPLOY.md` first. 352 checks passed, 0 failed on a local Supabase stack.
   ZIP SHA-256: `0bc1076838e6c13f793bb7b16b1229598b10a39c89c43fa2ad634e9f95a71f87`.
+- `Wine_Reference_Migration_001_r5_Final.zip` (2026-11-08): **Migration 001 r5 final** (release "001 r5 (2026-11-08)", owner decisions
+  5/14/15/16; NOT run on production), from `main` at `cf6ca69`. 25 files; open `DEPLOY_001.md` first.
+  ZIP SHA-256: `aa168c951706c7ef82cde9af71d961d1ebea5e6147516f9bbf6652e3960dcdac`.
