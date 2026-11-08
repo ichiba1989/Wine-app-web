@@ -18,5 +18,5 @@ on the website (the publishing workflow only copies `main` and `vwm`), and nothi
   change), from `main` at `0720d3c`. 35 files; open `MANIFEST.md` and `reports/ANON_HARDENING_CHANGE_REPORT.md` first. 293 checks
   passed, 0 failed on a local Supabase stack. ZIP SHA-256: `eea0b453a481bdf48b1f6b0ac5f62cfb350bcc3af10c459308f4da2a4cdf8fee`.
 - `Wine_App_Security_Hardening_Release2.zip` (2026-11-08): **privilege hardening release 2, final and tested, NOT deployed**, from
-  `main` at `49f9eb4`. 41 files; open `DEPLOY.md` first. 352 checks passed, 0 failed on a local Supabase stack.
-  ZIP SHA-256: `dd2d0ff32fe0a4e75e6b1a71d1b8d12f58ad6a9d2bc6f0ceafc3c9542cd85ae4`.
+  `main` at `49f9eb4`. 43 files; open `DEPLOY.md` first. 352 checks passed, 0 failed on a local Supabase stack.
+  ZIP SHA-256: `0bc1076838e6c13f793bb7b16b1229598b10a39c89c43fa2ad634e9f95a71f87`.
