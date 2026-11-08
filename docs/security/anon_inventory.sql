@@ -72,6 +72,12 @@ select 'G default privileges', coalesce(n.nspname, '<all schemas>') || ' / for r
  where (n.nspname is null or n.nspname = 'public') and x.grantee_name in ('anon', 'authenticated', 'PUBLIC')
  group by 1, 2, 3
 union all
+select 'I schema private', coalesce((select 'exists, owner ' || pg_get_userbyid(nspowner) from pg_namespace where nspname = 'private'), 'absent'), ro.r,
+       case when to_regnamespace('private') is null then '-'
+            else coalesce(nullif(concat_ws(',', case when has_schema_privilege(ro.r, 'private', 'USAGE') then 'USAGE' end,
+                                                case when has_schema_privilege(ro.r, 'private', 'CREATE') then 'CREATE' end), ''), '-') end, ''
+  from roles ro
+union all
 select 'H hardening backup', 'private.anon_hardening_backup', '-',
        case when to_regclass('private.anon_hardening_backup') is null then 'absent' else 'present' end, 'present = anon_hardening_up.sql has been applied'
 order by 1, 2, 3;

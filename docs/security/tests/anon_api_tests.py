@@ -91,6 +91,34 @@ check(sql("select count(*) from public.profiles") != "0", "every rolled-back TRU
 for priv in ["REFERENCES", "TRIGGER", "MAINTAIN"]:   # MAINTAIN exists from PostgreSQL 17 (the local stack is 17.11)
     v = sql(f"select has_table_privilege('anon', 'public.profiles', '{priv}')::text || has_table_privilege('anon', 'public.consumptions', '{priv}')::text")
     check(v == ("falsefalse" if HARD else "truetrue"), f"anon {priv} on profiles and consumptions: {'none' if HARD else 'present (Supabase default)'}", v)
+# release 2: signed-in users lose the same table privileges; sequences; default privileges for future objects
+r = as_role("authenticated", "truncate public.consumptions", OWNER_U)
+if HARD: check("permission denied" in r, "direct SQL: authenticated cannot TRUNCATE a player table (consumptions)", r[:120])
+else: check(not r.startswith("ERROR"), "BASELINE FINDING: authenticated CAN truncate a player table in direct SQL (rolled back)", r[:120])
+for priv in ["REFERENCES", "TRIGGER", "MAINTAIN"]:
+    v = sql(f"select has_table_privilege('authenticated', 'public.consumptions', '{priv}')::text || has_table_privilege('authenticated', 'public.wines', '{priv}')::text")
+    check(v == ("falsefalse" if HARD else "truetrue"), f"authenticated {priv} on consumptions and wines: {'none' if HARD else 'present (Supabase default)'}", v)
+v = sql("select string_agg(has_sequence_privilege('anon', c.oid, p)::text, ',' order by p) from pg_class c, unnest(array['SELECT','UPDATE','USAGE']) p where c.oid = 'public.grape_aliases_id_seq'::regclass")
+check(v == ("false,false,false" if HARD else "true,true,true"), f"anon on sequences (SELECT, UPDATE, USAGE): {'none' if HARD else 'all (Supabase default)'}", v)
+v = sql("select has_sequence_privilege('authenticated', 'public.grape_aliases_id_seq', 'UPDATE')::text || ',' || has_sequence_privilege('authenticated', 'public.grape_aliases_id_seq', 'USAGE')::text")
+check(v == ("false,true" if HARD else "true,true"), f"authenticated on sequences: UPDATE {'removed' if HARD else 'present'}, USAGE kept", v)
+# setval is never undone by a rollback, so the probe only moves the counter forward (to its own next value)
+r = as_role("anon", "select setval('public.grape_aliases_id_seq', nextval('public.grape_aliases_id_seq'))")
+if HARD: check("permission denied" in r, "direct SQL: anon cannot move a sequence (setval)", r[:120])
+else: check(not r.startswith("ERROR"), "BASELINE FINDING: anon CAN move a sequence with setval in direct SQL, and a rollback does not undo it (the probe only moved it forward)", r[:120])
+sql("create table public._probe_future (id bigserial primary key, x text); alter table public._probe_future enable row level security;")
+v = sql("""select string_agg(g || ':' || p || '=' || has_table_privilege(g, 'public._probe_future', p)::text, ',' order by g, p)
+             from unnest(array['anon','authenticated']) g, unnest(array['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER','MAINTAIN']) p""")
+want_anon = {"SELECT": "true", "INSERT": "false" if HARD else "true", "UPDATE": "false" if HARD else "true", "DELETE": "false" if HARD else "true",
+             "TRUNCATE": "false" if HARD else "true", "REFERENCES": "false" if HARD else "true", "TRIGGER": "false" if HARD else "true", "MAINTAIN": "false" if HARD else "true"}
+want_auth = {"SELECT": "true", "INSERT": "true", "UPDATE": "true", "DELETE": "true", "TRUNCATE": "false" if HARD else "true", "REFERENCES": "false" if HARD else "true",
+             "TRIGGER": "false" if HARD else "true", "MAINTAIN": "false" if HARD else "true"}
+got = dict(x.split("=") for x in v.split(","))
+ok_ = all(got[f"anon:{p}"] == want_anon[p] for p in want_anon) and all(got[f"authenticated:{p}"] == want_auth[p] for p in want_auth)
+check(ok_, f"a table created later by postgres gets {'anon SELECT only; authenticated without TRUNCATE/REFERENCES/TRIGGER/MAINTAIN' if HARD else 'all privileges for both (Supabase default)'}", v)
+v = sql("select has_sequence_privilege('anon', 'public._probe_future_id_seq', 'USAGE')::text || ',' || has_sequence_privilege('authenticated', 'public._probe_future_id_seq', 'USAGE')::text || ',' || has_sequence_privilege('authenticated', 'public._probe_future_id_seq', 'UPDATE')::text")
+check(v == ("false,true,false" if HARD else "true,true,true"), f"a sequence created later: anon {'none' if HARD else 'all'}, authenticated USAGE kept, UPDATE {'removed' if HARD else 'present'}", v)
+sql("drop table public._probe_future;")
 
 # ---------------------------------------------------------------- 3. sign-up, guests, and the signed-in person's own profile
 PLAYER_T, PLAYER_U, _ = signup("player")
@@ -126,6 +154,16 @@ check(st == 201 and js[0]["user_id"] == GUEST_U, "a guest can still save a journ
 st, js = http("POST", "/rest/v1/consumptions", None, {"user_id": GUEST_U})
 check(st in (401, 403), f"a signed-out visitor cannot save a journal entry (HTTP {st}: {msg(js)[:50]})", (st, js))
 
+# the repository's own player tables (restaurant_visits.sql, this_or_that.sql, note_legend.sql), written by a guest
+st, js = http("POST", "/rest/v1/restaurant_visits", GUEST_T, {"occasion": "casual"}, {"Prefer": "return=representation"})
+check(st == 201 and js[0]["user_id"] == GUEST_U, "a guest saves a restaurant visit (restaurant_visits.sql)", (st, js))
+st, js = http("POST", "/rest/v1/this_or_that_answers", GUEST_T, {"pair_id": "p1", "pair_kind": "food", "choice": "a"}, {"Prefer": "return=representation"})
+check(st == 201, "a guest saves a This or That answer (this_or_that.sql, its key trigger runs)", (st, js))
+st, js = http("POST", "/rest/v1/note_legend_mine", GUEST_T, {"user_id": GUEST_U, "phrase": "zippy", "field": "acidity", "value": "high"}, {"Prefer": "return=representation"})
+check(st == 201, "a guest saves a legend word (note_legend.sql)", (st, js))
+st, js = http("POST", "/rest/v1/restaurant_visits", None, {"occasion": "casual"})
+check(st in (401, 403), f"a signed-out visitor cannot save a restaurant visit (HTTP {st})", (st, js))
+
 # ---------------------------------------------------------------- 4. staff management, plan switch and the Owner (docs/roles_proposal.sql, unchanged)
 st, js = rpc("staff_list", {}, OWNER_T)
 check(st == 200 and any(r["user_id"] == OWNER_U and r["role"] == "owner" for r in js), "the Owner lists staff (staff_list)", (st, js))
@@ -133,6 +171,10 @@ st, js = rpc("staff_set_role", {"p_email": f"player-{RUN}@staging.invalid", "p_r
 check(st == 200 and prof(PLAYER_U, "staff_role") == "editor", "the Owner makes the player an Editor (staff_set_role)", (st, js))
 st, js = rpc("my_staff_access", {}, PLAYER_T)
 check(st == 200 and js.get("role") == "editor", "the new Editor's access reads back as editor", (st, js))
+st, js = http("POST", "/rest/v1/grape_aliases", PLAYER_T, {"alias": f"zz-{RUN}", "grape": "Pinot Noir", "kind": "shortcut"}, {"Prefer": "return=representation"})
+check(st == 201 and js[0]["id"] >= 1, "the Editor adds a reference-list row (serial id: sequence USAGE kept)", (st, js))
+st, js = http("POST", "/rest/v1/grape_aliases", GUEST_T, {"alias": f"yy-{RUN}", "grape": "Pinot Noir", "kind": "shortcut"})
+check(st in (401, 403), f"a guest cannot add a reference-list row (HTTP {st})", (st, js))
 st, js = rpc("staff_set_role", {"p_email": OWNER_E, "p_role": "editor"}, OWNER_T)
 check(st >= 400 and prof(OWNER_U, "staff_role") == "owner", "the Owner role cannot be changed from the app", (st, js))
 st, js = rpc("staff_remove", {"p_user_id": PLAYER_U}, OWNER_T)
