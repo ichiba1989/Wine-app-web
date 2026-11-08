@@ -54,7 +54,11 @@ await p.waitForFunction(() => window.__wine && window.__wine.state && window.__w
 const who = await p.evaluate(() => ({ id: window.__wine.state.user.id, perms: window.__wine.state.access.permissions }));
 check(who.id === uid && who.perms.includes("owner_page"), "the app opens signed in as the local Owner, with the Owner page permission", JSON.stringify(who));
 
-const act = async (action, wait = 900) => { await p.click(`[data-action="${action}"]`); await p.waitForTimeout(wait); };
+// A button inside an open sheet (#overlay) wins over one with the same action on the page beneath it (the venue version has two).
+const act = async (action, wait = 900) => {
+  const sel = `[data-action="${action}"]`, inSheet = p.locator(`#overlay ${sel}`);
+  await ((await inSheet.count()) ? inSheet.first() : p.locator(sel).first()).click(); await p.waitForTimeout(wait);
+};
 const msg = () => p.evaluate(() => window.__wine.state.owner.msg || "");
 const R = () => p.evaluate(() => window.__wine.state.owner.wref);
 await act("settings", 500); await act("owner:open", 800); await act("owner:tab:reference", 1500);

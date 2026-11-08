@@ -12,6 +12,9 @@ build step. Saved from the working session on 2026-10-19 so a new session can ch
   2. `python3 docs/tools/resolve_imports.py`: settles conflicts made only of import lines;
   3. settle what is left by hand; on `vwm`, `text.js` is `?v=3` (on main it is `?v=2`), so any new import of it there must say 3;
   4. `grep -rn '^<<<<<<<\|^>>>>>>>' --include='*.js' --include='*.html' --include='*.md' .` must print nothing;
+  4b. parse every file as a module: `node --check` reads a `.js` file as a script and misses a name imported twice (step 2 can leave
+     one, and the module then fails to load in the browser: found 2026-11-08 in `owner.js` on `vwm`). Copy each to a `.mjs` name and check
+     it: `for f in *.js; do cp "$f" /tmp/m.mjs && node --check /tmp/m.mjs || echo "$f"; done` must print no file name;
   5. compare with the last `vwm` commit: a module whose content changed but whose `?v=` did not must be bumped with `cascade.py`
      (the check is in `docs/HANDOFF.md`).
 
