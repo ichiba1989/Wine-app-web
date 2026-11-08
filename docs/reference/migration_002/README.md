@@ -1,6 +1,6 @@
 # Migration 002: the editorial door, the wine identity levels and links to the old catalog
 
-Release `002 r1 (2026-11-08)`. **Implemented and tested locally; not run on production** (steps: `DEPLOY_002.md`).
+Release `002 r1 (2026-11-08)`. **Deployed on production by the owner on 2026-11-08** (live checks 13/0, 26/0, 26/0) (steps: `DEPLOY_002.md`).
 Builds on 001 r5 and 001a, both deployed on production. `reference_enabled` stays at 0.
 
 ## Why this scope

@@ -1,6 +1,15 @@
 # Running Migration 002 on production (release "002 r1 (2026-11-08)")
 
-**Status: implemented and tested locally. NOT run on production. It needs the owner's explicit go-ahead** ("approved: run Migration 002").
+**Status: DEPLOYED on production by the owner on 2026-11-08** (approved: "run Migration 002"; run by hand in the SQL editor). Live checks
+after deployment (public key only):
+- `live_post_deploy_002.mjs`: 13/0;
+- `docs/security/tests/live_smoke.mjs`: 26/0;
+- `live_ui.mjs`: 26/0 (main and /vwm/).
+
+`reference_enabled` is off, and the identity types are still proposed. The results of `002_preflight.sql` and `002_verify.sql` are
+reported by the owner.
+
+Original note:
 I have no access to the production database. The owner runs each script in the Supabase SQL editor (works from an iPhone browser).
 
 **What it adds:**
