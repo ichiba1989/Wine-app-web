@@ -1,6 +1,8 @@
 # Anonymous access hardening: change report (Phase 2.0B.6, 2026-11-01)
 
-**Status: a tested proposal.**
+**Status: release 2 is final and tested; it is NOT deployed** (the owner runs it from `DEPLOY.md` after approval). The text from "Release 1" onward describes the reviewed proposal.
+
+**Release 1 status (2026-11-01): a tested proposal.**
 - **Not run on the live database.** No production connection was made.
 - **No app file changed.** Migration 001 r5 is untouched.
 - The owner decides whether, and when, to run it (section 9).
@@ -8,13 +10,78 @@
 **Results.** On a disposable local Supabase stack, with real Auth, PostgREST and the app's own data code: **293 checks passed, 0
 failed**, across three phases: before, after, and after the rollback. Background and findings: `ANON_ACCESS_AUDIT.md`.
 
+
+## Release 2 (2026-11-08, implementation): the final version to deploy
+
+**What changed from the reviewed proposal** (owner's implementation brief, items 1 to 6). The sections further down describe release 1
+and stay as the record.
+
+1. **Rollback of the private schema (corrected).**
+   - Release 1 ran `revoke all on schema private from public, anon, authenticated` on every run, also on the live database's existing
+     `private` schema, and the rollback did not put those privileges back.
+   - Release 2 leaves an existing `private` schema's privileges alone. If the schema does not exist, release 2 creates it and records
+     that, and the rollback removes it again (only when empty).
+   - Tested both ways: an existing `private` schema with its own grant and table is identical after up and rollback; a created one is
+     gone after rollback.
+2. **`profiles`:** unchanged from release 1 (`anon` nothing; signed-in users SELECT plus UPDATE of the five name, consent and age
+   columns only).
+3. **TRUNCATE, REFERENCES, TRIGGER, MAINTAIN** are now removed from **signed-in users too** (release 1: `anon` only), on every `public`
+   table and view `postgres` owns. Nothing in the app or the repository's SQL uses them.
+4. **Sequences:** `anon` loses USAGE, SELECT and UPDATE; signed-in users lose UPDATE (`setval`) and keep USAGE and SELECT, so serial ids
+   still work (tested with an Editor adding a reference-list row).
+5. **Default privileges for future objects:**
+   - **`postgres`:** new tables give `anon` SELECT only and give signed-in users no TRUNCATE, REFERENCES, TRIGGER or MAINTAIN; new
+     sequences give `anon` nothing and signed-in users USAGE and SELECT.
+   - **`supabase_admin`:** the same is attempted. The SQL editor's role is not allowed to change another role's defaults (VERIFIED
+     locally: "permission denied to change default privileges", as on hosted Supabase). The script reports "NOT CHANGED", carries on,
+     and the rollback likewise. Only Supabase support could change `supabase_admin`'s defaults.
+   - **Unchanged:** function defaults (the policy helper functions need them; R-4 below) and default privileges for all schemas.
+6. **Signed-in-only functions:** as release 1 (the guard skips any function a policy or view relies on).
+7. **Objects another role owns are left alone and listed.** `postgres` cannot revoke grants on objects it does not own; release 1 would
+   then have failed its own postcondition.
+8. **New:** `anon_hardening_verify.sql`, a read-only post-deployment check (18 rows, all PASS on a hardened database), and `DEPLOY.md`
+   with the exact SQL editor steps.
+
+**Production inventory.** The owner's live `anon_inventory.sql` result was not available in this session (not in the repository, on any
+branch, or on this machine). Release 2 therefore checks at run time everything it depends on: the PostgreSQL version (MAINTAIN), which
+objects `postgres` owns, which functions exist and whether a policy or view mentions them, and whether a role's defaults can be changed.
+Nothing in it depends on the inventory being read first.
+
+**Pre-deployment safety check** (`run_anon_tests.sh` on a disposable local Supabase stack, PostgreSQL 17.11, real Auth and PostgREST):
+**352 passed, 0 failed**.
+
+| Group | Result |
+|---|---|
+| Real API | before 86, after 89, after rollback 86 |
+| The app's own code (`data.js`, `consent.js`, `visualdata.js`) | 18 in each of the three phases |
+| Script-level checks: idempotence, backup, exact rollback, guard, preflight, existing `private` schema, the `supabase_admin` result, post-deployment check (18 of 18 PASS after; refuses without the hardening), and Migration 001 r5 on a hardened database (installs, 28 of 28 verify, rolls back) | 37 |
+
+**New in this run:**
+- signed-in users cannot TRUNCATE a player table, and hold no REFERENCES, TRIGGER or MAINTAIN;
+- sequences: `anon` has none and `setval` is refused, while signed-in users keep USAGE;
+- tables and sequences created later get the new defaults;
+- a guest saves a restaurant visit, a This or That answer and a legend word (the repository's own scripts);
+- an Editor adds a reference-list row; a guest and a signed-out visitor cannot.
+
+**Bugs found and fixed before release 2 was final.**
+- The `private` schema rollback gap (item 1).
+- Objects not owned by `postgres` would have failed the postcondition (item 7).
+- In the new post-deployment check: PostgreSQL may evaluate a sequence-privilege function before the "is a sequence" filter, so those
+  calls are now wrapped in CASE.
+- Two test-only issues:
+  - a `setval` probe moved a counter backwards. A rollback never undoes `setval`, which is itself a baseline finding: before the
+    hardening, `anon` could move any counter permanently in direct SQL;
+  - a test matched an old output label.
+
 ## 1. Files
 
 | File | SHA-256 (first 16) | What it is |
 |---|---|---|
-| `docs/security/anon_hardening_up.sql` | `b2f84af614f3a995` | The hardening, in one transaction |
-| `docs/security/anon_hardening_rollback.sql` | `412eb056d64b12e5` | Puts back exactly the saved grants |
-| `docs/security/anon_inventory.sql` | `6100f8ca6e61c58c` | Read-only inventory of `anon` and `authenticated` privileges; safe on the live database |
+| `docs/security/anon_hardening_up.sql` | `eddd95d7b76a8c3d` (release 2; release 1 was `b2f84af614f3a995`) | The hardening, in one transaction |
+| `docs/security/anon_hardening_rollback.sql` | `3a8fe229a69a3724` (release 2; release 1 was `412eb056d64b12e5`) | Puts back exactly the saved grants |
+| `docs/security/anon_hardening_verify.sql` | `18be15336d981d07` | Read-only post-deployment check (release 2) |
+| `docs/security/DEPLOY.md` | | The SQL editor steps |
+| `docs/security/anon_inventory.sql` | `d99f96f0d8306b83` (release 1 was `6100f8ca6e61c58c`) | Read-only inventory of `anon` and `authenticated` privileges; safe on the live database |
 | `docs/security/ANON_ACCESS_AUDIT.md` | | The audit |
 | `docs/security/ANON_HARDENING_CHANGE_REPORT.md` | | This report |
 | `docs/security/tests/` | | `prereq_app.sql` (stand-ins), `anon_api_tests.py` (real API), `app_code_tests.mjs` (the app's own code), `run_anon_tests.sh` (the runner) |
