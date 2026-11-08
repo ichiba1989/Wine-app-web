@@ -747,3 +747,42 @@ through `public.ref_staff` and `public.ref_draft`.
 - Internal, no grants: `wine_reference.require_permission(text)`, `wine_reference.write_claim_version(uuid, jsonb)`,
   `wine_reference.fingerprint_002()`.
 
+## Added by migration 003 (release `003 r1 (2026-11-08)`; not run on production yet)
+
+Read from the local test database after 003 was installed. Design: `docs/reference/migration_003/README.md`.
+
+### `wine_reference.legacy_links`: new columns, checks and triggers
+
+- `match_method` text not null default `'editor'::text`
+- `match_score` smallint
+- Check `legacy_links_match_method_check`: `CHECK ((match_method = ANY (ARRAY['editor'::text, 'exact_name'::text, 'created_from_catalog'::text])))`
+- Check `legacy_links_match_score_check`: `CHECK (((match_score IS NULL) OR ((match_score >= 0) AND (match_score <= 100))))`
+- Trigger `legacy_links_check` runs `wine_reference.check_legacy_link`
+- Trigger `legacy_links_settle` runs `wine_reference.settle_legacy_link`
+
+
+- `legacy_links_check`, before insert or update:
+  - the thing's kind must match the table;
+  - the catalog row must exist;
+  - a new link starts as suggested;
+  - no new suggestion for a row that has a confirmed link;
+  - allowed moves: suggested → confirmed/rejected, confirmed → rejected, rejected → suggested;
+  - a link's row and thing never change;
+  - a retired or replaced thing cannot be linked or confirmed.
+- `legacy_links_settle`, after update: confirming a link rejects the row's other suggestions.
+
+### New functions
+
+- `public.ref_tools(p_action text, p_data jsonb)`: security definer with `search_path ''`, `authenticated` only.
+  - Reads (any `ref_*`): `taxonomy`, `coverage`, `link_queue`, `duplicates`.
+  - `ref_edit`: `create_domain`, `create_node`, `assign_taxonomy`, `import_taxonomy`, `review_many` (each decision still goes
+    through `ref_review`), `catalog_identity`, `suggest_links`, `seed_from_catalog`.
+  - `ref_review`: `decide_links`, `confirm_unambiguous`, `undo_link`, `reopen_link`.
+- Internal, no grants:
+  - `wine_reference.catalog_kind`, `catalog_row_exists`, `catalog_row_name`, `catalog_rows`;
+  - `make_entity`, `add_names`, `suggest_link`, `linked_entity`, `catalog_fact`, `catalog_identity`;
+  - `display_name`, `names_json`, `import_taxonomy`, `fingerprint_003`;
+  - `check_legacy_link`, `settle_legacy_link`.
+
+No new tables, and no new vocabulary rows.
+

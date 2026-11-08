@@ -808,6 +808,13 @@ export async function refDraft(sb, action, payload) {
   if (error) throw refMissing(error);
   return data;
 }
+// Migration 003 (docs/reference/migration_003): public.ref_tools, the tab's taxonomy, wine identity and catalog-matching tools (reads
+// for any ref_* holder; drafts and suggestions with ref_edit; link decisions with ref_review). Before 003 the function does not exist.
+export async function refTools(sb, action, payload) {
+  const { data, error } = await sb.rpc("ref_tools", { p_action: action, p_data: payload || {} });
+  if (error) throw (error.code === "PGRST202" ? new Error("This part needs migration 003 (docs/reference/migration_003/DEPLOY_003.md).") : error);
+  return data;
+}
 export async function refReview(sb, table, id, decision, note = "") {
   const { data, error } = await sb.rpc("ref_review", { p_table: table, p_id: id, p_decision: decision, p_note: note });
   if (error) throw error;

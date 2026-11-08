@@ -4,7 +4,7 @@
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
 import { esc } from "./logic.js?v=23";
 import { rankAppellationFor } from "./rankaoc.js?v=1";
-import { REACH_CHOICES } from "./wineinfo.js?v=36";
+import { REACH_CHOICES } from "./wineinfo.js?v=37";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=4";
 import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=15";
 import { TAG_KINDS } from "./tags.js?v=4";
@@ -320,7 +320,7 @@ export function pairingsTable(O, d) {
 // approve (the Owner may approve their own work; it is recorded as an owner override), publish, retire. Nothing here reaches players
 // while reference_enabled is 0. The rules below (which decisions a status allows, the steps for an entity with its names, or a source
 // with its rights and versions) are pure; app.js calls the database.
-export const WR_VIEWS = [{ id: "entities", label: "Places & things" }, { id: "sources", label: "Sources" }, { id: "claims", label: "Facts" }, { id: "types", label: "Types" }, { id: "links", label: "Catalog links" }];
+export const WR_VIEWS = [{ id: "entities", label: "Places & things" }, { id: "sources", label: "Sources" }, { id: "claims", label: "Facts" }, { id: "types", label: "Types" }, { id: "taxonomy", label: "Subject areas" }, { id: "links", label: "Catalog links" }];
 export const WR_LANGS = [["en", "English"], ["fr", "Français"], ["it", "Italiano"], ["ja", "日本語"], ["zh-Hans", "中文 (简体)"], ["zh-Hant", "中文 (繁體)"], ["de", "Deutsch"], ["es", "Español"], ["und", "Not stated"]];
 export const WR_LINK_TABLES = [["producers", "Producers"], ["wines", "Wines"], ["wine_vintages", "Vintages"], ["grapes", "Grapes"], ["geo_areas", "Places"]];
 export const WR_DECISION_LABEL = { submit: "Submit", approve: "Approve", reject: "Send back", publish: "Publish", retire: "Retire" };
@@ -350,6 +350,95 @@ export function sourceSteps(src, decision) {
   for (const v of src.versions || []) if (v.status === want) steps.push(["source_versions", v.id, decision]);
   return steps;
 }
+// ---- migration 003: the subject areas (taxonomy), the catalog links queue and the recommended types. Pure.
+// The owner's approved list is pasted from a spreadsheet (tabs) or a CSV file (commas): a header row, then one row per entry. Columns:
+// "domain" (the domain's code), "code", "parent" (a subdomain's parent code; empty for a top subdomain), "sort", and one "name:xx" (or
+// "name_xx") column per language, e.g. name:en, name:fr, name:ja, name:zh-Hans. A row whose code is its domain (or has no domain) is the
+// domain itself. Nothing is invented: an empty cell stays empty; the database checks the codes and refuses conflicts.
+const splitRow = (line, sep) => {
+  if (sep === "\t") return line.split("\t");
+  const out = []; let cur = "", q = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (q) { if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; } else if (c === '"') q = false; else cur += c; }
+    else if (c === '"') q = true; else if (c === ",") { out.push(cur); cur = ""; } else cur += c;
+  }
+  out.push(cur); return out;
+};
+export function parseTaxonomyTable(text) {
+  const lines = String(text || "").replace(/\r/g, "").split("\n").filter((l) => l.trim());
+  if (lines.length < 2) return { domains: [], errors: ["Paste a header row and at least one entry."], entries: 0 };
+  const sep = lines[0].includes("\t") ? "\t" : ",";
+  const head = splitRow(lines[0], sep).map((h) => h.trim().toLowerCase());
+  const col = (n) => head.indexOf(n), iD = col("domain"), iC = col("code"), iP = col("parent"), iS = col("sort");
+  const langs = head.map((h, i) => [i, (h.match(/^name[:_]([a-z]{2,3}(?:-[a-z0-9]{2,8})*)$/i) || [])[1]]).filter(([, l]) => l)
+    .map(([i, l]) => [i, l.replace(/-([a-z]{4})$/i, (m, s) => "-" + s[0].toUpperCase() + s.slice(1).toLowerCase())]);
+  const errors = [];
+  if (iC < 0) errors.push('The header needs a "code" column.');
+  if (!langs.length) errors.push('The header needs at least one name column, for example "name:en".');
+  if (errors.length) return { domains: [], errors, entries: 0 };
+  const SCRIPT = { ja: "Jpan", "zh-Hans": "Hans", "zh-Hant": "Hant", ko: "Kore" };
+  const domains = new Map(), nodes = []; let rows = 0;
+  lines.slice(1).forEach((line, k) => {
+    const cells = splitRow(line, sep).map((c) => c.trim()), code = cells[iC] || "", dom = iD >= 0 ? cells[iD] || "" : "";
+    if (!code) { errors.push(`Row ${k + 2}: no code.`); return; }
+    rows++;
+    const names = langs.filter(([i]) => cells[i]).map(([i, l]) => ({ name: cells[i], language: l, ...(SCRIPT[l] ? { script: SCRIPT[l] } : {}) }));
+    const sort = iS >= 0 && cells[iS] !== "" && !Number.isNaN(Number(cells[iS])) ? Number(cells[iS]) : undefined;
+    if (!dom || dom === code) domains.set(code, { code, ...(sort !== undefined ? { sort_order: sort } : {}), names, nodes: [] });
+    else nodes.push({ dom, code, parent: iP >= 0 ? cells[iP] || null : null, sort, names, row: k + 2 });
+  });
+  for (const n of nodes) {
+    if (!domains.has(n.dom)) domains.set(n.dom, { code: n.dom, names: [], nodes: [], missing: true });
+  }
+  for (const d of domains.values()) {
+    if (d.missing) errors.push(`Domain ${d.code} has subdomains but no row of its own (add a row with code ${d.code}).`);
+    // parents before children, keeping the file's order otherwise
+    const mine = nodes.filter((n) => n.dom === d.code), placed = new Set(), out = [];
+    let left = mine.slice(), guard = 0;
+    while (left.length && guard++ < 50) {
+      const next = [];
+      for (const n of left) { if (!n.parent || placed.has(n.parent) || !mine.some((m) => m.code === n.parent)) { out.push(n); placed.add(n.code); } else next.push(n); }
+      if (next.length === left.length) break;
+      left = next;
+    }
+    for (const n of left) out.push(n);
+    d.nodes = out.map((n) => ({ code: n.code, ...(n.parent ? { parent: n.parent } : {}), ...(n.sort !== undefined ? { sort_order: n.sort } : {}), names: n.names }));
+    delete d.missing;
+  }
+  return { domains: [...domains.values()], errors, entries: rows };
+}
+// A subdomain's depth in its domain (for indenting the tree).
+export function nodeDepth(nodes, code) {
+  const byCode = new Map((nodes || []).map((n) => [n.code, n]));
+  let d = 0, cur = byCode.get(code);
+  while (cur && cur.parent && d < 20) { d++; cur = byCode.get(cur.parent); }
+  return d;
+}
+// Review steps for a whole domain: its names, then the domain and its subdomains (an entry is published only with an approved name).
+export function taxonomySteps(dom, decision) {
+  const all = [dom, ...(dom.nodes || [])], want = decision === "submit" ? "draft" : decision === "approve" ? "pending_review" : "verified";
+  const names = decision === "publish" ? [] : all.flatMap((e) => (e.names || []).filter((n) => n.status === want).map((n) => n.id));
+  const ents = all.filter((e) => e.status === want && !(decision === "publish" && e.published_at)).map((e) => e.entity_id);
+  return { names, entities: ents };
+}
+export const WR_LINK_FILTERS = [["waiting", "Waiting"], ["several", "Several candidates"], ["unlinked", "Not linked"], ["confirmed", "Confirmed"], ["duplicates", "Same thing twice"]];
+export const WR_METHOD_LABEL = { editor: "picked by hand", exact_name: "same name", created_from_catalog: "made from this row" };
+// Recommendations for the identity types (migration 003 README). The decision stays the owner's: the Types view only shows the advice.
+export const WR_TYPE_ADVICE = {
+  part_of: ["now", "Builds the place tree (village in region in country); the catalog's own place tree can then be checked against a source."],
+  product_of: ["now", "Ties each wine product to its producer, so products can be listed by producer."],
+  defined_by_place: ["now", "Records the place a product is defined by (its appellation) as the label states it."],
+  edition_of: ["now", "Ties each vintage or non-vintage edition to its product: the backbone of product, edition and release."],
+  harvest_year: ["now", "The year on the label for a vintage edition; the old catalog's year is offered as a draft that needs a source."],
+  nv_identifier: ["now", "Tells non-vintage editions apart only when the label or producer states it (edition number, base year, lot)."],
+  release_of: ["later", "Switch on when you record the first stated release (a library or late release)."],
+  release_date: ["later", "Switch on with releases: the date a release reached the market, as stated."],
+  event_of: ["later", "Switch on when you record the first stated event (bottling, disgorgement)."],
+  event_date: ["later", "Switch on with events."],
+  made_from: ["later", "Switch on once grape varieties are linked and confirmed; a share only when stated."],
+  bottle_format_ml: ["decide", "Your decision first: does bottle format belong to a release (REFERENCE_MODEL.md section 15, question 4)? Keep it proposed until then."],
+};
 const wrBadge = (st, published) => (st === "verified" && published ? `<span class="gbadge ok">Published</span>` : st === "verified" ? `<span class="gbadge">Approved</span>`
   : st === "pending_review" ? `<span class="gbadge star">Waiting for review</span>` : st === "retired" ? `<span class="gbadge">Retired</span>` : `<span class="gbadge draft">Draft</span>`);
 const wrButtons = (verb, id, decisions) => decisions.map((dec) => `<button class="opill" data-action="owner:${verb}:${id}:${dec}">${esc(WR_DECISION_LABEL[dec])}</button>`).join("");
@@ -400,14 +489,33 @@ export function referenceTable(O, d) {
     }).join("");
     body = form + table("<th>Fact</th><th>Versions</th><th></th>", rows, "No facts yet.");
   } else if (view === "types") {
-    const row = (kind, t) => `<tr><td><b>${esc(t.label)}</b><div class="muted tiny">${esc(t.code)}</div></td><td class="small">${esc((t.subject_kinds || []).join(", "))}${t.object_kinds ? " → " + esc(t.object_kinds.join(", ")) : t.value_type ? ` = ${esc(t.value_type)}${t.unit ? " (" + esc(t.unit) + ")" : ""}` : ""}</td><td>${t.status === "active" ? `<span class="gbadge ok">On</span>` : t.status === "retired" ? `<span class="gbadge">Retired</span>` : `<span class="gbadge draft">Proposed</span>`}</td><td>${t.status !== "active" && t.status !== "retired" ? `<button class="opill" data-action="owner:wrtype:${kind}:${t.code}:active">Switch on</button>` : ""}${t.status === "active" ? `<button class="opill" data-action="owner:wrtype:${kind}:${t.code}:retired">Retire</button>` : ""}</td></tr>`;
+    const advice = (t) => { const a = WR_TYPE_ADVICE[t.code]; if (!a || t.status !== "proposed") return ""; return `<div class="tiny ${a[0] === "now" ? "" : "muted"}"><b>${a[0] === "now" ? "Recommended now" : a[0] === "later" ? "Later" : "Your decision"}:</b> ${esc(a[1])}</div>`; };
+    const row = (kind, t) => `<tr><td><b>${esc(t.label)}</b><div class="muted tiny">${esc(t.code)}</div>${advice(t)}</td><td class="small">${esc((t.subject_kinds || []).join(", "))}${t.object_kinds ? " → " + esc(t.object_kinds.join(", ")) : t.value_type ? ` = ${esc(t.value_type)}${t.unit ? " (" + esc(t.unit) + ")" : ""}` : ""}</td><td>${t.status === "active" ? `<span class="gbadge ok">On</span>` : t.status === "retired" ? `<span class="gbadge">Retired</span>` : `<span class="gbadge draft">Proposed</span>`}</td><td>${t.status !== "active" && t.status !== "retired" ? `<button class="opill" data-action="owner:wrtype:${kind}:${t.code}:active">Switch on</button>` : ""}${t.status === "active" ? `<button class="opill" data-action="owner:wrtype:${kind}:${t.code}:retired">Retire</button>` : ""}</td></tr>`;
     body = `<div class="muted small onote">A type can be used in facts only once it is switched on. Switching one on is your decision; a type in use can be retired but not changed.</div>`
       + table("<th>Relationship</th><th>Between</th><th>Status</th><th></th>", (R.relationship_types || []).map((t) => row("relationship", t)).join(""))
       + table("<th>Value</th><th>For</th><th>Status</th><th></th>", (R.attribute_types || []).map((t) => row("attribute", t)).join(""), "None yet.");
-  } else {
+  } else if (view === "taxonomy") {
+    const T = d.wrTax, svs = []; for (const s0 of R.sources || []) for (const v of s0.versions || []) if (v.status !== "retired") svs.push([v.id, `${s0.title}: ${v.version_label}`]);
+    const plan = d.wrImport ? `<div class="small onote">${d.wrImport.dry_run ? "<b>Check only, nothing saved:</b>" : "<b>Imported:</b>"} ${d.wrImport.new_domains.length} new domains, ${d.wrImport.new_nodes.length} new subdomains, ${d.wrImport.names} names${d.wrImport.sort_changes.length ? `, new order for ${esc(d.wrImport.sort_changes.join(", "))}` : ""}.${d.wrImport.conflicts.length ? `<div><b>Problems (nothing will be saved until they are fixed):</b><ul>${d.wrImport.conflicts.slice(0, 20).map((c) => `<li>${esc(c)}</li>`).join("")}</ul></div>` : ""}${d.wrImport.not_in_file.length ? `<div class="muted">Already in the reference but not in this file (kept; retire them yourself if the list dropped them): ${esc(d.wrImport.not_in_file.slice(0, 30).join(", "))}</div>` : ""}${(d.wrImport.parse_errors || []).length ? `<div><b>Reading the table:</b> ${esc(d.wrImport.parse_errors.join(" "))}</div>` : ""}</div>` : "";
+    const imp = `<div class="muted small onote">Your approved list of domains and subdomains goes here; nothing is filled in for you. Paste it from a spreadsheet: a header row with <b>domain</b>, <b>code</b>, <b>parent</b>, <b>sort</b> and one <b>name:xx</b> column per language (name:en, name:fr, name:it, name:ja, name:zh-Hans), then one row per entry (a domain's own row has its code in both domain and code). First record the document as a source (Sources view), then pick it here. "Check" saves nothing; "Import" saves drafts; the same file can be imported again later (codes are kept, new names and orders are added).</div>
+      <div class="ocontrols">${svs.length ? wrSelect("tsv", svs, "The approved document (source version)") : `<span class="muted small">Record the approved document as a source first.</span>`}</div>
+      <textarea class="ofield" data-wr="ttext" rows="5" style="width:100%" aria-label="The approved list, pasted" placeholder="domain&#9;code&#9;parent&#9;sort&#9;name:en&#9;name:fr"></textarea>
+      <div class="ocontrols"><button class="opill" data-action="owner:wrtax:check">Check</button><button class="opill" data-action="owner:wrtax:import">Import</button></div>${plan}`;
+    let tree = "";
+    if (T === undefined) tree = `<p class="muted">Loading…</p>`;
+    else if (T === null) tree = `<p class="muted small">${esc(d.wr3Error || "Could not load the subject areas.")}</p>`;
+    else tree = (T.domains || []).length ? T.domains.map((dm) => {
+      const label = (e) => `${wrBadge(e.status, !!e.published_at)} ${(e.names || []).map((n) => `<span class="small">${esc(n.name)} <span class="muted tiny">${esc(n.language)}</span></span>`).join(" · ")}`;
+      const act = (dec, lab) => { const st = taxonomySteps(dm, dec); return st.names.length + st.entities.length ? `<button class="opill" data-action="owner:wrtaxrev:${dm.code}:${dec}">${lab} (${st.names.length + st.entities.length})</button>` : ""; };
+      const nodes = (dm.nodes || []).map((n) => `<div style="padding-left:${12 + 14 * nodeDepth(dm.nodes, n.code)}px"><b class="small">${esc(n.code)}</b> ${label(n)}${n.assigned ? ` <span class="muted tiny">${n.assigned} assigned</span>` : ""}</div>`).join("");
+      return `<div class="onote"><div><b>${esc(dm.code)}</b> ${label(dm)}</div>${nodes}<div class="ocontrols">${act("submit", "Submit all")}${act("approve", "Approve all")}${act("publish", "Publish all")}</div></div>`;
+    }).join("") : `<p class="muted small">No subject areas yet: they come only from your approved list.</p>`;
+    body = imp + `<h4 class="gh">Subject areas</h4>` + tree;
+  } else if (d.wr3Missing) {
+    // before migration 003: 002's report of old catalog rows not linked yet (kept so the tab works until 003 is run)
     const tab = O.wrLinkTable || "producers", S = d.wrSuggest;
     const picker = `<div class="ocontrols">${WR_LINK_TABLES.map(([id, label]) => `<button class="opill${id === tab ? " on" : ""}" data-action="owner:wrlinktab:${id}" aria-pressed="${id === tab}">${esc(label)}</button>`).join("")}</div>
-      <div class="muted small onote">Old catalog rows not linked yet, the kind of thing each would be, and a reference thing with the same name if there is one. Every link is marked "old catalog, not verified"; nothing in the catalog changes.</div>`;
+      <div class="muted small onote">Old catalog rows not linked yet, the kind of thing each would be, and a reference thing with the same name if there is one. Every link is marked "old catalog, not verified"; nothing in the catalog changes. (Matching in bulk needs migration 003.)</div>`;
     const sugg = S === undefined ? `<p class="muted">Loading…</p>` : S === null ? `<p class="muted small">${esc(d.wrSuggestError || "Could not load the suggestions.")}</p>`
       : table("<th>Catalog row</th><th>Would be</th><th>Same name in the reference</th><th></th>", (S.rows || []).filter((r) => !q || fold(r.name || "").includes(q)).map((r) => {
         const matches = (r.matches || []).map((id) => `<button class="opill" data-action="owner:wrlink:${r.catalog_table}:${r.catalog_id}:${id}">Link to ${esc(entName(id))}</button>`).join("");
@@ -415,6 +523,27 @@ export function referenceTable(O, d) {
       }).join(""), "Every row of this table is linked.");
     const links = (R.links || []).map((l) => `<tr><td class="small">${esc(l.catalog_table)} ${esc(l.catalog_id.slice(0, 8))}</td><td>${esc(entName(l.entity_id))}</td><td>${l.status === "confirmed" ? `<span class="gbadge ok">Confirmed</span>` : l.status === "rejected" ? `<span class="gbadge">Rejected</span>` : `<span class="gbadge draft">Suggested</span>`}</td><td>${l.status === "suggested" ? `<button class="opill" data-action="owner:wrdecide:${l.id}:confirmed">Confirm</button><button class="opill" data-action="owner:wrdecide:${l.id}:rejected">Reject</button>` : ""}</td></tr>`).join("");
     body = picker + sugg + `<h4 class="gh">Links</h4>` + table("<th>Catalog row</th><th>Reference thing</th><th>Status</th><th></th>", links, "No links yet.");
+  } else {
+    const tab = O.wrLinkTable || "producers", filter = O.wrFilter || "waiting", C = d.wrCov, Q = d.wrQueue;
+    const cov = C && (C.tables || []).find((t) => t.catalog_table === tab);
+    const picker = `<div class="ocontrols">${WR_LINK_TABLES.map(([id, label]) => `<button class="opill${id === tab ? " on" : ""}" data-action="owner:wrlinktab:${id}" aria-pressed="${id === tab}">${esc(label)}</button>`).join("")}</div>`;
+    const counts = cov ? `<div class="muted small onote">${cov.rows} catalog rows: <b>${cov.confirmed}</b> confirmed, ${cov.waiting} waiting for your decision${cov.several ? ` (${cov.several} with several candidates)` : ""}, ${cov.unlinked} not linked. Every link is marked "old catalog, not verified"; the catalog itself never changes. Nothing is confirmed unless you confirm it.</div>`
+      : C === null ? `<p class="muted small">${esc(d.wr3Error || "")}</p>` : "";
+    const vint = tab === "wine_vintages";
+    const tools = `<div class="ocontrols"><button class="opill" data-action="owner:wrtool:suggest">Find same-name matches</button>${vint ? `<button class="opill" data-action="owner:wrtool:identity">Build product + edition for the next 25</button>` : `<button class="opill" data-action="owner:wrtool:seed">Make drafts for the next 50 not linked</button>`}<button class="opill" data-action="owner:wrtool:confirm">Confirm the unambiguous ones</button></div>
+      <div class="muted tiny">"Unambiguous" means the row's only suggestion, either made from that very row or the one thing with exactly its name. A row with several candidates always waits for you.</div>`;
+    const filters = `<div class="ocontrols">${WR_LINK_FILTERS.map(([id, label]) => `<button class="opill${id === filter ? " on" : ""}" data-action="owner:wrfilter:${id}" aria-pressed="${id === filter}">${esc(label)}</button>`).join("")}</div>`;
+    let list = "";
+    if (Q === undefined) list = `<p class="muted">Loading…</p>`;
+    else if (Q === null) list = `<p class="muted small">${esc(d.wr3Error || "Could not load the links.")}</p>`;
+    else if (filter === "duplicates") list = table("<th>Reference thing</th><th>Old catalog rows</th>", (Q.groups || []).filter((g) => g.catalog_table === tab).map((g) => `<tr><td>${esc(g.entity_name || "")}</td><td>${g.rows.map((r) => `<div class="small">${esc(r.name || r.catalog_id)} <span class="muted">${esc(r.status)}</span></div>`).join("")}</td></tr>`).join(""),
+      "No two rows of this table point at the same thing.");
+    else list = table("<th>Catalog row</th><th>Reference thing</th><th></th>", (Q.rows || []).filter((r) => !q || fold(r.name || "").includes(q)).map((r) => {
+      const links = (r.links || []).map((l) => `<div class="small">${esc(l.entity_name || "(no name)")} ${l.status === "confirmed" ? `<span class="gbadge ok">Confirmed</span>` : `<span class="gbadge draft">Suggested</span>`} <span class="muted tiny">${esc(WR_METHOD_LABEL[l.method] || l.method)}${l.score ? " · " + l.score : ""}${l.entity_status === "draft" ? " · thing is a draft" : ""}</span> ${l.status === "suggested" ? `<button class="opill" data-action="owner:wrdecide:${l.id}:confirmed">Confirm</button><button class="opill" data-action="owner:wrdecide:${l.id}:rejected">Reject</button>` : `<button class="opill" data-action="owner:wrundo:${l.id}">Undo</button>`}</div>`).join("");
+      const make = (r.links || []).length ? "" : vint ? `<button class="opill" data-action="owner:wrrow:identity:${r.catalog_id}">Build product + edition</button>` : `<button class="opill" data-action="owner:wrrow:seed:${r.catalog_id}">Make a draft</button>`;
+      return `<tr><td>${esc(r.name || "")}${r.detail ? `<div class="muted tiny">${esc(r.detail)}</div>` : ""}</td><td>${links || `<span class="muted small">none</span>`}</td><td>${make}</td></tr>`;
+    }).join(""), filter === "waiting" ? "Nothing waiting for a decision here." : "None.");
+    body = picker + counts + tools + filters + list;
   }
   return views + note + body;
 }

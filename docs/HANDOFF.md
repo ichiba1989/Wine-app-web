@@ -3,6 +3,14 @@
 Read `CLAUDE.md` first: every owner decision is written there with its date (conventions 1–27 and the domain model). This page holds only
 what is waiting and how the work is done.
 
+## Workflow rule from the owner (2026-11-08)
+
+Previously assigned Owner tasks (running SQL, checks, manual app tests) are **assumed completed successfully unless the owner reports
+a problem**. Do not reopen completed phases, re-run old verifications or ask for old outputs that were not pasted. Interrupt the owner
+only for a genuinely new decision, an actual test or implementation failure, a material security or data-integrity risk, or a
+production deployment that needs authorisation. Process: one targeted safety review when needed, then the owner deploys, then
+Claude tests and fixes, then the next phase.
+
 ## Standing instruction from the owner (2026-11-01)
 
 At the end of **every** completed task: give the deliverable (if any), a short plain-language summary, and **one self-contained, copyable
@@ -18,6 +26,14 @@ AND give its download link, and name the branch and path. Packages live on branc
 
 Latest review package: `review_packages/Wine_Reference_Migration_002_Review.zip` (Migration 002, 2026-11-08). Earlier: `review_packages/Wine_Reference_Phase_2_0B_3_Security_Review.zip` on branch `claude/wine-app-setup-35g1ne`
 (Migration 001 **r4**, rebuilt after the final review follow-up on 2026-11-01; not on the website).
+**Migration 003 (2026-11-08, release `003 r1 (2026-11-08)`): implemented and tested locally; NOT run on production.**
+- What it adds: subject-area import tools (no taxonomy content), product and edition drafts from the old catalog, and catalog matching
+  with database rules on every link.
+- Tests: `docs/reference/migration_003/tests/run_003_tests.sh`, 116 passed, 0 failed.
+- Steps: `docs/reference/migration_003/DEPLOY_003.md` (preflight 9 PASS → 003 → verify 41 PASS). Then I run
+  `live_post_deploy_003.mjs`, `live_smoke.mjs` and `live_ui.mjs`.
+- Waiting for: the owner's go-ahead; the approved taxonomy; the type switches (recommendations in the migration's README).
+
 **Migration 002 DEPLOYED (owner, 2026-11-08; release `002 r1 (2026-11-08)`).** Live checks after deployment: `live_post_deploy_002.mjs`
 13/0, `live_smoke.mjs` 26/0, `live_ui.mjs` 26/0 (main and /vwm/); no regressions. `reference_enabled` is off and the identity types are
 still proposed. Next step: the owner uses the Reference tab (first sources and places), or decides which identity types to switch on.
