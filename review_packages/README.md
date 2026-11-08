@@ -28,3 +28,8 @@ on the website (the publishing workflow only copies `main` and `vwm`), and nothi
   on production.** Built from `main` at `8e81e86` (`vwm` at `bb4f896`); 25 files. Open `README.md`, then
   `migration_002/README.md` and `migration_002/DEPLOY_002.md`. Local Supabase: 96 passed, 0 failed (57 API, 19 browser). The
   live smoke and UI checks are 26/0 each. ZIP SHA-256: `c443f38f27324e41e002d62dccb034289d93fe96ba16930de1e8754df4715aa0`.
+- `Wine_Reference_Migration_003_Review.zip` (2026-11-08): **Migration 003** (release `003 r1 (2026-11-08)`): subject-area import tools,
+  product and edition drafts from the old catalog, and catalog matching with link rules, plus the Reference tab's new views.
+  **Implemented and tested locally; NOT run on production.** Built from `main` at `942b29a` (`vwm` at `09b6214`); 27 files. Open
+  `README.md`, then `migration_003/README.md` and `migration_003/DEPLOY_003.md`. Local suite 116/0 (main and vwm); live smoke and UI
+  26/0 each. ZIP SHA-256: `f99eda4410f26e3e1cf4d7db6c830043a647ef6f3a4aa4e21cc3b9411558d1ed`.
