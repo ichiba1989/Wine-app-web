@@ -109,9 +109,9 @@ point. No database or dashboard setting was changed; the owner keeps Exposed sch
 
 | Item | Planned |
 |---|---|
-| Wine product, edition, release and release-event tables (revision 4) | 002 |
-| Mapping to the legacy catalog (`producers`, `wines`, `wine_vintages`, `grapes`, `geo_areas`), read-only suggestion reports first, all marked "old catalog, not verified" | 002 |
-| Staff functions to create and edit drafts (entities, names, sources, claims, evidence) and the Owner page "Reference" tab | 002 / 003 (until then, rows typed in the SQL Editor have no author and **cannot be approved through `ref_review`**, by design) |
+| Wine product, edition, release and release-event tables (revision 4) | **002: built** as entity kinds plus proposed link types (`docs/reference/migration_002/`, release `002 r1 (2026-11-08)`, tested locally, not run on production) |
+| Mapping to the legacy catalog (`producers`, `wines`, `wine_vintages`, `grapes`, `geo_areas`), read-only suggestion reports first, all marked "old catalog, not verified" | **002: built** (`wine_reference.legacy_links`, the `ref_staff('suggestions')` report) |
+| Staff functions to create and edit drafts (entities, names, sources, claims, evidence) and the Owner page "Reference" tab | **002: built** (`public.ref_draft` writes drafts as the signed-in author; `public.ref_staff`; the Owner page's Reference tab). Rows typed in the SQL Editor still have no author and cannot be approved, by design |
 | Reconciling `field_provenance`, `appellation_grape_rules`, the code lists (`aocgrapes.js`, `geo.js` ...) | after 002 |
 | The taxonomy import (once the approved list is supplied) | its own script |
 | Attribute types (ABV, founding year ...) | owner decision, then a small script |

@@ -16,8 +16,20 @@ AND give its download link, and name the branch and path. Packages live on branc
 `review_packages/`; the direct download link is
 `https://github.com/ichiba1989/Wine-app-web/raw/claude/wine-app-setup-35g1ne/review_packages/<file name>.zip`.
 
-Latest review package: `review_packages/Wine_Reference_Phase_2_0B_3_Security_Review.zip` on branch `claude/wine-app-setup-35g1ne`
+Latest review package: `review_packages/Wine_Reference_Migration_002_Review.zip` (Migration 002, 2026-11-08). Earlier: `review_packages/Wine_Reference_Phase_2_0B_3_Security_Review.zip` on branch `claude/wine-app-setup-35g1ne`
 (Migration 001 **r4**, rebuilt after the final review follow-up on 2026-11-01; not on the website).
+**Migration 002 (2026-11-08, release `002 r1 (2026-11-08)`): implemented and tested locally; NOT run on production.**
+- What it adds: the editorial door `ref_draft`, the staff read `ref_staff`, the Owner page **Reference** tab, the four wine identity
+  levels (types proposed) and `legacy_links` to the old catalog.
+- Tests: local Supabase on the hardened 001 r5 + 001a state, `docs/reference/migration_002/tests/run_002_tests.sh`, 96 passed,
+  0 failed. That includes 57 API checks and 19 Owner-page browser checks.
+- Steps: `docs/reference/migration_002/DEPLOY_002.md` (preflight → 002 → verify 35/35 → Reference tab). I then run
+  `live_post_deploy_002.mjs`.
+- Package: `review_packages/Wine_Reference_Migration_002_Review.zip` on `claude/wine-app-setup-35g1ne`.
+- Waiting for the owner's go-ahead.
+
+**Production state confirmed by the owner (2026-11-08):** hardening release 2, Migration 001 r5 and 001a are DEPLOYED (Owner-only
+ref_* permissions; the reference is empty; `reference_enabled` is 0). The notes below that say 001 is "not run" predate this.
 **Migration 001 r5 FINAL (2026-11-08):** owner decisions 5 (Owner only), 14 (stricter: restore as a new version; built and tested), 15 (accept now), 16 (r5 approved). Release label `001 r5 (2026-11-08)`. Local 359/0, Supabase compat 341/0, hardened-DB production order all PASS. **Not run on production: waiting for the owner's go-ahead**; steps in `docs/reference/migration_001/DEPLOY_001.md`, then the live checks there.
 **Privilege hardening release 2: DEPLOYED by the owner on 2026-11-08** (up and verify reported successful). Live checks against production with the public key: `live_smoke.mjs` 26/26 and `live_ui.mjs` 26/26 (main and /vwm/), no regressions (`docs/security/POST_DEPLOY_REPORT.md`, which also lists the owner-only live checks). Next: Migration 001 r5 prerequisites. Earlier note: The owner runs it from `docs/security/DEPLOY.md` after approval (SQL editor: up → verify, every row PASS → app check; rollback script if needed). After it is deployed and checked: Migration 001 r5 prerequisites (DEPLOY.md, last section).
 **Anonymous-access hardening (Phase 2.0B.6, proposal):** `docs/security/` holds the audit (`ANON_ACCESS_AUDIT.md`), a tested, reversible grant change (`anon_hardening_up.sql` / `anon_hardening_rollback.sql`), a read-only inventory to run on production first (`anon_inventory.sql`) and the change report; 293 checks passed on a local Supabase stack. **Not run live; waiting for the owner.**
