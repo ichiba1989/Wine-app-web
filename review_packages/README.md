@@ -14,3 +14,6 @@ on the website (the publishing workflow only copies `main` and `vwm`), and nothi
 - `Wine_Reference_Phase_2_0B_5_r5_Review.zip` (2026-11-01): Migration 001 **release candidate r5** (not approved, not run live), from
   `main` at `fb9ee00`. 154 files; open `MANIFEST.md` and `reports/CHANGE_REPORT_2_0B_5.md` first. Local 353 passed, 0 failed; local
   Supabase 335 + 20 + 113 passed, 0 failed. ZIP SHA-256: `583852153ee532d3833195774caa8d3e353e9dc51ffa5aad4583ef809e3f3231`.
+- `Wine_App_Anon_Hardening_Review.zip` (2026-11-08): **anonymous-access hardening proposal** (Phase 2.0B.6; not run live, no app
+  change), from `main` at `0720d3c`. 35 files; open `MANIFEST.md` and `reports/ANON_HARDENING_CHANGE_REPORT.md` first. 293 checks
+  passed, 0 failed on a local Supabase stack. ZIP SHA-256: `eea0b453a481bdf48b1f6b0ac5f62cfb350bcc3af10c459308f4da2a4cdf8fee`.
