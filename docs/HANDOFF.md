@@ -11,6 +11,11 @@ state: project and phase; repository, branch and commit; what was done; files cr
 it; test results (newly run vs. previously reported); security findings and unresolved risks; whether any live database or application
 change happened; decisions the owner must make; the recommended next step. If a task fails, still give the box and say what failed.
 
+**Delivering review packages (owner, 2026-11-08):** whenever a ZIP or other package is produced, attach it to the chat (send the file)
+AND give its download link, and name the branch and path. Packages live on branch `claude/wine-app-setup-35g1ne` under
+`review_packages/`; the direct download link is
+`https://github.com/ichiba1989/Wine-app-web/raw/claude/wine-app-setup-35g1ne/review_packages/<file name>.zip`.
+
 Latest review package: `review_packages/Wine_Reference_Phase_2_0B_3_Security_Review.zip` on branch `claude/wine-app-setup-35g1ne`
 (Migration 001 **r4**, rebuilt after the final review follow-up on 2026-11-01; not on the website).
 **Anonymous-access hardening (Phase 2.0B.6, proposal):** `docs/security/` holds the audit (`ANON_ACCESS_AUDIT.md`), a tested, reversible grant change (`anon_hardening_up.sql` / `anon_hardening_rollback.sql`), a read-only inventory to run on production first (`anon_inventory.sql`) and the change report; 293 checks passed on a local Supabase stack. **Not run live; waiting for the owner.**
