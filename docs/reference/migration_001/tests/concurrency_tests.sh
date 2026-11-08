@@ -115,7 +115,7 @@ N=$(c11_state c11a); A=$(q c11a "select count(*) from wine_reference.review_even
 # 12b. v3 first (holding), then v1: the older version is refused (forward-only rule); v3 stays live; nothing retired
 pair c11b "$(staff $U_B "select public.ref_review('claim_versions', '$F11', 'publish');")" "$(staff $U_C "select public.ref_review('claim_versions', '$F2', 'publish');")"
 N=$(c11_state c11b)
-[ "$S1" = "0" ] && [ "$S2" != "0" ] && [ "$N" = "1 1 verified,false verified,true 1 0 0" ] && grep -q "is newer and published" "$WORK/c11b.2.log" \
+[ "$S1" = "0" ] && [ "$S2" != "0" ] && [ "$N" = "1 1 verified,false verified,true 1 0 0" ] && grep -q "has been published, so version" "$WORK/c11b.2.log" \
   && ok "C11b v3 published, then v1 at the same time: v1 refused (newer version live), v3 stays the one current version" \
   || bad "C11b [live current v1 v3 publish-events retire-events change_log] = $N, exits $S1/$S2"; report c11b
 # 13. the same version published twice at once: one publication, the second refused

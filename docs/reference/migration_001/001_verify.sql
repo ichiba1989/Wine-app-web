@@ -55,8 +55,8 @@ checks(name, ok, detail) as (
          and not has_function_privilege('anon', 'public.ref_review(text,uuid,text,text,uuid)', 'EXECUTE')
          and not has_function_privilege('service_role', 'public.ref_review(text,uuid,text,text,uuid)', 'EXECUTE'), ''
   union all
-  select 'migration 001 release is "001 r5 (2026-11-01)"',
-         (select release from wine_reference.schema_migrations where version = '001') = '001 r5 (2026-11-01)', ''
+  select 'migration 001 release is "001 r5 (2026-11-08)"',
+         (select release from wine_reference.schema_migrations where version = '001') = '001 r5 (2026-11-08)', ''
   union all
   select 'every editorial table takes the editorial lock at the start of each write statement (18 statement triggers)',
          (select count(*) from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_namespace n on n.oid = c.relnamespace

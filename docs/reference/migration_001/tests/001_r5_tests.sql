@@ -4,7 +4,8 @@
 --   S-1  lock order: every write statement on an editorial table takes the editorial lock first (statement trigger), even when it
 --        changes no row; reads do not take it. (The deadlock itself is reproduced in tests/concurrency_tests.sh, probes D1-D3.)
 --   S-2  the automatic retirement of the previous live version is recorded once in review_events, attributed to the publisher.
---   S-3  forward-only publication: an older version is not published while a newer one is published and not retired.
+--   S-3  forward-only publication (owner decision 14, stricter): an older version is never published once a newer one has been
+--        published, whatever happened to it since; older content comes back only as a new version.
 --   S-5  TRUNCATE is refused on the reference tables (it skips the row rules).
 
 create schema if not exists t;
@@ -117,13 +118,26 @@ select t.check('r5 S-3: F7 is still the one current version and F5 unpublished; 
   $q$select (select array_agg(id) from wine_reference.current_claim_versions where claim_id = 'c0000000-0000-0000-0000-000000000005') = array['f0000000-0000-0000-0000-000000000007'::uuid]
         and (select published_at is null from wine_reference.claim_versions where id = 'f0000000-0000-0000-0000-000000000005')
         and not exists (select 1 from wine_reference.review_events where target_id = 'f0000000-0000-0000-0000-000000000005' and decision = 'publish')$q$);
-select t.run('r5 S-3: intentional restoration, step 1: B retires the newer F7 (its own recorded decision)', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
-  $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000007', 'retire', 'bringing version 1 back')$q$);
-select t.run('r5 S-3: intentional restoration, step 2: F5 (version 1) may now be published', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
-  $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000005', 'publish')$q$);
-select t.check('r5 S-3: after the restoration F5 is current, and F7 has exactly one retire event (the explicit one, with its note)', 'postgres', null,
-  $q$select (select array_agg(id) from wine_reference.current_claim_versions where claim_id = 'c0000000-0000-0000-0000-000000000005') = array['f0000000-0000-0000-0000-000000000005'::uuid]
-        and (select count(*) = 1 and bool_and(note = 'bringing version 1 back') from wine_reference.review_events where target_id = 'f0000000-0000-0000-0000-000000000007' and decision = 'retire')$q$);
+select t.run('r5 S-3: B may retire the newer F7 (its own recorded decision)', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000007', 'retire', 'bringing version 1 content back')$q$);
+select t.run('r5 S-3 (decision 14): the older F5 is still refused after the newer F7 was retired', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000005', 'publish')$q$, '23514');
+select t.run('r5 S-3 (decision 14): ... also for the Owner', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000d',
+  $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000005', 'publish')$q$, '23514');
+select t.run('r5 S-3: restoring as a new version: F13 (claim K5, version 3) is written with evidence', 'postgres', 'aaaaaaaa-0000-0000-0000-00000000000a',
+  $q$insert into wine_reference.claim_versions (id, claim_id, version_no, risk_tier, supersedes_version_id, change_note)
+       values ('f0000000-0000-0000-0000-000000000013', 'c0000000-0000-0000-0000-000000000005', 3, 2, 'f0000000-0000-0000-0000-000000000007', 'restores the content of version 1');
+     insert into wine_reference.claim_evidence (claim_version_id, source_version_id, modality, locator) values ('f0000000-0000-0000-0000-000000000013', '51000000-0000-0000-0000-000000000002', 'documentary', 'p. 13')$q$);
+select t.run('r5 S-3: A submits F13', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000a',
+  $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000013', 'submit')$q$);
+select t.run('r5 S-3: B approves and publishes F13 (forward publication)', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000013', 'approve'), public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000013', 'publish')$q$);
+select t.check('r5 S-3: F13 is the current version of K5; F5 was never published; F7 has exactly one retire event (the explicit one, with its note)', 'postgres', null,
+  $q$select (select array_agg(id) from wine_reference.current_claim_versions where claim_id = 'c0000000-0000-0000-0000-000000000005') = array['f0000000-0000-0000-0000-000000000013'::uuid]
+        and (select published_at is null from wine_reference.claim_versions where id = 'f0000000-0000-0000-0000-000000000005')
+        and (select count(*) = 1 and bool_and(note = 'bringing version 1 content back') from wine_reference.review_events where target_id = 'f0000000-0000-0000-0000-000000000007' and decision = 'retire')$q$);
+select t.run('r5 S-3: the retired F7 cannot be published again', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000007', 'publish')$q$, '22023');
 -- a SUSPENDED newer version also blocks an older one (claim K1: F1 = v1 approved and unpublished; F12 = v2 published, then suspended)
 select t.run('r5 S-3 setup: source version V3 and version F12 (claim K1, version 2) with evidence from V3', 'postgres', 'aaaaaaaa-0000-0000-0000-00000000000a',
   $q$insert into wine_reference.source_versions (id, source_id, version_label, rights_id) values ('51000000-0000-0000-0000-000000000003', '50000000-0000-0000-0000-000000000001', 'v3', 'b0000000-0000-0000-0000-000000000001');
@@ -140,11 +154,13 @@ select t.check('r5 S-3 setup check: F12 is suspended, published, not retired', '
   $q$select suspended_at is not null and status = 'verified' from wine_reference.claim_versions where id = 'f0000000-0000-0000-0000-000000000012'$q$);
 select t.run('r5 S-3: an older version is not published while a newer one is suspended but not retired', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
   $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000001', 'publish')$q$, '23514');
-select t.run('r5 S-3: after B retires the suspended F12, the older F1 may be published', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
-  $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000012', 'retire', 'its source was withdrawn'),
-            public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000001', 'publish')$q$);
-select t.check('r5 S-3: F1 is now the current version of K1', 'postgres', null,
-  $q$select (select array_agg(id) from wine_reference.current_claim_versions where claim_id = 'c0000000-0000-0000-0000-000000000001') = array['f0000000-0000-0000-0000-000000000001'::uuid]$q$);
+select t.run('r5 S-3: B retires the suspended F12', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000012', 'retire', 'its source was withdrawn')$q$);
+select t.run('r5 S-3 (decision 14): the older F1 is still refused after the suspended F12 was retired', 'authenticated', 'aaaaaaaa-0000-0000-0000-00000000000b',
+  $q$select public.ref_review('claim_versions', 'f0000000-0000-0000-0000-000000000001', 'publish')$q$, '23514');
+select t.check('r5 S-3: K1 has no current version until its content is written again as a new version', 'postgres', null,
+  $q$select not exists (select 1 from wine_reference.current_claim_versions where claim_id = 'c0000000-0000-0000-0000-000000000001')
+        and (select published_at is null from wine_reference.claim_versions where id = 'f0000000-0000-0000-0000-000000000001')$q$);
 
 -- ------------------------------------------------------------------ S-5: TRUNCATE is refused, even for the database owner
 select t.run('r5 S-5: TRUNCATE review_events is refused', 'postgres', null, $q$truncate wine_reference.review_events$q$, '42501');

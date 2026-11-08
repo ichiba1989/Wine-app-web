@@ -1,4 +1,4 @@
-# Migration 001: physical schema and data dictionary (DRAFT, 2026-10-26; release candidate "001 r5", 2026-11-01)
+# Migration 001: physical schema and data dictionary (DRAFT, 2026-10-26; release "001 r5 (2026-11-08)")
 
 The schema `wine_reference` as created by `001_wine_reference_foundation.sql`. **Not on the live database yet.** The column tables below are
 **generated from a tested local install** by `tests/dictionary.sql` (`DICT=... bash tests/run_local_tests.sh`), so they match the SQL
@@ -53,8 +53,8 @@ cause)`, `has_display_name(entity)` (a verified, non-shortcut name valid today),
 any row) and `refuse_truncate` (TRUNCATE refused on every reference table but `schema_migrations`).
 **Doors in `public`:** `ref_published_names(query, language, limit)` and `ref_review(table, id, decision, note, replacement)`.
 
-**Publishing a new version (release r5).** A claim version is not published while a newer version (higher `version_no`) of the same
-claim is published and not retired; to bring older content back, retire the newer version first or write the content as a new version.
+**Publishing a new version (release r5, owner decision 14).** A claim version is never published once a newer version (higher
+`version_no`) of the same claim has been published, whatever happened to it since; older content comes back only as a new version.
 Publishing retires the previous live version of the claim and records that as a `retire` row in `review_events` (actor = the person
 publishing, note "replaced by the publication of version <id>"), as well as in `change_log`.
 

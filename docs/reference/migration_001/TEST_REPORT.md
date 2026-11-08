@@ -1,7 +1,7 @@
-# Migration 001: local test report (2026-11-01, release candidate "001 r5", Phase 2.0B.5)
+# Migration 001: local test report (2026-11-08, release "001 r5 (2026-11-08)", final with the owner's decisions)
 
-**Result: 353 passed, 0 failed**, on a throwaway local PostgreSQL 16.15 database in the cloud work container, re-run in full from scratch
-on 2026-11-01. It includes **20 concurrent-transaction checks** (`tests/concurrency_tests.sh`, run as part of the suite) and the **r5
+**Result: 359 passed, 0 failed**, on a throwaway local PostgreSQL 16.15 database in the cloud work container, re-run in full from scratch
+on 2026-11-08 (decision 14: the stricter rule for older versions; 6 more S-3 checks). It includes **20 concurrent-transaction checks** (`tests/concurrency_tests.sh`, run as part of the suite) and the **r5
 regression tests** (`tests/001_r5_tests.sql`). **Nothing was run on the live Supabase database.** Re-run at any time with
 `bash docs/reference/migration_001/tests/run_local_tests.sh`. The same release on a local Supabase stack: `STAGING_TEST_REPORT.md`.
 
@@ -103,7 +103,7 @@ PASS  verify: health: every private source copy is under verified rights that al
 PASS  verify: health: every published entity has a current display name | 
 PASS  verify: health: every published, unsuspended claim version is current (sound, with current dependencies) | 
 PASS  verify: migration 001 is registered | 
-PASS  verify: migration 001 release is "001 r5 (2026-11-01)" | 
+PASS  verify: migration 001 release is "001 r5 (2026-11-08)" | 
 PASS  verify: no function in the schema is executable by anon, authenticated or PUBLIC | 
 PASS  verify: no policies on the schema's tables (only the owner reaches rows) | 
 PASS  verify: no structure drift: the schema matches the fingerprint stored by the migration | 
@@ -342,7 +342,7 @@ PASS  verify after tests: 001a consistency: no role other than owner (or editor,
 PASS  verify after tests: health: every private source copy is under verified rights that allow copying | 
 PASS  verify after tests: health: every published entity has a current display name | 
 PASS  verify after tests: health: every published, unsuspended claim version is current (sound, with current dependencies) | 
-PASS  verify after tests: migration 001 release is "001 r5 (2026-11-01)" | 
+PASS  verify after tests: migration 001 release is "001 r5 (2026-11-08)" | 
 PASS  verify after tests: no structure drift: the schema matches the fingerprint stored by the migration | 
 PASS  owner_role_check.sql runs read-only and reports the role lookup, profiles grants and role counts
 PASS  rollback refuses while the reference holds content
@@ -387,20 +387,26 @@ PASS  r5 S-3 setup: evidence for draft F7 (claim K5, version 2)
 PASS  r5 S-3 setup: A submits F7
 PASS  r5 S-3 setup: B approves F7
 PASS  r5 S-3 setup: B publishes F7 (version 2) while F5 (version 1) is approved but unpublished
-PASS  r5 S-3: publishing the OLDER F5 while the newer F7 is live is refused  -> refused: 23514: Version 2 of this claim is newer and published: retire it first if version 1 is meant to come back, or write the content as a new version
-PASS  r5 S-3: ... also for the Owner  -> refused: 23514: Version 2 of this claim is newer and published: retire it first if version 1 is meant to come back, or write the content as a new version
+PASS  r5 S-3: publishing the OLDER F5 while the newer F7 is live is refused  -> refused: 23514: Version 2 of this claim has been published, so version 1 is never published: write its content as a new version
+PASS  r5 S-3: ... also for the Owner  -> refused: 23514: Version 2 of this claim has been published, so version 1 is never published: write its content as a new version
 PASS  r5 S-3: F7 is still the one current version and F5 unpublished; no event recorded for the refusals
-PASS  r5 S-3: intentional restoration, step 1: B retires the newer F7 (its own recorded decision)
-PASS  r5 S-3: intentional restoration, step 2: F5 (version 1) may now be published
-PASS  r5 S-3: after the restoration F5 is current, and F7 has exactly one retire event (the explicit one, with its note)
+PASS  r5 S-3: B may retire the newer F7 (its own recorded decision)
+PASS  r5 S-3 (decision 14): the older F5 is still refused after the newer F7 was retired  -> refused: 23514: Version 2 of this claim has been published, so version 1 is never published: write its content as a new version
+PASS  r5 S-3 (decision 14): ... also for the Owner  -> refused: 23514: Version 2 of this claim has been published, so version 1 is never published: write its content as a new version
+PASS  r5 S-3: restoring as a new version: F13 (claim K5, version 3) is written with evidence
+PASS  r5 S-3: A submits F13
+PASS  r5 S-3: B approves and publishes F13 (forward publication)
+PASS  r5 S-3: F13 is the current version of K5; F5 was never published; F7 has exactly one retire event (the explicit one, with its note)
+PASS  r5 S-3: the retired F7 cannot be published again  -> refused: 22023: Cannot publish a row that is retired
 PASS  r5 S-3 setup: source version V3 and version F12 (claim K1, version 2) with evidence from V3
 PASS  r5 S-3 setup: A submits V3 and F12
 PASS  r5 S-3 setup: B approves V3 and F12, and publishes F12
 PASS  r5 S-3 setup: C retires V3, which suspends F12
 PASS  r5 S-3 setup check: F12 is suspended, published, not retired
-PASS  r5 S-3: an older version is not published while a newer one is suspended but not retired  -> refused: 23514: Version 2 of this claim is newer and published: retire it first if version 1 is meant to come back, or write the content as a new version
-PASS  r5 S-3: after B retires the suspended F12, the older F1 may be published
-PASS  r5 S-3: F1 is now the current version of K1
+PASS  r5 S-3: an older version is not published while a newer one is suspended but not retired  -> refused: 23514: Version 2 of this claim has been published, so version 1 is never published: write its content as a new version
+PASS  r5 S-3: B retires the suspended F12
+PASS  r5 S-3 (decision 14): the older F1 is still refused after the suspended F12 was retired  -> refused: 23514: Version 2 of this claim has been published, so version 1 is never published: write its content as a new version
+PASS  r5 S-3: K1 has no current version until its content is written again as a new version
 PASS  r5 S-5: TRUNCATE review_events is refused  -> refused: 42501: wine_reference.review_events: TRUNCATE is not allowed on the reference (it skips the row rules); retire rows instead
 PASS  r5 S-5: TRUNCATE change_log is refused  -> refused: 42501: wine_reference.change_log: TRUNCATE is not allowed on the reference (it skips the row rules); retire rows instead
 PASS  r5 S-5: TRUNCATE claim_evidence is refused  -> refused: 42501: wine_reference.claim_evidence: TRUNCATE is not allowed on the reference (it skips the row rules); retire rows instead
@@ -414,7 +420,7 @@ PASS  verify after r5 tests: audit: every claim version retired after publicatio
 PASS  verify after r5 tests: audit: no claim version has more than one retire event | 
 PASS  verify after r5 tests: every editorial table takes the editorial lock at the start of each write statement (18 statement triggers) | 
 PASS  verify after r5 tests: health: every published, unsuspended claim version is current (sound, with current dependencies) | 
-PASS  verify after r5 tests: migration 001 release is "001 r5 (2026-11-01)" | 
+PASS  verify after r5 tests: migration 001 release is "001 r5 (2026-11-08)" | 
 PASS  verify after r5 tests: no structure drift: the schema matches the fingerprint stored by the migration | 
 PASS  concurrency: C1a publish F1 (holding) while V1 (its only evidence) is retired: no unsound claim stays current
 PASS  concurrency: C1b retire V1 (holding) while F1 is published: no unsound claim stays current
@@ -437,5 +443,5 @@ PASS  concurrency: D1 the submit waited for the owner's edit and includes its ev
 PASS  concurrency: D2 the owner touches a draft claim, then adds evidence, while its version is submitted: no deadlock, both transactions committed, nothing unsound
 PASS  concurrency: D3 the owner records a private copy under R2, then adds evidence, while R2 is retired: no deadlock, both transactions committed, nothing unsound
 
-TOTAL: 353 passed, 0 failed  (PostgreSQL 16.15, local throwaway database)
+TOTAL: 359 passed, 0 failed  (PostgreSQL 16.15, local throwaway database)
 ```

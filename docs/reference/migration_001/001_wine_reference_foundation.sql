@@ -1,4 +1,4 @@
--- MIGRATION 001: Wine Education Master Reference, canonical foundation. DRAFT (Phase 2.0B.2, 2026-10-26; corrected in Phase 2.0B.3, 2026-10-27 and 2026-11-01; release "001 r5" release candidate, Phase 2.0B.5, 2026-11-01). NOT RUN ON THE LIVE DATABASE.
+-- MIGRATION 001: Wine Education Master Reference, canonical foundation. DRAFT (Phase 2.0B.2, 2026-10-26; corrected in Phase 2.0B.3, 2026-10-27 and 2026-11-01; release "001 r5", Phase 2.0B.5 2026-11-01, finalised 2026-11-08 with the owner's decisions). NOT RUN ON THE LIVE DATABASE.
 --
 -- What it does: creates a NEW, PRIVATE schema `wine_reference` with the reference's foundation tables (entities, names, taxonomy, relationship
 -- and attribute types, sources and source versions, rights statements, claims and claim versions, claim evidence, claim-version
@@ -41,7 +41,7 @@ end $$;
 --       - the schema's structure no longer matches the fingerprint stored after the last run (someone changed it by hand: drift).
 do $$
 declare
-  c_release constant text := '001 r5 (2026-11-01)';
+  c_release constant text := '001 r5 (2026-11-08)';
   v_foreign text; v_ours boolean; v_release text; v_stored text;
 begin
   select string_agg(p.proname || '(' || pg_catalog.oidvectortypes(p.proargtypes) || ')', ', ') into v_foreign
@@ -1137,17 +1137,16 @@ begin
   if p_decision = 'publish' and p_table = 'entities' and not wine_reference.has_display_name(p_id) then
     raise exception 'An entity needs a current display name (a verified name that is not a typing shortcut) before it is published' using errcode = '23514';
   end if;
-  -- forward-only publication (release r5, staging finding S-3): a version is not published while a NEWER version of the same claim
-  -- (higher version_no) is published and not retired, live or suspended. Normal publication moves forward and replaces the older live
-  -- version automatically. Bringing older content back is deliberate: retire the newer version first (its own recorded decision), or
-  -- write the older content as a new version. Owner policy to confirm (DESIGN.md section 7, decision 14).
+  -- forward-only publication (staging finding S-3; owner decision 14, 2026-11-08: the stricter rule). A version is never published once a
+  -- NEWER version of the same claim (higher version_no) has ever been published, whether that one is live, suspended or retired.
+  -- Publication only moves forward: bringing older content back means writing it as a new version and sending it through review.
   if p_decision = 'publish' and p_table = 'claim_versions' then
     select n.version_no as newer_no, o.version_no as this_no into r
       from wine_reference.claim_versions o join wine_reference.claim_versions n on n.claim_id = o.claim_id
-     where o.id = p_id and n.id <> o.id and n.version_no > o.version_no and n.status = 'verified' and n.published_at is not null
+     where o.id = p_id and n.id <> o.id and n.version_no > o.version_no and n.published_at is not null
      order by n.version_no desc limit 1;
     if r.newer_no is not null then
-      raise exception 'Version % of this claim is newer and published: retire it first if version % is meant to come back, or write the content as a new version', r.newer_no, r.this_no
+      raise exception 'Version % of this claim has been published, so version % is never published: write its content as a new version', r.newer_no, r.this_no
         using errcode = '23514';
     end if;
   end if;
@@ -1227,7 +1226,7 @@ comment on table wine_reference.change_log is 'Append-only before/after record o
 -- =====================================================================================================================================
 insert into wine_reference.schema_migrations (version, name, notes, release)
 values ('001', 'wine_reference foundation', 'release r5 candidate (Phase 2.0B.5); schema, entities, names, taxonomy, claim types, sources, rights, claims, evidence, review, change log',
-        '001 r5 (2026-11-01)')
+        '001 r5 (2026-11-08)')
 on conflict (version) do nothing;
 update wine_reference.schema_migrations set structure_md5 = wine_reference.structure_fingerprint() where version = '001';
 

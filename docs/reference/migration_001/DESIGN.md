@@ -272,8 +272,11 @@ Details and test evidence: `CHANGE_REPORT_2_0B_5.md`.
   version of the same claim, it now writes a `retire` review event for that version: actor = the person publishing, note "replaced by the
   publication of version <id>", `owner_override` false, written just before the publish event in the same transaction. At most one such
   version exists (the unique index), so the event is written once. `change_log` is unchanged and still records the row change.
-- **S-3, older versions (smallest rule; owner to confirm).** `ref_review` refuses to publish a claim version while a **newer** version
-  (higher `version_no`) of the same claim is published and not retired, live or suspended. Normal publication moves forward and replaces
+- **S-3, older versions (owner decision 14, 2026-11-08: the stricter rule).** `ref_review` refuses to publish a claim version once a
+  **newer** version (higher `version_no`) of the same claim has **ever** been published, whether it is live, suspended or retired; the
+  content comes back only as a new version, reviewed like any other. *(The text below describes the first r5 draft, which still allowed
+  "retire the newer one, then publish the older one"; that path is now refused.)* Draft rule: refused while a newer version is
+  published and not retired, live or suspended. Normal publication moves forward and replaces
   the older live version (S-2). Bringing older content back stays possible with the decisions that already exist, each recorded: retire
   the newer version first (its own review event, with a note), then publish the older approved one; or write the older content as a
   new version. No new workflow or status was added. A version that was published and retired can never be published again (unchanged).
@@ -341,6 +344,13 @@ Details and test evidence: `CHANGE_REPORT_2_0B_5.md`.
     the reference reaches tens of thousands of published versions.
 16. **Approve release candidate r5** (sections 4d and 8) in place of r4.
 
+**Owner decisions of 2026-11-08 (recorded):**
+- **5: Owner only.** `001a` gives the four `ref_*` permissions to the Owner role only (unchanged; the Editor lines stay commented out).
+- **14: stricter.** Once a newer version of a claim has been published, an older one is never published; restoration is a new version.
+  Built into r5 and tested; the release label became "001 r5 (2026-11-08)".
+- **15: accept now, optimise later.** Unchanged; a later migration narrows the suspension sweep.
+- **16: r5 approved** as the release to run (production run still needs the owner's explicit go-ahead, `DEPLOY_001.md`).
+
 ---
 
 ## 8. Approval checklist for live execution
@@ -353,10 +363,10 @@ the owner, one at a time.
 - [ ] Confirm a recent backup exists (dashboard: Database, Backups), or note that the plan has none.
 - [ ] Confirm **Settings, API, Exposed schemas** does not list `wine_reference`; leave it unchanged.
 - [ ] Use the files from the repository's `main` branch at the approved commit. Fingerprints (first 16 hex of SHA-256) as committed:
-      `001_wine_reference_foundation.sql` `62b801e9f82929e1`, `001a_reference_permissions.sql` `0f7b14de0152c2a8`,
-      `001_verify.sql` `d23b64fdc065a9ea`, `001_rollback.sql` `af80fc11000f6fc1`, `001a_rollback.sql` `cc997dca39ac806c`,
-      `owner_role_check.sql` `e911b62ebfba298b` (release candidate "001 r5 (2026-11-01)", Phase 2.0B.5; the last three unchanged since r4).
-- [ ] Re-run the local tests on that commit: `bash docs/reference/migration_001/tests/run_local_tests.sh` → 353 passed, 0 failed
+      `001_wine_reference_foundation.sql` `363f4022eb2c0f6b`, `001a_reference_permissions.sql` `980a8a67df975a86`,
+      `001_verify.sql` `35422d599935a784`, `001_rollback.sql` `af80fc11000f6fc1`, `001a_rollback.sql` `cc997dca39ac806c`,
+      `owner_role_check.sql` `e911b62ebfba298b` (release "001 r5 (2026-11-08)", final, with the owner's decisions of 2026-11-08; the last three unchanged since r4).
+- [ ] Re-run the local tests on that commit: `bash docs/reference/migration_001/tests/run_local_tests.sh` → 359 passed, 0 failed
       (this includes the r5 regression tests and 20 concurrency checks, among them the deadlock probes D1-D3).
 - [ ] Local Supabase stack test (done for r4 in Phase 2.0B.4 and for r5 in Phase 2.0B.5: `STAGING_TEST_REPORT.md`); repeat if the files change.
 - [ ] Run `owner_role_check.sql` (read-only) and confirm every point in `OWNER_ROLE_VERIFICATION.md`, "What to confirm". If any
