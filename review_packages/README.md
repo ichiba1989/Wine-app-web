@@ -23,3 +23,8 @@ on the website (the publishing workflow only copies `main` and `vwm`), and nothi
 - `Wine_Reference_Migration_001_r5_Final.zip` (2026-11-08): **Migration 001 r5 final** (release "001 r5 (2026-11-08)", owner decisions
   5/14/15/16; NOT run on production), from `main` at `cf6ca69`. 25 files; open `DEPLOY_001.md` first.
   ZIP SHA-256: `aa168c951706c7ef82cde9af71d961d1ebea5e6147516f9bbf6652e3960dcdac`.
+- `Wine_Reference_Migration_002_Review.zip` (2026-11-08): **Migration 002** (release `002 r1 (2026-11-08)`): the editorial door,
+  the wine identity levels and links to the old catalog, plus the Owner page Reference tab. **Implemented and tested locally; NOT run
+  on production.** Built from `main` at `8e81e86` (`vwm` at `bb4f896`); 25 files. Open `README.md`, then
+  `migration_002/README.md` and `migration_002/DEPLOY_002.md`. Local Supabase: 96 passed, 0 failed (57 API, 19 browser). The
+  live smoke and UI checks are 26/0 each. ZIP SHA-256: `c443f38f27324e41e002d62dccb034289d93fe96ba16930de1e8754df4715aa0`.
