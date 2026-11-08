@@ -286,11 +286,11 @@ what it created. Once content exists: never drop; fix forward with a new migrati
 9. Whether `privacy.html` needs a line about staff records (owner and lawyers).
 10. Keep the reference's own change log, or later unify with the existing `revisions` table.
 11. When to switch the reference on (not before there is published content).
-12. Older claim versions (release r5): confirm the forward-only rule (an older version is not published while a newer one is live or
-    suspended; to bring it back, retire the newer one first, recorded), or choose stricter (never) or looser (r4 behaviour).
-13. Accept that each publish or retire takes longer as the reference grows (about 0.7 s at 10,000 published versions) and plan a
+12. DECIDED 2026-11-08 (stricter: an older version is never published once a newer one has been; restore as a new version; was: confirm the forward-only rule (an older version is not published while a newer one is live or
+    suspended; to bring it back, retire the newer one first, recorded), or choose stricter (never) or looser (r4 behaviour)).
+13. DECIDED 2026-11-08 (accept now, optimise later): accept that each publish or retire takes longer as the reference grows (about 0.7 s at 10,000 published versions) and plan a
     narrower check in a later migration.
-14. Approve release candidate r5 in place of r4.
+14. DECIDED 2026-11-08: r5 approved. Decision 5 decided the same day: Owner only holds the ref_* permissions.
 15. Also open from earlier: the definitions of product / edition / release / release event (and where bottle format belongs); whether to add an expert level; CMS/WSET permission; whether licensed source copies may be kept in a private bucket; the six accent-only producer duplicates; the parked feature's open setting; the `claude_readonly` role.
 
 ---
@@ -303,11 +303,11 @@ Nothing here happens until the owner approves in writing. Scripts run one at a t
 - [ ] Owner approves the design, including decisions 1, 3 and 5.
 - [ ] A recent database backup exists (dashboard: Database, Backups), or note that the plan has none.
 - [ ] Settings, API, Exposed schemas does **not** list `wine_reference`; leave it unchanged.
-- [ ] Use the approved files. Fingerprints (first 16 hex characters of SHA-256): `001_wine_reference_foundation.sql` `62b801e9f82929e1`,
-      `001a_reference_permissions.sql` `0f7b14de0152c2a8`, `001_verify.sql` `d23b64fdc065a9ea`, `001_rollback.sql` `af80fc11000f6fc1`,
-      `001a_rollback.sql` `cc997dca39ac806c`, `owner_role_check.sql` `e911b62ebfba298b` (release candidate r5).
+- [ ] Use the approved files. Fingerprints (first 16 hex characters of SHA-256): `001_wine_reference_foundation.sql` `363f4022eb2c0f6b`,
+      `001a_reference_permissions.sql` `980a8a67df975a86`, `001_verify.sql` `35422d599935a784`, `001_rollback.sql` `af80fc11000f6fc1`,
+      `001a_rollback.sql` `cc997dca39ac806c`, `owner_role_check.sql` `e911b62ebfba298b` (release "001 r5 (2026-11-08)", final).
 - [ ] Run `owner_role_check.sql` (read-only) and confirm the points in `OWNER_ROLE_VERIFICATION.md` (DESIGN.md §8).
-- [ ] Re-run the local tests on that commit: 353 passed, 0 failed.
+- [ ] Re-run the local tests on that commit: 359 passed, 0 failed.
 
 **Run**
 - [ ] Paste `001_wine_reference_foundation.sql`, Run: expect "Success. No rows returned". Any error: stop; nothing was applied.

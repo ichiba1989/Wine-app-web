@@ -20,10 +20,10 @@ do $$
 declare v_missing text;
 begin
   if to_regclass('wine_reference.schema_migrations') is null then
-    raise exception 'Preflight: run migration 001 (release "001 r5 (2026-11-01)") first';
+    raise exception 'Preflight: run migration 001 (release "001 r5 (2026-11-08)") first';
   end if;
-  if not exists (select 1 from wine_reference.schema_migrations where version = '001' and release = '001 r5 (2026-11-01)') then
-    raise exception 'Preflight: run migration 001 (release "001 r5 (2026-11-01)") first';
+  if not exists (select 1 from wine_reference.schema_migrations where version = '001' and release = '001 r5 (2026-11-08)') then
+    raise exception 'Preflight: run migration 001 (release "001 r5 (2026-11-08)") first';
   end if;
   if to_regclass('public.staff_roles') is null or not exists (select 1 from public.staff_roles where code = 'owner') then
     raise exception 'Preflight: public.staff_roles has no owner row';

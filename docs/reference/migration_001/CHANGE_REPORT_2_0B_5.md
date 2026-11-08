@@ -1,5 +1,25 @@
 # Migration 001 release candidate r5: change report (Phase 2.0B.5, 2026-11-01)
 
+> **Final (2026-11-08), with the owner's decisions:** decision 14 chose the **stricter** rule. An older claim version is never published
+> once a newer one has been published (even if the newer one was retired since); the content comes back only as a new version. This is
+> one changed condition in `ref_review` (the newer version only needs `published_at` set; the draft also required it to be live or
+> suspended), with a new message. The release label became **"001 r5 (2026-11-08)"** in the foundation, 001a and verify, so the
+> final file cannot be mistaken for the draft. Decisions 5 (Owner only: 001a unchanged), 15 (accept now) and 16 (approve r5) needed no
+> SQL change.
+>
+> **Fingerprints (SHA-256, first 16):** foundation `363f4022eb2c0f6b`, 001a `980a8a67df975a86`, verify `35422d599935a784`; rollbacks and
+> `owner_role_check.sql` unchanged (`af80fc11000f6fc1`, `cc997dca39ac806c`, `e911b62ebfba298b`).
+>
+> **Tests:**
+> - Local suite: **359 passed, 0 failed.** The S-3 tests now show the older version still refused after the newer one is retired
+>   (also for the Owner, also after a suspension), and a restoration written as version 3 publishes normally.
+> - Local Supabase compatibility suite: **341 passed, 0 failed.**
+> - Hardening suite with Migration 001 on a hardened database: **352 passed, 0 failed.**
+> - The production order on a hardened database (hardening → 001 → verify → 001a → verify → hardening verify → replay): **all passed;
+>   001 verify 28 of 28.**
+>
+> The text below describes the draft of 2026-11-01.
+
 **Release candidate `001 r5 (2026-11-01)`. Not approved, not run on the live database.** It replaces r4 as the candidate. r4 was never
 run live.
 
