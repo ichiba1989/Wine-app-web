@@ -21,7 +21,7 @@ is merged, move the lines to "Merged" with the date. Whenever a venue gets somet
 ## Venue: `vwm` (published under `/vwm/`)
 
 ### On main, not yet merged into `vwm`
-_(nothing: `vwm` has all of main as of 2026-11-01)_
+_(nothing: `vwm` has all of main as of 2026-11-08)_
 
 ### Merged (main is in `vwm` up to)
 - 2026-10-26: main's **reference model draft and read-only database inspection** (Phase 2.0B.1; documents and SQL only, no app file changed:
@@ -31,7 +31,9 @@ _(nothing: `vwm` has all of main as of 2026-11-01)_
 - 2026-10-26 (latest): main's **migration 001 draft** (`docs/reference/migration_001/`: design, data dictionary, SQL, tests, report;
   documents and SQL only, not run live) merged into `vwm`.
 - 2026-10-26: main's **reference briefing** (`docs/reference/WINE_REFERENCE_BRIEFING.md`, one document for passing on) merged into `vwm`.
-- 2026-11-08 (latest): main's **Migration 001 r5 final** (owner decisions, stricter version rule, DEPLOY_001.md, live check; SQL drafts and documents, not run live) merged into `vwm`.
+- 2026-11-08 (latest): main's **Migration 002** (`docs/reference/migration_002/`: SQL, preflight, verify, rollback, tests, deploy steps; not
+  run on production). Also the app files for the Owner page **Reference** tab (`owner.js`, `data.js`, `app.js`, with their `?v=` bumps).
+- 2026-11-08 (later): main's **Migration 001 r5 final** (owner decisions, stricter version rule, DEPLOY_001.md, live check; SQL drafts and documents, not run live) merged into `vwm`.
 - 2026-11-08 (earlier): main's **post-deployment validation** of the hardening (`docs/security/POST_DEPLOY_REPORT.md`, live checks; documents and test scripts only) merged into `vwm`.
 - 2026-11-08 (earlier): main's **privilege hardening release 2** (`docs/security/`: final SQL, rollback, post-deployment check, DEPLOY.md, tests; not deployed, no app file changed) merged into `vwm`.
 - 2026-11-08 (earlier): main's **anonymous-access hardening proposal** (`docs/security/`: audit, SQL proposal and rollback, read-only inventory, tests; not run live, no app file changed) merged into `vwm`.

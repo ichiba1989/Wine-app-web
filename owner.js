@@ -3,7 +3,7 @@
 // still decides what anyone may change. The rules at the top (rows, search, sort, checks, coverage) are pure: no page, no network.
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
 import { esc } from "./logic.js?v=25";
-import { REACH_CHOICES } from "./wineinfo.js?v=44";
+import { REACH_CHOICES } from "./wineinfo.js?v=45";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=5";
 import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=17";
 import { TAG_KINDS } from "./tags.js?v=5";
@@ -17,7 +17,7 @@ import { placeChecks } from "./geo.js?v=10";
 import { WINE_KINDS, FOODS, RATING_ORDER, RATING_LABEL, kindById, fitOf, ratingOf } from "./foods.js?v=4";
 export { placeChecks };   // used by app.js through the lazily loaded Owner module
 
-export const OWNER_TABS = [{ id: "wines", label: "Wines" }, { id: "lenses", label: "Lenses" }, { id: "bingo", label: "Bingo" }, { id: "checks", label: "Checks" }, { id: "tags", label: "Tags" }, { id: "legend", label: "Legend" }, { id: "roles", label: "Roles" }, { id: "config", label: "Config" }, { id: "lists", label: "Lists" }, { id: "pairings", label: "Pairings" }, { id: "venue", label: `${VENUE.name} list` }];
+export const OWNER_TABS = [{ id: "wines", label: "Wines" }, { id: "lenses", label: "Lenses" }, { id: "bingo", label: "Bingo" }, { id: "checks", label: "Checks" }, { id: "tags", label: "Tags" }, { id: "legend", label: "Legend" }, { id: "roles", label: "Roles" }, { id: "config", label: "Config" }, { id: "lists", label: "Lists" }, { id: "pairings", label: "Pairings" }, { id: "reference", label: "Reference" }, { id: "venue", label: `${VENUE.name} list` }];
 
 const fold = plainKey;   // text.js: the shared lookup key
 const isLive = (c) => !c.archived && (!c.wineStatus || c.wineStatus === "verified");
@@ -379,8 +379,112 @@ export function pairingsTable(O, d) {
     <div class="ocontrols"><input class="ofield osearch" data-owner-preason placeholder="Reason players will read (optional)" aria-label="Reason for the pin" autocomplete="off"></div>`}
     ${table("<th>Dish</th><th>Rules say</th><th>Your pin</th><th></th>", body, "No dish matches.")}`;
 }
+// ---------------------------------------------------------------- the Reference tab (Wine Education Master Reference, migration 002)
+// The owner writes drafts through public.ref_draft (they are recorded as the author) and moves them on with public.ref_review: submit,
+// approve (the Owner may approve their own work; it is recorded as an owner override), publish, retire. Nothing here reaches players
+// while reference_enabled is 0. The rules below (which decisions a status allows, the steps for an entity with its names, or a source
+// with its rights and versions) are pure; app.js calls the database.
+export const WR_VIEWS = [{ id: "entities", label: "Places & things" }, { id: "sources", label: "Sources" }, { id: "claims", label: "Facts" }, { id: "types", label: "Types" }, { id: "links", label: "Catalog links" }];
+export const WR_LANGS = [["en", "English"], ["fr", "Français"], ["it", "Italiano"], ["ja", "日本語"], ["zh-Hans", "中文 (简体)"], ["zh-Hant", "中文 (繁體)"], ["de", "Deutsch"], ["es", "Español"], ["und", "Not stated"]];
+export const WR_LINK_TABLES = [["producers", "Producers"], ["wines", "Wines"], ["wine_vintages", "Vintages"], ["grapes", "Grapes"], ["geo_areas", "Places"]];
+export const WR_DECISION_LABEL = { submit: "Submit", approve: "Approve", reject: "Send back", publish: "Publish", retire: "Retire" };
+// The decisions a row's status allows (entities and fact versions can be published; sources, rights and names cannot).
+export function nextDecisions(status, published = false, publishable = false) {
+  if (status === "draft") return ["submit", "retire"];
+  if (status === "pending_review") return ["approve", "reject"];
+  if (status === "verified") return publishable && !published ? ["publish", "retire"] : ["retire"];
+  return [];
+}
+export const prefName = (e) => { const n = (e && e.names) || []; const p = n.find((x) => x.is_preferred && x.status !== "retired") || n.find((x) => x.status !== "retired") || n[0]; return p ? p.name : "(no name)"; };
+// An entity with its names in one tap: names first (an entity is published only with a current display name), then the entity.
+export function entitySteps(e, decision) {
+  const names = (e.names || []).filter((n) => (decision === "submit" ? n.status === "draft" : n.status === "pending_review"));
+  const steps = decision === "publish" || decision === "retire" ? [] : names.map((n) => ["entity_names", n.id, decision]);
+  const own = nextDecisions(e.status, !!e.published_at, true);
+  if (own.includes(decision)) steps.push(["entities", e.id, decision]);
+  return steps;
+}
+// A source with its versions and their rights in one tap: source, then rights (ref_rights), then versions (a version needs both).
+export function sourceSteps(src, decision) {
+  const want = decision === "submit" ? "draft" : "pending_review", steps = [];
+  if (src.status === want) steps.push(["sources", src.id, decision]);
+  const rights = new Map();
+  for (const v of src.versions || []) if (v.rights && v.rights.status === want) rights.set(v.rights.id, v.rights);
+  for (const r of rights.values()) steps.push(["rights_statements", r.id, decision]);
+  for (const v of src.versions || []) if (v.status === want) steps.push(["source_versions", v.id, decision]);
+  return steps;
+}
+const wrBadge = (st, published) => (st === "verified" && published ? `<span class="gbadge ok">Published</span>` : st === "verified" ? `<span class="gbadge">Approved</span>`
+  : st === "pending_review" ? `<span class="gbadge star">Waiting for review</span>` : st === "retired" ? `<span class="gbadge">Retired</span>` : `<span class="gbadge draft">Draft</span>`);
+const wrButtons = (verb, id, decisions) => decisions.map((dec) => `<button class="opill" data-action="owner:${verb}:${id}:${dec}">${esc(WR_DECISION_LABEL[dec])}</button>`).join("");
+const wrSelect = (key, options, label, chosen = "") => `<select class="ofield" data-wr="${key}" aria-label="${esc(label)}">${options.map(([v, t]) => `<option value="${esc(v)}"${v === chosen ? " selected" : ""}>${esc(t)}</option>`).join("")}</select>`;
+const wrInput = (key, label, ph = label) => `<input class="ofield osearch" data-wr="${key}" placeholder="${esc(ph)}" aria-label="${esc(label)}" autocomplete="off">`;
+export function referenceTable(O, d) {
+  const R = d.wref, view = O.wrView || "entities";
+  if (R === undefined) return `<p class="muted">Loading…</p>`;
+  if (R === null) return `<div class="muted small onote">${esc(d.wrefError || "The reference needs migration 002 (docs/reference/migration_002/DEPLOY_002.md).")}</div>`;
+  const views = `<div class="ocontrols">${WR_VIEWS.map((v) => `<button class="opill${v.id === view ? " on" : ""}" data-action="owner:wrview:${v.id}" aria-pressed="${v.id === view}">${esc(v.label)}</button>`).join("")}</div>`;
+  const note = `<div class="muted small onote">Private reference: ${R.counts.entities} things, ${R.counts.claims} facts, ${R.counts.sources} sources, ${R.counts.links} catalog links. ${Number(R.switch) >= 1 ? "<b>Switched on for players.</b>" : "Not shown to players (reference_enabled is 0)."} Your own approvals are recorded as owner approvals.</div>`;
+  const ents = R.entities || [], byId = new Map(ents.map((e) => [e.id, e])), kindLabel = new Map((R.entity_kinds || []).map((k) => [k.code, k.label]));
+  const entName = (id) => (byId.has(id) ? prefName(byId.get(id)) : "(not in the list)");
+  const q = fold(O.q || "");
+  let body = "";
+  if (view === "entities") {
+    const form = `<div class="ocontrols">${wrSelect("kind", (R.entity_kinds || []).map((k) => [k.code, k.label]), "Kind")}${wrInput("name", "Name")}${wrSelect("lang", WR_LANGS, "Language", "en")}${wrSelect("namekind", (R.name_kinds || []).map((k) => [k.code, k.label]), "Kind of name", "common")}<button class="opill" data-action="owner:wrnew">Create draft</button></div>`;
+    const rows = ents.filter((e) => !q || (e.names || []).some((n) => fold(n.name).includes(q))).map((e) => {
+      const open = O.wrOpen === e.id, decisions = nextDecisions(e.status, !!e.published_at, true);
+      const names = (e.names || []).map((n) => `<div class="small">${esc(n.name)} <span class="muted">${esc(n.language)}${n.script ? " " + esc(n.script) : ""} · ${esc(n.name_kind)}${n.is_preferred ? " · preferred" : ""}</span> ${wrBadge(n.status, false)} ${e.status !== n.status && n.status !== "verified" && n.status !== "retired" ? wrButtons("wrname", n.id, nextDecisions(n.status)) : ""}</div>`).join("");
+      const add = open ? `<div class="ocontrols">${wrInput("addname", "Another name")}${wrSelect("addlang", WR_LANGS, "Language", "fr")}${wrSelect("addkind", (R.name_kinds || []).map((k) => [k.code, k.label]), "Kind of name", "translation")}<button class="opill" data-action="owner:wraddname:${e.id}">Add name</button></div>` : "";
+      return `<tr><td><b>${esc(prefName(e))}</b><div class="muted tiny">${esc(kindLabel.get(e.kind) || e.kind)}</div></td><td>${wrBadge(e.status, !!e.published_at)}</td><td>${names}${add}</td><td>${wrButtons("wrent", e.id, decisions)}<button class="opill" data-action="owner:wropen:${e.id}">${open ? "Close" : "Names"}</button></td></tr>`;
+    }).join("");
+    body = form + table("<th>Thing</th><th>Status</th><th>Names</th><th></th>", rows, "Nothing yet. Create the first draft above.");
+  } else if (view === "sources") {
+    const form = `<div class="ocontrols">${wrInput("stitle", "Title of the source")}${wrSelect("skind", (R.source_kinds || []).map((k) => [k.code, k.label]), "Kind of source", "regulation")}${wrInput("surl", "Web address (optional)", "https://...")}${wrInput("sversion", "Edition or date read (optional)")}</div>
+      <div class="ocontrols">${wrInput("slicence", "Licence (for example CC-BY-4.0; empty if unknown)")}<label class="small"><input type="checkbox" data-wr="squote"> may be quoted</label><label class="small"><input type="checkbox" data-wr="scopy"> may be copied</label><button class="opill" data-action="owner:wrsource">Create source</button></div>`;
+    const rows = (R.sources || []).filter((s) => !q || fold(s.title).includes(q)).map((s) => {
+      const all = [s.status, ...(s.versions || []).map((v) => v.status), ...(s.versions || []).map((v) => v.rights && v.rights.status).filter(Boolean)];
+      const can = (st) => all.includes(st);
+      const vers = (s.versions || []).map((v) => `<div class="small">${esc(v.version_label)} ${wrBadge(v.status, false)}${v.rights ? ` <span class="muted">· ${esc(v.rights.licence_code)}${v.rights.allows_quote ? ", quotable" : ""}${v.rights.allows_copy ? ", copyable" : ""}</span> ${wrBadge(v.rights.status, false)}` : ` <span class="muted">· no licence recorded</span>`}</div>`).join("");
+      return `<tr><td><b>${esc(s.title)}</b><div class="muted tiny">${esc(s.kind)}</div></td><td>${wrBadge(s.status, false)}</td><td>${vers}</td><td>${can("draft") ? `<button class="opill" data-action="owner:wrsrc:${s.id}:submit">Submit all</button>` : ""}${can("pending_review") ? `<button class="opill" data-action="owner:wrsrc:${s.id}:approve">Approve all</button>` : ""}</td></tr>`;
+    }).join("");
+    body = form + table("<th>Source</th><th>Status</th><th>Versions and rights</th><th></th>", rows, "No sources yet.");
+  } else if (view === "claims") {
+    const active = (R.relationship_types || []).filter((t) => t.status === "active"), attrs = (R.attribute_types || []).filter((t) => t.status === "active");
+    const live = ents.filter((e) => e.status !== "retired").map((e) => [e.id, `${prefName(e)} (${kindLabel.get(e.kind) || e.kind})`]);
+    const versions = []; for (const s of R.sources || []) for (const v of s.versions || []) if (v.status !== "retired") versions.push([v.id, `${s.title}: ${v.version_label}`]);
+    const typeOpts = [...active.map((t) => ["rel:" + t.code, t.label]), ...attrs.map((t) => ["attr:" + t.code, `${t.label} (a value)`])];
+    const form = typeOpts.length && live.length ? `<div class="ocontrols">${wrSelect("csubject", live, "About")}${wrSelect("ctype", typeOpts, "Says")}${wrSelect("cobject", [["", "(a value instead)"], ...live], "Object")}${wrInput("cvalue", "Value (for a value fact)")}</div>
+      <div class="ocontrols">${versions.length ? wrSelect("csv", versions, "Evidence: source version") : `<span class="muted small">Add a source first.</span>`}${wrInput("cloc", "Where in the source (page, article...)")}${wrSelect("cmod", (R.modalities || []).map((m) => [m.code, m.label]), "Kind of evidence", "documentary")}<button class="opill" data-action="owner:wrclaim">Create fact</button></div>`
+      : `<div class="muted small onote">${live.length ? "Switch on at least one type on the Types view first (all types start as proposed)." : "Create a thing first."}</div>`;
+    const rows = (R.claims || []).map((c) => {
+      const what = c.relationship_type ? `${esc(entName(c.subject_entity_id))} <span class="muted">${esc(c.relationship_type)}</span> ${esc(entName(c.object_entity_id))}` : `${esc(entName(c.subject_entity_id))} <span class="muted">${esc(c.attribute_type)}</span>`;
+      if (q && !fold(what).includes(q)) return "";
+      const vers = (c.versions || []).map((v) => `<div class="small">v${v.version_no} ${wrBadge(v.status, !!v.published_at)}${v.suspended_at ? ` <span class="gbadge draft">Suspended</span>` : ""}${v.current ? ` <span class="muted">current</span>` : ""}${[v.value_text, v.value_number, v.value_date, v.value_boolean].filter((x) => x !== null && x !== undefined).map((x) => ` = ${esc(String(x))}`).join("")} <span class="muted">· ${v.evidence} evidence</span>${(v.problems || []).length ? `<div class="muted tiny">${esc(v.problems.join("; "))}</div>` : ""} ${v.suspended_at ? "" : wrButtons("wrver", v.id, nextDecisions(v.status, !!v.published_at, true))}</div>`).join("");
+      return `<tr><td>${what}</td><td>${vers}</td><td><button class="opill" data-action="owner:wrnewver:${c.id}">New version</button></td></tr>`;
+    }).join("");
+    body = form + table("<th>Fact</th><th>Versions</th><th></th>", rows, "No facts yet.");
+  } else if (view === "types") {
+    const row = (kind, t) => `<tr><td><b>${esc(t.label)}</b><div class="muted tiny">${esc(t.code)}</div></td><td class="small">${esc((t.subject_kinds || []).join(", "))}${t.object_kinds ? " → " + esc(t.object_kinds.join(", ")) : t.value_type ? ` = ${esc(t.value_type)}${t.unit ? " (" + esc(t.unit) + ")" : ""}` : ""}</td><td>${t.status === "active" ? `<span class="gbadge ok">On</span>` : t.status === "retired" ? `<span class="gbadge">Retired</span>` : `<span class="gbadge draft">Proposed</span>`}</td><td>${t.status !== "active" && t.status !== "retired" ? `<button class="opill" data-action="owner:wrtype:${kind}:${t.code}:active">Switch on</button>` : ""}${t.status === "active" ? `<button class="opill" data-action="owner:wrtype:${kind}:${t.code}:retired">Retire</button>` : ""}</td></tr>`;
+    body = `<div class="muted small onote">A type can be used in facts only once it is switched on. Switching one on is your decision; a type in use can be retired but not changed.</div>`
+      + table("<th>Relationship</th><th>Between</th><th>Status</th><th></th>", (R.relationship_types || []).map((t) => row("relationship", t)).join(""))
+      + table("<th>Value</th><th>For</th><th>Status</th><th></th>", (R.attribute_types || []).map((t) => row("attribute", t)).join(""), "None yet.");
+  } else {
+    const tab = O.wrLinkTable || "producers", S = d.wrSuggest;
+    const picker = `<div class="ocontrols">${WR_LINK_TABLES.map(([id, label]) => `<button class="opill${id === tab ? " on" : ""}" data-action="owner:wrlinktab:${id}" aria-pressed="${id === tab}">${esc(label)}</button>`).join("")}</div>
+      <div class="muted small onote">Old catalog rows not linked yet, the kind of thing each would be, and a reference thing with the same name if there is one. Every link is marked "old catalog, not verified"; nothing in the catalog changes.</div>`;
+    const sugg = S === undefined ? `<p class="muted">Loading…</p>` : S === null ? `<p class="muted small">${esc(d.wrSuggestError || "Could not load the suggestions.")}</p>`
+      : table("<th>Catalog row</th><th>Would be</th><th>Same name in the reference</th><th></th>", (S.rows || []).filter((r) => !q || fold(r.name || "").includes(q)).map((r) => {
+        const matches = (r.matches || []).map((id) => `<button class="opill" data-action="owner:wrlink:${r.catalog_table}:${r.catalog_id}:${id}">Link to ${esc(entName(id))}</button>`).join("");
+        return `<tr><td>${esc(r.name || "")}${r.note ? `<div class="muted tiny">${esc(r.note)}</div>` : ""}</td><td class="small">${esc(kindLabel.get(r.kind) || r.kind)}</td><td>${matches || `<span class="muted small">none</span>`}</td><td><button class="opill" data-action="owner:wrmake:${r.catalog_table}:${r.catalog_id}">Make a draft and link</button></td></tr>`;
+      }).join(""), "Every row of this table is linked.");
+    const links = (R.links || []).map((l) => `<tr><td class="small">${esc(l.catalog_table)} ${esc(l.catalog_id.slice(0, 8))}</td><td>${esc(entName(l.entity_id))}</td><td>${l.status === "confirmed" ? `<span class="gbadge ok">Confirmed</span>` : l.status === "rejected" ? `<span class="gbadge">Rejected</span>` : `<span class="gbadge draft">Suggested</span>`}</td><td>${l.status === "suggested" ? `<button class="opill" data-action="owner:wrdecide:${l.id}:confirmed">Confirm</button><button class="opill" data-action="owner:wrdecide:${l.id}:rejected">Reject</button>` : ""}</td></tr>`).join("");
+    body = picker + sugg + `<h4 class="gh">Links</h4>` + table("<th>Catalog row</th><th>Reference thing</th><th>Status</th><th></th>", links, "No links yet.");
+  }
+  return views + note + body;
+}
 export function ownerTableHtml(O, d) {
   if (O.tab === "venue") return venueTable(O, d);
+  if (O.tab === "reference") return referenceTable(O, d);
   if (O.tab === "pairings") return pairingsTable(O, d);
   if (O.tab === "roles") return rolesTable(O, d);
   if (O.tab === "legend") return legendTable(O, d);
@@ -401,6 +505,7 @@ export function ownerHtml(O, d) {
     ${d.wineTags ? `<select class="ofield" data-owner-tagfilter aria-label="Tag"><option value="all">Any tag</option><option value="none"${O.tagFilter === "none" ? " selected" : ""}>No tag</option>${d.wineTags.tags.map((t) => `<option value="${esc(t.id)}"${O.tagFilter === t.id ? " selected" : ""}>${esc(t.name)}</option>`).join("")}</select>` : ""}`;
   else if (O.tab === "bingo") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search cards or squares" value="${esc(O.q)}" aria-label="Search bingo cards">`;
   else if (O.tab === "pairings") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search dishes" value="${esc(O.q)}" aria-label="Search dishes">`;
+  else if (O.tab === "reference") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search names, titles or facts" value="${esc(O.q)}" aria-label="Search the reference">`;
   else if (O.tab === "lists") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search this list" value="${esc(O.q)}" aria-label="Search this list">`;
   else if (O.tab === "tags") controls = `<input class="ofield osearch" type="search" data-owner-q placeholder="Search tags" value="${esc(O.q)}" aria-label="Search tags">
     <select class="ofield" data-owner-tagkind aria-label="Kind of new tag">${TAG_KINDS.map((k) => `<option value="${k.id}">${esc(k.label)}</option>`).join("")}</select>

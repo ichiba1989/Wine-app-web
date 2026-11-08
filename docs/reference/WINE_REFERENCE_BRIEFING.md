@@ -24,6 +24,7 @@ needs the owner: the decisions in section 10 and written approval, then the chec
 7. The eight Phase 1.9 revisions and where each lives
 8. Migration 001: what it builds
 9. Security, compatibility, tests and recovery
+9a. Migration 002
 10. Decisions the owner still has to make
 11. Checklist for running migration 001 on the live database
 12. What is missing (dependencies)
@@ -273,6 +274,26 @@ what it created. Once content exists: never drop; fix forward with a new migrati
 
 ---
 
+## 9a. Migration 002 (2026-11-08): the editorial door, wine identity levels, links to the old catalog
+
+**Status (2026-11-08):**
+- **Production:** hardening release 2, 001 r5 and 001a are deployed; the reference tables are empty.
+- **002:** implemented and tested locally (96 passed, 0 failed); **not run on production**. Steps are in
+  `docs/reference/migration_002/DEPLOY_002.md`, the design in `docs/reference/migration_002/README.md`.
+
+What 002 adds, which is exactly what DESIGN.md §3 put off to 002:
+- `public.ref_draft`: the Owner, signed in, writes drafts as their author, so their own work can now be approved through `ref_review`
+  (recorded as `owner_override`).
+- `public.ref_staff`: the staff read.
+- The Owner page's **Reference** tab, for entities, names, sources with rights, claims and their versions with evidence, types and
+  catalog links.
+- The four wine identity levels (`wine_product`, `wine_edition`, `wine_release`, `release_event`), with 6 relationship types and
+  5 attribute types. All are **proposed** until the Owner switches each on.
+- `wine_reference.legacy_links`: the old catalog row → reference entity. Each link is "old catalog, not verified", starts as suggested,
+  and has at most one confirmed per row. The catalog is never changed.
+
+`reference_enabled` stays at 0.
+
 ## 10. Decisions the owner still has to make
 
 1. Approve the namespace: the dedicated private schema `wine_reference`, never exposed through the API.
@@ -291,7 +312,7 @@ what it created. Once content exists: never drop; fix forward with a new migrati
 13. DECIDED 2026-11-08 (accept now, optimise later): accept that each publish or retire takes longer as the reference grows (about 0.7 s at 10,000 published versions) and plan a
     narrower check in a later migration.
 14. DECIDED 2026-11-08: r5 approved. Decision 5 decided the same day: Owner only holds the ref_* permissions.
-15. Also open from earlier: the definitions of product / edition / release / release event (and where bottle format belongs); whether to add an expert level; CMS/WSET permission; whether licensed source copies may be kept in a private bucket; the six accent-only producer duplicates; the parked feature's open setting; the `claude_readonly` role.
+15. Also open from earlier: the definitions of product / edition / release / release event (and where bottle format belongs; since 002 these are proposed types the Owner switches on in the Reference tab, and `bottle_format_ml` stays proposed until this is decided); whether to add an expert level; CMS/WSET permission; whether licensed source copies may be kept in a private bucket; the six accent-only producer duplicates; the parked feature's open setting; the `claude_readonly` role.
 
 ---
 

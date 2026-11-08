@@ -942,6 +942,31 @@ export async function removeStaff(sb, userId) {
   const { error } = await sb.rpc("staff_remove", { p_user_id: userId });
   if (error) throw staffMissing(error);
 }
+// ---------------------------------------------------------------- the Wine Education Master Reference (Owner page, Reference tab)
+// Migration 002 (docs/reference/migration_002): public.ref_staff reads the private reference for staff (drafts included);
+// public.ref_draft writes drafts with the signed-in person as author; public.ref_review (migration 001) moves them on. Online only:
+// none of these are queued offline (staff writes, convention 22). Before migration 002 the two functions do not exist (PGRST202).
+const refMissing = (error) => (error && error.code === "PGRST202" ? new Error("The reference needs migration 002 (docs/reference/migration_002/DEPLOY_002.md).") : error);
+export async function refOverview(sb) {
+  const { data, error } = await sb.rpc("ref_staff", { p_what: "overview", p_args: {} });
+  if (error) throw refMissing(error);
+  return data;
+}
+export async function refSuggestions(sb, table) {
+  const { data, error } = await sb.rpc("ref_staff", { p_what: "suggestions", p_args: { table } });
+  if (error) throw refMissing(error);
+  return data;
+}
+export async function refDraft(sb, action, payload) {
+  const { data, error } = await sb.rpc("ref_draft", { p_action: action, p_data: payload || {} });
+  if (error) throw refMissing(error);
+  return data;
+}
+export async function refReview(sb, table, id, decision, note = "") {
+  const { data, error } = await sb.rpc("ref_review", { p_table: table, p_id: id, p_decision: decision, p_note: note });
+  if (error) throw error;
+  return data;
+}
 // The latest changes to staff roles (who changed whom). An empty list until the script has been run.
 export async function loadStaffAudit(sb) {
   try {

@@ -696,3 +696,54 @@ The approved taxonomy under each domain (an entity each). Same domain as its par
 - Trigger `taxonomy_nodes_log` runs `wine_reference.log_change`
 - Trigger `taxonomy_nodes_no_truncate` runs `wine_reference.refuse_truncate`
 
+## Added by migration 002 (release `002 r1 (2026-11-08)`; not run on production yet)
+
+Read from the local test database after 002 was installed. Design: `docs/reference/migration_002/README.md`.
+
+### `wine_reference.legacy_links`
+
+Which reference entity an old catalog row stands for. The old catalog is never changed. Every link is "old catalog, not verified" and
+starts as `suggested`; only a `confirmed` link counts, with at most one per catalog row. RLS is on with no policies; staff reach it only
+through `public.ref_staff` and `public.ref_draft`.
+
+- `id` uuid not null default `gen_random_uuid()`
+- `catalog_table` text not null
+- `catalog_id` text not null
+- `entity_id` uuid not null
+- `status` text not null default `'suggested'::text`
+- `basis` text not null default `'old catalog, not verified'::text`
+- `note` text not null default `''::text`
+- `created_by` uuid default `auth.uid()`
+- `created_at` timestamp with time zone not null default `now()`
+- `decided_by` uuid
+- `decided_at` timestamp with time zone
+- Check `legacy_links_catalog_id_check`: `CHECK (((length(catalog_id) >= 1) AND (length(catalog_id) <= 64)))`
+- Unique `legacy_links_catalog_table_catalog_id_entity_id_key`: `UNIQUE (catalog_table, catalog_id, entity_id)`
+- Check `legacy_links_catalog_table_check`: `CHECK ((catalog_table = ANY (ARRAY['producers'::text, 'wines'::text, 'wine_vintages'::text, 'grapes'::text, 'geo_areas'::text])))`
+- Check `legacy_links_decided`: `CHECK (((status = 'suggested'::text) = (decided_at IS NULL)))`
+- Foreign key `legacy_links_entity_id_fkey`: `FOREIGN KEY (entity_id) REFERENCES wine_reference.entities(id)`
+- Check `legacy_links_note_check`: `CHECK ((length(note) <= 500))`
+- Primary key `legacy_links_pkey`: `PRIMARY KEY (id)`
+- Check `legacy_links_status_check`: `CHECK ((status = ANY (ARRAY['suggested'::text, 'confirmed'::text, 'rejected'::text])))`
+- Index `legacy_links_entity`: `USING btree (entity_id)`
+- Index `legacy_links_one_confirmed`: `USING btree (catalog_table, catalog_id) WHERE (status = 'confirmed'::text)`
+- Trigger `legacy_links_lock_first` runs `wine_reference.lock_before_write`
+- Trigger `legacy_links_log` runs `wine_reference.log_change`
+- Trigger `legacy_links_no_truncate` runs `wine_reference.refuse_truncate`
+
+
+### New vocabulary rows (all `proposed` until the Owner switches each on)
+
+- Entity kinds: `wine_product`, `wine_edition`, `wine_release`, `release_event`
+- Relationship types: `product_of`, `defined_by_place`, `edition_of`, `release_of`, `event_of`, `made_from`
+- Attribute types: `harvest_year`, `nv_identifier`, `release_date`, `event_date`, `bottle_format_ml`
+
+### New functions
+
+- `public.ref_draft(p_action text, p_data jsonb)`: writes drafts as the signed-in author. Security definer with `search_path ''`;
+  `authenticated` only.
+- `public.ref_staff(p_what text, p_args jsonb)`: `overview`, and `suggestions` (the old-catalog report, read-only). Any `ref_*`
+  permission; `authenticated` only.
+- Internal, no grants: `wine_reference.require_permission(text)`, `wine_reference.write_claim_version(uuid, jsonb)`,
+  `wine_reference.fingerprint_002()`.
+
