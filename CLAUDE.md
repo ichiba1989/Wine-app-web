@@ -4,8 +4,8 @@ Guidance for AI assistants working in this repository. Read this before changing
 
 **Picking the project up in a new session? Read `docs/HANDOFF.md` next, and `docs/BRANCHES.md` (what main has that the venue branches do not yet, and what is venue-only)**: what is waiting (database scripts to run, open items) and how the work is done (`docs/tools/`: version bumps, the `vwm` merge, browser checks). **The Wine Education Master Reference** (started 2026-10-26, not built yet) is planned in `docs/REFERENCE_MODEL.md`; its read-only database inspection is in `docs/reference/`, and migration 001 (designed and tested locally, not run live) in `docs/reference/migration_001/` (`DESIGN.md`; tests: `bash docs/reference/migration_001/tests/run_local_tests.sh`; validated on a local Supabase stack on 2026-11-01: `STAGING_TEST_REPORT.md`, runners in `staging/`; the release is "001 r5 (2026-11-08)", approved by the owner with decisions 5/14/15/16 and **deployed on production with 001a** (owner, 2026-11-08): `DEPLOY_001.md`,
 `CHANGE_REPORT_2_0B_5.md`). **Migration 002** (`docs/reference/migration_002/`, release "002 r1 (2026-11-08)": the editorial door, the
-wine identity levels, links to the old catalog, the Owner page Reference tab) is implemented and tested locally, **not run on
-production**. Read `README.md` there, then `DEPLOY_002.md`; tests: `tests/run_002_tests.sh`. Never fill in its pending items (the 14 domains, the subdomain taxonomy, the Phase 1.9 revisions) without the owner's own material.
+wine identity levels, links to the old catalog, the Owner page Reference tab) is **deployed on production** (owner, 2026-11-08;
+live checks pass; `reference_enabled` off, identity types still proposed). Read `README.md` there, then `DEPLOY_002.md`; tests: `tests/run_002_tests.sh`. Never fill in its pending items (the 14 domains, the subdomain taxonomy, the Phase 1.9 revisions) without the owner's own material.
 
 ## What this project is
 

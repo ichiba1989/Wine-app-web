@@ -18,7 +18,10 @@ AND give its download link, and name the branch and path. Packages live on branc
 
 Latest review package: `review_packages/Wine_Reference_Migration_002_Review.zip` (Migration 002, 2026-11-08). Earlier: `review_packages/Wine_Reference_Phase_2_0B_3_Security_Review.zip` on branch `claude/wine-app-setup-35g1ne`
 (Migration 001 **r4**, rebuilt after the final review follow-up on 2026-11-01; not on the website).
-**Migration 002 (2026-11-08, release `002 r1 (2026-11-08)`): implemented and tested locally; NOT run on production.**
+**Migration 002 DEPLOYED (owner, 2026-11-08; release `002 r1 (2026-11-08)`).** Live checks after deployment: `live_post_deploy_002.mjs`
+13/0, `live_smoke.mjs` 26/0, `live_ui.mjs` 26/0 (main and /vwm/); no regressions. `reference_enabled` is off and the identity types are
+still proposed. Next step: the owner uses the Reference tab (first sources and places), or decides which identity types to switch on.
+Earlier status:
 - What it adds: the editorial door `ref_draft`, the staff read `ref_staff`, the Owner page **Reference** tab, the four wine identity
   levels (types proposed) and `legacy_links` to the old catalog.
 - Tests: local Supabase on the hardened 001 r5 + 001a state, `docs/reference/migration_002/tests/run_002_tests.sh`, 96 passed,

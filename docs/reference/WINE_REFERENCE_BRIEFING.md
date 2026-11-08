@@ -278,7 +278,7 @@ what it created. Once content exists: never drop; fix forward with a new migrati
 
 **Status (2026-11-08):**
 - **Production:** hardening release 2, 001 r5 and 001a are deployed; the reference tables are empty.
-- **002:** implemented and tested locally (96 passed, 0 failed); **not run on production**. Steps are in
+- **002:** tested locally (96 passed, 0 failed) and **deployed on production by the owner on 2026-11-08**. Live checks: 13/0, 26/0, 26/0. Steps are in
   `docs/reference/migration_002/DEPLOY_002.md`, the design in `docs/reference/migration_002/README.md`.
 
 What 002 adds, which is exactly what DESIGN.md §3 put off to 002:
