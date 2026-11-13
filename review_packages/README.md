@@ -33,3 +33,8 @@ on the website (the publishing workflow only copies `main` and `vwm`), and nothi
   **Implemented and tested locally; NOT run on production.** Built from `main` at `942b29a` (`vwm` at `09b6214`); 27 files. Open
   `README.md`, then `migration_003/README.md` and `migration_003/DEPLOY_003.md`. Local suite 116/0 (main and vwm); live smoke and UI
   26/0 each. ZIP SHA-256: `f99eda4410f26e3e1cf4d7db6c830043a647ef6f3a4aa4e21cc3b9411558d1ed`.
+- `Wine_Reference_Migration_004_Review.zip` (2026-11-13): **Migration 004** (release `004 r1 (2026-11-13)`): made_from drafts from label
+  grapes, part_of drafts from the catalog place tree, subject areas on each thing, and the read-only grape-rules check
+  (appellation_grape_rules against aocgrapes.js). **Implemented and tested locally; NOT run on production; needs 003 first.** Built from
+  `main` at `b7f42c1` (`vwm` at `94da41f`); 26 files. Local suite 78/0 (main and vwm). ZIP SHA-256:
+  `a70006bbbad33d5244abe714577ec110a9806b826b004ce85f680b4435743672`.
