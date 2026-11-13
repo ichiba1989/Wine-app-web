@@ -21,7 +21,7 @@ is merged, move the lines to "Merged" with the date. Whenever a venue gets somet
 ## Venue: `vwm` (published under `/vwm/`)
 
 ### On main, not yet merged into `vwm`
-_(nothing: `vwm` has all of main as of 2026-11-08)_
+_(nothing: `vwm` has all of main as of 2026-11-13, Migration 004 included)_
 
 ### Merged (main is in `vwm` up to)
 - 2026-10-26: main's **reference model draft and read-only database inspection** (Phase 2.0B.1; documents and SQL only, no app file changed:
@@ -31,7 +31,11 @@ _(nothing: `vwm` has all of main as of 2026-11-08)_
 - 2026-10-26 (latest): main's **migration 001 draft** (`docs/reference/migration_001/`: design, data dictionary, SQL, tests, report;
   documents and SQL only, not run live) merged into `vwm`.
 - 2026-10-26: main's **reference briefing** (`docs/reference/WINE_REFERENCE_BRIEFING.md`, one document for passing on) merged into `vwm`.
-- 2026-11-08 (latest): main's **Migration 002** (`docs/reference/migration_002/`: SQL, preflight, verify, rollback, tests, deploy steps; not
+- 2026-11-13 (latest): main's **Migration 004** (`docs/reference/migration_004/`; not run on production) and the Reference tab's Grape rules view,
+  subject areas on each thing and the two draft buttons (venue `?v=` cascaded; `owner.js` imports the venue's `aocgrapes.js?v=3`).
+- 2026-11-08 (later): main's **Migration 003** (`docs/reference/migration_003/`: SQL, preflight, verify, rollback, tests, deploy steps; not run
+  on production) and the Reference tab's Subject areas and Catalog links views (`owner.js`, `data.js`, `app.js`; venue `?v=` cascaded).
+- 2026-11-08 (later): main's **Migration 002** (`docs/reference/migration_002/`: SQL, preflight, verify, rollback, tests, deploy steps; not
   run on production). Also the app files for the Owner page **Reference** tab (`owner.js`, `data.js`, `app.js`, with their `?v=` bumps).
 - 2026-11-08 (later): main's **Migration 001 r5 final** (owner decisions, stricter version rule, DEPLOY_001.md, live check; SQL drafts and documents, not run live) merged into `vwm`.
 - 2026-11-08 (earlier): main's **post-deployment validation** of the hardening (`docs/security/POST_DEPLOY_REPORT.md`, live checks; documents and test scripts only) merged into `vwm`.
