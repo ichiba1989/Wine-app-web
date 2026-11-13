@@ -27,6 +27,7 @@ needs the owner: the decisions in section 10 and written approval, then the chec
 9a. Migration 002
 9b. Migration 003
 9c. Migration 004
+9d. Migration 005
 10. Decisions the owner still has to make
 11. Checklist for running migration 001 on the live database
 12. What is missing (dependencies)
@@ -330,6 +331,16 @@ What 002 adds, which is exactly what DESIGN.md §3 put off to 002:
 - `rules_name_grape` (proposed).
 
 **Owner decision:** which list becomes the reference for appellation grape rules (A, B or C; C recommended).
+
+## 9d. Migration 005 (2026-11-13): grape-rule reconciliation and import
+
+**Status:** tested locally (85/0); not run on production; needs 003 and 004 (`docs/reference/migration_005/`).
+
+**Built:**
+- A review workflow comparing `aocgrapes.js` with `appellation_grape_rules`: stage, then seven states, then a per-candidate decision.
+  A conflict needs an explicit side; unchecked, unresolved and "usual" lines cannot be accepted.
+- The import of accepted rules as draft `rules_name_grape` facts, with documentary evidence from draft sources (reused per address).
+  Nothing is published, and a rule is never imported twice.
 
 ## 10. Decisions the owner still has to make
 

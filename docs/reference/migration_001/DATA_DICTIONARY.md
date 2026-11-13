@@ -800,3 +800,26 @@ Design: `docs/reference/migration_004/README.md`. No new tables or columns.
 - Reads `public.wine_grapes` (`wine_id`, `grape_id`, `basis`) and `public.appellation_grape_rules`. The second is read whole with
   `to_jsonb`, so it does not depend on the table's column names.
 
+## Added by migration 005 (release `005 r1 (2026-11-13)`; not run on production yet)
+
+Design: `docs/reference/migration_005/README.md`.
+
+- `wine_reference.rule_import_batches`: `id`, `created_by`, `created_at`, `code_lines`, `table_rows`, `table_columns` (jsonb), `note`.
+- `wine_reference.rule_import_candidates`: `id`, `batch_id`, `appellation`, `grape`, `style`, `geo_area_id`, `grape_id`, `code_line`
+  (jsonb), `code_rule`, `table_row` (jsonb, as stored), `table_rule`, `table_min_pct`, `table_source`, `state` (agree | conflict |
+  code_only | table_only | unresolved | needs_source | not_importable), `reason`, `decision` (pending | accept_code | accept_table |
+  reject), `decided_by`, `decided_at`, `decision_note`, `claim_id`, `imported_at`.
+  - Checks: decided iff `decided_at`; imported iff `claim_id`; an import needs an accept.
+  - Trigger `rule_import_candidates_check`:
+    - content is immutable;
+    - a decision moves only through pending;
+    - an accept is allowed only for an existing side with a source, a checked code line, and not unresolved or not importable;
+    - an imported candidate is frozen.
+  - Both tables: RLS on, no policies; the log, lock and no-TRUNCATE triggers.
+- `public.ref_rules(p_action text, p_data jsonb)`: security definer with `search_path ''`, `authenticated` only.
+  - Reads (any `ref_*`): `batches`, `candidates`.
+  - `ref_edit`: `stage`, `import`.
+  - `ref_review`: `decide`.
+- Internal, no grants: `check_rule_candidate`, `row_rule`, `row_min_pct`, `row_source`, `code_rule`, `stage_rules`,
+  `rule_source_version`, `import_rules`, `fingerprint_005`.
+

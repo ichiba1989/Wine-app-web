@@ -3,7 +3,7 @@
 // still decides what anyone may change. The rules at the top (rows, search, sort, checks, coverage) are pure: no page, no network.
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
 import { esc } from "./logic.js?v=23";
-import { REACH_CHOICES } from "./wineinfo.js?v=38";
+import { REACH_CHOICES } from "./wineinfo.js?v=39";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=4";
 import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=15";
 import { TAG_KINDS } from "./tags.js?v=4";
@@ -424,7 +424,7 @@ export function taxonomySteps(dom, decision) {
   return { names, entities: ents };
 }
 // The app's code list of appellation grape rules (aocgrapes.js), as the lines the grape-rules check compares with appellation_grape_rules.
-export const ruleLines = () => APPELLATION_GRAPES.map((r) => ({ country: r.country, appellation: r.appellation, style: r.style, grape: r.grape, rule: r.rule, checked: !!r.checked, source: r.source || "" }));
+export const ruleLines = () => APPELLATION_GRAPES.map((r) => ({ country: r.country, appellation: r.appellation, style: r.style, grape: r.grape, rule: r.rule, checked: !!r.checked, source: r.source || "", read: r.read || "" }));
 // The grape-rules check in counts: how many code lines are in both, missing from the table, or not found in the catalog by name.
 export function ruleSummary(rep) {
   const out = { both: 0, missing: 0, notFound: 0, extra: (rep && rep.extra_rows || []).length };
@@ -433,6 +433,19 @@ export function ruleSummary(rep) {
 }
 // A table row shown compactly: its fields as stored, ids left out (they are long and say nothing to a person).
 export const rowText = (row) => Object.entries(row || {}).filter(([, v]) => v !== null && v !== "" && !/^[0-9a-f-]{36}$/i.test(String(v))).map(([k, v]) => `${k}: ${v}`).join(" · ");
+// The grape-rule review (migration 005): the states, and which decisions a candidate allows (the database checks them again).
+export const RULE_STATES = [["conflict", "Conflicts"], ["agree", "Agree"], ["code_only", "Code list only"], ["table_only", "Table only"], ["needs_source", "Needs a source"], ["unresolved", "Not found"], ["not_importable", "Not importable"]];
+export function ruleDecisions(c) {
+  if (c.claim_id) return [];
+  if (c.decision !== "pending") return ["pending"];
+  if (c.state === "unresolved" || c.state === "not_importable") return [];
+  const out = [];
+  if (c.code_line && c.code_line.checked && c.code_line.source && c.code_rule !== "usual") out.push("accept_code");
+  if (c.table_row && c.table_source && c.table_rule) out.push("accept_table");
+  out.push("reject");
+  return out;
+}
+export const RULE_DECISION_LABEL = { accept_code: "Use the code list's", accept_table: "Use the table's", reject: "Reject", pending: "Undecide" };
 export const WR_LINK_FILTERS = [["waiting", "Waiting"], ["several", "Several candidates"], ["unlinked", "Not linked"], ["confirmed", "Confirmed"], ["duplicates", "Same thing twice"]];
 export const WR_METHOD_LABEL = { editor: "picked by hand", exact_name: "same name", created_from_catalog: "made from this row" };
 // Recommendations for the identity types (migration 003 README). The decision stays the owner's: the Types view only shows the advice.
@@ -450,6 +463,28 @@ export const WR_TYPE_ADVICE = {
   made_from: ["later", "Switch on once grape varieties are linked and confirmed; a share only when stated."],
   bottle_format_ml: ["decide", "Your decision first: does bottle format belong to a release (REFERENCE_MODEL.md section 15, question 4)? Keep it proposed until then."],
 };
+// The review and import of grape rules (migration 005): stage a batch, decide each candidate, import the accepted ones as draft facts.
+function ruleReviewHtml(O, d, q) {
+  const B = d.wrBatches, head = `<h4 class="gh">Review and import</h4>`;
+  if (d.wr5Missing) return head + `<p class="muted small">${esc(d.wr5Error)}</p>`;
+  if (B === undefined) return head + `<p class="muted">Loading…</p>`;
+  if (B === null) return head + `<p class="muted small">${esc(d.wr5Error || "Could not load the review.")}</p>`;
+  const intro = `<div class="muted small onote">Stage the comparison as a batch to review. Each appellation and grape becomes a candidate: you take the code list's version or the table's, or reject it. A conflict is never taken without your choice. "Import accepted as drafts" turns accepted candidates into draft facts (type "Its rules name the grape", which must be switched on), each with its source as evidence; nothing is published.</div>
+    <div class="ocontrols"><button class="opill" data-action="owner:wrrules:stage">Stage for review</button>${B.length ? `<button class="opill" data-action="owner:wrrules:import">Import accepted as drafts</button>` : ""}</div>`;
+  if (!B.length) return head + intro + `<p class="muted small">No batch yet.</p>`;
+  const b = B[0], counts = b.counts || {}, st = O.wrCandState || "conflict";
+  const pick = `<div class="ocontrols">${RULE_STATES.map(([id, label]) => `<button class="opill${id === st ? " on" : ""}" data-action="owner:wrcandstate:${id}" aria-pressed="${id === st}">${esc(label)} (${counts[id] || 0})</button>`).join("")}</div>`;
+  const summary = `<div class="muted small">Latest batch: ${b.code_lines} code lines, ${b.table_rows} table rows; ${b.decided} decided, ${b.imported} imported.</div>`;
+  const C = d.wrCands;
+  const rows = C === undefined ? "" : (C || []).filter((c) => !q || fold(c.appellation + " " + c.grape).includes(q)).map((c) => {
+    const code = c.code_line ? `${esc(c.code_rule || "")}${c.code_line.checked ? "" : " · to check"}${c.code_line.source ? ` · <a href="${esc(c.code_line.source)}" target="_blank" rel="noopener">source</a>` : ""}` : `<span class="muted">not in the code list</span>`;
+    const tbl = c.table_row ? `${esc(c.table_rule || "no rule word")}${c.table_min_pct != null ? ` · min ${esc(String(c.table_min_pct))}%` : ""}<div class="muted tiny">${esc(rowText(c.table_row))}</div>` : `<span class="muted">not in the table</span>`;
+    const dec = c.claim_id ? `<span class="gbadge ok">Imported (draft fact)</span>` : c.decision !== "pending" ? `<span class="gbadge">${esc(RULE_DECISION_LABEL[c.decision] || c.decision)}</span>` : "";
+    const btns = ruleDecisions(c).map((x) => `<button class="opill" data-action="owner:wrcand:${c.id}:${x}">${esc(RULE_DECISION_LABEL[x])}</button>`).join("");
+    return `<tr><td><b>${esc(c.appellation)}</b> · ${esc(c.grape)}${c.style ? ` <span class="muted tiny">${esc(c.style)}</span>` : ""}<div class="muted tiny">${esc(c.reason)}</div></td><td class="small">${code}</td><td class="small">${tbl}</td><td>${dec}${btns}</td></tr>`;
+  }).join("");
+  return head + intro + summary + pick + (C === undefined ? `<p class="muted">Loading…</p>` : table("<th>Appellation · grape</th><th>Code list</th><th>Table</th><th></th>", rows, "None in this group."));
+}
 // Subject areas of one thing (migration 004's read, 003's assign): its assignments with their review buttons, and a form to add one.
 function assignHtml(e, d) {
   const A = d.wrAssign, T = d.wrTax;
@@ -549,6 +584,7 @@ export function referenceTable(O, d) {
       body = note + pick + (filt === "extra" ? table("<th>Place</th><th>Grape</th><th>The table's row</th>", extraRows, "Every table row matches a code line.")
         : table("<th>Appellation (code list)</th><th>Grape and rule</th><th>In the table</th>", lineRows, "Every code line is in the table."));
     }
+    body += ruleReviewHtml(O, d, q);
   } else if (d.wr3Missing) {
     // before migration 003: 002's report of old catalog rows not linked yet (kept so the tab works until 003 is run)
     const tab = O.wrLinkTable || "producers", S = d.wrSuggest;

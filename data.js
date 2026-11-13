@@ -822,6 +822,12 @@ export async function refWork(sb, action, payload) {
   if (error) throw (error.code === "PGRST202" ? new Error("This part needs migration 004 (docs/reference/migration_004/DEPLOY_004.md).") : error);
   return data;
 }
+// Migration 005 (docs/reference/migration_005): public.ref_rules, the grape-rule review and import (stage, decide, import as drafts).
+export async function refRules(sb, action, payload) {
+  const { data, error } = await sb.rpc("ref_rules", { p_action: action, p_data: payload || {} });
+  if (error) throw (error.code === "PGRST202" ? new Error("The review and import need migration 005 (docs/reference/migration_005/DEPLOY_005.md).") : error);
+  return data;
+}
 export async function refReview(sb, table, id, decision, note = "") {
   const { data, error } = await sb.rpc("ref_review", { p_table: table, p_id: id, p_decision: decision, p_note: note });
   if (error) throw error;
