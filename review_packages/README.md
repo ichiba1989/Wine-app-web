@@ -38,3 +38,7 @@ on the website (the publishing workflow only copies `main` and `vwm`), and nothi
   (appellation_grape_rules against aocgrapes.js). **Implemented and tested locally; NOT run on production; needs 003 first.** Built from
   `main` at `b7f42c1` (`vwm` at `94da41f`); 26 files. Local suite 78/0 (main and vwm). ZIP SHA-256:
   `a70006bbbad33d5244abe714577ec110a9806b826b004ce85f680b4435743672`.
+- `Wine_Reference_Migration_005_Review.zip` (2026-11-13): **Migration 005** (release `005 r1 (2026-11-13)`): the grape-rule reconciliation and import
+  workflow (stage, decide, import as drafts; nothing published). **Implemented and tested locally; NOT run on production; needs 003 and 004.**
+  Built from `main` at `084b46d` (`vwm` at `523e345`); 26 files. Local suite 85/0 (main and vwm). ZIP SHA-256:
+  `70cc7390205ddd38889371dd896192a4cbeb1ba97acfa2feada6f0fb029ef909`.
