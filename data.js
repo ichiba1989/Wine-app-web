@@ -969,6 +969,13 @@ export async function refTools(sb, action, payload) {
   if (error) throw (error.code === "PGRST202" ? new Error("This part needs migration 003 (docs/reference/migration_003/DEPLOY_003.md).") : error);
   return data;
 }
+// Migration 004 (docs/reference/migration_004): public.ref_work: grape and place-tree drafts from the old catalog, the subject-area
+// assignments, and the read-only grape-rules check. Before 004 the function does not exist.
+export async function refWork(sb, action, payload) {
+  const { data, error } = await sb.rpc("ref_work", { p_action: action, p_data: payload || {} });
+  if (error) throw (error.code === "PGRST202" ? new Error("This part needs migration 004 (docs/reference/migration_004/DEPLOY_004.md).") : error);
+  return data;
+}
 export async function refReview(sb, table, id, decision, note = "") {
   const { data, error } = await sb.rpc("ref_review", { p_table: table, p_id: id, p_decision: decision, p_note: note });
   if (error) throw error;

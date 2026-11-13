@@ -786,3 +786,17 @@ Read from the local test database after 003 was installed. Design: `docs/referen
 
 No new tables, and no new vocabulary rows.
 
+## Added by migration 004 (release `004 r1 (2026-11-13)`; not run on production yet)
+
+Design: `docs/reference/migration_004/README.md`. No new tables or columns.
+
+- Relationship type `rules_name_grape` (proposed): place → grape_variety. Risk tier 1; required modality `documentary`. Qualifiers:
+  `rule`, `min_percent`.
+- `public.ref_work(p_action text, p_data jsonb)`: security definer with `search_path ''`, `authenticated` only.
+  - Reads (any `ref_*`): `assignments`, `rule_grape_report`.
+  - `ref_edit`: `catalog_grapes`, `catalog_place_tree`.
+- Internal, no grants: `wine_reference.catalog_grapes(text[], integer)`, `catalog_place_tree(integer)`,
+  `rule_grape_report(jsonb)`, `fingerprint_004()`.
+- Reads `public.wine_grapes` (`wine_id`, `grape_id`, `basis`) and `public.appellation_grape_rules`. The second is read whole with
+  `to_jsonb`, so it does not depend on the table's column names.
+
