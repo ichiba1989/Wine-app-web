@@ -26,6 +26,16 @@ AND give its download link, and name the branch and path. Packages live on branc
 
 Latest review package: `review_packages/Wine_Reference_Migration_002_Review.zip` (Migration 002, 2026-11-08). Earlier: `review_packages/Wine_Reference_Phase_2_0B_3_Security_Review.zip` on branch `claude/wine-app-setup-35g1ne`
 (Migration 001 **r4**, rebuilt after the final review follow-up on 2026-11-01; not on the website).
+**Migration 004 (2026-11-13, release `004 r1 (2026-11-13)`): implemented and tested locally; NOT run on production; needs 003 first.**
+- What it adds: `made_from` drafts from label grapes, `part_of` drafts from the catalog's place tree, subject areas on each thing, the
+  read-only Grape rules check, and `rules_name_grape` (proposed).
+- Tests: `docs/reference/migration_004/tests/run_004_tests.sh`, 78/0.
+- Steps: `docs/reference/migration_004/DEPLOY_004.md`.
+- Owner decision: which list becomes the reference for appellation grape rules (README there; recommended: C, line by line).
+
+**Owner approved running Migration 003 r1 (2026-11-13).** As of 2026-11-13 `live_post_deploy_003.mjs` still reported "not deployed yet".
+Once it is live, run `live_post_deploy_003.mjs`, `live_smoke.mjs` and `live_ui.mjs`.
+
 **Migration 003 (2026-11-08, release `003 r1 (2026-11-08)`): implemented and tested locally; NOT run on production.**
 - What it adds: subject-area import tools (no taxonomy content), product and edition drafts from the old catalog, and catalog matching
   with database rules on every link.

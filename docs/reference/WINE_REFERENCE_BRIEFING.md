@@ -26,6 +26,7 @@ needs the owner: the decisions in section 10 and written approval, then the chec
 9. Security, compatibility, tests and recovery
 9a. Migration 002
 9b. Migration 003
+9c. Migration 004
 10. Decisions the owner still has to make
 11. Checklist for running migration 001 on the live database
 12. What is missing (dependencies)
@@ -316,6 +317,19 @@ What 002 adds, which is exactly what DESIGN.md §3 put off to 002:
 `nv_identifier`. `bottle_format_ml` stays proposed until the owner decides where it belongs.
 
 **Not included:** the 14 domains and the subdomains themselves (the owner's list).
+
+## 9c. Migration 004 (2026-11-13): grape and place-tree drafts, subject-area assignments, the grape-rules check
+
+**Status:** tested locally (78/0); not run on production; needs 003 first (`docs/reference/migration_004/`).
+
+**Built:**
+- `made_from` drafts, only from label grapes, with no invented share;
+- `part_of` drafts from the catalog's own place tree, only between confirmed places;
+- subject areas on each thing, with review;
+- a read-only comparison of `appellation_grape_rules` with `aocgrapes.js` that works whatever the table's columns are called;
+- `rules_name_grape` (proposed).
+
+**Owner decision:** which list becomes the reference for appellation grape rules (A, B or C; C recommended).
 
 ## 10. Decisions the owner still has to make
 

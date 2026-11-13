@@ -3,7 +3,7 @@
 // still decides what anyone may change. The rules at the top (rows, search, sort, checks, coverage) are pure: no page, no network.
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
 import { esc } from "./logic.js?v=23";
-import { REACH_CHOICES } from "./wineinfo.js?v=37";
+import { REACH_CHOICES } from "./wineinfo.js?v=38";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=4";
 import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=15";
 import { TAG_KINDS } from "./tags.js?v=4";
@@ -12,6 +12,7 @@ import { centsToField } from "./pricing.js?v=3";
 import { ASSIGNABLE_ROLES, ROLES, PERMISSIONS, staffRows, filterStaff, rowActions } from "./access.js?v=4";
 import { plainKey } from "./text.js?v=2";
 import { rankAppellationFor } from "./rankaoc.js?v=1";
+import { APPELLATION_GRAPES } from "./aocgrapes.js?v=2";
 import { placeChecks } from "./geo.js?v=9";
 import { WINE_KINDS, FOODS, RATING_ORDER, RATING_LABEL, kindById, fitOf, ratingOf } from "./foods.js?v=3";
 export { placeChecks };   // used by app.js through the lazily loaded Owner module
@@ -320,7 +321,7 @@ export function pairingsTable(O, d) {
 // approve (the Owner may approve their own work; it is recorded as an owner override), publish, retire. Nothing here reaches players
 // while reference_enabled is 0. The rules below (which decisions a status allows, the steps for an entity with its names, or a source
 // with its rights and versions) are pure; app.js calls the database.
-export const WR_VIEWS = [{ id: "entities", label: "Places & things" }, { id: "sources", label: "Sources" }, { id: "claims", label: "Facts" }, { id: "types", label: "Types" }, { id: "taxonomy", label: "Subject areas" }, { id: "links", label: "Catalog links" }];
+export const WR_VIEWS = [{ id: "entities", label: "Places & things" }, { id: "sources", label: "Sources" }, { id: "claims", label: "Facts" }, { id: "types", label: "Types" }, { id: "taxonomy", label: "Subject areas" }, { id: "links", label: "Catalog links" }, { id: "rules", label: "Grape rules" }];
 export const WR_LANGS = [["en", "English"], ["fr", "Français"], ["it", "Italiano"], ["ja", "日本語"], ["zh-Hans", "中文 (简体)"], ["zh-Hant", "中文 (繁體)"], ["de", "Deutsch"], ["es", "Español"], ["und", "Not stated"]];
 export const WR_LINK_TABLES = [["producers", "Producers"], ["wines", "Wines"], ["wine_vintages", "Vintages"], ["grapes", "Grapes"], ["geo_areas", "Places"]];
 export const WR_DECISION_LABEL = { submit: "Submit", approve: "Approve", reject: "Send back", publish: "Publish", retire: "Retire" };
@@ -422,6 +423,16 @@ export function taxonomySteps(dom, decision) {
   const ents = all.filter((e) => e.status === want && !(decision === "publish" && e.published_at)).map((e) => e.entity_id);
   return { names, entities: ents };
 }
+// The app's code list of appellation grape rules (aocgrapes.js), as the lines the grape-rules check compares with appellation_grape_rules.
+export const ruleLines = () => APPELLATION_GRAPES.map((r) => ({ country: r.country, appellation: r.appellation, style: r.style, grape: r.grape, rule: r.rule, checked: !!r.checked, source: r.source || "" }));
+// The grape-rules check in counts: how many code lines are in both, missing from the table, or not found in the catalog by name.
+export function ruleSummary(rep) {
+  const out = { both: 0, missing: 0, notFound: 0, extra: (rep && rep.extra_rows || []).length };
+  for (const l of (rep && rep.lines) || []) { if (l.state === "in both") out.both++; else if (l.state === "not in appellation_grape_rules") out.missing++; else out.notFound++; }
+  return out;
+}
+// A table row shown compactly: its fields as stored, ids left out (they are long and say nothing to a person).
+export const rowText = (row) => Object.entries(row || {}).filter(([, v]) => v !== null && v !== "" && !/^[0-9a-f-]{36}$/i.test(String(v))).map(([k, v]) => `${k}: ${v}`).join(" · ");
 export const WR_LINK_FILTERS = [["waiting", "Waiting"], ["several", "Several candidates"], ["unlinked", "Not linked"], ["confirmed", "Confirmed"], ["duplicates", "Same thing twice"]];
 export const WR_METHOD_LABEL = { editor: "picked by hand", exact_name: "same name", created_from_catalog: "made from this row" };
 // Recommendations for the identity types (migration 003 README). The decision stays the owner's: the Types view only shows the advice.
@@ -439,6 +450,18 @@ export const WR_TYPE_ADVICE = {
   made_from: ["later", "Switch on once grape varieties are linked and confirmed; a share only when stated."],
   bottle_format_ml: ["decide", "Your decision first: does bottle format belong to a release (REFERENCE_MODEL.md section 15, question 4)? Keep it proposed until then."],
 };
+// Subject areas of one thing (migration 004's read, 003's assign): its assignments with their review buttons, and a form to add one.
+function assignHtml(e, d) {
+  const A = d.wrAssign, T = d.wrTax;
+  if (e.kind === "taxonomy_domain" || e.kind === "taxonomy_node") return "";
+  if (A === null || T === null) return `<div class="muted tiny">${esc(d.wr4Error || d.wr3Error || "Subject areas need migrations 003 and 004.")}</div>`;
+  if (!A || A.entity_id !== e.id || !T) return `<div class="muted tiny">Loading subject areas…</div>`;
+  const nodes = []; for (const dm of T.domains || []) for (const n of dm.nodes || []) nodes.push([n.code, `${n.code} ${((n.names || []).find((x) => x.language === "en") || (n.names || [])[0] || {}).name || ""}`]);
+  const rows = (A.rows || []).map((a) => `<div class="small">Subject area <b>${esc(a.node)}</b> ${esc(a.node_name || "")}${a.is_primary ? " · main" : ""} ${wrBadge(a.status, false)} ${wrButtons("wrassign", a.id, nextDecisions(a.status))}</div>`).join("");
+  const form = nodes.length ? `<div class="ocontrols">${wrSelect("anode", nodes, "Subject area")}<label class="small"><input type="checkbox" data-wr="aprimary"> main one</label><button class="opill" data-action="owner:wrassignadd:${e.id}">Put in subject area</button></div>`
+    : `<div class="muted tiny">No subject areas yet (Subject areas view).</div>`;
+  return rows + form;
+}
 const wrBadge = (st, published) => (st === "verified" && published ? `<span class="gbadge ok">Published</span>` : st === "verified" ? `<span class="gbadge">Approved</span>`
   : st === "pending_review" ? `<span class="gbadge star">Waiting for review</span>` : st === "retired" ? `<span class="gbadge">Retired</span>` : `<span class="gbadge draft">Draft</span>`);
 const wrButtons = (verb, id, decisions) => decisions.map((dec) => `<button class="opill" data-action="owner:${verb}:${id}:${dec}">${esc(WR_DECISION_LABEL[dec])}</button>`).join("");
@@ -459,7 +482,7 @@ export function referenceTable(O, d) {
     const rows = ents.filter((e) => !q || (e.names || []).some((n) => fold(n.name).includes(q))).map((e) => {
       const open = O.wrOpen === e.id, decisions = nextDecisions(e.status, !!e.published_at, true);
       const names = (e.names || []).map((n) => `<div class="small">${esc(n.name)} <span class="muted">${esc(n.language)}${n.script ? " " + esc(n.script) : ""} · ${esc(n.name_kind)}${n.is_preferred ? " · preferred" : ""}</span> ${wrBadge(n.status, false)} ${e.status !== n.status && n.status !== "verified" && n.status !== "retired" ? wrButtons("wrname", n.id, nextDecisions(n.status)) : ""}</div>`).join("");
-      const add = open ? `<div class="ocontrols">${wrInput("addname", "Another name")}${wrSelect("addlang", WR_LANGS, "Language", "fr")}${wrSelect("addkind", (R.name_kinds || []).map((k) => [k.code, k.label]), "Kind of name", "translation")}<button class="opill" data-action="owner:wraddname:${e.id}">Add name</button></div>` : "";
+      const add = open ? `<div class="ocontrols">${wrInput("addname", "Another name")}${wrSelect("addlang", WR_LANGS, "Language", "fr")}${wrSelect("addkind", (R.name_kinds || []).map((k) => [k.code, k.label]), "Kind of name", "translation")}<button class="opill" data-action="owner:wraddname:${e.id}">Add name</button></div>${assignHtml(e, d)}` : "";
       return `<tr><td><b>${esc(prefName(e))}</b><div class="muted tiny">${esc(kindLabel.get(e.kind) || e.kind)}</div></td><td>${wrBadge(e.status, !!e.published_at)}</td><td>${names}${add}</td><td>${wrButtons("wrent", e.id, decisions)}<button class="opill" data-action="owner:wropen:${e.id}">${open ? "Close" : "Names"}</button></td></tr>`;
     }).join("");
     body = form + table("<th>Thing</th><th>Status</th><th>Names</th><th></th>", rows, "Nothing yet. Create the first draft above.");
@@ -511,6 +534,21 @@ export function referenceTable(O, d) {
       return `<div class="onote"><div><b>${esc(dm.code)}</b> ${label(dm)}</div>${nodes}<div class="ocontrols">${act("submit", "Submit all")}${act("approve", "Approve all")}${act("publish", "Publish all")}</div></div>`;
     }).join("") : `<p class="muted small">No subject areas yet: they come only from your approved list.</p>`;
     body = imp + `<h4 class="gh">Subject areas</h4>` + tree;
+  } else if (view === "rules") {
+    const G = d.wrRules;
+    if (G === undefined) body = `<p class="muted">Loading…</p>`;
+    else if (G === null) body = `<p class="muted small">${esc(d.wr4Error || "Could not run the check.")}</p>`;
+    else if (!G.table_found) body = `<p class="muted small">There is no appellation_grape_rules table in the database, so there is nothing to compare.</p>`;
+    else {
+      const s = ruleSummary(G), filt = O.wrRuleFilter || "differ";
+      const pick = `<div class="ocontrols">${[["differ", "Not in both"], ["all", "All code lines"], ["extra", "Only in the table"]].map(([id, label]) => `<button class="opill${id === filt ? " on" : ""}" data-action="owner:wrrulefilter:${id}" aria-pressed="${id === filt}">${esc(label)}</button>`).join("")}</div>`;
+      const note = `<div class="muted small onote">A read-only comparison of the database table appellation_grape_rules (${G.table_rows} rows; columns ${esc((G.columns || []).join(", "))}) with the app's code list (aocgrapes.js). Nothing is changed. <b>${s.both}</b> code lines are in both; ${s.missing} are not in the table; ${s.notFound} could not be found in the catalog by their exact name; ${s.extra} table rows match no code line. Deciding which becomes the reference (as facts of the proposed type "Its rules name the grape") is yours.</div>`;
+      const lines = (G.lines || []).filter((l) => filt === "all" || l.state !== "in both").filter((l) => !q || fold(l.appellation + " " + l.grape).includes(q));
+      const lineRows = lines.map((l) => `<tr><td>${esc(l.appellation)} <span class="muted tiny">${esc(l.style || "")}</span></td><td>${esc(l.grape)} <span class="muted tiny">${esc(l.rule)}${l.checked ? "" : " · to check"}</span></td><td class="small">${esc(l.state)}${(l.table_rows || []).map((r) => `<div class="muted tiny">${esc(rowText(r))}</div>`).join("")}</td></tr>`).join("");
+      const extraRows = (G.extra_rows || []).map((x) => `<tr><td>${esc((x.places || []).join(", ") || "?")}</td><td>${esc((x.grapes || []).join(", ") || "?")}</td><td class="muted tiny">${esc(rowText(x.row))}</td></tr>`).join("");
+      body = note + pick + (filt === "extra" ? table("<th>Place</th><th>Grape</th><th>The table's row</th>", extraRows, "Every table row matches a code line.")
+        : table("<th>Appellation (code list)</th><th>Grape and rule</th><th>In the table</th>", lineRows, "Every code line is in the table."));
+    }
   } else if (d.wr3Missing) {
     // before migration 003: 002's report of old catalog rows not linked yet (kept so the tab works until 003 is run)
     const tab = O.wrLinkTable || "producers", S = d.wrSuggest;
@@ -530,7 +568,8 @@ export function referenceTable(O, d) {
     const counts = cov ? `<div class="muted small onote">${cov.rows} catalog rows: <b>${cov.confirmed}</b> confirmed, ${cov.waiting} waiting for your decision${cov.several ? ` (${cov.several} with several candidates)` : ""}, ${cov.unlinked} not linked. Every link is marked "old catalog, not verified"; the catalog itself never changes. Nothing is confirmed unless you confirm it.</div>`
       : C === null ? `<p class="muted small">${esc(d.wr3Error || "")}</p>` : "";
     const vint = tab === "wine_vintages";
-    const tools = `<div class="ocontrols"><button class="opill" data-action="owner:wrtool:suggest">Find same-name matches</button>${vint ? `<button class="opill" data-action="owner:wrtool:identity">Build product + edition for the next 25</button>` : `<button class="opill" data-action="owner:wrtool:seed">Make drafts for the next 50 not linked</button>`}<button class="opill" data-action="owner:wrtool:confirm">Confirm the unambiguous ones</button></div>
+    const extra = vint ? `<button class="opill" data-action="owner:wrtool:grapes">Draft grapes from the labels (made from)</button>` : tab === "geo_areas" ? `<button class="opill" data-action="owner:wrtool:placetree">Draft the place tree (part of)</button>` : "";
+    const tools = `<div class="ocontrols"><button class="opill" data-action="owner:wrtool:suggest">Find same-name matches</button>${vint ? `<button class="opill" data-action="owner:wrtool:identity">Build product + edition for the next 25</button>` : `<button class="opill" data-action="owner:wrtool:seed">Make drafts for the next 50 not linked</button>`}<button class="opill" data-action="owner:wrtool:confirm">Confirm the unambiguous ones</button>${extra}</div>
       <div class="muted tiny">"Unambiguous" means the row's only suggestion, either made from that very row or the one thing with exactly its name. A row with several candidates always waits for you.</div>`;
     const filters = `<div class="ocontrols">${WR_LINK_FILTERS.map(([id, label]) => `<button class="opill${id === filter ? " on" : ""}" data-action="owner:wrfilter:${id}" aria-pressed="${id === filter}">${esc(label)}</button>`).join("")}</div>`;
     let list = "";

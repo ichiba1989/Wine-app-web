@@ -6,8 +6,8 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete, styleLabel,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=23";
-import * as db from "./data.js?v=50";
-import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=25";
+import * as db from "./data.js?v=51";
+import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=26";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=14";
 import { shrinkImage } from "./photos.js?v=5";
 import {
@@ -41,7 +41,7 @@ import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=9";
 import { createProfile } from "./profile.js?v=36";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=21";
 import { createFeedback } from "./feedback.js?v=15";
-import { createEditor } from "./editor.js?v=53";
+import { createEditor } from "./editor.js?v=54";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=18";
 import { gamesHtml } from "./games.js?v=28";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
@@ -56,7 +56,7 @@ import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
 import { setOffline, setCardLookup } from "./overlay.js?v=2";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null, ATL = null, ATLD = null, ATLL = null, FOOD = null, REST = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=32"));
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=33"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=15"));
 const loadFoodModule = async () => { FOOD = FOOD || await import("./foodview.js?v=4"); ensureFoodPins(); return FOOD; };   // the Food screens in the More tab, on first use
 const loadRestModule = async () => (REST = REST || await import("./restview.js?v=3"));   // At a restaurant, in the More tab, on first use
@@ -64,7 +64,7 @@ const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=21"
 const loadAtlasModule = async () => (ATL = ATL || await import("./atlasview.js?v=8"));   // the Atlas screen, on first use
 const loadAtlasData = async () => (ATLD = ATLD || await import("./atlasdata.js?v=2"));   // the Atlas's map data (about 290 KB compressed), when the Atlas opens
 const loadAtlasLite = async () => (ATLL = ATLL || await import("./atlaslite.js?v=3"));   // the card map's lighter data (about 90 KB compressed), when a card's map is tapped
-import { createWineInfo } from "./wineinfo.js?v=37";
+import { createWineInfo } from "./wineinfo.js?v=38";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -532,7 +532,7 @@ function ownerData() {
   const O = state.owner;
   if (state._ownerFor !== state.cards) { state._ownerFor = state.cards; state._ownerCache = { rows: OWN.wineRows(state.cards), bingo: OWN.bingoCoverage(state.cards) }; }
   const { bingo } = state._ownerCache, rows = OWN.withTags(state._ownerCache.rows, O.wineTags, O.wineIds);
-  return { rows, bingo, wineTags: O.wineTags, wineTagsError: O.wineTagsError, checks: OWN.checkCounts(rows), places: O.places, refLists: O.refLists, refListsError: O.refListsError, config: O.config, configError: O.configError, pins: O.pins, pinsError: O.pinsError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, staff: O.staff, staffError: O.staffError, staffAudit: O.staffAudit, wref: O.wref, wrefError: O.wrefError, wrSuggest: O.wrSuggest, wrSuggestError: O.wrSuggestError, wrTax: O.wrTax, wrCov: O.wrCov, wrQueue: O.wrQueue, wrImport: O.wrImport, wr3Error: O.wr3Error, wr3Missing: O.wr3Missing, seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
+  return { rows, bingo, wineTags: O.wineTags, wineTagsError: O.wineTagsError, checks: OWN.checkCounts(rows), places: O.places, refLists: O.refLists, refListsError: O.refListsError, config: O.config, configError: O.configError, pins: O.pins, pinsError: O.pinsError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, staff: O.staff, staffError: O.staffError, staffAudit: O.staffAudit, wref: O.wref, wrefError: O.wrefError, wrSuggest: O.wrSuggest, wrSuggestError: O.wrSuggestError, wrTax: O.wrTax, wrCov: O.wrCov, wrQueue: O.wrQueue, wrImport: O.wrImport, wr3Error: O.wr3Error, wr3Missing: O.wr3Missing, wrAssign: O.wrAssign, wrRules: O.wrRules, wr4Error: O.wr4Error, seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
 }
 // The lens preview: the top picks of one lens for the owner's own profile, or for a brand-new player, using the weights typed on the page.
 function ownerLens() {
@@ -687,7 +687,23 @@ async function loadOwnerReference() {
   catch (e) { O.wref = null; O.wrefError = /migration 002/.test(String(e.message || "")) ? e.message : "Could not load the reference: " + (e.message || e); }
   if (O.wrView === "links") await loadOwnerLinks(false);
   if (O.wrView === "taxonomy") await loadOwnerTaxonomy(false);
+  if (O.wrView === "rules") await loadOwnerRules(false);
+  if ((O.wrView || "entities") === "entities" && O.wrOpen) await loadOwnerAssign(O.wrOpen, false);
   if (state.tab === "owner" && O.tab === "reference") ownerRedraw();
+}
+// Migration 004's reads (ref_work): one thing's subject areas (with the subject-area list for the form), and the grape-rules check.
+async function loadOwnerAssign(entityId, redraw = true) {
+  const O = state.owner;
+  if (!O.wrTax) await loadOwnerTaxonomy(false);
+  try { const r = await db.refWork(state.sb, "assignments", { entity_id: entityId }); O.wrAssign = { entity_id: entityId, rows: r.assignments || [] }; O.wr4Error = ""; }
+  catch (e) { O.wrAssign = null; O.wr4Error = e.message || String(e); }
+  if (redraw && state.tab === "owner" && O.tab === "reference") ownerRedraw();
+}
+async function loadOwnerRules(redraw = true) {
+  const O = state.owner;
+  try { O.wrRules = await db.refWork(state.sb, "rule_grape_report", { lines: OWN.ruleLines() }); O.wr4Error = ""; }
+  catch (e) { O.wrRules = null; O.wr4Error = e.message || String(e); }
+  if (redraw && state.tab === "owner" && O.tab === "reference") ownerRedraw();
 }
 // Migration 003's reads (ref_tools). Before 003 the links view falls back to 002's report (wr3Missing).
 const wr3Fail = (O, e) => { O.wr3Missing = /migration 003/.test(String(e.message || "")); O.wr3Error = O.wr3Missing ? e.message : "Could not load: " + (e.message || e); };
@@ -723,8 +739,9 @@ async function wrRun(steps) {
 }
 async function ownerReference([a, b, c, d]) {
   const O = state.owner, R = O.wref || {}, sb = state.sb;
-  if (a === "wrview") { O.wrView = b; O.q = ""; renderBody(); if (b === "links") await loadOwnerLinks(); if (b === "taxonomy") await loadOwnerTaxonomy(); return; }
-  if (a === "wropen") { O.wrOpen = O.wrOpen === b ? null : b; ownerRedraw(); return; }
+  if (a === "wrview") { O.wrView = b; O.q = ""; renderBody(); if (b === "links") await loadOwnerLinks(); if (b === "taxonomy") await loadOwnerTaxonomy(); if (b === "rules") await loadOwnerRules(); return; }
+  if (a === "wropen") { O.wrOpen = O.wrOpen === b ? null : b; O.wrAssign = undefined; ownerRedraw(); if (O.wrOpen) await loadOwnerAssign(O.wrOpen); return; }
+  if (a === "wrrulefilter") { O.wrRuleFilter = b; ownerRedraw(); return; }
   if (a === "wrlinktab") { O.wrLinkTable = b; O.wrSuggest = undefined; O.wrQueue = undefined; ownerRedraw(); await loadOwnerLinks(); return; }
   if (a === "wrfilter") { O.wrFilter = b; O.wrQueue = undefined; ownerRedraw(); await loadOwnerLinks(); return; }
   try {
@@ -791,6 +808,15 @@ async function ownerReference([a, b, c, d]) {
       const table = O.wrLinkTable || "producers";
       if (a === "wrtool" && b === "suggest") { const r = await db.refTools(sb, "suggest_links", { table, limit: 2000 }); ownerSay(`${r.suggestions} suggestions for ${r.rows_matched} rows (same name).`); }
       else if (a === "wrtool" && b === "seed") { const r = await db.refTools(sb, "seed_from_catalog", { table, limit: 50 }); ownerSay(`${r.drafts} drafts made and suggested.`); }
+      else if (a === "wrtool" && b === "placetree") {
+        const r = await db.refWork(sb, "catalog_place_tree", { limit: 2000 });
+        ownerSay(`${r.made} "part of" drafts made, ${r.already_there} already there, ${r.waiting_for_links} waiting for both places to be confirmed${r.type_proposed ? `, ${r.type_proposed} waiting for "Is part of" to be switched on (Types)` : ""}.`);
+      } else if (a === "wrtool" && b === "grapes") {
+        const r = await db.refWork(sb, "catalog_grapes", { limit: 200 }), res = r.results || [];
+        let made = 0, there = 0, proposed = 0, skipped = 0; const noEd = res.filter((x) => x.error).length;
+        for (const x of res) { for (const f of x.facts || []) { if (f.made_from === "made") made++; else if (f.made_from === "type proposed") proposed++; else there++; } skipped += (x.skipped || []).length; }
+        ownerSay(`${made} "made from" drafts, ${there} already there${proposed ? `, ${proposed} waiting for "Is made from" to be switched on (Types)` : ""}; ${skipped} grapes skipped (not from the label, or not linked yet)${noEd ? `; ${noEd} vintages need product + edition first` : ""}.`);
+      }
       else if (a === "wrtool" && b === "confirm") { const r = await db.refTools(sb, "confirm_unambiguous", { table, limit: 200 }); ownerSay(`${r.confirmed} confirmed.`); }
       else if (b === "seed") { await db.refTools(sb, "seed_from_catalog", { table, ids: [c] }); ownerSay("Draft made and suggested."); }
       else if (b === "identity") {
@@ -801,7 +827,11 @@ async function ownerReference([a, b, c, d]) {
         const errs = res.filter((x) => x.error), waiting = new Set(); for (const x of res) for (const [k, v] of Object.entries(x.facts || {})) if (v === "type proposed") waiting.add(k);
         ownerSay(`${res.length - errs.length} built${errs.length ? `, ${errs.length} not: ${errs[0].error}` : ""}.${waiting.size ? ` Facts waiting for their type to be switched on: ${[...waiting].join(", ")}.` : ""}`);
       }
-    } else if (a === "wrundo") { await db.refTools(sb, "undo_link", { id: b, note: "undone on the Owner page" }); ownerSay("Link undone (it is now rejected; the history is kept)."); }
+    } else if (a === "wrassignadd") {
+      await db.refTools(sb, "assign_taxonomy", { entity_id: b, node: wrVal("anode"), is_primary: wrVal("aprimary") === true });
+      ownerSay("Put in the subject area as a draft; submit and approve it here.");
+    } else if (a === "wrassign") { await db.refReview(sb, "taxonomy_assignments", b, c); ownerSay(`Subject area: ${OWN.WR_DECISION_LABEL[c]} done.`); }
+    else if (a === "wrundo") { await db.refTools(sb, "undo_link", { id: b, note: "undone on the Owner page" }); ownerSay("Link undone (it is now rejected; the history is kept)."); }
     await loadOwnerReference();
   } catch (e) { ownerSay("Not saved: " + (e.message || e)); await loadOwnerReference(); }
 }
