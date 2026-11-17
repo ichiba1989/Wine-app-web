@@ -26,7 +26,14 @@ AND give its download link, and name the branch and path. Packages live on branc
 
 Latest review package: `review_packages/Wine_Reference_Migration_002_Review.zip` (Migration 002, 2026-11-08). Earlier: `review_packages/Wine_Reference_Phase_2_0B_3_Security_Review.zip` on branch `claude/wine-app-setup-35g1ne`
 (Migration 001 **r4**, rebuilt after the final review follow-up on 2026-11-01; not on the website).
-**Migration 005 (2026-11-13, release `005 r1 (2026-11-13)`): implemented and tested locally; NOT run on production; needs 003 and 004.**
+**Production check, 2026-11-17: 003, 004 and 005 are all approved but NOT live.** Each `live_post_deploy_00N.mjs` reports "not
+deployed yet" (`ref_tools`, `ref_work` and `ref_rules` are not found by the Data API). If the owner did run 003, run
+`notify pgrst, 'reload schema';` in the SQL Editor and check again. Order and file fingerprints: `docs/reference/DEPLOY_ORDER.md`.
+
+**Editorial work queue (2026-11-17, app only):** the Reference tab's To do view, tick boxes, and bulk Submit/Approve (never publish).
+`docs/reference/editorial/` (30/0).
+
+**Migration 005 (2026-11-13, release `005 r1 (2026-11-13)`): implemented and tested locally; NOT run on production; needs 003 and 004. Approved by the owner on 2026-11-17, conditional on 003 and 004.**
 - What it adds: the grape-rule review and import (stage, decide, import as drafts with documentary evidence; nothing published;
   conflicts only by explicit choice).
 - Tests: `docs/reference/migration_005/tests/run_005_tests.sh`, 85/0.

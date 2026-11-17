@@ -58,7 +58,7 @@ import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
 import { setOffline, setCardLookup } from "./overlay.js?v=3";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null, ATL = null, ATLD = null, ATLL = null, FOOD = null, REST = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=50"));
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=51"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=17"));
 const loadFoodModule = async () => { FOOD = FOOD || await import("./foodview.js?v=5"); ensureFoodPins(); return FOOD; };   // the Food screens in the More tab, on first use
 const loadRestModule = async () => (REST = REST || await import("./restview.js?v=4"));   // At a restaurant, in the More tab, on first use
@@ -557,7 +557,7 @@ function ownerData() {
   const O = state.owner;
   if (state._ownerFor !== state.cards) { state._ownerFor = state.cards; state._ownerCache = { rows: OWN.wineRows(state.cards), bingo: OWN.bingoCoverage(state.cards) }; }
   const { bingo } = state._ownerCache, rows = OWN.withTags(state._ownerCache.rows, O.wineTags, O.wineIds);
-  return { rows, bingo, wineTags: O.wineTags, wineTagsError: O.wineTagsError, checks: OWN.checkCounts(rows), places: O.places, refLists: O.refLists, refListsError: O.refListsError, config: O.config, configError: O.configError, pins: O.pins, pinsError: O.pinsError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, staff: O.staff, staffError: O.staffError, staffAudit: O.staffAudit, wref: O.wref, wrefError: O.wrefError, wrSuggest: O.wrSuggest, wrSuggestError: O.wrSuggestError, wrTax: O.wrTax, wrCov: O.wrCov, wrQueue: O.wrQueue, wrImport: O.wrImport, wr3Error: O.wr3Error, wr3Missing: O.wr3Missing, wrAssign: O.wrAssign, wrRules: O.wrRules, wr4Error: O.wr4Error, wrBatches: O.wrBatches, wrCands: O.wrCands, wr5Error: O.wr5Error, wr5Missing: O.wr5Missing, venue: state.venue, wineIds: O.wineIds, cards: state.cards, cardsById: new Map(state.cards.map((c) => [c.id, c])), seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
+  return { rows, bingo, wineTags: O.wineTags, wineTagsError: O.wineTagsError, checks: OWN.checkCounts(rows), places: O.places, refLists: O.refLists, refListsError: O.refListsError, config: O.config, configError: O.configError, pins: O.pins, pinsError: O.pinsError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, staff: O.staff, staffError: O.staffError, staffAudit: O.staffAudit, wref: O.wref, wrefError: O.wrefError, wrSuggest: O.wrSuggest, wrSuggestError: O.wrSuggestError, wrTax: O.wrTax, wrCov: O.wrCov, wrQueue: O.wrQueue, wrImport: O.wrImport, wr3Error: O.wr3Error, wr3Missing: O.wr3Missing, wrAssign: O.wrAssign, wrRules: O.wrRules, wr4Error: O.wr4Error, wrBatches: O.wrBatches, wrCands: O.wrCands, wr5Error: O.wr5Error, wr5Missing: O.wr5Missing, wrQueueAll: O.wrQueueAll, venue: state.venue, wineIds: O.wineIds, cards: state.cards, cardsById: new Map(state.cards.map((c) => [c.id, c])), seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
 }
 // The lens preview: the top picks of one lens for the owner's own profile, or for a brand-new player, using the weights typed on the page.
 function ownerLens() {
@@ -717,6 +717,7 @@ async function loadOwnerReference() {
   if (O.wrView === "links") await loadOwnerLinks(false);
   if (O.wrView === "taxonomy") await loadOwnerTaxonomy(false);
   if (O.wrView === "rules") await loadOwnerRules(false);
+  if (O.wrView === "todo") await loadOwnerTodo(false);
   if ((O.wrView || "entities") === "entities" && O.wrOpen) await loadOwnerAssign(O.wrOpen, false);
   if (state.tab === "owner" && O.tab === "reference") ownerRedraw();
 }
@@ -733,6 +734,14 @@ async function loadOwnerRules(redraw = true) {
   try { O.wrRules = await db.refWork(state.sb, "rule_grape_report", { lines: OWN.ruleLines() }); O.wr4Error = ""; }
   catch (e) { O.wrRules = null; O.wr4Error = e.message || String(e); }
   await loadOwnerRuleReview(false);
+  if (redraw && state.tab === "owner" && O.tab === "reference") ownerRedraw();
+}
+// The To do view: the overview (002) with what 003 and 005 add when they are deployed; a part not deployed is named, not guessed.
+async function loadOwnerTodo(redraw = true) {
+  const O = state.owner, sb = state.sb, missing = [];
+  const part = (p, mig) => p.catch((e) => { missing.push(/migration 00\d/.test(String(e.message || "")) ? `migration ${mig}` : `${mig} (${e.message || e})`); return null; });
+  const [coverage, taxonomy, batches] = await Promise.all([part(db.refTools(sb, "coverage"), "003"), part(db.refTools(sb, "taxonomy"), "003"), part(db.refRules(sb, "batches"), "005")]);
+  O.wrQueueAll = OWN.workQueue({ overview: O.wref, coverage, taxonomy, batches: batches && batches.batches, missing: [...new Set(missing)] });
   if (redraw && state.tab === "owner" && O.tab === "reference") ownerRedraw();
 }
 // Migration 005's review (ref_rules): the batches, and the latest batch's candidates in the chosen state.
@@ -778,9 +787,14 @@ async function wrRun(steps) {
 }
 async function ownerReference([a, b, c, d]) {
   const O = state.owner, R = O.wref || {}, sb = state.sb;
-  if (a === "wrview") { O.wrView = b; O.q = ""; renderBody(); if (b === "links") await loadOwnerLinks(); if (b === "taxonomy") await loadOwnerTaxonomy(); if (b === "rules") await loadOwnerRules(); return; }
+  if (a === "wrview") { O.wrView = b; O.q = ""; renderBody(); if (b === "links") await loadOwnerLinks(); if (b === "taxonomy") await loadOwnerTaxonomy(); if (b === "rules") await loadOwnerRules(); if (b === "todo") { O.wrQueueAll = undefined; await loadOwnerTodo(); } return; }
   if (a === "wropen") { O.wrOpen = O.wrOpen === b ? null : b; O.wrAssign = undefined; ownerRedraw(); if (O.wrOpen) await loadOwnerAssign(O.wrOpen); return; }
   if (a === "wrrulefilter") { O.wrRuleFilter = b; ownerRedraw(); return; }
+  if (a === "wrtick" || a === "wrrtick") {   // tick boxes: only the screen state changes until a bulk button is pressed
+    const k = a === "wrtick" ? "wrTicks" : "wrRuleTicks", list = O[k] || [];
+    O[k] = list.includes(b) ? list.filter((x) => x !== b) : [...list, b]; ownerRedraw(); return;
+  }
+  if ((a === "wrticked" || a === "wrrticked") && b === "clear") { O[a === "wrticked" ? "wrTicks" : "wrRuleTicks"] = []; ownerRedraw(); return; }
   if (a === "wrcandstate") { O.wrCandState = b; O.wrCands = undefined; ownerRedraw(); await loadOwnerRuleReview(); return; }
   if (a === "wrlinktab") { O.wrLinkTable = b; O.wrSuggest = undefined; O.wrQueue = undefined; ownerRedraw(); await loadOwnerLinks(); return; }
   if (a === "wrfilter") { O.wrFilter = b; O.wrQueue = undefined; ownerRedraw(); await loadOwnerLinks(); return; }
@@ -878,6 +892,21 @@ async function ownerReference([a, b, c, d]) {
       const r = await db.refRules(sb, "decide", { ids: [b], decision: c });
       if (r.done !== 1) { ownerSay("Not saved: " + ((r.failed || [])[0] || "refused")); await loadOwnerRuleReview(); return; }
       ownerSay(`${OWN.RULE_DECISION_LABEL[c]}: saved.`);
+    } else if (a === "wrtodo") {   // a bulk review step from the To do view: each row reviewed on its own, refusals listed
+      const it = ((O.wrQueueAll && O.wrQueueAll.items) || [])[Number(b)]; if (!it || !it.bulk) return;
+      let done = 0, failed = [];
+      try { const r = await db.refTools(sb, "review_many", { table: it.bulk.table, ids: it.bulk.ids, decision: it.bulk.decision }); done = r.done; failed = r.failed || []; }
+      catch (e) {
+        if (!/migration 003/.test(String(e.message || ""))) throw e;
+        for (const id of it.bulk.ids) { try { await db.refReview(sb, it.bulk.table, id, it.bulk.decision); done++; } catch (x) { failed.push(`${id}: ${x.message || x}`); } }
+      }
+      ownerSay(`${OWN.WR_DECISION_LABEL[it.bulk.decision]}: ${done} of ${it.bulk.ids.length} done${failed.length ? `; ${failed.length} refused, first: ${failed[0]}` : "."}`);
+    } else if (a === "wrticked") {
+      const r = await db.refTools(sb, "decide_links", { ids: O.wrTicks || [], status: b }); O.wrTicks = [];
+      ownerSay(`${b === "confirmed" ? "Confirmed" : "Rejected"}: ${r.done} of ${r.of}${(r.failed || []).length ? `; refused: ${r.failed[0]}` : "."}`);
+    } else if (a === "wrrticked") {
+      const r = await db.refRules(sb, "decide", { ids: O.wrRuleTicks || [], decision: b }); O.wrRuleTicks = [];
+      ownerSay(`${OWN.RULE_DECISION_LABEL[b]}: ${r.done} of ${r.of} saved${(r.failed || []).length ? `; refused: ${r.failed[0]}` : "."}`);
     } else if (a === "wrassignadd") {
       await db.refTools(sb, "assign_taxonomy", { entity_id: b, node: wrVal("anode"), is_primary: wrVal("aprimary") === true });
       ownerSay("Put in the subject area as a draft; submit and approve it here.");
