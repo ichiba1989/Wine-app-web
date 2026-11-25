@@ -788,6 +788,60 @@ export async function removeStaff(sb, userId) {
   const { error } = await sb.rpc("staff_remove", { p_user_id: userId });
   if (error) throw staffMissing(error);
 }
+// ---------------------------------------------------------------- the Wine Education Master Reference (Owner page, Reference tab)
+// Migration 002 (docs/reference/migration_002): public.ref_staff reads the private reference for staff (drafts included);
+// public.ref_draft writes drafts with the signed-in person as author; public.ref_review (migration 001) moves them on. Online only:
+// none of these are queued offline (staff writes, convention 22). Before migration 002 the two functions do not exist (PGRST202).
+const refMissing = (error) => (error && error.code === "PGRST202" ? new Error("The reference needs migration 002 (docs/reference/migration_002/DEPLOY_002.md).") : error);
+export async function refOverview(sb) {
+  const { data, error } = await sb.rpc("ref_staff", { p_what: "overview", p_args: {} });
+  if (error) throw refMissing(error);
+  return data;
+}
+export async function refSuggestions(sb, table) {
+  const { data, error } = await sb.rpc("ref_staff", { p_what: "suggestions", p_args: { table } });
+  if (error) throw refMissing(error);
+  return data;
+}
+export async function refDraft(sb, action, payload) {
+  const { data, error } = await sb.rpc("ref_draft", { p_action: action, p_data: payload || {} });
+  if (error) throw refMissing(error);
+  return data;
+}
+// Migration 003 (docs/reference/migration_003): public.ref_tools, the tab's taxonomy, wine identity and catalog-matching tools (reads
+// for any ref_* holder; drafts and suggestions with ref_edit; link decisions with ref_review). Before 003 the function does not exist.
+export async function refTools(sb, action, payload) {
+  const { data, error } = await sb.rpc("ref_tools", { p_action: action, p_data: payload || {} });
+  if (error) throw (error.code === "PGRST202" ? new Error("This part needs migration 003 (docs/reference/migration_003/DEPLOY_003.md).") : error);
+  return data;
+}
+// Migration 004 (docs/reference/migration_004): public.ref_work: grape and place-tree drafts from the old catalog, the subject-area
+// assignments, and the read-only grape-rules check. Before 004 the function does not exist.
+export async function refWork(sb, action, payload) {
+  const { data, error } = await sb.rpc("ref_work", { p_action: action, p_data: payload || {} });
+  if (error) throw (error.code === "PGRST202" ? new Error("This part needs migration 004 (docs/reference/migration_004/DEPLOY_004.md).") : error);
+  return data;
+}
+// Migration 005 (docs/reference/migration_005): public.ref_rules, the grape-rule review and import (stage, decide, import as drafts).
+export async function refRules(sb, action, payload) {
+  const { data, error } = await sb.rpc("ref_rules", { p_action: action, p_data: payload || {} });
+  if (error) throw (error.code === "PGRST202" ? new Error("The review and import need migration 005 (docs/reference/migration_005/DEPLOY_005.md).") : error);
+  return data;
+}
+// Migration 006's read door (ref_browse, read-only): the evidence review, the full lists of things and facts page by page, and one
+// catalog row's candidate links side by side. Each answer has rows, next (the cursor for the next page, null at the end) and, on the
+// first page, total. Before 006 is run the door does not exist and the screens say so.
+export async function refBrowse(sb, action, payload) {
+  const { data, error } = await sb.rpc("ref_browse", { p_action: action, p_data: payload || {} });
+  if (error) throw (error.code === "PGRST202" ? new Error("This part needs migration 006 (docs/reference/migration_006/DEPLOY_006.md).") : error);
+  return data;
+}
+// A replacement is given only when retiring a thing (or a source version) in favour of another one (merging never deletes).
+export async function refReview(sb, table, id, decision, note = "", replacement = null) {
+  const { data, error } = await sb.rpc("ref_review", { p_table: table, p_id: id, p_decision: decision, p_note: note, ...(replacement ? { p_replacement: replacement } : {}) });
+  if (error) throw error;
+  return data;
+}
 // The latest changes to staff roles (who changed whom). An empty list until the script has been run.
 export async function loadStaffAudit(sb) {
   try {

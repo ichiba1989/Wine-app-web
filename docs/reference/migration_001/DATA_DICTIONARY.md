@@ -1,4 +1,4 @@
-# Migration 001: physical schema and data dictionary (DRAFT, 2026-10-26)
+# Migration 001: physical schema and data dictionary (DRAFT, 2026-10-26; release "001 r5 (2026-11-08)")
 
 The schema `wine_reference` as created by `001_wine_reference_foundation.sql`. **Not on the live database yet.** The column tables below are
 **generated from a tested local install** by `tests/dictionary.sql` (`DICT=... bash tests/run_local_tests.sh`), so they match the SQL
@@ -35,7 +35,28 @@ review_events (append-only, every status decision)      change_log (append-only,
 | `verified` + `published_at` | shown to players (entities and claim versions only) | `ref_review(..., 'publish')`, needs `ref_publish` and the publication rules |
 | `retired` | withdrawn; kept forever | `ref_review(..., 'retire')`, needs `ref_publish`; publishing a newer claim version retires the old one |
 
-`reject` sends a submitted row back to `draft`. A plain `update` of `status`, `published_at` or `retired_at` is refused.
+`reject` sends a submitted row back to `draft`. A plain `update` of any lifecycle column (`status`, `published_at`, `published_by`,
+`retired_at`, `superseded_by`, `checked_by`, `checked_at`, `suspended_at`, `suspended_reason`) is refused, and every other column is
+**frozen once the row leaves draft** (`guard_row`): to change approved content, write a new row, have it reviewed and retire the old one.
+
+**Suspended (claim versions only, Phase 2.0B.3).** A published version that stops being sound (its evidence's source version or source
+retired or superseded, a quote's rights retired, its subject or object retired, a dependency retired or suspended) is suspended
+automatically (`suspended_at`, `suspended_reason`, a `suspend` row in `review_events`, repeated until nothing changes, so it reaches every
+dependent). Suspension is final for that version. **Current** = verified, published, not suspended, sound, with every dependency current
+(`wine_reference.is_current`, view `wine_reference.current_claim_versions`).
+
+**Functions inside the schema** (owner only): `editorial_lock()` (the transaction-level editorial lock, DESIGN.md 4c), `version_problems(id)` (the soundness rule), `is_current(id)`, `suspend_unsound(actor,
+cause)`, `has_display_name(entity)` (a verified, non-shortcut name valid today), `structure_fingerprint()`, and the trigger functions `guard_row`, `start_as_draft`, `freeze_claim`,
+`freeze_taxonomy`, `freeze_claim_type`, `check_source_copy`, `check_claim`, `check_claim_version`, `check_taxonomy_node`,
+`check_taxonomy_domain`, `check_dependency`, `evidence_only_on_draft`, `dependency_only_on_draft`, `log_change`, `refuse_change`, and
+(release r5) `lock_before_write` (statement-level: every write statement on an editorial table takes the editorial lock before touching
+any row) and `refuse_truncate` (TRUNCATE refused on every reference table but `schema_migrations`).
+**Doors in `public`:** `ref_published_names(query, language, limit)` and `ref_review(table, id, decision, note, replacement)`.
+
+**Publishing a new version (release r5, owner decision 14).** A claim version is never published once a newer version (higher
+`version_no`) of the same claim has been published, whatever happened to it since; older content comes back only as a new version.
+Publishing retires the previous live version of the claim and records that as a `retire` row in `review_events` (actor = the person
+publishing, note "replaced by the publication of version <id>"), as well as in `change_log`.
 
 **Owner approval override (owner policy, 2026-10-26).** "Approved by someone other than the author" has one exception: the person whose
 staff role is Owner (read server-side by `public.my_staff_role_code()`, checked on every call) may approve their own work. Each such
@@ -68,7 +89,10 @@ Controlled list of entity-to-value claim types. None seeded; each is an owner de
 - Check `attribute_types_status_check`: `CHECK (status = ANY (ARRAY['proposed'::text, 'active'::text, 'retired'::text]))`
 - Check `attribute_types_value_type_check`: `CHECK (value_type = ANY (ARRAY['text'::text, 'number'::text, 'date'::text, 'boolean'::text]))`
 - Primary key `attribute_types_pkey`: `PRIMARY KEY (code)`
+- Trigger `attribute_types_freeze` runs `wine_reference.freeze_claim_type`
+- Trigger `attribute_types_lock_first` runs `wine_reference.lock_before_write`
 - Trigger `attribute_types_log` runs `wine_reference.log_change`
+- Trigger `attribute_types_no_truncate` runs `wine_reference.refuse_truncate`
 
 ## `change_log`
 
@@ -92,6 +116,7 @@ Append-only before/after record of every insert, update and delete in the refere
 - Primary key `change_log_pkey`: `PRIMARY KEY (id)`
 - Index `change_log_row`: `USING btree (table_name, row_key, changed_at)`
 - Trigger `change_log_append_only` runs `wine_reference.refuse_change`
+- Trigger `change_log_no_truncate` runs `wine_reference.refuse_truncate`
 
 ## `claim_evidence`
 
@@ -126,7 +151,9 @@ Where a claim version is supported or contradicted: source version, locator, mod
 - Index `claim_evidence_source`: `USING btree (source_version_id)`
 - Index `claim_evidence_version`: `USING btree (claim_version_id)`
 - Trigger `claim_evidence_draft_only` runs `wine_reference.evidence_only_on_draft`
+- Trigger `claim_evidence_lock_first` runs `wine_reference.lock_before_write`
 - Trigger `claim_evidence_log` runs `wine_reference.log_change`
+- Trigger `claim_evidence_no_truncate` runs `wine_reference.refuse_truncate`
 
 ## `claim_version_dependencies`
 
@@ -149,12 +176,14 @@ This claim version holds only if that one holds (Phase 1.9 revision 6). No cycle
 - Primary key `claim_version_dependencies_pkey`: `PRIMARY KEY (dependent_version_id, depends_on_version_id)`
 - Index `claim_version_dependencies_on`: `USING btree (depends_on_version_id)`
 - Trigger `claim_version_dependencies_draft_only` runs `wine_reference.dependency_only_on_draft`
+- Trigger `claim_version_dependencies_lock_first` runs `wine_reference.lock_before_write`
 - Trigger `claim_version_dependencies_log` runs `wine_reference.log_change`
 - Trigger `claim_version_dependencies_no_cycle` runs `wine_reference.check_dependency`
+- Trigger `claim_version_dependencies_no_truncate` runs `wine_reference.refuse_truncate`
 
 ## `claim_versions`
 
-What a claim says, when it was true, its risk tier and status. Frozen once it leaves draft; one live published version per claim.
+What a claim says, when it was true, its risk tier and status. Frozen once it leaves draft; one live published version per claim; suspended automatically when it stops being sound.
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -179,6 +208,8 @@ What a claim says, when it was true, its risk tier and status. Frozen once it le
 | `published_at` | timestamp with time zone | null |  |
 | `published_by` | uuid | null |  |
 | `retired_at` | timestamp with time zone | null |  |
+| `suspended_at` | timestamp with time zone | null |  |
+| `suspended_reason` | text | null |  |
 
 **Keys and rules**
 
@@ -188,6 +219,8 @@ What a claim says, when it was true, its risk tier and status. Frozen once it le
 - Check `claim_versions_qualifiers_check`: `CHECK (jsonb_typeof(qualifiers) = 'object'::text AND octet_length(qualifiers::text) <= 4000)`
 - Check `claim_versions_retired_dates`: `CHECK ((status = 'retired'::verification_status) = (retired_at IS NOT NULL))`
 - Check `claim_versions_risk_tier_check`: `CHECK (risk_tier >= 1 AND risk_tier <= 3)`
+- Check `claim_versions_suspended_is_published`: `CHECK (suspended_at IS NULL OR published_at IS NOT NULL)`
+- Check `claim_versions_suspended_reason`: `CHECK ((suspended_at IS NULL) = (suspended_reason IS NULL))`
 - Check `claim_versions_valid_from_precision_check`: `CHECK (valid_from_precision = ANY (ARRAY['day'::text, 'month'::text, 'year'::text, 'decade'::text, 'unknown'::text]))`
 - Check `claim_versions_valid_to_precision_check`: `CHECK (valid_to_precision = ANY (ARRAY['day'::text, 'month'::text, 'year'::text, 'decade'::text, 'unknown'::text]))`
 - Check `claim_versions_value_text_check`: `CHECK (value_text IS NULL OR length(value_text) <= 2000)`
@@ -199,10 +232,11 @@ What a claim says, when it was true, its risk tier and status. Frozen once it le
 - Index `claim_versions_claim`: `USING btree (claim_id)`
 - Index `claim_versions_one_published`: `USING btree (claim_id) WHERE ((status = 'verified'::verification_status) AND (published_at IS NOT NULL))`
 - Trigger `claim_versions_check` runs `wine_reference.check_claim_version`
-- Trigger `claim_versions_freeze` runs `wine_reference.freeze_claim_version`
+- Trigger `claim_versions_guard` runs `wine_reference.guard_row`
+- Trigger `claim_versions_lock_first` runs `wine_reference.lock_before_write`
 - Trigger `claim_versions_log` runs `wine_reference.log_change`
+- Trigger `claim_versions_no_truncate` runs `wine_reference.refuse_truncate`
 - Trigger `claim_versions_start_draft` runs `wine_reference.start_as_draft`
-- Trigger `claim_versions_status_guard` runs `wine_reference.guard_status`
 
 ## `claims`
 
@@ -231,7 +265,10 @@ The stable identity of a statement: subject + relationship type + object, or sub
 - Index `claims_relationship`: `USING btree (relationship_type, subject_entity_id) WHERE (relationship_type IS NOT NULL)`
 - Index `claims_subject`: `USING btree (subject_entity_id)`
 - Trigger `claims_check` runs `wine_reference.check_claim`
+- Trigger `claims_freeze` runs `wine_reference.freeze_claim`
+- Trigger `claims_lock_first` runs `wine_reference.lock_before_write`
 - Trigger `claims_log` runs `wine_reference.log_change`
+- Trigger `claims_no_truncate` runs `wine_reference.refuse_truncate`
 
 ## `entities`
 
@@ -260,9 +297,11 @@ One permanent id per real-world thing. Status and publication are changed only t
 - Primary key `entities_pkey`: `PRIMARY KEY (id)`
 - Index `entities_kind`: `USING btree (kind)`
 - Index `entities_published`: `USING btree (kind) WHERE ((status = 'verified'::verification_status) AND (published_at IS NOT NULL))`
+- Trigger `entities_guard` runs `wine_reference.guard_row`
+- Trigger `entities_lock_first` runs `wine_reference.lock_before_write`
 - Trigger `entities_log` runs `wine_reference.log_change`
+- Trigger `entities_no_truncate` runs `wine_reference.refuse_truncate`
 - Trigger `entities_start_draft` runs `wine_reference.start_as_draft`
-- Trigger `entities_status_guard` runs `wine_reference.guard_status`
 
 ## `entity_kinds`
 
@@ -279,7 +318,9 @@ Controlled list: the kinds of thing the reference holds. Owner decision to chang
 
 - Check `entity_kinds_code_check`: `CHECK (code ~ '^[a-z][a-z_]{1,39}$'::text)`
 - Primary key `entity_kinds_pkey`: `PRIMARY KEY (code)`
+- Trigger `entity_kinds_lock_first` runs `wine_reference.lock_before_write`
 - Trigger `entity_kinds_log` runs `wine_reference.log_change`
+- Trigger `entity_kinds_no_truncate` runs `wine_reference.refuse_truncate`
 
 ## `entity_names`
 
@@ -320,9 +361,11 @@ Every name of every entity, per language, kind and period (Phase 1.9 revision 5:
 - Index `entity_names_one`: `USING btree (entity_id, lower(name), language, name_kind, COALESCE(valid_from, '-infinity'::date))`
 - Index `entity_names_one_preferred`: `USING btree (entity_id, language) WHERE (is_preferred AND (valid_to IS NULL) AND (status <> 'retired'::verification_status))`
 - Index `entity_names_search`: `USING gin (lower(name) gin_trgm_ops)`
+- Trigger `entity_names_guard` runs `wine_reference.guard_row`
+- Trigger `entity_names_lock_first` runs `wine_reference.lock_before_write`
 - Trigger `entity_names_log` runs `wine_reference.log_change`
+- Trigger `entity_names_no_truncate` runs `wine_reference.refuse_truncate`
 - Trigger `entity_names_start_draft` runs `wine_reference.start_as_draft`
-- Trigger `entity_names_status_guard` runs `wine_reference.guard_status`
 
 ## `evidence_modalities`
 
@@ -337,7 +380,9 @@ Controlled list: how evidence was obtained (Phase 1.9 revision 7: kept apart by 
 
 - Check `evidence_modalities_code_check`: `CHECK (code ~ '^[a-z][a-z_]{1,39}$'::text)`
 - Primary key `evidence_modalities_pkey`: `PRIMARY KEY (code)`
+- Trigger `evidence_modalities_lock_first` runs `wine_reference.lock_before_write`
 - Trigger `evidence_modalities_log` runs `wine_reference.log_change`
+- Trigger `evidence_modalities_no_truncate` runs `wine_reference.refuse_truncate`
 
 ## `name_kinds`
 
@@ -353,7 +398,9 @@ Controlled list: kinds of name (official, label, common, historical, translation
 
 - Check `name_kinds_code_check`: `CHECK (code ~ '^[a-z][a-z_]{1,39}$'::text)`
 - Primary key `name_kinds_pkey`: `PRIMARY KEY (code)`
+- Trigger `name_kinds_lock_first` runs `wine_reference.lock_before_write`
 - Trigger `name_kinds_log` runs `wine_reference.log_change`
+- Trigger `name_kinds_no_truncate` runs `wine_reference.refuse_truncate`
 
 ## `relationship_types`
 
@@ -380,11 +427,14 @@ Controlled list of entity-to-entity claim types. Proposed until the owner activa
 - Check `relationship_types_status_check`: `CHECK (status = ANY (ARRAY['proposed'::text, 'active'::text, 'retired'::text]))`
 - Foreign key `relationship_types_required_modality_fkey`: `FOREIGN KEY (required_modality) REFERENCES wine_reference.evidence_modalities(code)`
 - Primary key `relationship_types_pkey`: `PRIMARY KEY (code)`
+- Trigger `relationship_types_freeze` runs `wine_reference.freeze_claim_type`
+- Trigger `relationship_types_lock_first` runs `wine_reference.lock_before_write`
 - Trigger `relationship_types_log` runs `wine_reference.log_change`
+- Trigger `relationship_types_no_truncate` runs `wine_reference.refuse_truncate`
 
 ## `review_events`
 
-Append-only history of every status decision (submit, approve, reject, publish, retire); owner_override marks the Owner approving without a second person.
+Append-only history of every status decision (submit, approve, reject, publish, retire, and the automatic retire on replacement and suspend); owner_override marks the Owner approving without a second person.
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -401,13 +451,14 @@ Append-only history of every status decision (submit, approve, reject, publish, 
 
 **Keys and rules**
 
-- Check `review_events_decision_check`: `CHECK (decision = ANY (ARRAY['submit'::text, 'approve'::text, 'reject'::text, 'publish'::text, 'retire'::text]))`
+- Check `review_events_decision_check`: `CHECK (decision = ANY (ARRAY['submit'::text, 'approve'::text, 'reject'::text, 'publish'::text, 'retire'::text, 'suspend'::text]))`
 - Check `review_events_note_check`: `CHECK (length(note) <= 2000)`
 - Check `review_events_override_only_on_approve`: `CHECK (NOT owner_override OR decision = 'approve'::text)`
 - Check `review_events_target_table_check`: `CHECK (target_table = ANY (ARRAY['entities'::text, 'entity_names'::text, 'claim_versions'::text, 'sources'::text, 'source_versions'::text, 'rights_statements'::text, 'taxonomy_assignments'::text]))`
 - Primary key `review_events_pkey`: `PRIMARY KEY (id)`
 - Index `review_events_target`: `USING btree (target_table, target_id, acted_at)`
 - Trigger `review_events_append_only` runs `wine_reference.refuse_change`
+- Trigger `review_events_no_truncate` runs `wine_reference.refuse_truncate`
 
 ## `rights_statements`
 
@@ -439,9 +490,11 @@ What a component may be used for: licence, holder, attribution, quote/copy/comme
 - Check `rights_statements_licence_url_check`: `CHECK (licence_url IS NULL OR licence_url ~ '^https?://'::text)`
 - Check `rights_statements_retired_dates`: `CHECK ((status = 'retired'::verification_status) = (retired_at IS NOT NULL))`
 - Primary key `rights_statements_pkey`: `PRIMARY KEY (id)`
+- Trigger `rights_statements_guard` runs `wine_reference.guard_row`
+- Trigger `rights_statements_lock_first` runs `wine_reference.lock_before_write`
 - Trigger `rights_statements_log` runs `wine_reference.log_change`
+- Trigger `rights_statements_no_truncate` runs `wine_reference.refuse_truncate`
 - Trigger `rights_statements_start_draft` runs `wine_reference.start_as_draft`
-- Trigger `rights_statements_status_guard` runs `wine_reference.guard_status`
 
 ## `schema_migrations`
 
@@ -454,6 +507,8 @@ Which reference migrations ran, when and by which database user.
 | `applied_at` | timestamp with time zone | not null | `now()` |
 | `applied_by` | text | not null | `CURRENT_USER` |
 | `notes` | text | null |  |
+| `release` | text | not null | `''::text` |
+| `structure_md5` | text | null |  |
 
 **Keys and rules**
 
@@ -473,7 +528,9 @@ Controlled list: kinds of source (regulation, register, producer document ...).
 
 - Check `source_kinds_code_check`: `CHECK (code ~ '^[a-z][a-z_]{1,39}$'::text)`
 - Primary key `source_kinds_pkey`: `PRIMARY KEY (code)`
+- Trigger `source_kinds_lock_first` runs `wine_reference.lock_before_write`
 - Trigger `source_kinds_log` runs `wine_reference.log_change`
+- Trigger `source_kinds_no_truncate` runs `wine_reference.refuse_truncate`
 
 ## `source_versions`
 
@@ -511,9 +568,12 @@ The exact edition, page state or file of a source that was read, with its retrie
 - Primary key `source_versions_pkey`: `PRIMARY KEY (id)`
 - Unique `source_versions_source_id_version_label_key`: `UNIQUE (source_id, version_label)`
 - Index `source_versions_source`: `USING btree (source_id)`
+- Trigger `source_versions_copy` runs `wine_reference.check_source_copy`
+- Trigger `source_versions_guard` runs `wine_reference.guard_row`
+- Trigger `source_versions_lock_first` runs `wine_reference.lock_before_write`
 - Trigger `source_versions_log` runs `wine_reference.log_change`
+- Trigger `source_versions_no_truncate` runs `wine_reference.refuse_truncate`
 - Trigger `source_versions_start_draft` runs `wine_reference.start_as_draft`
-- Trigger `source_versions_status_guard` runs `wine_reference.guard_status`
 
 ## `sources`
 
@@ -543,9 +603,11 @@ A work that can be cited (regulation, book, register, producer document ...).
 - Check `sources_url_check`: `CHECK (url IS NULL OR url ~ '^https?://'::text)`
 - Foreign key `sources_kind_fkey`: `FOREIGN KEY (kind) REFERENCES wine_reference.source_kinds(code)`
 - Primary key `sources_pkey`: `PRIMARY KEY (id)`
+- Trigger `sources_guard` runs `wine_reference.guard_row`
+- Trigger `sources_lock_first` runs `wine_reference.lock_before_write`
 - Trigger `sources_log` runs `wine_reference.log_change`
+- Trigger `sources_no_truncate` runs `wine_reference.refuse_truncate`
 - Trigger `sources_start_draft` runs `wine_reference.start_as_draft`
-- Trigger `sources_status_guard` runs `wine_reference.guard_status`
 
 ## `taxonomy_assignments`
 
@@ -571,9 +633,11 @@ Which taxonomy nodes an entity belongs to (at most one primary).
 - Unique `taxonomy_assignments_id_key`: `UNIQUE (id)`
 - Index `taxonomy_assignments_node`: `USING btree (node_id)`
 - Index `taxonomy_assignments_one_primary`: `USING btree (entity_id) WHERE (is_primary AND (status <> 'retired'::verification_status))`
+- Trigger `taxonomy_assignments_guard` runs `wine_reference.guard_row`
+- Trigger `taxonomy_assignments_lock_first` runs `wine_reference.lock_before_write`
 - Trigger `taxonomy_assignments_log` runs `wine_reference.log_change`
+- Trigger `taxonomy_assignments_no_truncate` runs `wine_reference.refuse_truncate`
 - Trigger `taxonomy_assignments_start_draft` runs `wine_reference.start_as_draft`
-- Trigger `taxonomy_assignments_status_guard` runs `wine_reference.guard_status`
 
 ## `taxonomy_domains`
 
@@ -595,7 +659,10 @@ The approved knowledge domains (an entity each). Empty until the owners approved
 - Primary key `taxonomy_domains_pkey`: `PRIMARY KEY (entity_id)`
 - Unique `taxonomy_domains_code_key`: `UNIQUE (code)`
 - Trigger `taxonomy_domains_check` runs `wine_reference.check_taxonomy_domain`
+- Trigger `taxonomy_domains_freeze` runs `wine_reference.freeze_taxonomy`
+- Trigger `taxonomy_domains_lock_first` runs `wine_reference.lock_before_write`
 - Trigger `taxonomy_domains_log` runs `wine_reference.log_change`
+- Trigger `taxonomy_domains_no_truncate` runs `wine_reference.refuse_truncate`
 
 ## `taxonomy_nodes`
 
@@ -624,5 +691,153 @@ The approved taxonomy under each domain (an entity each). Same domain as its par
 - Index `taxonomy_nodes_domain`: `USING btree (domain_id)`
 - Index `taxonomy_nodes_parent`: `USING btree (parent_id)`
 - Trigger `taxonomy_nodes_check` runs `wine_reference.check_taxonomy_node`
+- Trigger `taxonomy_nodes_freeze` runs `wine_reference.freeze_taxonomy`
+- Trigger `taxonomy_nodes_lock_first` runs `wine_reference.lock_before_write`
 - Trigger `taxonomy_nodes_log` runs `wine_reference.log_change`
+- Trigger `taxonomy_nodes_no_truncate` runs `wine_reference.refuse_truncate`
 
+## Added by migration 002 (release `002 r1 (2026-11-08)`; not run on production yet)
+
+Read from the local test database after 002 was installed. Design: `docs/reference/migration_002/README.md`.
+
+### `wine_reference.legacy_links`
+
+Which reference entity an old catalog row stands for. The old catalog is never changed. Every link is "old catalog, not verified" and
+starts as `suggested`; only a `confirmed` link counts, with at most one per catalog row. RLS is on with no policies; staff reach it only
+through `public.ref_staff` and `public.ref_draft`.
+
+- `id` uuid not null default `gen_random_uuid()`
+- `catalog_table` text not null
+- `catalog_id` text not null
+- `entity_id` uuid not null
+- `status` text not null default `'suggested'::text`
+- `basis` text not null default `'old catalog, not verified'::text`
+- `note` text not null default `''::text`
+- `created_by` uuid default `auth.uid()`
+- `created_at` timestamp with time zone not null default `now()`
+- `decided_by` uuid
+- `decided_at` timestamp with time zone
+- Check `legacy_links_catalog_id_check`: `CHECK (((length(catalog_id) >= 1) AND (length(catalog_id) <= 64)))`
+- Unique `legacy_links_catalog_table_catalog_id_entity_id_key`: `UNIQUE (catalog_table, catalog_id, entity_id)`
+- Check `legacy_links_catalog_table_check`: `CHECK ((catalog_table = ANY (ARRAY['producers'::text, 'wines'::text, 'wine_vintages'::text, 'grapes'::text, 'geo_areas'::text])))`
+- Check `legacy_links_decided`: `CHECK (((status = 'suggested'::text) = (decided_at IS NULL)))`
+- Foreign key `legacy_links_entity_id_fkey`: `FOREIGN KEY (entity_id) REFERENCES wine_reference.entities(id)`
+- Check `legacy_links_note_check`: `CHECK ((length(note) <= 500))`
+- Primary key `legacy_links_pkey`: `PRIMARY KEY (id)`
+- Check `legacy_links_status_check`: `CHECK ((status = ANY (ARRAY['suggested'::text, 'confirmed'::text, 'rejected'::text])))`
+- Index `legacy_links_entity`: `USING btree (entity_id)`
+- Index `legacy_links_one_confirmed`: `USING btree (catalog_table, catalog_id) WHERE (status = 'confirmed'::text)`
+- Trigger `legacy_links_lock_first` runs `wine_reference.lock_before_write`
+- Trigger `legacy_links_log` runs `wine_reference.log_change`
+- Trigger `legacy_links_no_truncate` runs `wine_reference.refuse_truncate`
+
+
+### New vocabulary rows (all `proposed` until the Owner switches each on)
+
+- Entity kinds: `wine_product`, `wine_edition`, `wine_release`, `release_event`
+- Relationship types: `product_of`, `defined_by_place`, `edition_of`, `release_of`, `event_of`, `made_from`
+- Attribute types: `harvest_year`, `nv_identifier`, `release_date`, `event_date`, `bottle_format_ml`
+
+### New functions
+
+- `public.ref_draft(p_action text, p_data jsonb)`: writes drafts as the signed-in author. Security definer with `search_path ''`;
+  `authenticated` only.
+- `public.ref_staff(p_what text, p_args jsonb)`: `overview`, and `suggestions` (the old-catalog report, read-only). Any `ref_*`
+  permission; `authenticated` only.
+- Internal, no grants: `wine_reference.require_permission(text)`, `wine_reference.write_claim_version(uuid, jsonb)`,
+  `wine_reference.fingerprint_002()`.
+
+## Added by migration 003 (release `003 r1 (2026-11-08)`; not run on production yet)
+
+Read from the local test database after 003 was installed. Design: `docs/reference/migration_003/README.md`.
+
+### `wine_reference.legacy_links`: new columns, checks and triggers
+
+- `match_method` text not null default `'editor'::text`
+- `match_score` smallint
+- Check `legacy_links_match_method_check`: `CHECK ((match_method = ANY (ARRAY['editor'::text, 'exact_name'::text, 'created_from_catalog'::text])))`
+- Check `legacy_links_match_score_check`: `CHECK (((match_score IS NULL) OR ((match_score >= 0) AND (match_score <= 100))))`
+- Trigger `legacy_links_check` runs `wine_reference.check_legacy_link`
+- Trigger `legacy_links_settle` runs `wine_reference.settle_legacy_link`
+
+
+- `legacy_links_check`, before insert or update:
+  - the thing's kind must match the table;
+  - the catalog row must exist;
+  - a new link starts as suggested;
+  - no new suggestion for a row that has a confirmed link;
+  - allowed moves: suggested → confirmed/rejected, confirmed → rejected, rejected → suggested;
+  - a link's row and thing never change;
+  - a retired or replaced thing cannot be linked or confirmed.
+- `legacy_links_settle`, after update: confirming a link rejects the row's other suggestions.
+
+### New functions
+
+- `public.ref_tools(p_action text, p_data jsonb)`: security definer with `search_path ''`, `authenticated` only.
+  - Reads (any `ref_*`): `taxonomy`, `coverage`, `link_queue`, `duplicates`.
+  - `ref_edit`: `create_domain`, `create_node`, `assign_taxonomy`, `import_taxonomy`, `review_many` (each decision still goes
+    through `ref_review`), `catalog_identity`, `suggest_links`, `seed_from_catalog`.
+  - `ref_review`: `decide_links`, `confirm_unambiguous`, `undo_link`, `reopen_link`.
+- Internal, no grants:
+  - `wine_reference.catalog_kind`, `catalog_row_exists`, `catalog_row_name`, `catalog_rows`;
+  - `make_entity`, `add_names`, `suggest_link`, `linked_entity`, `catalog_fact`, `catalog_identity`;
+  - `display_name`, `names_json`, `import_taxonomy`, `fingerprint_003`;
+  - `check_legacy_link`, `settle_legacy_link`.
+
+No new tables, and no new vocabulary rows.
+
+## Added by migration 004 (release `004 r1 (2026-11-13)`; not run on production yet)
+
+Design: `docs/reference/migration_004/README.md`. No new tables or columns.
+
+- Relationship type `rules_name_grape` (proposed): place → grape_variety. Risk tier 1; required modality `documentary`. Qualifiers:
+  `rule`, `min_percent`.
+- `public.ref_work(p_action text, p_data jsonb)`: security definer with `search_path ''`, `authenticated` only.
+  - Reads (any `ref_*`): `assignments`, `rule_grape_report`.
+  - `ref_edit`: `catalog_grapes`, `catalog_place_tree`.
+- Internal, no grants: `wine_reference.catalog_grapes(text[], integer)`, `catalog_place_tree(integer)`,
+  `rule_grape_report(jsonb)`, `fingerprint_004()`.
+- Reads `public.wine_grapes` (`wine_id`, `grape_id`, `basis`) and `public.appellation_grape_rules`. The second is read whole with
+  `to_jsonb`, so it does not depend on the table's column names.
+
+## Added by migration 005 (release `005 r1 (2026-11-13)`; not run on production yet)
+
+Design: `docs/reference/migration_005/README.md`.
+
+- `wine_reference.rule_import_batches`: `id`, `created_by`, `created_at`, `code_lines`, `table_rows`, `table_columns` (jsonb), `note`.
+- `wine_reference.rule_import_candidates`: `id`, `batch_id`, `appellation`, `grape`, `style`, `geo_area_id`, `grape_id`, `code_line`
+  (jsonb), `code_rule`, `table_row` (jsonb, as stored), `table_rule`, `table_min_pct`, `table_source`, `state` (agree | conflict |
+  code_only | table_only | unresolved | needs_source | not_importable), `reason`, `decision` (pending | accept_code | accept_table |
+  reject), `decided_by`, `decided_at`, `decision_note`, `claim_id`, `imported_at`.
+  - Checks: decided iff `decided_at`; imported iff `claim_id`; an import needs an accept.
+  - Trigger `rule_import_candidates_check`:
+    - content is immutable;
+    - a decision moves only through pending;
+    - an accept is allowed only for an existing side with a source, a checked code line, and not unresolved or not importable;
+    - an imported candidate is frozen.
+  - Both tables: RLS on, no policies; the log, lock and no-TRUNCATE triggers.
+- `public.ref_rules(p_action text, p_data jsonb)`: security definer with `search_path ''`, `authenticated` only.
+  - Reads (any `ref_*`): `batches`, `candidates`.
+  - `ref_edit`: `stage`, `import`.
+  - `ref_review`: `decide`.
+- Internal, no grants: `check_rule_candidate`, `row_rule`, `row_min_pct`, `row_source`, `code_rule`, `stage_rules`,
+  `rule_source_version`, `import_rules`, `fingerprint_005`.
+
+
+## Added by migration 006 (release `006 r1 (2026-11-25)`; not run on production yet)
+
+Read-only: no table, no column and no content.
+- Indexes: `entities_created` on `wine_reference.entities (created_at, id)` and `claims_created` on `wine_reference.claims (created_at, id)`,
+  for the newest-first pages.
+- `public.ref_browse(p_action text, p_data jsonb)`: security definer, STABLE, `search_path ''`, `authenticated` only; any `ref_*`
+  permission.
+  - Actions: `evidence`, `evidence_sources`, `entities`, `claims`, `link_compare`.
+  - Common arguments: `limit` (1 to 100, default 50) and `after` (the previous page's `next` cursor `{k, id}`).
+  - Answers: `rows`, `next`, and `total` on the first page.
+- Internal, no grants (all STABLE or IMMUTABLE):
+  - `author_blocker(uuid)`: mirrors ref_review's two-person rule with the Owner exemption;
+  - `source_version_blockers(uuid)`: mirrors ref_review's approval rules for a source version;
+  - `newer_published(uuid)`: mirrors the forward-only publication rule;
+  - `fact_review_json(uuid)`: one version with its evidence, `version_problems()` verbatim, `is_current()`, the blockers and the next step;
+  - `like_pattern(text)`: a search word with its wildcards taken literally;
+  - `fingerprint_006`.

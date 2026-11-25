@@ -20,8 +20,13 @@ is merged, move the lines to "Merged" with the date. Whenever a venue gets somet
 
 ## Venue: `vwm` (published under `/vwm/`)
 
+### Prepared, not yet on main or `vwm` (waiting for migration 006 and the owner's go-ahead)
+- 2026-11-25: **Migration 006** and its Reference tab screens (Evidence review, Browse all, assign many, Compare side by side). The commit
+  is on `claude/wine-app-setup-35g1ne` (not published). The merge into `vwm` was rehearsed: the only hand conflict is `ownerData` in
+  `app.js`; after it, `cascade.py` gives `vwm` owner.js 53, data.js 63, app.js 140.
+
 ### On main, not yet merged into `vwm`
-_(nothing: `vwm` has all of main as of 2026-10-26)_
+_(nothing: `vwm` has all of main as of 2026-11-25, the review-to-publication workflow included)_
 
 ### Merged (main is in `vwm` up to)
 - 2026-10-26: main's **reference model draft and read-only database inspection** (Phase 2.0B.1; documents and SQL only, no app file changed:
@@ -31,6 +36,27 @@ _(nothing: `vwm` has all of main as of 2026-10-26)_
 - 2026-10-26 (latest): main's **migration 001 draft** (`docs/reference/migration_001/`: design, data dictionary, SQL, tests, report;
   documents and SQL only, not run live) merged into `vwm`.
 - 2026-10-26: main's **reference briefing** (`docs/reference/WINE_REFERENCE_BRIEFING.md`, one document for passing on) merged into `vwm`.
+- 2026-11-25 (latest): main's **review-to-publication workflow** (publish one by one, Add evidence, Replace with, run-all with Stop; app only)
+  and the 003-005 deployment notes (venue `?v=` cascaded: app.js 139).
+- 2026-11-17: main's **editorial work queue** (Reference tab To do view, tick boxes, bulk review; app only) and `docs/reference/DEPLOY_ORDER.md`
+  (venue `?v=` cascaded: owner.js 51, app.js 138).
+- 2026-11-13 (later): main's **Migration 005** (`docs/reference/migration_005/`; not run on production) and the Grape rules view's Review and import
+  (venue `?v=` cascaded; merged without conflicts beyond version numbers).
+- 2026-11-13 (earlier): main's **Migration 004** (`docs/reference/migration_004/`; not run on production) and the Reference tab's Grape rules view,
+  subject areas on each thing and the two draft buttons (venue `?v=` cascaded; `owner.js` imports the venue's `aocgrapes.js?v=3`).
+- 2026-11-08 (later): main's **Migration 003** (`docs/reference/migration_003/`: SQL, preflight, verify, rollback, tests, deploy steps; not run
+  on production) and the Reference tab's Subject areas and Catalog links views (`owner.js`, `data.js`, `app.js`; venue `?v=` cascaded).
+- 2026-11-08 (later): main's **Migration 002** (`docs/reference/migration_002/`: SQL, preflight, verify, rollback, tests, deploy steps; not
+  run on production). Also the app files for the Owner page **Reference** tab (`owner.js`, `data.js`, `app.js`, with their `?v=` bumps).
+- 2026-11-08 (later): main's **Migration 001 r5 final** (owner decisions, stricter version rule, DEPLOY_001.md, live check; SQL drafts and documents, not run live) merged into `vwm`.
+- 2026-11-08 (earlier): main's **post-deployment validation** of the hardening (`docs/security/POST_DEPLOY_REPORT.md`, live checks; documents and test scripts only) merged into `vwm`.
+- 2026-11-08 (earlier): main's **privilege hardening release 2** (`docs/security/`: final SQL, rollback, post-deployment check, DEPLOY.md, tests; not deployed, no app file changed) merged into `vwm`.
+- 2026-11-08 (earlier): main's **anonymous-access hardening proposal** (`docs/security/`: audit, SQL proposal and rollback, read-only inventory, tests; not run live, no app file changed) merged into `vwm`.
+- 2026-11-01: main's **migration 001 release candidate r5** (SQL drafts, tests, staging runners and documents under `docs/reference/migration_001/`; not run live, not approved) merged into `vwm`.
+- 2026-11-01 (later): main's **local Supabase staging validation** of migration 001 r4 (`docs/reference/migration_001/staging/`, `STAGING_TEST_REPORT.md`, `STAGING_CHANGE_REPORT.md`; test scripts and documents only, r4 unchanged, nothing run live) merged into `vwm`.
+- 2026-11-01: main's **final review follow-up** to migration 001 (release r4: names valid today, editorial lock, concurrency tests, staging assessment; SQL drafts and documents, not run live) merged into `vwm`.
+- 2026-11-01: main's **hand-off note** (the owner's standing ChatGPT-handoff instruction; documentation only) merged into `vwm`.
+- 2026-10-27: main's **Phase 2.0B.3 corrections** to migration 001 (SQL drafts, tests, documents; not run live) merged into `vwm`.
 - 2026-10-26: main's **Owner approval override amendment** to migration 001 (SQL drafts, tests, documents; not run live) merged into `vwm`.
 - 2026-10-19 (latest): main's **At a restaurant** (convention 31, `docs/restaurant_visits.sql`) merged into `vwm`; there the matching and the taste context use the venue's own list as the catalog. Conflicts were `?v=` numbers, duplicated import lines and `CLAUDE.md`; the new files were pointed at `vwm`'s numbers (`text.js` 3, `logic.js` 25, `recommend.js` 17, `grapes.js` 3, `flavors.js` 4, `structure.js` 16, `aocgrapes.js` 3). All `vwm` browser checks pass (venue_ui 17, vrev_ui 48, sure_ui 14, atlas_v 14, cardmap_v 19, steps 12, food_more_ui 25, food_owner_ui 11, food_ui 4, restaurant_ui 29) and the Node checks (foods 49, restaurant 38).
 - 2026-10-19 (later): main's **More tab, Food screens and the owner's pairing pins** (convention 30, `docs/food_pairing.sql`) merged into `vwm`. Conflicts

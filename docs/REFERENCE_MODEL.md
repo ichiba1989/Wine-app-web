@@ -39,7 +39,9 @@ revisions · 14 Where the tables live (namespace options) · 15 Open questions
 - **How they will be stored [Proposal]:** domains and subdomains are rows (a code, a name per language, a parent, an order, a status), not
   code. An entity, a claim or an entry is tagged with one or more subdomains. Changing the taxonomy later never changes an entity's id.
 - **To import them:** the owner supplies the list (a document or a spreadsheet); it is committed as given under `docs/reference/` with its
-  date and source, and only then turned into seed rows.
+  date and source, and only then turned into seed rows. **Since migration 003 (2026-11-08)** the Owner page's Reference tab, Subject
+  areas, imports it directly: paste the table (domain, code, parent, sort, name:xx per language), Check, Import (`ref_tools`
+  `import_taxonomy`, with the approved document as the source version).
 
 ## 3. Canonical identity principles [Proposal]
 
@@ -139,6 +141,9 @@ The reference adds **mapping rows** that point from its entities to legacy ids.
 
 - **Owner approval override (owner policy, 2026-10-26):** the Owner may approve their own work in every tier and publish it alone;
   everyone else keeps the two-person rule; each use is recorded (`docs/reference/migration_001/DESIGN.md` §4).
+- **Lifecycle (Phase 2.0B.3, 2026-10-27):** approved records are frozen (revise by a new record plus retirement); a published claim is
+  suspended automatically when its evidence, rights, entities or dependencies stop being valid, transitively; suspension is final for
+  that version (`docs/reference/migration_001/DESIGN.md` §4b).
 - **AI never decides:** a language model may *propose* a draft claim with its citation for a person to check; it never sets a status
   above draft, never publishes, and its drafts are marked as such.
 

@@ -1,55 +1,112 @@
-# Migration 001: local test report (2026-10-26, re-run after the Owner approval override amendment)
+# Migration 001: local test report (2026-11-08, release "001 r5 (2026-11-08)", final with the owner's decisions)
 
-**Result: 160 tests passed, 0 failed**, on a throwaway local PostgreSQL 16.15 database in the cloud work container. The whole suite was
-re-run from scratch after the amendment (the earlier 127 was the suite before it; 33 tests were added). **Nothing was run on
-the live Supabase database.** Re-run at any time with `bash docs/reference/migration_001/tests/run_local_tests.sh` (it starts its own
-database and deletes it afterwards).
+**Result: 359 passed, 0 failed**, on a throwaway local PostgreSQL 16.15 database in the cloud work container, re-run in full from scratch
+on 2026-11-08 (decision 14: the stricter rule for older versions; 6 more S-3 checks). It includes **20 concurrent-transaction checks** (`tests/concurrency_tests.sh`, run as part of the suite) and the **r5
+regression tests** (`tests/001_r5_tests.sql`). **Nothing was run on the live Supabase database.** Re-run at any time with
+`bash docs/reference/migration_001/tests/run_local_tests.sh`. The same release on a local Supabase stack: `STAGING_TEST_REPORT.md`.
+
+History: 127 (first draft) → 160 (Owner approval override) → 270 (Phase 2.0B.3 corrections, r3) → 294 (final review follow-up, r4:
+5 name checks for names valid today, 6 more name checks and setup steps, 13 concurrency checks) → 353 (r5: the r5 regression file with
+its verify rows, 4 new rows in each verify run, and 7 more concurrency checks: C11a, C11b, C12, D1 (two checks), D2, D3).
+
+**Proof that the r5 tests catch the staging findings:** the updated concurrency harness run against the unchanged r4 SQL gives **15
+passed, 5 failed**: C11a (no retire event for the replaced version), C11b (the older version replaced the newer one), D1 (deadlock, and
+its outcome check) and D3 (deadlock). On r5 all 20 pass. **Proof that the new tests catch the
+issues:** the same 294-check suite run against the unchanged r3 SQL gives **278 passed, 16 failed** (the 5 name-validity checks and
+11 concurrency checks); the concurrency harness alone on r3: 1 passed, 11 failed (before C10 was added).
+
+## Concurrency test method
+
+Each scenario runs on a fresh copy of a fixture database (`tests/concurrency_fixture.sql`: published places, a verified source with two
+versions, a rights statement that allows quoting, approved but unpublished claim versions, one published version with a dependent, two
+drafts, and an Owner with a submitted name). Session 1 opens a transaction, makes its decision and holds the transaction open 1.5 s;
+session 2 starts 0.4 s later with a conflicting decision; afterwards the integrity rules are checked. Isolation: PostgreSQL's default,
+READ COMMITTED, as on Supabase. On r4, session 2 waited about 1.1 s in every scenario (the editorial lock), then completed safely or was
+refused with the right reason.
+
+| Check | Race | r3 | r4 |
+|---|---|---|---|
+| C1a / C1b | publish a claim version / retire the source version that is its only evidence (both orders) | FAIL / FAIL | PASS (retire then suspends it) / PASS (publish refused) |
+| C2a / C2b | publish a version with a quote / retire the quote's rights statement (both orders) | FAIL / FAIL | PASS / PASS |
+| C3a / C3b | publish a dependent version / retire the version it depends on (both orders) | FAIL / FAIL | PASS / PASS |
+| C4a | publish a claim / retire the entity it is about | FAIL | PASS |
+| C5 | two editors retire the two display names of a published entity | FAIL (no name left) | PASS (second refused) |
+| C6 | two editors add the two halves of a `part_of` cycle | FAIL (cycle stored) | PASS |
+| C7 | two editors add the two halves of a dependency cycle | FAIL (cycle stored) | PASS |
+| C8 | a version is submitted while evidence is added to it | FAIL (evidence on a submitted version) | PASS (evidence refused) |
+| C9 | evidence added first, then the submit | PASS | PASS |
+| C10 | the Owner self-approves while an editor rejects the same row | (added on r4) | PASS (approval stands, one `owner_override` event; late rejection refused) |
+
+Added for r5 (from the Phase 2.0B.4 local Supabase run); results on r4 and r5:
+
+| Check | Race | r4 | r5 |
+|---|---|---|---|
+| C11a | version 1 (holding) and version 3 of one claim published at once | FAIL (no retire event for version 1) | PASS (version 3 live; version 1 retired with one retire event by the publisher of version 3) |
+| C11b | version 3 (holding), then version 1 | FAIL (version 1 replaced the newer version 3) | PASS (version 1 refused; version 3 stays current) |
+| C12 | the same version published twice at once | PASS | PASS (one publication, the second refused) |
+| D1 | the owner edits a draft version in SQL, waits, adds evidence; meanwhile it is submitted through `ref_review` | FAIL (deadlock, one side cancelled) | PASS (no deadlock; the submit waits, then includes the evidence) |
+| D2 | the owner touches a draft claim, waits, adds evidence; meanwhile its version is submitted | PASS | PASS |
+| D3 | the owner records a private copy under R2, waits, adds evidence; meanwhile R2 is retired | FAIL (deadlock) | PASS (no deadlock; the retirement waits) |
 
 ## What the run does
 
 | Step | What it proves |
 |---|---|
-| `tests/stub_supabase.sql` | Builds a stand-in for what the migration needs from Supabase: the roles `anon`, `authenticated`, `service_role`; `auth.uid()`; Supabase's default grants in `public`; `pg_trgm`; the `verification_status` enum; `app_config` and `cfg_number()` (copied from `docs/import_limit.sql`); a **stub** `has_permission()` reading a test table; two catalog stand-in tables with rows; the role definitions as read on 2026-10-26 |
-| Fresh install | `001_wine_reference_foundation.sql` runs without error |
-| Replay | A second run raises no error, changes no structure (every object compared) and adds no duplicate rows |
-| Backward compatibility | The whole `public` schema (tables, columns, constraints, indexes, functions and their grants, triggers, policies, table grants) is compared before and after: the only change is the two new `ref_*` functions; the stand-in rows are untouched |
-| `001_verify.sql` | The read-only checks meant for the live database after migration: all PASS |
-| `tests/001_behaviour_tests.sql` | Foreign keys and uniqueness, taxonomy cycles and domains, relationship types and cycles, dates and values, the editorial rules, provenance, rights, dependencies, append-only history, access by each role, and the publication rules of the read function |
-| Rollback | `001_rollback.sql` refuses while content exists; on an empty install it removes everything and `public` is exactly as before; a re-install then works |
-| `001a_reference_permissions.sql` | Runs twice; the owner role gains the four `ref_*` permissions once; other roles unchanged |
-| Owner approval override (amendment) | The Owner approves and publishes their own eligible work, including a tier-1 claim; the Owner still cannot publish without evidence, on an unverified source version, or with a quote whose rights forbid quoting; an ordinary reviewer cannot approve their own draft; a non-Owner publisher cannot publish without independent approval; a session setting cannot make someone the Owner; each override is recorded (owner_override, actor, time, decision, justification) and cannot be changed, deleted or written for other decisions; removing the Owner role ends the override at once (even with every `ref_*` permission kept); the older `profiles.role = 'admin'` path counts as Owner |
-| Missing dependency | On a database without `my_staff_role_code()`, the migration stops at its first step and creates nothing |
+| `tests/stub_supabase.sql` | Stand-in for the Supabase objects the migration needs: roles, `auth.uid()`, Supabase's default grants in `public`, `pg_trgm`, the `verification_status` enum, `app_config` and `cfg_number()`, stub `has_permission()` and `my_staff_role_code()`, `profiles`, `staff_roles`, catalog stand-ins with rows |
+| Fresh install, replay | The migration installs; a second run passes its own preflight (same release, no drift), changes no structure and adds no duplicates |
+| Backward compatibility | The whole `public` schema compared before and after: only the two `ref_*` functions are new; stand-in rows untouched |
+| `001_verify.sql` | All checks PASS right after the migration, and the release, drift, health and 001a checks PASS again after all the lifecycle tests |
+| Behaviour and negative tests | Keys, uniqueness, taxonomy and relationship cycles, dates, values, editorial rules, the two-person rule and the Owner override, provenance, rights, dependencies, append-only history, access by every role, the read door |
+| **Corrections 1 and 2** | Retiring a source version, a whole source, a rights statement or an entity, and superseding a source version, suspend exactly the published versions that lose their support (redundant evidence keeps a claim current); suspensions are recorded; a three-step dependency chain is suspended transitively; a newer dependency version suspends its dependent; publishing on a suspended dependency is refused; a suspended version cannot be republished or un-suspended by hand; the Owner is still refused on a superseded source |
+| **Correction 3** | Approved names, sources, source versions and rights statements cannot be edited or deleted; `superseded_by` and suspension cannot be set by hand; claim identity, taxonomy codes and in-use claim types are frozen (wording and order may change); drafts and rejected rows stay editable; private copies need verified copy rights when written; source versions need their source and rights approved |
+| **Correction 4** | The last display name of a published entity cannot be retired; a second name allows it; a shortcut is never a display name; the read door shows only remaining names |
+| **Correction 5** | `owner_role_check.sql` runs in a read-only transaction and reports the role lookup, profile grants and role counts |
+| **Correction 6** | On fresh databases: an unexpected `ref_*` function, `ref_review` without the schema, hand-made drift, a different release and a missing registration each stop the migration with nothing changed; 001a stops before 001 and when partly undone; verify reports a partial 001a |
+| **Correction 7** | `001a_rollback.sql` runs twice, removes every `ref_*` permission from every role (others kept, in order) and unregisters 001a; `001_rollback.sql` refuses until then; the full order works; 001a re-runs after its rollback |
+| **Final review: names valid today** | An ended name and a not-yet-started name of an entity with a current name are not returned; exactly one name returned; an entity whose names have all ended or not started cannot be published; its last name valid today cannot be retired |
+| **Final review: concurrency** | The 13 checks in the table above |
+| **r5 regression tests** (`tests/001_r5_tests.sql`, own database with the concurrency fixture) | S-1: a write statement takes the editorial lock before touching any row (even one that changes nothing; inserts, updates, deletes, controlled lists), reads do not, the 18 statement triggers exist, the function is neither security definer nor executable by the browser roles. S-2: the automatic retirement has exactly one retire event, attributed to the publisher of the replacement, naming it, verified to retired, no override, written just before the publish event; `change_log` still has the row; a first publication writes none. S-3: an older version is refused while a newer one is live (also for the Owner) or suspended but not retired; restoring by retiring the newer one (with a note) and then publishing the older one works and is recorded. S-5: TRUNCATE refused on the history, change log, evidence and dependencies, and with CASCADE on entities; nothing lost. Then the verify script's release, drift, health, lock, TRUNCATE and audit rows |
+| Rollback, permissions, dependencies | Rollback refused with content and clean when empty; 001a runs twice; a missing live function stops the migration |
 
 ## Limits of this test (what it does not prove)
 
-- **It is not Supabase.** Locally the migration runs as a superuser; on Supabase it runs as `postgres`, which is not a superuser but owns
-  `public` objects and bypasses row-level security (FINDINGS.md). The statements used (create schema, revoke, alter default privileges,
-  security definer functions owned by the creator) are all within what `postgres` may do there, but this was **not** run on Supabase.
-- `has_permission()`, `my_staff_role_code()` and `auth.uid()` are stubs. The stub `my_staff_role_code()` follows the rule in the
-  repository's role scripts (`docs/roles_proposal.sql`: `profiles.role` 'admin' = Owner, else `profiles.staff_role`); the live body is
-  not in the repository. **Before the live run, read the live body once** (checklist in DESIGN.md §8).
-- The live `has_permission()` body is not in the repository either; the design relies only on its
-  documented behaviour (true when the signed-in person's staff role lists the permission).
-- Supabase's own event triggers and the dashboard's **Exposed schemas** setting are not present locally. `001_verify.sql`, run on the live
-  database after the migration, re-checks the grants; the owner checks the dashboard setting by eye.
-- Load and speed were not tested (the reference holds no content).
+- **It is not Supabase** (see `STAGING_TEST_REPORT.md` for the same release on a local Supabase stack). Locally the migration runs as a superuser; on Supabase it runs as `postgres` (not a superuser; bypasses
+  row-level security). Supabase's event triggers and the dashboard's Exposed schemas setting are not present locally.
+- `has_permission()`, `my_staff_role_code()` and `auth.uid()` are stand-ins written from the documented rules; the live bodies are not in
+  the repository (`OWNER_ROLE_VERIFICATION.md`, `owner_role_check.sql`).
+- Concurrency was tested with two sessions and fixed timings, not under load. Speed was measured on a local Supabase stack at 100 to
+  10,000 published versions (`STAGING_TEST_REPORT.md`): the soundness and suspension checks scan every published version on each
+  retire or publish (about 0.7 s each at 10,000); to revisit in a later migration (DESIGN.md decision 15).
+- Time-based expiry of names (`valid_to` passing) cannot be simulated without changing the clock; the read door and the verify script
+  handle it, but no test moves time.
 
 ## Full output of the last run
 
 ```
 PASS  fresh install runs without error
 PASS  replay (second run) runs without error
-PASS  replay changes no structure (578 objects identical)
+PASS  replay changes no structure (669 objects identical)
 PASS  replay adds no duplicate rows (migrations/kinds/relationship types/name kinds = 1/9/6/8)
 PASS  backward compatibility: public schema unchanged except the 2 new ref_* functions
 PASS  backward compatibility: existing rows untouched (wines/vintages/app_config = 5/5/0)
 PASS  verify: (right after migration 001) no published entity yet | 
 PASS  verify: (right after migration 001) relationship types are all still proposed | owner activates them
 PASS  verify: (right after migration 001) taxonomy is empty until the approved list is imported | 
+PASS  verify: 001a consistency: if registered, the Owner role holds all four ref_* permissions; if not, no role holds any | 001a not registered
+PASS  verify: 001a consistency: no role other than owner (or editor, if the owner chose it) holds a ref_* permission | 
+PASS  verify: TRUNCATE is refused on every reference table except the migration register (20 triggers) | 
 PASS  verify: all 21 tables exist | 
+PASS  verify: audit: every claim version retired after publication has a retire event in review_events | 
+PASS  verify: audit: no claim version has more than one retire event | 
+PASS  verify: every editorial table takes the editorial lock at the start of each write statement (18 statement triggers) | 
+PASS  verify: health: every private source copy is under verified rights that allow copying | 
+PASS  verify: health: every published entity has a current display name | 
+PASS  verify: health: every published, unsuspended claim version is current (sound, with current dependencies) | 
 PASS  verify: migration 001 is registered | 
+PASS  verify: migration 001 release is "001 r5 (2026-11-08)" | 
 PASS  verify: no function in the schema is executable by anon, authenticated or PUBLIC | 
 PASS  verify: no policies on the schema's tables (only the owner reaches rows) | 
+PASS  verify: no structure drift: the schema matches the fingerprint stored by the migration | 
 PASS  verify: no table grants to anon, authenticated, service_role or PUBLIC | 
 PASS  verify: nothing else named ref_* in public | 
 PASS  verify: public.ref_published_names: security definer, empty search_path, executable by anon and authenticated only | 
@@ -71,7 +128,7 @@ PASS  unique: two preferred names in one language are refused  -> refused: 23505
 PASS  check: a malformed language tag is refused  -> refused: 23514: new row for relation "entity_names" violates check constraint "entity_names_language_check"
 PASS  FK: a claim about a missing entity is refused  -> refused: 23503: insert or update on table "claims" violates foreign key constraint "claims_subject_entity_id_fkey"
 PASS  unique: the same source version label twice is refused  -> refused: 23505: duplicate key value violates unique constraint "source_versions_source_id_version_label_key"
-PASS  rights: a private copy without a rights statement is refused  -> refused: 23514: new row for relation "source_versions" violates check constraint "source_versions_copy_needs_rights"
+PASS  rights: a private copy without a rights statement is refused  -> refused: 23514: A private copy needs verified rights that allow copying
 PASS  check: a claim with both shapes (relationship and attribute) is refused  -> refused: 23514: new row for relation "claims" violates check constraint "claims_one_shape"
 PASS  check: a claim about itself is refused  -> refused: 23514: This part_of claim would make a cycle
 PASS  taxonomy: a domain must be an entity of kind taxonomy_domain  -> refused: 23514: A knowledge domain must be an entity of kind taxonomy_domain
@@ -92,30 +149,33 @@ PASS  values: a share of 150 percent is refused  -> refused: 23514: share_percen
 PASS  dates: an ownership version with "dates unknown" stated is accepted
 PASS  values: a number attribute given only as text is refused  -> refused: 23514: Attribute test_number needs a number value
 PASS  editorial: inserting a row already verified is refused  -> refused: 42501: New rows start as draft; use public.ref_review to move them on
-PASS  editorial: changing a status by a plain update is refused  -> refused: 42501: Status and publication change only through public.ref_review
+PASS  editorial: changing a status by a plain update is refused  -> refused: 42501: Status, publication, retirement, supersession and suspension change only through public.ref_review
 PASS  setup: claim version CV1 (P1 in P2, v1) by A, with no evidence
 PASS  review: signed-out callers cannot use ref_review  -> refused: 42501: permission denied for function ref_review
 PASS  review: a signed-in user with no permission is refused  -> refused: 42501: Not allowed: needs ref_edit
 PASS  review: a call with no signed-in user is refused  -> refused: 42501: Sign in first
 PASS  review: author A submits CV1
-PASS  provenance: editing CV1 after submission is refused  -> refused: 42501: A claim version can only be edited while it is a draft; make a new version instead
+PASS  provenance: editing CV1 after submission is refused  -> refused: 42501: wine_reference.claim_versions: this row is pending_review and frozen; make a new row and retire this one
 PASS  provenance: adding evidence to a submitted version is refused  -> refused: 42501: Evidence and dependencies can only change while the claim version is a draft
-PASS  provenance: deleting a submitted version is refused  -> refused: 42501: Only a draft claim version can be deleted
+PASS  provenance: deleting a submitted version is refused  -> refused: 42501: wine_reference.claim_versions: a row that left draft is never deleted; retire it instead
 PASS  two-person rule: author A cannot approve their own CV1  -> refused: 42501: The author cannot approve their own row (and a row with no recorded author cannot be approved here)
 PASS  review: B approves CV1
 PASS  publication: A (no ref_publish) cannot publish  -> refused: 42501: Not allowed: needs ref_publish
-PASS  publication: CV1 with no evidence cannot be published  -> refused: 23514: A claim needs supporting evidence from a verified source version before it is published
+PASS  publication: CV1 with no evidence cannot be published  -> refused: 23514: Cannot publish this claim version: its subject is not a published entity; its object is not a published entity; no supporting evidence from a verified, current source version of a verified source
 PASS  setup: CV2 (P1 in P2, v2) by A with evidence from source version v1 (not yet verified)
 PASS  rights: evidence with a quote but no rights statement is refused  -> refused: 23514: new row for relation "claim_evidence" violates check constraint "claim_evidence_quote_needs_rights"
 PASS  setup: A submits, B approves CV2
 PASS  setup: B approves CV2
-PASS  publication: evidence from an unverified source version is not enough  -> refused: 23514: A claim needs supporting evidence from a verified source version before it is published
-PASS  setup: the source version is submitted by A and approved by B
+PASS  publication: evidence from an unverified source version is not enough  -> refused: 23514: Cannot publish this claim version: its subject is not a published entity; its object is not a published entity; no supporting evidence from a verified, current source version of a verified source
+PASS  setup: A submits the source version
+PASS  approval: a source version cannot be approved before its source  -> refused: 23514: Approve the source before its versions
+PASS  setup: A submits the source and the quoting-allowed rights statement; B approves both
+PASS  setup: B approves the source and the rights statement
 PASS  setup: B approves the source version
-PASS  publication: a claim about unpublished entities cannot be published  -> refused: 23514: Publish the entities a claim is about first
+PASS  publication: a claim about unpublished entities cannot be published  -> refused: 23514: Cannot publish this claim version: its subject is not a published entity; its object is not a published entity
 PASS  setup: A submits entity P1
 PASS  setup: B approves entity P1
-PASS  publication: B cannot publish P1 before one of its names is verified  -> refused: 23514: An entity needs at least one verified name before it is published
+PASS  publication: B cannot publish P1 before one of its names is verified  -> refused: 23514: An entity needs a current display name (a verified name that is not a typing shortcut) before it is published
 PASS  setup: names submitted by A
 PASS  setup: names approved by B
 PASS  setup: entities P2, P3, G1, G2 submitted by A
@@ -129,11 +189,11 @@ PASS  versions: publishing CV3 retired CV2, and one version of the claim is live
 PASS  setup: G1 genetic parent of G2, CV with documentary evidence only; A submits, B approves
 PASS  setup: genetic CV submitted by A
 PASS  setup: genetic CV approved by B
-PASS  provenance: a genetic-parent claim without genetic evidence cannot be published  -> refused: 23514: This kind of claim needs evidence of its required modality
+PASS  provenance: a genetic-parent claim without genetic evidence cannot be published  -> refused: 23514: Cannot publish this claim version: no current evidence of the required modality
 PASS  setup: CV for P2 in P3 with a quote under a "no quoting" rights statement
 PASS  setup: quote CV submitted by A
 PASS  setup: quote CV approved by B; P3 published
-PASS  rights: a claim whose quote is not allowed to be quoted cannot be published  -> refused: 23514: A quote in the evidence has no verified rights statement that allows quoting
+PASS  rights: a claim whose quote is not allowed to be quoted cannot be published  -> refused: 23514: Cannot publish this claim version: a quote has no verified rights statement that allows quoting
 PASS  rights: approving a rights statement needs ref_rights (A lacks it)  -> refused: 42501: Not allowed: needs ref_rights
 PASS  setup: CV6 (ownership v2) by A depends on the unpublished genetic CV
 PASS  dependencies: a dependency cycle is refused  -> refused: 23514: This dependency would make a cycle
@@ -166,9 +226,9 @@ PASS  owner: O approves their own eligible drafts (names and entities P4, G3)
 PASS  owner: O publishes their own approved entities P4 and G3
 PASS  owner setup: O writes claim P4 in P2 with three flawed versions (no evidence; unverified source; forbidden quote)
 PASS  owner setup: O submits and self-approves the three flawed versions
-PASS  owner: O cannot publish a claim without evidence  -> refused: 23514: A claim needs supporting evidence from a verified source version before it is published
-PASS  owner: O cannot publish on evidence from an unverified source version  -> refused: 23514: A claim needs supporting evidence from a verified source version before it is published
-PASS  owner: O cannot publish a quote whose rights forbid quoting  -> refused: 23514: A quote in the evidence has no verified rights statement that allows quoting
+PASS  owner: O cannot publish a claim without evidence  -> refused: 23514: Cannot publish this claim version: no supporting evidence from a verified, current source version of a verified source
+PASS  owner: O cannot publish on evidence from an unverified source version  -> refused: 23514: Cannot publish this claim version: no supporting evidence from a verified, current source version of a verified source
+PASS  owner: O cannot publish a quote whose rights forbid quoting  -> refused: 23514: Cannot publish this claim version: a quote has no verified rights statement that allows quoting
 PASS  owner setup: O writes a tier-1 claim, G1 genetic parent of G3, with genetic evidence from a verified source version
 PASS  owner: O submits, self-approves and publishes their own tier-1 claim
 PASS  owner setup: B (Editor, reviewer and publisher) writes and submits a version of P2 in P3
@@ -188,6 +248,103 @@ PASS  revocation: O can no longer approve their own submitted entity P5  -> refu
 PASS  revocation: someone else (A) can still approve O's draft the normal way
 PASS  owner setup: the Owner role is given back through the older profiles.role 'admin' path
 PASS  owner: the older admin path counts as Owner again (O approves own P5)
+PASS  lifecycle setup: sources, versions, rights and places Q1..Q7 with names (by A)
+PASS  lifecycle setup: A submits everything
+PASS  lifecycle setup: B approves sources, rights, the plain source versions, names; approves Q1..Q7 and publishes Q1..Q6
+PASS  rights: a private copy under rights that do not allow copying is refused when written  -> refused: 23514: A private copy needs verified rights that allow copying
+PASS  rights: a private copy under rights that are not yet verified is refused when written  -> refused: 23514: A private copy needs verified rights that allow copying
+PASS  approval: a source version whose rights statement is still a draft is refused  -> refused: 23514: The rights statement of this source version is not verified
+PASS  lifecycle setup: claims X1..X5 written by A
+PASS  lifecycle setup: A submits X1..X5
+PASS  lifecycle setup: B approves X1..X5 and publishes them in dependency order
+PASS  lifecycle: X1..X5 are all current after publication
+PASS  evidence: B retires source version SV21
+PASS  evidence: X1 (supported only by SV21) is suspended and no longer current
+PASS  evidence: X2 (also supported by SV31) stays current: suspension is not over-eager
+PASS  evidence: the suspension is in the review history (decision suspend, actor B, the cause)
+PASS  evidence: a suspended version cannot be published again  -> refused: 22023: Cannot publish a row that is verified
+PASS  evidence: a suspension cannot be lifted by a plain update  -> refused: 42501: Status, publication, retirement, supersession and suspension change only through public.ref_review
+PASS  evidence: B retires rights statement R3 (the quote's licence)
+PASS  evidence: X5 (quote under R3) is suspended
+PASS  evidence: a replacement must be a verified version of the same source  -> refused: 23514: The replacement must be a verified version of the same source
+PASS  evidence: a replacement is only accepted with retire on an entity or a source version  -> refused: 22023: A replacement is only given when retiring an entity or a source version
+PASS  evidence: B supersedes SV31 with SV32 (retire with a replacement)
+PASS  evidence: SV31 records superseded_by SV32
+PASS  dependencies: X2 lost its last current evidence and is suspended
+PASS  dependencies: X3 (its own evidence still valid) is suspended because it depends on X2
+PASS  dependencies: X4 is suspended too, two steps away (transitive)
+PASS  dependencies: each suspension is a separate review event
+PASS  dependencies setup: X6 (Q6 in Q4, evidence SV41) depends on the suspended X4; A writes and submits, B approves
+PASS  dependencies setup: X6 submitted by A
+PASS  dependencies setup: X6 approved by B
+PASS  dependencies: a version depending on a suspended version cannot be published  -> refused: 23514: Cannot publish this claim version: a version it depends on is not published, or was retired or suspended
+PASS  dependencies setup: Y1 (Q2 in Q4, v1, evidence SV41) and Z1 (Q5 in Q4, depends on Y1) published; Y2 (v2) approved
+PASS  dependencies setup: Y1, Z1, Y2 submitted by A
+PASS  dependencies setup: B approves Y1, Z1, Y2 and publishes Y1 then Z1
+PASS  dependencies: Z1 is current while Y1 is the live version
+PASS  dependencies: B publishes Y2, which retires Y1
+PASS  dependencies: Z1 (which depended on the retired Y1) is suspended; Y2 is current
+PASS  lifecycle: B retires entity Q2 (Y2 is about Q2)
+PASS  lifecycle: Y2 is suspended because its subject was retired
+PASS  lifecycle setup: W1 (Q6 in Q1, evidence SV22 only) published
+PASS  lifecycle setup: W1 submitted by A
+PASS  lifecycle setup: W1 approved and published by B
+PASS  lifecycle: B retires the whole source S2
+PASS  lifecycle: W1 (evidence only from a version of S2) is suspended
+PASS  lifecycle: no published, unsuspended version anywhere is unsound (the verify script's health check)
+PASS  owner exception kept: O self-approves a claim resting on the superseded SV31, but cannot publish it
+PASS  owner exception kept: O submits and self-approves it
+PASS  owner exception kept: O cannot publish on a superseded source version  -> refused: 23514: Cannot publish this claim version: no supporting evidence from a verified, current source version of a verified source
+PASS  names: retiring the only display name of a published entity (Q3) is refused  -> refused: 23514: This is the published entity's last current display name: approve another name first, or retire the entity
+PASS  names setup: A adds a second name for Q3 and submits it; B approves
+PASS  names setup: submitted by A
+PASS  names setup: approved by B
+PASS  names: with a second display name, the first can be retired
+PASS  names: the remaining display name cannot be retired  -> refused: 23514: This is the published entity's last current display name: approve another name first, or retire the entity
+PASS  names: an entity whose only verified name is a typing shortcut (Q7) cannot be published  -> refused: 23514: An entity needs a current display name (a verified name that is not a typing shortcut) before it is published
+PASS  names setup: owner turns the read switch on
+PASS  names: the read door still shows Q3 by its remaining name, never a retired one
+PASS  names setup: owner turns the read switch off
+PASS  frozen: an approved name's text cannot be edited  -> refused: 42501: wine_reference.entity_names: this row is verified and frozen; make a new row and retire this one
+PASS  frozen: an approved name cannot be deleted  -> refused: 42501: wine_reference.entity_names: a row that left draft is never deleted; retire it instead
+PASS  frozen: an approved source's title cannot be edited  -> refused: 42501: wine_reference.sources: this row is verified and frozen; make a new row and retire this one
+PASS  frozen: an approved source version's link cannot be edited  -> refused: 42501: wine_reference.source_versions: this row is verified and frozen; make a new row and retire this one
+PASS  frozen: an approved source version's fingerprint cannot be edited  -> refused: 42501: wine_reference.source_versions: this row is verified and frozen; make a new row and retire this one
+PASS  frozen: an approved rights statement's permissions cannot be edited  -> refused: 42501: wine_reference.rights_statements: this row is verified and frozen; make a new row and retire this one
+PASS  frozen: superseded_by cannot be set by a plain update  -> refused: 42501: Status, publication, retirement, supersession and suspension change only through public.ref_review
+PASS  frozen: a new claim version cannot be inserted already suspended  -> refused: 42501: New rows start as draft; use public.ref_review to move them on
+PASS  frozen: a claim's object cannot change once a version left draft  -> refused: 42501: A claim whose versions left draft keeps its subject, type and object; make a new claim
+PASS  frozen setup: taxonomy node N1's entity is submitted by A and approved by B
+PASS  frozen setup: approved by B
+PASS  frozen: an approved taxonomy node's code cannot change  -> refused: 42501: This taxonomy row's entity left draft; its code, parent and domain are frozen
+PASS  frozen: its display order may still change
+PASS  frozen: a claim type in use cannot change its required evidence  -> refused: 42501: Claim type part_of is in use: only its label, description and retirement may change
+PASS  frozen: a claim type in use cannot go back to proposed  -> refused: 42501: Claim type part_of is in use: only its label, description and retirement may change
+PASS  frozen: a claim type in use may change its wording
+PASS  frozen: a draft name can still be edited
+PASS  frozen setup: the draft name is submitted by A
+PASS  frozen: a submitted name cannot be edited  -> refused: 42501: wine_reference.entity_names: this row is pending_review and frozen; make a new row and retire this one
+PASS  frozen setup: B rejects it back to draft
+PASS  frozen: a rejected (draft again) name can be edited
+PASS  names (final) setup: Q8 with a current, an ended and a future name (by A)
+PASS  names (final) setup: A submits the names and Q8, Q9
+PASS  names (final) setup: B approves them and publishes Q8
+PASS  names (final) setup: owner turns the read switch on
+PASS  names (final): the read door returns Q8's current name
+PASS  names (final): REGRESSION: an ended name of an entity that has a current name is not returned
+PASS  names (final): REGRESSION: a name that has not started yet is not returned
+PASS  names (final): exactly one Zeta name is returned
+PASS  names (final) setup: owner turns the read switch off
+PASS  names (final): an entity whose names have all ended or not started (Q9) cannot be published  -> refused: 23514: An entity needs a current display name (a verified name that is not a typing shortcut) before it is published
+PASS  names (final): retiring Q8's current name is refused although an ended and a future name remain  -> refused: 23514: This is the published entity's last current display name: approve another name first, or retire the entity
+PASS  verify after tests: 001a consistency: if registered, the Owner role holds all four ref_* permissions; if not, no role holds any | 001a not registered
+PASS  verify after tests: 001a consistency: no role other than owner (or editor, if the owner chose it) holds a ref_* permission | 
+PASS  verify after tests: health: every private source copy is under verified rights that allow copying | 
+PASS  verify after tests: health: every published entity has a current display name | 
+PASS  verify after tests: health: every published, unsuspended claim version is current (sound, with current dependencies) | 
+PASS  verify after tests: migration 001 release is "001 r5 (2026-11-08)" | 
+PASS  verify after tests: no structure drift: the schema matches the fingerprint stored by the migration | 
+PASS  owner_role_check.sql runs read-only and reports the role lookup, profiles grants and role counts
 PASS  rollback refuses while the reference holds content
 PASS  rollback on an empty reference runs
 PASS  after rollback the public schema is exactly as before
@@ -197,5 +354,94 @@ PASS  001a runs, and runs again
 PASS  001a: owner gains ref_edit, ref_review, ref_publish, ref_rights once; editor unchanged; registered
 PASS  migration stops when a required live function (my_staff_role_code) is missing
 PASS  after that stop nothing was created
-TOTAL: 160 passed, 0 failed  (PostgreSQL 16.15, local throwaway database)
+PASS  preflight stops (pf_foreign) and changes nothing: unexpected function
+PASS  preflight stops (pf_orphan) and changes nothing: partial or foreign deployment
+PASS  preflight stops (pf_drift) and changes nothing: changed by hand
+PASS  preflight stops (pf_release) and changes nothing: Never replay an edited 001
+PASS  preflight stops (pf_unregistered) and changes nothing: migration 001 is not registered
+PASS  001a stops when migration 001 has not run
+PASS  001a runs after 001
+PASS  001a stops when an earlier run was partly undone (Owner lacks ref_rights)
+PASS  verify reports the partial 001a as FAIL
+PASS  001_rollback refuses while 001a's permissions are in place
+PASS  001a_rollback runs, and runs again
+PASS  001a_rollback removed every ref_* permission from every role (other permissions kept, in order) and unregistered 001a
+PASS  001a runs again cleanly after its rollback
+PASS  full rollback order works: 001a_rollback, then 001_rollback
+PASS  r5 S-1: a write statement takes the editorial lock before touching any row (even one that changes no row)
+PASS  r5 S-1: reading the tables does not take the editorial lock
+PASS  r5 S-1: delete and insert statements (also on a controlled list) take it too
+PASS  r5 S-1: the lock trigger function is not executable by anon or authenticated
+PASS  r5 S-1: the lock trigger function is not security definer (runs with the writer's own rights)
+PASS  r5 S-1: every one of the 18 editorial tables has the statement-level lock trigger
+PASS  r5 S-2 setup: B publishes F2 (claim K2, version 1)
+PASS  r5 S-2 setup: C publishes F11 (claim K2, version 3)
+PASS  r5 S-2: F2 was retired automatically and F11 is the one current version
+PASS  r5 S-2: the automatic retirement has exactly one review event
+PASS  r5 S-2: it is attributed to the person who published the replacement (C), names the replacement, verified -> retired, no override
+PASS  r5 S-2: it is written before the publish event of the replacement, in the same transaction
+PASS  r5 S-2: the change_log still records the retirement (before verified, after retired)
+PASS  r5 S-2: the first publication (of F2, with nothing live before it) wrote no retire event
+PASS  r5 S-2: the retired F2 cannot be published again  -> refused: 22023: Cannot publish a row that is retired
+PASS  r5 S-3 setup: evidence for draft F7 (claim K5, version 2)
+PASS  r5 S-3 setup: A submits F7
+PASS  r5 S-3 setup: B approves F7
+PASS  r5 S-3 setup: B publishes F7 (version 2) while F5 (version 1) is approved but unpublished
+PASS  r5 S-3: publishing the OLDER F5 while the newer F7 is live is refused  -> refused: 23514: Version 2 of this claim has been published, so version 1 is never published: write its content as a new version
+PASS  r5 S-3: ... also for the Owner  -> refused: 23514: Version 2 of this claim has been published, so version 1 is never published: write its content as a new version
+PASS  r5 S-3: F7 is still the one current version and F5 unpublished; no event recorded for the refusals
+PASS  r5 S-3: B may retire the newer F7 (its own recorded decision)
+PASS  r5 S-3 (decision 14): the older F5 is still refused after the newer F7 was retired  -> refused: 23514: Version 2 of this claim has been published, so version 1 is never published: write its content as a new version
+PASS  r5 S-3 (decision 14): ... also for the Owner  -> refused: 23514: Version 2 of this claim has been published, so version 1 is never published: write its content as a new version
+PASS  r5 S-3: restoring as a new version: F13 (claim K5, version 3) is written with evidence
+PASS  r5 S-3: A submits F13
+PASS  r5 S-3: B approves and publishes F13 (forward publication)
+PASS  r5 S-3: F13 is the current version of K5; F5 was never published; F7 has exactly one retire event (the explicit one, with its note)
+PASS  r5 S-3: the retired F7 cannot be published again  -> refused: 22023: Cannot publish a row that is retired
+PASS  r5 S-3 setup: source version V3 and version F12 (claim K1, version 2) with evidence from V3
+PASS  r5 S-3 setup: A submits V3 and F12
+PASS  r5 S-3 setup: B approves V3 and F12, and publishes F12
+PASS  r5 S-3 setup: C retires V3, which suspends F12
+PASS  r5 S-3 setup check: F12 is suspended, published, not retired
+PASS  r5 S-3: an older version is not published while a newer one is suspended but not retired  -> refused: 23514: Version 2 of this claim has been published, so version 1 is never published: write its content as a new version
+PASS  r5 S-3: B retires the suspended F12
+PASS  r5 S-3 (decision 14): the older F1 is still refused after the suspended F12 was retired  -> refused: 23514: Version 2 of this claim has been published, so version 1 is never published: write its content as a new version
+PASS  r5 S-3: K1 has no current version until its content is written again as a new version
+PASS  r5 S-5: TRUNCATE review_events is refused  -> refused: 42501: wine_reference.review_events: TRUNCATE is not allowed on the reference (it skips the row rules); retire rows instead
+PASS  r5 S-5: TRUNCATE change_log is refused  -> refused: 42501: wine_reference.change_log: TRUNCATE is not allowed on the reference (it skips the row rules); retire rows instead
+PASS  r5 S-5: TRUNCATE claim_evidence is refused  -> refused: 42501: wine_reference.claim_evidence: TRUNCATE is not allowed on the reference (it skips the row rules); retire rows instead
+PASS  r5 S-5: TRUNCATE claim_version_dependencies is refused  -> refused: 42501: wine_reference.claim_version_dependencies: TRUNCATE is not allowed on the reference (it skips the row rules); retire rows instead
+PASS  r5 S-5: TRUNCATE ... CASCADE on entities is refused  -> refused: 42501: wine_reference.entities: TRUNCATE is not allowed on the reference (it skips the row rules); retire rows instead
+PASS  r5 S-5: after the attempts the history and content are all still there
+PASS  r5 audit: every claim version retired after publication has a retire event, and none has two
+PASS  r5 health: every published, unsuspended claim version is current
+PASS  verify after r5 tests: TRUNCATE is refused on every reference table except the migration register (20 triggers) | 
+PASS  verify after r5 tests: audit: every claim version retired after publication has a retire event in review_events | 
+PASS  verify after r5 tests: audit: no claim version has more than one retire event | 
+PASS  verify after r5 tests: every editorial table takes the editorial lock at the start of each write statement (18 statement triggers) | 
+PASS  verify after r5 tests: health: every published, unsuspended claim version is current (sound, with current dependencies) | 
+PASS  verify after r5 tests: migration 001 release is "001 r5 (2026-11-08)" | 
+PASS  verify after r5 tests: no structure drift: the schema matches the fingerprint stored by the migration | 
+PASS  concurrency: C1a publish F1 (holding) while V1 (its only evidence) is retired: no unsound claim stays current
+PASS  concurrency: C1b retire V1 (holding) while F1 is published: no unsound claim stays current
+PASS  concurrency: C2a publish F2 (quote under R, holding) while R is retired
+PASS  concurrency: C2b retire R (holding) while F2 is published
+PASS  concurrency: C3a publish F4 (depends on F3, holding) while F3 is retired
+PASS  concurrency: C3b retire F3 (holding) while F4 is published
+PASS  concurrency: C4a publish F5 (about E1, holding) while E1 is retired
+PASS  concurrency: C5 concurrent retirement of both display names of published E3: it keeps one
+PASS  concurrency: C6 concurrent halves of a part_of cycle: at most one is stored
+PASS  concurrency: C7 concurrent halves of a dependency cycle: at most one is stored
+PASS  concurrency: C8 evidence added while the version is being submitted is refused (submitted content stays frozen)
+PASS  concurrency: C9 evidence added first is included when the submit follows
+PASS  concurrency: C10 Owner self-approval (holding) while an editor rejects the same row: the approval stands, recorded once as owner_override; the late rejection is refused
+PASS  concurrency: C11a v1 and v3 of one claim published at once: v3 live and current, v1 retired; one retire event (by the publisher of v3, naming v3) and the change_log row
+PASS  concurrency: C11b v3 published, then v1 at the same time: v1 refused (newer version live), v3 stays the one current version
+PASS  concurrency: C12 the same version published twice at once: one publication, the second refused
+PASS  concurrency: D1 the owner edits a draft version, then adds evidence, while it is submitted: no deadlock, both transactions committed, nothing unsound
+PASS  concurrency: D1 the submit waited for the owner's edit and includes its evidence
+PASS  concurrency: D2 the owner touches a draft claim, then adds evidence, while its version is submitted: no deadlock, both transactions committed, nothing unsound
+PASS  concurrency: D3 the owner records a private copy under R2, then adds evidence, while R2 is retired: no deadlock, both transactions committed, nothing unsound
+
+TOTAL: 359 passed, 0 failed  (PostgreSQL 16.15, local throwaway database)
 ```

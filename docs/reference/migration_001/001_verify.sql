@@ -49,11 +49,66 @@ checks(name, ok, detail) as (
          and not has_function_privilege('service_role', 'public.ref_published_names(text,text,integer)', 'EXECUTE'), ''
   union all
   select 'public.ref_review: security definer, empty search_path, executable by authenticated only',
-         exists (select 1 from pg_proc p where p.oid = 'public.ref_review(text,uuid,text,text)'::regprocedure and p.prosecdef
+         exists (select 1 from pg_proc p where p.oid = 'public.ref_review(text,uuid,text,text,uuid)'::regprocedure and p.prosecdef
                    and p.proconfig @> array['search_path=""'])
-         and has_function_privilege('authenticated', 'public.ref_review(text,uuid,text,text)', 'EXECUTE')
-         and not has_function_privilege('anon', 'public.ref_review(text,uuid,text,text)', 'EXECUTE')
-         and not has_function_privilege('service_role', 'public.ref_review(text,uuid,text,text)', 'EXECUTE'), ''
+         and has_function_privilege('authenticated', 'public.ref_review(text,uuid,text,text,uuid)', 'EXECUTE')
+         and not has_function_privilege('anon', 'public.ref_review(text,uuid,text,text,uuid)', 'EXECUTE')
+         and not has_function_privilege('service_role', 'public.ref_review(text,uuid,text,text,uuid)', 'EXECUTE'), ''
+  union all
+  select 'migration 001 release is "001 r5 (2026-11-08)"',
+         (select release from wine_reference.schema_migrations where version = '001') = '001 r5 (2026-11-08)', ''
+  union all
+  select 'every editorial table takes the editorial lock at the start of each write statement (18 statement triggers)',
+         (select count(*) from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_namespace n on n.oid = c.relnamespace
+           where n.nspname = 'wine_reference' and not t.tgisinternal and t.tgname like '%\_lock\_first'
+             and t.tgfoid = 'wine_reference.lock_before_write()'::regprocedure
+             and (t.tgtype & 1) = 0 and (t.tgtype & 2) = 2 and (t.tgtype & 28) = 28) = 18, ''
+  union all
+  select 'TRUNCATE is refused on every reference table except the migration register (20 triggers)',
+         (select count(*) from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_namespace n on n.oid = c.relnamespace
+           where n.nspname = 'wine_reference' and not t.tgisinternal and t.tgfoid = 'wine_reference.refuse_truncate()'::regprocedure
+             and (t.tgtype & 32) = 32) = 20, ''
+  union all
+  select 'audit: every claim version retired after publication has a retire event in review_events',
+         not exists (select 1 from wine_reference.claim_versions v where v.status = 'retired' and v.published_at is not null
+                      and not exists (select 1 from wine_reference.review_events e where e.target_table = 'claim_versions'
+                                       and e.target_id = v.id and e.decision = 'retire')),
+         coalesce((select string_agg(v.id::text, ', ') from wine_reference.claim_versions v where v.status = 'retired' and v.published_at is not null
+                    and not exists (select 1 from wine_reference.review_events e where e.target_table = 'claim_versions'
+                                     and e.target_id = v.id and e.decision = 'retire')), '')
+  union all
+  select 'audit: no claim version has more than one retire event',
+         not exists (select 1 from wine_reference.review_events where target_table = 'claim_versions' and decision = 'retire'
+                      group by target_id having count(*) > 1), ''
+  union all
+  select 'no structure drift: the schema matches the fingerprint stored by the migration',
+         (select structure_md5 from wine_reference.schema_migrations where version = '001') = wine_reference.structure_fingerprint(), ''
+  union all
+  select 'health: every published, unsuspended claim version is current (sound, with current dependencies)',
+         not exists (select 1 from wine_reference.claim_versions v where v.status = 'verified' and v.published_at is not null
+                      and v.suspended_at is null and not wine_reference.is_current(v.id)),
+         coalesce((select string_agg(v.id::text, ', ') from wine_reference.claim_versions v where v.status = 'verified' and v.published_at is not null
+                    and v.suspended_at is null and not wine_reference.is_current(v.id)), '')
+  union all
+  select 'health: every published entity has a current display name',
+         not exists (select 1 from wine_reference.entities e where e.status = 'verified' and e.published_at is not null
+                      and not wine_reference.has_display_name(e.id)),
+         coalesce((select string_agg(e.id::text, ', ') from wine_reference.entities e where e.status = 'verified' and e.published_at is not null
+                    and not wine_reference.has_display_name(e.id)), '')
+  union all
+  select 'health: every private source copy is under verified rights that allow copying',
+         not exists (select 1 from wine_reference.source_versions sv left join wine_reference.rights_statements rs on rs.id = sv.rights_id
+                      where sv.storage_path is not null and sv.status <> 'retired' and not (rs.status = 'verified' and rs.allows_copy)), ''
+  union all
+  select '001a consistency: if registered, the Owner role holds all four ref_* permissions; if not, no role holds any',
+         case when exists (select 1 from wine_reference.schema_migrations where version = '001a')
+              then (select permissions @> array['ref_edit', 'ref_review', 'ref_publish', 'ref_rights'] from public.staff_roles where code = 'owner')
+              else not exists (select 1 from public.staff_roles where permissions && array['ref_edit', 'ref_review', 'ref_publish', 'ref_rights']) end,
+         case when exists (select 1 from wine_reference.schema_migrations where version = '001a') then '001a registered' else '001a not registered' end
+  union all
+  select '001a consistency: no role other than owner (or editor, if the owner chose it) holds a ref_* permission',
+         not exists (select 1 from public.staff_roles where code not in ('owner', 'editor')
+                      and permissions && array['ref_edit', 'ref_review', 'ref_publish', 'ref_rights']), ''
   union all
   select 'the Owner lookup public.my_staff_role_code() exists (used by the Owner approval override)',
          to_regprocedure('public.my_staff_role_code()') is not null, ''

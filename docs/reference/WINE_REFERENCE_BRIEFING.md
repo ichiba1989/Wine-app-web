@@ -1,11 +1,14 @@
 # Wine Education Master Reference: complete briefing
 
-**As of 2026-10-26 (updated the same day for the Owner approval override).** One document that covers the whole effort so far, written to be read on its own (no access to the code needed).
+**As of 2026-11-01 (updated for the Owner approval override, the Phase 2.0B.3 corrections, the final review follow-up, the local Supabase staging run and release candidate r5).** One document that covers the whole effort so far, written to be read on its own (no access to the code needed).
 Repository: `ichiba1989/Wine-app-web`, branch `main` (latest commit at writing: `76032a4`); the venue version `vwm` has the same documents.
 
 **Status in one paragraph.** The reference has been audited, the live database has been inspected (read-only), a reference model has
 been drafted, and **migration 001** (the database foundation) has been designed, written as SQL and **tested on a throwaway local
-database: 160 tests passed, 0 failed** (re-run in full after the Owner approval override was added). **Nothing has been run on the live database and nothing in the app has changed.** The next step
+database: 353 tests passed, 0 failed** (release candidate "001 r5", 2026-11-01; includes 20 concurrency checks), and validated on a
+disposable **local Supabase stack** (real sign-in, Data API and GraphQL; `migration_001/STAGING_TEST_REPORT.md`). r5 corrects the two
+small defects the Supabase run found (a lock-order deadlock between SQL-editor edits and decisions; a missing audit row when publishing
+replaces an older version), refuses TRUNCATE, and adds a forward-only publication rule that the owner must confirm. **Nothing has been run on the live database and nothing in the app has changed.** The next step
 needs the owner: the decisions in section 10 and written approval, then the checklist in section 11.
 
 ---
@@ -21,6 +24,10 @@ needs the owner: the decisions in section 10 and written approval, then the chec
 7. The eight Phase 1.9 revisions and where each lives
 8. Migration 001: what it builds
 9. Security, compatibility, tests and recovery
+9a. Migration 002
+9b. Migration 003
+9c. Migration 004
+9d. Migration 005
 10. Decisions the owner still has to make
 11. Checklist for running migration 001 on the live database
 12. What is missing (dependencies)
@@ -59,6 +66,10 @@ real bottle photographs only; third-party data only with a checked licence; data
 | 2.0A | Read-only repository audit | Recommendation: build inside the existing database, in its own section, additive only |
 | 2.0B.1 | Read-only database inspection scripts written and tested; the owner ran them on the live database; draft reference model | `docs/REFERENCE_MODEL.md`, `docs/reference/results/FINDINGS.md` (raw results kept by the owner, not published) |
 | 2.0B.2 | Migration 001 designed, written, tested locally | `docs/reference/migration_001/`: 160 of 160 tests passed; not run live |
+| 2.0B.3 | Independent review; corrections: evidence lifecycle, dependencies, frozen approved records, display names, Owner role check, migration safety, 001a recovery | 270 of 270 tests passed; not run live (`CHANGE_REPORT_2_0B_3.md`) |
+| 2.0B.3 final | Names valid today in the read door; an editorial lock against concurrent-transaction races; Supabase staging assessed | 294 of 294 passed (r4); not run live |
+| 2.0B.4 | r4 run unchanged on a disposable local Supabase stack | 423 checks passed; found a lock-order deadlock (S-1), a missing audit row (S-2), an older version able to replace a newer one (S-3), decision time growing with volume (S-4) |
+| 2.0B.5 | Release candidate r5: S-1, S-2 and TRUNCATE corrected, forward-only rule for S-3 (owner to confirm), S-4 documented | 353 of 353 local; Supabase results in `migration_001/STAGING_TEST_REPORT.md`; not run live, not yet approved |
 
 ---
 
@@ -245,7 +256,7 @@ education; database search per language.
 **Compatibility.** The whole `public` schema was compared before and after the migration in the test: the only difference is the two
 new `ref_*` functions. No app file changes; neither version of the app uses the reference yet.
 
-**Tests (local only, PostgreSQL 16, throwaway database): 160 passed, 0 failed.** Covered: fresh install; running it twice (no change,
+**Tests (local only, PostgreSQL 16, throwaway database): 294 passed, 0 failed** (13 of them run two editorial sessions at the same time). Covered: fresh install; running it twice (no change,
 no duplicates); backward compatibility; the read-only verify script; foreign keys and uniqueness; taxonomy loops and domains;
 relationship types and loops; dates and values; editorial rules and the two-person rule; provenance (frozen versions, evidence only on
 drafts); rights; dependencies; append-only history; access refused for every browser role; publication rules of the read door; rollback
@@ -253,10 +264,83 @@ drafts); rights; dependencies; append-only history; access refused for every bro
 reviewers and publishers, no rule waived, recorded, ended at once when the role is removed); a missing live function stops the migration. *Limits:* not Supabase itself; the permission check and sign-in were
 stand-ins; the verify script re-checks access on the live database after the migration.
 
+**Corrections after the independent review (Phase 2.0B.3, 2026-10-27).** A published claim is now **suspended automatically** when
+its supporting source version or source is retired or replaced, a quote's licence is retired, its subject is retired, or something it
+depends on is retired or suspended (at any depth); one rule decides what is sound, and "current" means published, not suspended and
+sound. Approved names, sources, source versions, licences and claim versions are **frozen**: changes are new records, reviewed, with the
+old one retired. A published entity always keeps a display name, and only names valid today are shown. Editorial decisions now run one
+after another (an editorial lock), so two editors acting at the same moment cannot leave an unsound claim current. The migration checks itself before running (unexpected functions,
+partial installs, a different release, hand-made changes) and `001a` has its own rollback. Full list: `CHANGE_REPORT_2_0B_3.md`.
+
 **Recovery.** The migration is one transaction (all or nothing). While the reference is empty, a tested rollback script removes exactly
 what it created. Once content exists: never drop; fix forward with a new migration and retire instead of deleting.
 
 ---
+
+## 9a. Migration 002 (2026-11-08): the editorial door, wine identity levels, links to the old catalog
+
+**Status (2026-11-08):**
+- **Production:** hardening release 2, 001 r5 and 001a are deployed; the reference tables are empty.
+- **002:** tested locally (96 passed, 0 failed) and **deployed on production by the owner on 2026-11-08**. Live checks: 13/0, 26/0, 26/0. Steps are in
+  `docs/reference/migration_002/DEPLOY_002.md`, the design in `docs/reference/migration_002/README.md`.
+
+What 002 adds, which is exactly what DESIGN.md §3 put off to 002:
+- `public.ref_draft`: the Owner, signed in, writes drafts as their author, so their own work can now be approved through `ref_review`
+  (recorded as `owner_override`).
+- `public.ref_staff`: the staff read.
+- The Owner page's **Reference** tab, for entities, names, sources with rights, claims and their versions with evidence, types and
+  catalog links.
+- The four wine identity levels (`wine_product`, `wine_edition`, `wine_release`, `release_event`), with 6 relationship types and
+  5 attribute types. All are **proposed** until the Owner switches each on.
+- `wine_reference.legacy_links`: the old catalog row → reference entity. Each link is "old catalog, not verified", starts as suggested,
+  and has at most one confirmed per row. The catalog is never changed.
+
+`reference_enabled` stays at 0.
+
+## 9b. Migration 003 (2026-11-08): subject areas, wine identity from the old catalog, catalog matching
+
+**Status:** tested locally (116 passed, 0 failed); **not run on production** (`docs/reference/migration_003/DEPLOY_003.md`; design in
+`README.md` there).
+
+**Built:**
+- The subject-area import: paste the approved list, check it, import it. Stable codes, hierarchy, names in every language, the
+  approved document as the source, safe to repeat.
+- Product and edition drafts per old vintage, with "unidentified non-vintage" editions and facts only where the type is switched on.
+- Catalog matching:
+  - coverage per table;
+  - same-name suggestions;
+  - drafts from rows;
+  - "Confirm the unambiguous ones";
+  - undo and reopen;
+  - database rules on every link: right kind, row exists, one confirmed link per row, auto-reject of competing suggestions.
+
+**Recommended to switch on now (the owner decides):** `part_of`, `product_of`, `defined_by_place`, `edition_of`, `harvest_year`,
+`nv_identifier`. `bottle_format_ml` stays proposed until the owner decides where it belongs.
+
+**Not included:** the 14 domains and the subdomains themselves (the owner's list).
+
+## 9c. Migration 004 (2026-11-13): grape and place-tree drafts, subject-area assignments, the grape-rules check
+
+**Status:** tested locally (78/0); not run on production; needs 003 first (`docs/reference/migration_004/`).
+
+**Built:**
+- `made_from` drafts, only from label grapes, with no invented share;
+- `part_of` drafts from the catalog's own place tree, only between confirmed places;
+- subject areas on each thing, with review;
+- a read-only comparison of `appellation_grape_rules` with `aocgrapes.js` that works whatever the table's columns are called;
+- `rules_name_grape` (proposed).
+
+**Owner decision:** which list becomes the reference for appellation grape rules (A, B or C; C recommended).
+
+## 9d. Migration 005 (2026-11-13): grape-rule reconciliation and import
+
+**Status:** tested locally (85/0); not run on production; needs 003 and 004 (`docs/reference/migration_005/`).
+
+**Built:**
+- A review workflow comparing `aocgrapes.js` with `appellation_grape_rules`: stage, then seven states, then a per-candidate decision.
+  A conflict needs an explicit side; unchecked, unresolved and "usual" lines cannot be accepted.
+- The import of accepted rules as draft `rules_name_grape` facts, with documentary evidence from draft sources (reused per address).
+  Nothing is published, and a rule is never imported twice.
 
 ## 10. Decisions the owner still has to make
 
@@ -271,7 +355,12 @@ what it created. Once content exists: never drop; fix forward with a new migrati
 9. Whether `privacy.html` needs a line about staff records (owner and lawyers).
 10. Keep the reference's own change log, or later unify with the existing `revisions` table.
 11. When to switch the reference on (not before there is published content).
-12. Also open from earlier: the definitions of product / edition / release / release event (and where bottle format belongs); whether to add an expert level; CMS/WSET permission; whether licensed source copies may be kept in a private bucket; the six accent-only producer duplicates; the parked feature's open setting; the `claude_readonly` role.
+12. DECIDED 2026-11-08 (stricter: an older version is never published once a newer one has been; restore as a new version; was: confirm the forward-only rule (an older version is not published while a newer one is live or
+    suspended; to bring it back, retire the newer one first, recorded), or choose stricter (never) or looser (r4 behaviour)).
+13. DECIDED 2026-11-08 (accept now, optimise later): accept that each publish or retire takes longer as the reference grows (about 0.7 s at 10,000 published versions) and plan a
+    narrower check in a later migration.
+14. DECIDED 2026-11-08: r5 approved. Decision 5 decided the same day: Owner only holds the ref_* permissions.
+15. Also open from earlier: the definitions of product / edition / release / release event (and where bottle format belongs; since 002 these are proposed types the Owner switches on in the Reference tab, and `bottle_format_ml` stays proposed until this is decided); whether to add an expert level; CMS/WSET permission; whether licensed source copies may be kept in a private bucket; the six accent-only producer duplicates; the parked feature's open setting; the `claude_readonly` role.
 
 ---
 
@@ -283,10 +372,11 @@ Nothing here happens until the owner approves in writing. Scripts run one at a t
 - [ ] Owner approves the design, including decisions 1, 3 and 5.
 - [ ] A recent database backup exists (dashboard: Database, Backups), or note that the plan has none.
 - [ ] Settings, API, Exposed schemas does **not** list `wine_reference`; leave it unchanged.
-- [ ] Use the approved files. Fingerprints (first 16 hex characters of SHA-256): `001_wine_reference_foundation.sql` `ae69fb54f1be71d7`,
-      `001a_reference_permissions.sql` `8cf791d1e3d0256a`, `001_verify.sql` `512247ba1d83ae50`, `001_rollback.sql` `210b650d5b103a2f`.
-- [ ] Read the live body of `my_staff_role_code()` once (read-only) and confirm it returns 'owner' only for the Owner role (DESIGN.md §8).
-- [ ] Re-run the local tests on that commit: 160 passed, 0 failed.
+- [ ] Use the approved files. Fingerprints (first 16 hex characters of SHA-256): `001_wine_reference_foundation.sql` `363f4022eb2c0f6b`,
+      `001a_reference_permissions.sql` `980a8a67df975a86`, `001_verify.sql` `35422d599935a784`, `001_rollback.sql` `af80fc11000f6fc1`,
+      `001a_rollback.sql` `cc997dca39ac806c`, `owner_role_check.sql` `e911b62ebfba298b` (release "001 r5 (2026-11-08)", final).
+- [ ] Run `owner_role_check.sql` (read-only) and confirm the points in `OWNER_ROLE_VERIFICATION.md` (DESIGN.md §8).
+- [ ] Re-run the local tests on that commit: 359 passed, 0 failed.
 
 **Run**
 - [ ] Paste `001_wine_reference_foundation.sql`, Run: expect "Success. No rows returned". Any error: stop; nothing was applied.
@@ -328,6 +418,12 @@ Nothing here happens until the owner approves in writing. Scripts run one at a t
 | `docs/reference/migration_001/001a_reference_permissions.sql` | The permissions step (separate approval) |
 | `docs/reference/migration_001/001_verify.sql` | Read-only checks for after the migration |
 | `docs/reference/migration_001/001_rollback.sql` | Rollback while the reference is empty |
+| `docs/reference/migration_001/001a_rollback.sql` | Takes the reference permissions back (run before 001_rollback) |
+| `docs/reference/migration_001/owner_role_check.sql` | Read-only check of the live Owner lookup and profile protections (for the owner to run) |
+| `docs/reference/migration_001/OWNER_ROLE_VERIFICATION.md` | What the Owner check must confirm, and what stays unverified |
+| `docs/reference/migration_001/CHANGE_REPORT_2_0B_3.md` | The Phase 2.0B.3 corrections and remaining risks |
+| `docs/reference/migration_001/STAGING_ASSESSMENT.md` | Whether a disposable Supabase test is possible without production credentials |
+| `docs/reference/migration_001/tests/concurrency_tests.sh`, `concurrency_fixture.sql` | Two-session concurrency checks (local only) |
 | `docs/reference/migration_001/TEST_REPORT.md` | The local test report with the full output |
 | `docs/reference/migration_001/tests/` | The local test harness (never for Supabase) |
 
