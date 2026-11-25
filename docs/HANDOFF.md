@@ -34,6 +34,15 @@ AND give its download link, and name the branch and path. Packages live on branc
 
 Latest review package: `review_packages/Wine_Reference_Migration_002_Review.zip` (Migration 002, 2026-11-08). Earlier: `review_packages/Wine_Reference_Phase_2_0B_3_Security_Review.zip` on branch `claude/wine-app-setup-35g1ne`
 (Migration 001 **r4**, rebuilt after the final review follow-up on 2026-11-01; not on the website).
+**Migration 006 (2026-11-25, release `006 r1 (2026-11-25)`): implemented and tested locally; NOT run on production.** It is read-only:
+`public.ref_browse` serves the Evidence review, Browse all (beyond 300, page by page), many things into one subject area, and Compare
+side by side.
+- SQL and steps: `docs/reference/migration_006/README.md` and `DEPLOY_006.md`; give the owner each script in full, in a code block.
+- **Branch rule for this phase:** the app screens are on the unpublished branch `claude/wine-app-setup-35g1ne` (commit "Migration 006 ...").
+  They go to `main`, then `vwm`, only after the owner has run 006 and authorised the app deployment.
+- The `vwm` merge was rehearsed locally: `vwm` numbers owner.js 53, data.js 63, app.js 140.
+- Until then, `main` and `vwm` stay at b5ffa99 / f72a163.
+
 **DEPLOYED 2026-11-25: Migrations 003, 004 and 005** (run by the owner, in order).
 
 Live checks, public key only:

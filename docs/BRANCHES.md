@@ -20,6 +20,11 @@ is merged, move the lines to "Merged" with the date. Whenever a venue gets somet
 
 ## Venue: `vwm` (published under `/vwm/`)
 
+### Prepared, not yet on main or `vwm` (waiting for migration 006 and the owner's go-ahead)
+- 2026-11-25: **Migration 006** and its Reference tab screens (Evidence review, Browse all, assign many, Compare side by side). The commit
+  is on `claude/wine-app-setup-35g1ne` (not published). The merge into `vwm` was rehearsed: the only hand conflict is `ownerData` in
+  `app.js`; after it, `cascade.py` gives `vwm` owner.js 53, data.js 63, app.js 140.
+
 ### On main, not yet merged into `vwm`
 _(nothing: `vwm` has all of main as of 2026-11-25, the review-to-publication workflow included)_
 

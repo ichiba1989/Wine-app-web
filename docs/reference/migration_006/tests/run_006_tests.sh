@@ -4,7 +4,7 @@
 # migration_003/tests/prereq_catalog_003.sql, migration_004/tests/prereq_catalog_004.sql), the production privilege hardening, 001 r5, 001a,
 # 002 r1, 003 r1, 004 r1 and 005 r1. Checks: the read-only preflight, preflight refusals, install, 006_verify, the public schema, replay,
 # the hardening and 005_verify (exactly its two documented rows), the real-API checks (api_006_tests.py: refusals, evidence, mirrors of
-# ref_review, pages beyond 300, subject areas, link comparison, no writes, the switch), the API workflows of 003, 004 and 005 on top of 006
+# ref_review, pages beyond 300, subject areas, link comparison, no writes, the switch), the API workflows of 002, 003, 004 and 005 on top of 006
 # (compatibility), verify after content, rollback (006 stores nothing, so it is always possible) and 005_verify passing again, re-install,
 # the tab's pure rules and (with UI_PORT) the Owner page in a browser (owner_ui_006.mjs).
 # Needs SB_PROJECT_DIR, SB_CLI, SB_ENV_FILE. Never targets production.
@@ -24,10 +24,10 @@ base() {
   done
 }
 readonly_file() { (echo "set default_transaction_read_only = on;"; cat "$1") | PSQL -At -F ' | ' 2>&1; }
-stops() {   # $1 label, $2 expected text
+stops() {   # $1 label, $2 expected text, $3 how many ref_browse functions the case itself made (default 0)
   if PSQL_FILE "$MIG" > "$OUT/stop.log" 2>&1; then bad "$1: 006 should have stopped"
   elif grep -q "$2" "$OUT/stop.log"; then
-    [ "$(q "select count(*) from wine_reference.schema_migrations where version = '006'")|$(q "select count(*) from pg_proc where proname = 'ref_browse'")|$(q "select to_regclass('wine_reference.entities_created') is null")" = "0|0|t" ] \
+    [ "$(q "select count(*) from wine_reference.schema_migrations where version = '006'")|$(q "select count(*) from pg_proc where proname = 'ref_browse'")|$(q "select to_regclass('wine_reference.entities_created') is null")" = "0|${3:-0}|t" ] \
       && ok "$1: 006 stops and creates nothing" || bad "$1: stopped but something was created"
   else bad "$1: unexpected error: $(grep ERROR $OUT/stop.log | head -1)"; fi
 }
@@ -41,7 +41,7 @@ api() {   # $1 label, $2 script: a whole API suite must pass
 base; q "alter table wine_reference.rule_import_batches add column hand_added int" >/dev/null; stops "preflight: hand-made change since 005 (drift)" "structure drift"
 base; q "update wine_reference.schema_migrations set release = '005 r0' where version = '005'" >/dev/null; stops "preflight: another 005 release" "005 r1 (2026-11-13)\" is required"
 base; q "create function public.ref_lookup() returns int language sql as 'select 1'" >/dev/null; stops "preflight: a foreign ref_* function" "unexpected function"
-base; q "create function public.ref_browse(text, jsonb) returns jsonb language sql as 'select null::jsonb'" >/dev/null; stops "preflight: a hand-made ref_browse" "ref_browse exists but migration 006 is not registered"
+base; q "create function public.ref_browse(text, jsonb) returns jsonb language sql as 'select null::jsonb'" >/dev/null; stops "preflight: a hand-made ref_browse" "ref_browse exists but migration 006 is not registered" 1
 
 # ---------------------------------------------------------------- install, verify, replay, the hardening and 005_verify
 base
@@ -74,6 +74,7 @@ PSQL_FILE "$MIG" >/dev/null 2>&1 && ok "006 installs again after its rollback, o
 V=$(readonly_file "$M6/006_verify.sql"); [ "$(echo "$V" | grep -vc '^PASS')" = "0" ] && ok "006_verify passes after the re-install" || bad "verify after re-install: $(echo "$V" | grep -v '^PASS' | head -2)"
 
 # ---------------------------------------------------------------- the earlier workflows on top of 006 (compatibility)
+base; PSQL_FILE "$MIG" >/dev/null 2>&1; api "002" "$M2/tests/api_002_tests.py"
 base; PSQL_FILE "$MIG" >/dev/null 2>&1; api "003" "$M3/tests/api_003_tests.py"
 base; PSQL_FILE "$MIG" >/dev/null 2>&1; api "004" "$M4/tests/api_004_tests.py"
 base; PSQL_FILE "$MIG" >/dev/null 2>&1; api "005" "$M5/tests/api_005_tests.py"
