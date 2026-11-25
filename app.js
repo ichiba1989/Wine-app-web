@@ -6,8 +6,8 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete, styleLabel,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=23";
-import * as db from "./data.js?v=52";
-import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=27";
+import * as db from "./data.js?v=53";
+import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=28";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=14";
 import { shrinkImage } from "./photos.js?v=5";
 import {
@@ -41,7 +41,7 @@ import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=9";
 import { createProfile } from "./profile.js?v=36";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=21";
 import { createFeedback } from "./feedback.js?v=15";
-import { createEditor } from "./editor.js?v=55";
+import { createEditor } from "./editor.js?v=56";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=18";
 import { gamesHtml } from "./games.js?v=28";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
@@ -56,7 +56,7 @@ import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
 import { setOffline, setCardLookup } from "./overlay.js?v=2";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null, ATL = null, ATLD = null, ATLL = null, FOOD = null, REST = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=35"));
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=36"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=15"));
 const loadFoodModule = async () => { FOOD = FOOD || await import("./foodview.js?v=4"); ensureFoodPins(); return FOOD; };   // the Food screens in the More tab, on first use
 const loadRestModule = async () => (REST = REST || await import("./restview.js?v=3"));   // At a restaurant, in the More tab, on first use
@@ -64,7 +64,7 @@ const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=21"
 const loadAtlasModule = async () => (ATL = ATL || await import("./atlasview.js?v=8"));   // the Atlas screen, on first use
 const loadAtlasData = async () => (ATLD = ATLD || await import("./atlasdata.js?v=2"));   // the Atlas's map data (about 290 KB compressed), when the Atlas opens
 const loadAtlasLite = async () => (ATLL = ATLL || await import("./atlaslite.js?v=3"));   // the card map's lighter data (about 90 KB compressed), when a card's map is tapped
-import { createWineInfo } from "./wineinfo.js?v=39";
+import { createWineInfo } from "./wineinfo.js?v=40";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -761,6 +761,17 @@ async function ownerReference([a, b, c, d]) {
   if (a === "wrview") { O.wrView = b; O.q = ""; renderBody(); if (b === "links") await loadOwnerLinks(); if (b === "taxonomy") await loadOwnerTaxonomy(); if (b === "rules") await loadOwnerRules(); if (b === "todo") { O.wrQueueAll = undefined; await loadOwnerTodo(); } return; }
   if (a === "wropen") { O.wrOpen = O.wrOpen === b ? null : b; O.wrAssign = undefined; ownerRedraw(); if (O.wrOpen) await loadOwnerAssign(O.wrOpen); return; }
   if (a === "wrrulefilter") { O.wrRuleFilter = b; ownerRedraw(); return; }
+  // screen-only steps: open or close a form, ask for a confirmation, stop a long run (nothing is written)
+  if (a === "wrevopen") { O.wrEvOpen = O.wrEvOpen === b ? null : b; ownerRedraw(); return; }
+  if (a === "wrpubq") { O.wrPubOpen = O.wrPubOpen === Number(b) ? null : Number(b); O.wrPubConfirm = null; ownerRedraw(); return; }
+  if (a === "wrpub") { O.wrPubConfirm = b; ownerRedraw(); return; }
+  if (a === "wrpubcancel") { O.wrPubConfirm = null; ownerRedraw(); return; }
+  if (a === "wrreplace") {
+    if (!wrVal("replby")) return;
+    O.wrReplConfirm = { id: b, by: wrVal("replby"), note: wrVal("replnote") }; ownerRedraw(); return;
+  }
+  if (a === "wrreplacecancel") { O.wrReplConfirm = null; ownerRedraw(); return; }
+  if (a === "wrstop") { O.wrStop = true; ownerSay("Stopping after this step…"); return; }
   if (a === "wrtick" || a === "wrrtick") {   // tick boxes: only the screen state changes until a bulk button is pressed
     const k = a === "wrtick" ? "wrTicks" : "wrRuleTicks", list = O[k] || [];
     O[k] = list.includes(b) ? list.filter((x) => x !== b) : [...list, b]; ownerRedraw(); return;
@@ -829,7 +840,7 @@ async function ownerReference([a, b, c, d]) {
         const r = await db.refTools(sb, "review_many", { table, ids, decision: c }); done += r.done; failed = failed.concat(r.failed || []);
       }
       ownerSay(`${OWN.WR_DECISION_LABEL[c]}: ${done} done${failed.length ? `; ${failed.length} refused: ${failed[0]}` : "."}`);
-    } else if (a === "wrtool" || a === "wrrow") {
+    } else if ((a === "wrtool" && b !== "seedall" && b !== "identityall") || a === "wrrow") {
       const table = O.wrLinkTable || "producers";
       if (a === "wrtool" && b === "suggest") { const r = await db.refTools(sb, "suggest_links", { table, limit: 2000 }); ownerSay(`${r.suggestions} suggestions for ${r.rows_matched} rows (same name).`); }
       else if (a === "wrtool" && b === "seed") { const r = await db.refTools(sb, "seed_from_catalog", { table, limit: 50 }); ownerSay(`${r.drafts} drafts made and suggested.`); }
@@ -863,6 +874,38 @@ async function ownerReference([a, b, c, d]) {
       const r = await db.refRules(sb, "decide", { ids: [b], decision: c });
       if (r.done !== 1) { ownerSay("Not saved: " + ((r.failed || [])[0] || "refused")); await loadOwnerRuleReview(); return; }
       ownerSay(`${OWN.RULE_DECISION_LABEL[c]}: saved.`);
+    } else if (a === "wrevadd") {
+      if (!wrVal("evsv") || !wrVal("evloc")) { ownerSay("Pick the source version and say where in it."); return; }
+      await db.refDraft(sb, "add_evidence", { claim_version_id: b, source_version_id: wrVal("evsv"), locator: wrVal("evloc"), modality: wrVal("evmod") || "documentary" });
+      O.wrEvOpen = null; ownerSay("Evidence added to the draft.");
+    } else if (a === "wrpubok") {   // publishing, one row at a time, after its own confirmation
+      O.wrPubConfirm = null;
+      await db.refReview(sb, b, c, "publish"); ownerSay("Published.");
+    } else if (a === "wrreplaceok") {
+      const r = O.wrReplConfirm; O.wrReplConfirm = null; if (!r || r.id !== b) return;
+      await db.refReview(sb, "entities", b, "retire", r.note || "replaced on the Owner page", r.by);
+      O.wrOpen = null; ownerSay("Retired and pointed at the thing kept. Its names, facts and links stay on record.");
+    } else if (a === "wrtool" && (b === "seedall" || b === "identityall")) {   // long runs in steps, with progress and Stop
+      const table = O.wrLinkTable || "producers"; O.wrRunning = true; O.wrStop = false; ownerRedraw();
+      let steps = 0, made = 0, failed = 0; const refused = new Set();
+      try {
+        while (!O.wrStop && steps < 200) {
+          steps++;
+          if (b === "seedall") { const r = await db.refTools(sb, "seed_from_catalog", { table, limit: 50 }); if (!r.drafts) break; made += r.drafts; }
+          else {
+            // vintages already refused stay unlinked: skip them, so the run moves on instead of asking again
+            const queue = await db.refTools(sb, "link_queue", { table: "wine_vintages", filter: "unlinked", limit: Math.min(2000, 25 + refused.size) });
+            const ids = (queue.rows || []).map((x) => x.catalog_id).filter((id) => !refused.has(id)).slice(0, 25);
+            if (!ids.length) break;
+            const res = (await db.refTools(sb, "catalog_identity", { wine_vintage_ids: ids })).results || [];
+            for (const x of res) if (x.error) refused.add(x.wine_vintage_id);
+            const bad = res.filter((x) => x.error).length; made += res.length - bad; failed += bad;
+          }
+          ownerSay(`Working… ${made} made${failed ? `, ${failed} not` : ""} (step ${steps}).`);
+        }
+      } finally { O.wrRunning = false; }
+      ownerSay(`${O.wrStop ? "Stopped" : "Done"}: ${made} ${b === "seedall" ? "drafts made and suggested" : "vintages built (product + edition)"}${failed ? `; ${failed} could not be built` : ""}.`);
+      O.wrStop = false;
     } else if (a === "wrtodo") {   // a bulk review step from the To do view: each row reviewed on its own, refusals listed
       const it = ((O.wrQueueAll && O.wrQueueAll.items) || [])[Number(b)]; if (!it || !it.bulk) return;
       let done = 0, failed = [];
