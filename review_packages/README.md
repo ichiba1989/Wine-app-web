@@ -42,3 +42,8 @@ on the website (the publishing workflow only copies `main` and `vwm`), and nothi
   workflow (stage, decide, import as drafts; nothing published). **Implemented and tested locally; NOT run on production; needs 003 and 004.**
   Built from `main` at `084b46d` (`vwm` at `523e345`); 26 files. Local suite 85/0 (main and vwm). ZIP SHA-256:
   `70cc7390205ddd38889371dd896192a4cbeb1ba97acfa2feada6f0fb029ef909`.
+- `Wine_Reference_Migration_006_Review.zip` (2026-11-25): **Migration 006** (release `006 r1 (2026-11-25)`): one read-only door,
+  `public.ref_browse`, and the Reference tab's Evidence review, Browse all (assign many) and Compare side by side.
+  - **Implemented and tested locally; NOT run on production.** The app screens are on this branch only and are not published yet.
+  - 27 files. Local suite 179/0, editorial 47/0, app checks on main and vwm all passing.
+  - ZIP SHA-256: `210c6667d0f56eb15b796ad83f2e59993011941ffe7bf0db09841a88d4553c25`.
