@@ -982,8 +982,9 @@ export async function refRules(sb, action, payload) {
   if (error) throw (error.code === "PGRST202" ? new Error("The review and import need migration 005 (docs/reference/migration_005/DEPLOY_005.md).") : error);
   return data;
 }
-export async function refReview(sb, table, id, decision, note = "") {
-  const { data, error } = await sb.rpc("ref_review", { p_table: table, p_id: id, p_decision: decision, p_note: note });
+// A replacement is given only when retiring a thing (or a source version) in favour of another one (merging never deletes).
+export async function refReview(sb, table, id, decision, note = "", replacement = null) {
+  const { data, error } = await sb.rpc("ref_review", { p_table: table, p_id: id, p_decision: decision, p_note: note, ...(replacement ? { p_replacement: replacement } : {}) });
   if (error) throw error;
   return data;
 }

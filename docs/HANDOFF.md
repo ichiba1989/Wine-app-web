@@ -3,6 +3,14 @@
 Read `CLAUDE.md` first: every owner decision is written there with its date (conventions 1–27 and the domain model). This page holds only
 what is waiting and how the work is done.
 
+## SQL delivery rule from the owner (2026-11-25)
+
+The owner runs Supabase SQL Editor on an iPhone, where loading files from GitHub has failed. For every future production SQL step:
+- give the **complete SQL in a copyable code block** in the reply;
+- give one executable script at a time when asked;
+- state the expected result;
+- never rely on a GitHub link alone.
+
 ## Workflow rule from the owner (2026-11-08)
 
 Previously assigned Owner tasks (running SQL, checks, manual app tests) are **assumed completed successfully unless the owner reports
@@ -26,7 +34,24 @@ AND give its download link, and name the branch and path. Packages live on branc
 
 Latest review package: `review_packages/Wine_Reference_Migration_002_Review.zip` (Migration 002, 2026-11-08). Earlier: `review_packages/Wine_Reference_Phase_2_0B_3_Security_Review.zip` on branch `claude/wine-app-setup-35g1ne`
 (Migration 001 **r4**, rebuilt after the final review follow-up on 2026-11-01; not on the website).
-**Production check, 2026-11-17: 003, 004 and 005 are all approved but NOT live.** Each `live_post_deploy_00N.mjs` reports "not
+**DEPLOYED 2026-11-25: Migrations 003, 004 and 005** (run by the owner, in order).
+
+Live checks, public key only:
+
+| Check | Result |
+|---|---|
+| `live_post_deploy_003.mjs` | 17/0 |
+| `live_post_deploy_004.mjs` | 21/0 |
+| `live_post_deploy_005.mjs` | 25/0 |
+| `live_smoke.mjs` | 26/0 |
+| `live_ui.mjs` (main and /vwm/) | 26/0 |
+
+The catalog is unaffected (1,877 wines on main, 1,317 on vwm), and `reference_enabled` is off. No corrective SQL was needed.
+
+**Review-to-publication workflow (2026-11-25, app only):** publish one by one with a confirmation (To do), "Add evidence" on draft
+facts, "Replace with" (merge a duplicate thing), and run-all catalog tools with Stop. See `docs/reference/editorial/` (47/0).
+
+(Earlier) **Production check, 2026-11-17: 003, 004 and 005 are all approved but NOT live.** Each `live_post_deploy_00N.mjs` reports "not
 deployed yet" (`ref_tools`, `ref_work` and `ref_rules` are not found by the Data API). If the owner did run 003, run
 `notify pgrst, 'reload schema';` in the SQL Editor and check again. Order and file fingerprints: `docs/reference/DEPLOY_ORDER.md`.
 

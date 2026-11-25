@@ -32,6 +32,10 @@ ok(find("types recommended").n === 1 && /edition_of/.test(find("types recommende
 const M = workQueue({ overview, missing: ["migration 003", "migration 005"] });
 ok(M.missing.length === 2 && !M.items.some((i) => i.area === "Catalog links" || /candidates/.test(i.text)), "parts not deployed are named as missing, never guessed");
 ok(workQueue({}).items.length === 0, "an empty reference has nothing to do");
+const pubE = find("approved things not yet published").publish, pubF = find("approved facts ready to publish").publish;
+ok(pubE.table === "entities" && pubE.rows.length === 1 && pubE.rows[0].id === "e3" && pubF.table === "claim_versions" && pubF.rows.map((r) => r.id).join() === "v2",
+  "publish lists: the approved thing and the publishable fact (never the blocked one), each published one by one");
+ok(!find("approved facts that cannot be published").publish && !find("approved facts ready to publish").bulk, "no bulk step on publishing, and nothing to publish for blocked facts");
 const cand = { state: "agree", decision: "pending", code_line: { checked: true, source: "x" }, code_rule: "primary", table_row: { a: 1 }, table_source: "s", table_rule: "primary" };
 ok(ruleTickable(cand) && !ruleTickable({ ...cand, state: "conflict" }) && !ruleTickable({ ...cand, decision: "accept_code" }) && !ruleTickable({ ...cand, state: "unresolved" }), "grape-rule ticks: agree yes; a conflict, a decided or an unresolved candidate no");
 console.log(`\nEDITORIAL RULES TOTAL: ${pass} passed, ${fail} failed`);

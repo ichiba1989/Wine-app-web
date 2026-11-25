@@ -1,4 +1,4 @@
-# The editorial work queue (Reference tab), 2026-11-17
+# The editorial work queue and review-to-publication workflow (Reference tab), 2026-11-17 / 2026-11-25
 
 App code only: no migration. It works on any deployed state, and each part lights up as its migration is deployed (002, then 003,
 then 005). Published with the app; nothing in it publishes reference content.
@@ -46,9 +46,15 @@ What the To do list counts:
 
 With the new app: the 005 suite 85/0, the 002 suite 96/0, and all app checks pass.
 
+Tests, 2026-11-25: `tests/run_editorial_tests.sh` **47 passed, 0 failed**. That is pure rules 13, the full-state browser test,
+`editorial_ui2.mjs` (long runs, evidence, publish one by one, merge) and the 002-only browser test. With the new app: the 005 suite
+85/0, the 002 suite 96/0, and all app checks pass.
+
 ## Next practical steps (independent of the owner's pending decisions)
 
-1. **Publish from To do, one at a time, with a confirmation.** Today "Open" leads to the right view.
-2. **Grape rules after import:** list each imported fact with its source, and offer "Approve this source, then this fact" in one place.
-3. **Catalog links:** a side-by-side view of a row with several candidates (names in every language, kind, status) before ticking.
-4. **Subject areas:** assign many things to one subject area at once (the database action exists; only the screen is missing).
+1. **Grape rules after import:** each imported fact with its source's status, and "Approve this source, then this fact" in one
+   place. This needs a small read of evidence and sources, which would be a migration (006).
+2. **Catalog links:** a side-by-side view of a row with several candidates (names in every language, kind, status) before ticking.
+3. **Subject areas:** assign many things to one subject area at once (the database action exists; only the screen is missing).
+4. **Scale:** the overview reads the latest 300 things. A paged, searchable read for thousands of drafts would also be a migration
+   (006).

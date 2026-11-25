@@ -21,7 +21,7 @@ is merged, move the lines to "Merged" with the date. Whenever a venue gets somet
 ## Venue: `vwm` (published under `/vwm/`)
 
 ### On main, not yet merged into `vwm`
-_(nothing: `vwm` has all of main as of 2026-11-17, the editorial work queue included)_
+_(nothing: `vwm` has all of main as of 2026-11-25, the review-to-publication workflow included)_
 
 ### Merged (main is in `vwm` up to)
 - 2026-10-26: main's **reference model draft and read-only database inspection** (Phase 2.0B.1; documents and SQL only, no app file changed:
@@ -31,7 +31,9 @@ _(nothing: `vwm` has all of main as of 2026-11-17, the editorial work queue incl
 - 2026-10-26 (latest): main's **migration 001 draft** (`docs/reference/migration_001/`: design, data dictionary, SQL, tests, report;
   documents and SQL only, not run live) merged into `vwm`.
 - 2026-10-26: main's **reference briefing** (`docs/reference/WINE_REFERENCE_BRIEFING.md`, one document for passing on) merged into `vwm`.
-- 2026-11-17 (latest): main's **editorial work queue** (Reference tab To do view, tick boxes, bulk review; app only) and `docs/reference/DEPLOY_ORDER.md`
+- 2026-11-25 (latest): main's **review-to-publication workflow** (publish one by one, Add evidence, Replace with, run-all with Stop; app only)
+  and the 003-005 deployment notes (venue `?v=` cascaded: app.js 139).
+- 2026-11-17: main's **editorial work queue** (Reference tab To do view, tick boxes, bulk review; app only) and `docs/reference/DEPLOY_ORDER.md`
   (venue `?v=` cascaded: owner.js 51, app.js 138).
 - 2026-11-13 (later): main's **Migration 005** (`docs/reference/migration_005/`; not run on production) and the Grape rules view's Review and import
   (venue `?v=` cascaded; merged without conflicts beyond version numbers).
