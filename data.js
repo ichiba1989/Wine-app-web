@@ -828,6 +828,14 @@ export async function refRules(sb, action, payload) {
   if (error) throw (error.code === "PGRST202" ? new Error("The review and import need migration 005 (docs/reference/migration_005/DEPLOY_005.md).") : error);
   return data;
 }
+// Migration 006's read door (ref_browse, read-only): the evidence review, the full lists of things and facts page by page, and one
+// catalog row's candidate links side by side. Each answer has rows, next (the cursor for the next page, null at the end) and, on the
+// first page, total. Before 006 is run the door does not exist and the screens say so.
+export async function refBrowse(sb, action, payload) {
+  const { data, error } = await sb.rpc("ref_browse", { p_action: action, p_data: payload || {} });
+  if (error) throw (error.code === "PGRST202" ? new Error("This part needs migration 006 (docs/reference/migration_006/DEPLOY_006.md).") : error);
+  return data;
+}
 // A replacement is given only when retiring a thing (or a source version) in favour of another one (merging never deletes).
 export async function refReview(sb, table, id, decision, note = "", replacement = null) {
   const { data, error } = await sb.rpc("ref_review", { p_table: table, p_id: id, p_decision: decision, p_note: note, ...(replacement ? { p_replacement: replacement } : {}) });

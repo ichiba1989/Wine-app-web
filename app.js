@@ -6,8 +6,8 @@ import {
   sheetForCard, sheetForEntry, sheetForOutside, setDim, nudgeDim, resetDim, validateOutside, DIMS, entryIncomplete, styleLabel,
   queuePhoto, unqueuePhoto, toggleExistingPhoto, refsByVintage, feedbackOn, WINE_FLAG_REASONS, isChoice, setStyle,
   dragPose, releaseVelocity, decideSwipe, flyPlan, wineEditForm, planWineEdit, validateWineEdit, retargetSheet } from "./logic.js?v=23";
-import * as db from "./data.js?v=53";
-import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=28";
+import * as db from "./data.js?v=54";
+import { sheetPhotosHtml, applyShareChanges } from "./sharing.js?v=29";
 import { startingValues, structureMap, entryAsCard, rulesFor, applyDefaults } from "./structure.js?v=14";
 import { shrinkImage } from "./photos.js?v=5";
 import {
@@ -41,7 +41,7 @@ import { buildDeck, userModel, prefOf, gapsOf } from "./deck.js?v=9";
 import { createProfile } from "./profile.js?v=36";
 import { createAccount, readPendingMerge, clearPendingMerge, mergeMessage } from "./account.js?v=21";
 import { createFeedback } from "./feedback.js?v=15";
-import { createEditor } from "./editor.js?v=56";
+import { createEditor } from "./editor.js?v=57";
 import { SETTINGS_KEY, parseSettings, changeSetting, textScale, settingsHtml } from "./settings.js?v=18";
 import { gamesHtml } from "./games.js?v=28";
 import { setSwipeConfig, reactionOf, LEGACY_OF, skipsOf } from "./reactions.js?v=3";
@@ -56,7 +56,7 @@ import { accessOf, PLANS, planIdOf, checkAssignment } from "./access.js?v=4";
 import { setOffline, setCardLookup } from "./overlay.js?v=2";
 // owner.js and demo.js are loaded when first needed (the Owner page; the first-time walkthrough), so everyone else does not download them at start.
 let OWN = null, DEMO = null, IMP = null, ATL = null, ATLD = null, ATLL = null, FOOD = null, REST = null;
-const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=36"));
+const loadOwnerModule = async () => (OWN = OWN || await import("./owner.js?v=37"));
 const loadImportModule = async () => (IMP = IMP || await import("./importer.js?v=15"));
 const loadFoodModule = async () => { FOOD = FOOD || await import("./foodview.js?v=4"); ensureFoodPins(); return FOOD; };   // the Food screens in the More tab, on first use
 const loadRestModule = async () => (REST = REST || await import("./restview.js?v=3"));   // At a restaurant, in the More tab, on first use
@@ -64,7 +64,7 @@ const loadDemoModule = async () => (DEMO = DEMO || await import("./demo.js?v=21"
 const loadAtlasModule = async () => (ATL = ATL || await import("./atlasview.js?v=8"));   // the Atlas screen, on first use
 const loadAtlasData = async () => (ATLD = ATLD || await import("./atlasdata.js?v=2"));   // the Atlas's map data (about 290 KB compressed), when the Atlas opens
 const loadAtlasLite = async () => (ATLL = ATLL || await import("./atlaslite.js?v=3"));   // the card map's lighter data (about 90 KB compressed), when a card's map is tapped
-import { createWineInfo } from "./wineinfo.js?v=40";
+import { createWineInfo } from "./wineinfo.js?v=41";
 
 // The database library is delivered over the internet. It is pinned to one exact version, and if the first source is down the same version
 // is tried from a second, independent one. The last resort is the newest 2.x from the first source.
@@ -532,7 +532,7 @@ function ownerData() {
   const O = state.owner;
   if (state._ownerFor !== state.cards) { state._ownerFor = state.cards; state._ownerCache = { rows: OWN.wineRows(state.cards), bingo: OWN.bingoCoverage(state.cards) }; }
   const { bingo } = state._ownerCache, rows = OWN.withTags(state._ownerCache.rows, O.wineTags, O.wineIds);
-  return { rows, bingo, wineTags: O.wineTags, wineTagsError: O.wineTagsError, checks: OWN.checkCounts(rows), places: O.places, refLists: O.refLists, refListsError: O.refListsError, config: O.config, configError: O.configError, pins: O.pins, pinsError: O.pinsError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, staff: O.staff, staffError: O.staffError, staffAudit: O.staffAudit, wref: O.wref, wrefError: O.wrefError, wrSuggest: O.wrSuggest, wrSuggestError: O.wrSuggestError, wrTax: O.wrTax, wrCov: O.wrCov, wrQueue: O.wrQueue, wrImport: O.wrImport, wr3Error: O.wr3Error, wr3Missing: O.wr3Missing, wrAssign: O.wrAssign, wrRules: O.wrRules, wr4Error: O.wr4Error, wrBatches: O.wrBatches, wrCands: O.wrCands, wr5Error: O.wr5Error, wr5Missing: O.wr5Missing, wrQueueAll: O.wrQueueAll, seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
+  return { rows, bingo, wineTags: O.wineTags, wineTagsError: O.wineTagsError, checks: OWN.checkCounts(rows), places: O.places, refLists: O.refLists, refListsError: O.refListsError, config: O.config, configError: O.configError, pins: O.pins, pinsError: O.pinsError, tags: O.tags, tagsError: O.tagsError, legend: O.legend, legendError: O.legendError, staff: O.staff, staffError: O.staffError, staffAudit: O.staffAudit, wref: O.wref, wrefError: O.wrefError, wrSuggest: O.wrSuggest, wrSuggestError: O.wrSuggestError, wrTax: O.wrTax, wrCov: O.wrCov, wrQueue: O.wrQueue, wrImport: O.wrImport, wr3Error: O.wr3Error, wr3Missing: O.wr3Missing, wrAssign: O.wrAssign, wrRules: O.wrRules, wr4Error: O.wr4Error, wrBatches: O.wrBatches, wrCands: O.wrCands, wr5Error: O.wr5Error, wr5Missing: O.wr5Missing, wrQueueAll: O.wrQueueAll, wrEv: O.wrEv, wrBrowse: O.wrBrowse, wrCmp: O.wrCmpData, wrCmpError: O.wrCmpError, wr6Missing: O.wr6Missing, wr6Error: O.wr6Error, seedNames: [], seedOk: true, lensRows: [], ...(O.tab === "lenses" ? ownerLens() : {}) };
 }
 // The lens preview: the top picks of one lens for the owner's own profile, or for a brand-new player, using the weights typed on the page.
 function ownerLens() {
@@ -690,7 +690,61 @@ async function loadOwnerReference() {
   if (O.wrView === "rules") await loadOwnerRules(false);
   if (O.wrView === "todo") await loadOwnerTodo(false);
   if ((O.wrView || "entities") === "entities" && O.wrOpen) await loadOwnerAssign(O.wrOpen, false);
+  if (O.wrView === "evidence") await loadOwnerEvidence("both", false);
+  if (O.wrView === "browse") await loadOwnerBrowse(false, false);
+  if (O.wrView === "links" && O.wrCmp) await loadOwnerCompare(false);
   if (state.tab === "owner" && O.tab === "reference") ownerRedraw();
+}
+// Migration 006's reads (ref_browse), page by page. A list keeps its rows while the next page loads; before 006 the views say so.
+const wr6Fail = (O, e) => { O.wr6Missing = /migration 006/.test(String(e.message || "")); O.wr6Error = e.message || String(e); };
+async function wrPage(key, holder, action, args, append) {   // holder[key] is the list on screen
+  const O = state.owner, prev = holder[key];
+  if (append && !(prev && prev.next)) return;
+  holder[key] = append ? { ...prev, status: "more" } : { rows: [], next: null, total: 0, status: "loading", error: "" };
+  if (state.tab === "owner" && O.tab === "reference") ownerRedraw();
+  try {
+    const res = await db.refBrowse(state.sb, action, { ...args, ...(append ? { after: prev.next } : {}) });
+    holder[key] = OWN.pageMerge(prev, res, append); O.wr6Missing = false;
+    return res;
+  } catch (e) { wr6Fail(O, e); holder[key] = { ...(append ? prev : { rows: [], next: null, total: 0 }), status: "error", error: "Could not load: " + (e.message || e) }; }
+}
+async function loadOwnerEvidence(which = "both", redraw = true, append = false) {
+  const O = state.owner; O.wrEv = O.wrEv || {};
+  const jobs = [];
+  if (which !== "facts") jobs.push(wrPage("sources", O.wrEv, "evidence_sources", { stage: O.wrEvSrcStage || "waiting", limit: 25 }, append));
+  if (which !== "sources") jobs.push(wrPage("facts", O.wrEv, "evidence", { stage: O.wrEvStage || "blocked", limit: 25 }, append));
+  const res = await Promise.all(jobs);
+  const withPerms = res.find((r) => r && r.permissions); if (withPerms) O.wrEv.perms = withPerms.permissions;
+  if (redraw && state.tab === "owner" && O.tab === "reference") ownerRedraw();
+}
+async function loadOwnerBrowse(redraw = true, append = false) {
+  const O = state.owner, B = O.wrB || (O.wrB = { what: "entities" }), A = O.wrAsg;
+  if (!O.wrTax && !O.wr3Missing) await loadOwnerTaxonomy(false);
+  const args = B.what === "claims"
+    ? { q: B.q || "", predicate: B.predicate || "", status: B.cstatus || "all", entity_id: B.entity || "", limit: 50 }
+    : { q: B.q || "", kind: B.kind || "", status: B.status || "live", area: B.area || "", sort: B.sort || "newest", limit: 50, ...(A && A.area ? { assign_area: A.area } : {}) };
+  await wrPage("wrBrowse", O, B.what === "claims" ? "claims" : "entities", args, append);
+  if (redraw && state.tab === "owner" && O.tab === "reference") ownerRedraw();
+}
+async function loadOwnerCompare(redraw = true) {
+  const O = state.owner;
+  try { O.wrCmpData = await db.refBrowse(state.sb, "link_compare", { table: O.wrCmp.table, catalog_id: O.wrCmp.catalog_id }); O.wrCmpError = ""; }
+  catch (e) { O.wrCmpData = null; wr6Fail(O, e); O.wrCmpError = e.message || String(e); }
+  if (redraw && state.tab === "owner" && O.tab === "reference") ownerRedraw();
+}
+// Many things into one subject area: one draft assignment each (003's assign_taxonomy), in order, with progress, Stop and each result.
+async function wrAssignMany() {
+  const O = state.owner, A = O.wrAsg; if (!A) return;
+  const rows = (O.wrBrowse && O.wrBrowse.rows) || [], ids = OWN.assignable(rows, A.ticks), name = (id) => (rows.find((r) => r.id === id) || {}).name || id;
+  A.confirm = false; A.stop = false; A.run = { running: true, done: 0, of: ids.length, ok: 0, results: [], stopped: false }; ownerRedraw();
+  for (const id of ids) {
+    if (A.stop) { A.run.stopped = true; break; }
+    try { await db.refTools(state.sb, "assign_taxonomy", { entity_id: id, node: A.area }); A.run.ok++; A.run.results.push({ id, name: name(id), ok: true }); }
+    catch (e) { A.run.results.push({ id, name: name(id), ok: false, msg: e.message || String(e) }); }
+    A.run.done++; ownerRedraw();
+  }
+  A.run.running = false; A.ticks = [];
+  await loadOwnerBrowse();
 }
 // Migration 004's reads (ref_work): one thing's subject areas (with the subject-area list for the form), and the grape-rules check.
 async function loadOwnerAssign(entityId, redraw = true) {
@@ -758,9 +812,35 @@ async function wrRun(steps) {
 }
 async function ownerReference([a, b, c, d]) {
   const O = state.owner, R = O.wref || {}, sb = state.sb;
-  if (a === "wrview") { O.wrView = b; O.q = ""; renderBody(); if (b === "links") await loadOwnerLinks(); if (b === "taxonomy") await loadOwnerTaxonomy(); if (b === "rules") await loadOwnerRules(); if (b === "todo") { O.wrQueueAll = undefined; await loadOwnerTodo(); } return; }
+  if (a === "wrview") { O.wrView = b; O.q = ""; renderBody(); if (b === "links") await loadOwnerLinks(); if (b === "taxonomy") await loadOwnerTaxonomy(); if (b === "rules") await loadOwnerRules(); if (b === "todo") { O.wrQueueAll = undefined; await loadOwnerTodo(); } if (b === "evidence") await loadOwnerEvidence(); if (b === "browse") await loadOwnerBrowse(); return; }
   if (a === "wropen") { O.wrOpen = O.wrOpen === b ? null : b; O.wrAssign = undefined; ownerRedraw(); if (O.wrOpen) await loadOwnerAssign(O.wrOpen); return; }
   if (a === "wrrulefilter") { O.wrRuleFilter = b; ownerRedraw(); return; }
+  // migration 006: the evidence review, the full lists, side-by-side candidates, many things into one subject area
+  if (a === "wrevstage") { O.wrEvStage = b; O.wrPubConfirm = null; await loadOwnerEvidence("facts"); return; }
+  if (a === "wrevsrcstage") { O.wrEvSrcStage = b; await loadOwnerEvidence("sources"); return; }
+  if (a === "wrevsrcpage" || a === "wrevfactpage") { await loadOwnerEvidence(a === "wrevsrcpage" ? "sources" : "facts", true, b === "more"); return; }
+  if (a === "wrbpage") { await loadOwnerBrowse(true, b === "more"); return; }
+  if (a === "wrbwhat") { O.wrB = { what: b }; O.wrAsg = null; await loadOwnerBrowse(); return; }
+  if (a === "wrbgo") {
+    const B = O.wrB || { what: "entities" };
+    O.wrB = B.what === "claims" ? { what: "claims", q: wrVal("bq"), predicate: wrVal("bpred"), cstatus: wrVal("bcstatus"), entity: B.entity }
+      : { what: "entities", q: wrVal("bq"), kind: wrVal("bkind"), status: wrVal("bstatus"), area: wrVal("barea"), sort: wrVal("bsort") };
+    await loadOwnerBrowse(); return;
+  }
+  if (a === "wrbclear") { O.wrB = { ...(O.wrB || {}), entity: "" }; await loadOwnerBrowse(); return; }
+  if (a === "wrbfacts") { O.wrB = { what: "claims", entity: b }; O.wrAsg = null; await loadOwnerBrowse(); return; }
+  if (a === "wrbasgn") { if (!wrVal("basgn")) return; O.wrAsg = { area: wrVal("basgn"), ticks: [] }; await loadOwnerBrowse(); return; }
+  if (a === "wrbtick") { const A = O.wrAsg; if (!A) return; A.ticks = A.ticks.includes(b) ? A.ticks.filter((x) => x !== b) : [...A.ticks, b]; ownerRedraw(); return; }
+  if (a === "wrbtickall") { const A = O.wrAsg; if (!A) return; A.ticks = [...new Set([...A.ticks, ...((O.wrBrowse && O.wrBrowse.rows) || []).filter((r) => r.assign === "").map((r) => r.id)])]; ownerRedraw(); return; }
+  if (a === "wrbasgnask") { if (O.wrAsg) O.wrAsg.confirm = true; ownerRedraw(); return; }
+  if (a === "wrbasgncancel") { if (O.wrAsg) O.wrAsg.confirm = false; ownerRedraw(); return; }
+  if (a === "wrbasgnstop") { if (O.wrAsg) O.wrAsg.stop = true; ownerSay("Stopping after this one…"); return; }
+  if (a === "wrbasgnend") { O.wrAsg = null; await loadOwnerBrowse(); return; }
+  if (a === "wrbasgnok") { await wrAssignMany(); return; }
+  if (a === "wrcmp") { O.wrCmp = { table: O.wrLinkTable || "producers", catalog_id: b }; O.wrCmpData = undefined; O.wrCmpPick = null; ownerRedraw(); await loadOwnerCompare(); return; }
+  if (a === "wrcmpclose") { O.wrCmp = null; O.wrCmpData = undefined; O.wrCmpPick = null; ownerRedraw(); return; }
+  if (a === "wrcmppick") { O.wrCmpPick = b; ownerRedraw(); return; }
+  if (a === "wrcmpcancel") { O.wrCmpPick = null; ownerRedraw(); return; }
   // screen-only steps: open or close a form, ask for a confirmation, stop a long run (nothing is written)
   if (a === "wrevopen") { O.wrEvOpen = O.wrEvOpen === b ? null : b; ownerRedraw(); return; }
   if (a === "wrpubq") { O.wrPubOpen = O.wrPubOpen === Number(b) ? null : Number(b); O.wrPubConfirm = null; ownerRedraw(); return; }
@@ -778,7 +858,7 @@ async function ownerReference([a, b, c, d]) {
   }
   if ((a === "wrticked" || a === "wrrticked") && b === "clear") { O[a === "wrticked" ? "wrTicks" : "wrRuleTicks"] = []; ownerRedraw(); return; }
   if (a === "wrcandstate") { O.wrCandState = b; O.wrCands = undefined; ownerRedraw(); await loadOwnerRuleReview(); return; }
-  if (a === "wrlinktab") { O.wrLinkTable = b; O.wrSuggest = undefined; O.wrQueue = undefined; ownerRedraw(); await loadOwnerLinks(); return; }
+  if (a === "wrlinktab") { O.wrCmp = null; O.wrCmpData = undefined; O.wrLinkTable = b; O.wrSuggest = undefined; O.wrQueue = undefined; ownerRedraw(); await loadOwnerLinks(); return; }
   if (a === "wrfilter") { O.wrFilter = b; O.wrQueue = undefined; ownerRedraw(); await loadOwnerLinks(); return; }
   try {
     if (a === "wrnew") {
@@ -878,6 +958,12 @@ async function ownerReference([a, b, c, d]) {
       if (!wrVal("evsv") || !wrVal("evloc")) { ownerSay("Pick the source version and say where in it."); return; }
       await db.refDraft(sb, "add_evidence", { claim_version_id: b, source_version_id: wrVal("evsv"), locator: wrVal("evloc"), modality: wrVal("evmod") || "documentary" });
       O.wrEvOpen = null; ownerSay("Evidence added to the draft.");
+    } else if (a === "wrevrev") {   // one review step in the evidence review (ref_review decides; a refusal is shown)
+      await db.refReview(sb, b, c, d); ownerSay(`${OWN.WR_DECISION_LABEL[d]}: done.`);
+    } else if (a === "wrcmpok") {   // the owner's explicit choice among several candidates (003's rule rejects the others)
+      O.wrCmpPick = null;
+      const r = await db.refTools(sb, "decide_links", { ids: [b], status: "confirmed" });
+      ownerSay(r.done ? "Confirmed. The other suggestions for this row are rejected (Undo stays possible)." : "Not confirmed: " + (r.failed || []).join("; "));
     } else if (a === "wrpubok") {   // publishing, one row at a time, after its own confirmation
       O.wrPubConfirm = null;
       await db.refReview(sb, b, c, "publish"); ownerSay("Published.");

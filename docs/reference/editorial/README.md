@@ -50,6 +50,17 @@ Tests, 2026-11-25: `tests/run_editorial_tests.sh` **47 passed, 0 failed**. That 
 `editorial_ui2.mjs` (long runs, evidence, publish one by one, merge) and the 002-only browser test. With the new app: the 005 suite
 85/0, the 002 suite 96/0, and all app checks pass.
 
+## Migration 006 screens (2026-11-25; need migration 006, which is read-only)
+
+These close steps 1–4 of the list below. Details are in `docs/reference/migration_006/README.md`.
+
+- **Evidence review:** sources, then versions, then facts, then publishing one by one, with the reasons a fact is blocked.
+- **Browse all:** every thing and fact, page by page, searched on the server.
+- **Many things into one subject area:** with confirmation, progress, Stop and per-item results.
+- **Compare side by side:** for catalog rows with several candidates.
+
+Before 006 is run, each says "This part needs migration 006".
+
 ## Next practical steps (independent of the owner's pending decisions)
 
 1. **Grape rules after import:** each imported fact with its source's status, and "Approve this source, then this fact" in one

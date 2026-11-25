@@ -1,4 +1,6 @@
-# Running migrations 003, 004 and 005 on production, in order (one page)
+# Running migrations 003 to 006 on production, in order (one page)
+
+003, 004 and 005 were run by the owner on 2026-11-25. 006 (read-only) is next: `docs/reference/migration_006/DEPLOY_006.md`.
 
 All three are approved by the owner, each conditional on the one before. Each is run by hand in the Supabase **SQL Editor** (an iPhone
 browser works). I never run production SQL. Every file is on `main`; check the first 16 characters of its SHA-256.

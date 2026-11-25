@@ -823,3 +823,21 @@ Design: `docs/reference/migration_005/README.md`.
 - Internal, no grants: `check_rule_candidate`, `row_rule`, `row_min_pct`, `row_source`, `code_rule`, `stage_rules`,
   `rule_source_version`, `import_rules`, `fingerprint_005`.
 
+
+## Added by migration 006 (release `006 r1 (2026-11-25)`; not run on production yet)
+
+Read-only: no table, no column and no content.
+- Indexes: `entities_created` on `wine_reference.entities (created_at, id)` and `claims_created` on `wine_reference.claims (created_at, id)`,
+  for the newest-first pages.
+- `public.ref_browse(p_action text, p_data jsonb)`: security definer, STABLE, `search_path ''`, `authenticated` only; any `ref_*`
+  permission.
+  - Actions: `evidence`, `evidence_sources`, `entities`, `claims`, `link_compare`.
+  - Common arguments: `limit` (1 to 100, default 50) and `after` (the previous page's `next` cursor `{k, id}`).
+  - Answers: `rows`, `next`, and `total` on the first page.
+- Internal, no grants (all STABLE or IMMUTABLE):
+  - `author_blocker(uuid)`: mirrors ref_review's two-person rule with the Owner exemption;
+  - `source_version_blockers(uuid)`: mirrors ref_review's approval rules for a source version;
+  - `newer_published(uuid)`: mirrors the forward-only publication rule;
+  - `fact_review_json(uuid)`: one version with its evidence, `version_problems()` verbatim, `is_current()`, the blockers and the next step;
+  - `like_pattern(text)`: a search word with its wildcards taken literally;
+  - `fingerprint_006`.

@@ -3,7 +3,7 @@
 // still decides what anyone may change. The rules at the top (rows, search, sort, checks, coverage) are pure: no page, no network.
 // The functions at the bottom return HTML strings. app.js holds the screen state, loads the data and does the saving (through data.js).
 import { esc } from "./logic.js?v=23";
-import { REACH_CHOICES } from "./wineinfo.js?v=40";
+import { REACH_CHOICES } from "./wineinfo.js?v=41";
 import { CARDS, TIERS, matches, cardFacts } from "./bingo.js?v=4";
 import { LENSES, LENS_IDS, DEFAULT_WEIGHTS, mergeWeights } from "./recommend.js?v=15";
 import { TAG_KINDS } from "./tags.js?v=4";
@@ -321,7 +321,7 @@ export function pairingsTable(O, d) {
 // approve (the Owner may approve their own work; it is recorded as an owner override), publish, retire. Nothing here reaches players
 // while reference_enabled is 0. The rules below (which decisions a status allows, the steps for an entity with its names, or a source
 // with its rights and versions) are pure; app.js calls the database.
-export const WR_VIEWS = [{ id: "todo", label: "To do" }, { id: "entities", label: "Places & things" }, { id: "sources", label: "Sources" }, { id: "claims", label: "Facts" }, { id: "types", label: "Types" }, { id: "taxonomy", label: "Subject areas" }, { id: "links", label: "Catalog links" }, { id: "rules", label: "Grape rules" }];
+export const WR_VIEWS = [{ id: "todo", label: "To do" }, { id: "evidence", label: "Evidence review" }, { id: "browse", label: "Browse all" }, { id: "entities", label: "Places & things" }, { id: "sources", label: "Sources" }, { id: "claims", label: "Facts" }, { id: "types", label: "Types" }, { id: "taxonomy", label: "Subject areas" }, { id: "links", label: "Catalog links" }, { id: "rules", label: "Grape rules" }];
 export const WR_LANGS = [["en", "English"], ["fr", "Français"], ["it", "Italiano"], ["ja", "日本語"], ["zh-Hans", "中文 (简体)"], ["zh-Hant", "中文 (繁體)"], ["de", "Deutsch"], ["es", "Español"], ["und", "Not stated"]];
 export const WR_LINK_TABLES = [["producers", "Producers"], ["wines", "Wines"], ["wine_vintages", "Vintages"], ["grapes", "Grapes"], ["geo_areas", "Places"]];
 export const WR_DECISION_LABEL = { submit: "Submit", approve: "Approve", reject: "Send back", publish: "Publish", retire: "Retire" };
@@ -473,7 +473,7 @@ export function workQueue({ overview, coverage, batches, taxonomy, missing = [] 
   const vers = (R.claims || []).flatMap((c) => (c.versions || []).map((v) => ({ ...v, rel: c.relationship_type, attr: c.attribute_type })));
   const rule = (v) => v.rel === "rules_name_grape";
   const dRule = vers.filter((v) => rule(v) && v.status === "draft"), dOther = vers.filter((v) => !rule(v) && v.status === "draft");
-  add("Grape rules", dRule.length, "imported grape-rule facts still drafts (approve their sources first)", "owner:wrview:claims", { label: "Submit them", table: "claim_versions", ids: ids(dRule), decision: "submit" });
+  add("Grape rules", dRule.length, "imported grape-rule facts still drafts (approve their sources first)", "owner:wrview:evidence", { label: "Submit them", table: "claim_versions", ids: ids(dRule), decision: "submit" });
   add("Facts", dOther.length, "facts still drafts", "owner:wrview:claims", { label: "Submit them", table: "claim_versions", ids: ids(dOther), decision: "submit" });
   add("Facts", vers.filter((v) => v.status === "pending_review").length, "facts waiting for your approval", "owner:wrview:claims");
   const byId = new Map((R.entities || []).map((e) => [e.id, e])), nameOf = (id) => (byId.has(id) ? prefName(byId.get(id)) : "?");
@@ -572,6 +572,152 @@ function assignHtml(e, d) {
     : `<div class="muted tiny">No subject areas yet (Subject areas view).</div>`;
   return rows + form;
 }
+// ------- migration 006: the evidence review, the full lists, side-by-side candidates, and many things into one subject area
+// Every list here is read from the database page by page (ref_browse): nothing loads the whole reference. What may be done next comes
+// from the database's own answer (the problems are wine_reference.version_problems verbatim; the blockers mirror ref_review), so a
+// button is shown only for a step ref_review would accept; ref_review still decides.
+
+// A page arrives: add it to the list (or start the list), keeping the cursor for the next page and the total from the first page.
+export function pageMerge(prev, res, append) {
+  const rows = append && prev && prev.rows ? prev.rows.concat(res.rows || []) : (res.rows || []);
+  const total = res.total != null ? res.total : prev && prev.total != null ? prev.total : rows.length;
+  return { rows, next: res.next || null, total, status: "ok", error: "" };
+}
+// The evidence review's stages for facts (ref_browse 'evidence'), in the order of the work.
+export const EV_STAGES = [["blocked", "Blocked"], ["draft", "Drafts"], ["pending_review", "Waiting for approval"], ["publishable", "Ready to publish"], ["published", "Published"], ["all", "All"]];
+// The steps a fact may take now, for the signed-in person: the database says what comes next and whether the author rule objects.
+export function factActions(f, perms = {}) {
+  if (!f) return [];
+  if (f.next === "submit" && perms.edit) return ["submit"];
+  if (f.next === "approve" && perms.review && !f.approve_blocker) return ["approve", "reject"];
+  if (f.next === "approve" && perms.review) return ["reject"];
+  if (f.next === "publish" && perms.publish && !(f.publish_blockers || []).length) return ["publish"];
+  return [];
+}
+// The steps a source and its version may take now. A version is approved only when nothing blocks it (its source first, then its
+// licence), and nobody approves their own row unless they are the Owner (the database reports both).
+export function sourceActions(row, perms = {}) {
+  const s = (row && row.source) || {}, v = (row && row.version) || {}, out = { source: [], version: [] };
+  if (s.status === "draft" && perms.edit) out.source.push("submit");
+  if (s.status === "pending_review" && perms.review) out.source.push(...(s.approve_blocker ? [] : ["approve"]), "reject");
+  if (v.status === "draft" && perms.edit) out.version.push("submit");
+  if (v.status === "pending_review" && perms.review) out.version.push(...(v.approve_blocker || (v.blockers || []).length ? [] : ["approve"]), "reject");
+  return out;
+}
+// What the owner should notice when comparing candidate things for one catalog row. Facts only from the two records; nothing is chosen.
+export function compareCandidates(cat, cands) {
+  const raw = String((cat && cat.name) || "").trim().toLowerCase(), want = fold((cat && cat.name) || "");
+  return (cands || []).map((c) => {
+    const e = c.entity || {}, names = (e.names || []).filter((n) => n.status !== "retired");
+    const exact = names.some((n) => String(n.name).trim().toLowerCase() === raw), near = !exact && names.some((n) => fold(n.name) === want);
+    const notes = [exact ? ["ok", "A name is exactly the catalog's"] : near ? ["warn", "A name matches only if accents, capitals or punctuation are ignored"] : ["warn", "No name matches the catalog's"]];
+    if (e.status === "retired" || e.superseded_by) notes.push(["bad", "Retired or replaced: link the thing that replaced it"]);
+    else if (!e.published) notes.push(["info", e.status === "verified" ? "Approved, not published yet" : e.status === "pending_review" ? "Waiting for approval" : "Still a draft"]);
+    const conf = (e.other_links || []).filter((o) => o.status === "confirmed"), sug = (e.other_links || []).filter((o) => o.status === "suggested");
+    if (conf.length) notes.push(["warn", `Already confirmed for ${conf.length === 1 ? "another catalog row" : conf.length + " other catalog rows"}: ${conf.map((o) => o.name || o.catalog_id).slice(0, 3).join(", ")}`]);
+    if (sug.length) notes.push(["info", `Also suggested for ${sug.length === 1 ? "another row" : sug.length + " other rows"}`]);
+    if (c.link && c.link.status === "confirmed") notes.push(["ok", "This is the confirmed link"]);
+    return { link_id: c.link && c.link.id, entity_id: e.id, match: exact ? "same" : near ? "similar" : "different", notes };
+  });
+}
+// The ticked things that can really be assigned to the chosen subject area (the database said '' for them).
+export const assignable = (rows, ticks) => (rows || []).filter((r) => r.assign === "" && (ticks || []).includes(r.id)).map((r) => r.id);
+export const BROWSE_STATUSES = [["live", "All but retired"], ["draft", "Drafts"], ["pending_review", "Waiting for approval"], ["approved", "Approved, not published"], ["published", "Published"], ["retired", "Retired"]];
+export const CLAIM_STATUSES = [["all", "Any status"], ["draft", "Drafts"], ["pending_review", "Waiting for approval"], ["approved", "Approved, not published"], ["published", "Published"], ["suspended", "Suspended"], ["retired", "Retired"]];
+// The foot of a server-backed list: loading, error, empty, more, or the end.
+function pagerFoot(P, more, empty) {
+  if (!P || P.status === "loading") return `<p class="muted" role="status">Loading…</p>`;
+  if (P.status === "error") return `<p class="muted small" role="alert">${esc(P.error)} <button class="opill" data-action="${more}:retry">Try again</button></p>`;
+  if (!P.rows.length) return `<p class="muted small">${esc(empty)}</p>`;
+  if (P.status === "more") return `<p class="muted small" role="status">Loading more…</p>`;
+  if (P.next) return `<div class="ocontrols"><span class="muted small">${P.rows.length} of ${P.total} shown</span><button class="opill" data-action="${more}:more">Show more</button></div>`;
+  return `<p class="muted small">End of the list: ${P.rows.length} of ${P.total}.</p>`;
+}
+const entLabel = (x) => (x ? `${esc(x.name || "(no name)")} ${x.published ? "" : `<span class="muted tiny">(${esc(x.status === "verified" ? "approved" : x.status === "pending_review" ? "waiting" : x.status)})</span>`}` : "");
+const valueText = (f) => [f.value != null ? `= ${String(f.value)}` : "", ...Object.entries(f.qualifiers || {}).map(([k, v]) => `${k}: ${v}`)].filter(Boolean).join(" · ");
+function evidenceHtml(O, d) {
+  const E = d.wrEv || {}, S = E.sources, F = E.facts, perms = E.perms || {}, stage = O.wrEvStage || "blocked", sstage = O.wrEvSrcStage || "waiting";
+  if (d.wr6Missing) return `<div class="muted small onote">${esc(d.wr6Error)}</div>`;
+  const intro = `<div class="muted small onote">The imported grape rules, with the sources they rely on. Work from top to bottom: 1. review the sources, 2. approve their versions, 3. review the facts, 4. approve them, 5. publish each one on its own. A step is offered only when the database would accept it; a blocked fact shows why. Nothing is published in bulk.</div>`;
+  const srcRows = S && S.rows ? S.rows.map((r) => {
+    const a = sourceActions(r, perms), f = r.facts || {};
+    const btn = (table, id, list) => list.map((x) => `<button class="opill" data-action="owner:wrevrev:${table}:${id}:${x}">${esc(WR_DECISION_LABEL[x])}</button>`).join("");
+    const why = [...(r.version.blockers || []), ...(r.version.approve_blocker ? [r.version.approve_blocker] : []), ...(r.source.approve_blocker ? [r.source.approve_blocker] : [])];
+    return `<tr><td><b>${esc(r.source.title)}</b> ${wrBadge(r.source.status, false)}${r.source.url ? ` <a class="tiny" href="${esc(r.source.url)}" target="_blank" rel="noopener">open</a>` : ""}<div>${btn("sources", r.source.id, a.source)}</div></td>
+      <td>${esc(r.version.label)} ${wrBadge(r.version.status, false)}${r.version.rights_status ? ` <span class="muted tiny">licence ${esc(r.version.rights_status)}</span>` : ""}${why.length && r.version.status !== "verified" ? `<div class="muted tiny">${esc(why.join("; "))}</div>` : ""}<div>${btn("source_versions", r.version.id, a.version)}</div></td>
+      <td class="small">${Object.entries(f).map(([k, n]) => `${n} ${esc(k.replace("_unpublished", " (not published)").replace("pending_review", "waiting").replace("verified", "approved"))}`).join(", ")}</td></tr>`;
+  }).join("") : "";
+  const sp = `<div class="ocontrols">${[["waiting", "Still to approve"], ["all", "All"]].map(([id, l]) => `<button class="opill${id === sstage ? " on" : ""}" data-action="owner:wrevsrcstage:${id}" aria-pressed="${id === sstage}">${esc(l)}</button>`).join("")}</div>`;
+  const factRows = F && F.rows ? F.rows.map((f) => {
+    const acts = factActions(f, perms), ev = (f.evidence || []).map((e) => `<div class="small">${esc(e.source.title)}: ${esc(e.version.label)} ${wrBadge(e.version.status, false)} <span class="muted tiny">${esc(e.locator)} · ${esc(e.modality)} · ${esc(e.role)}${e.counts ? " · counts" : " · does not count yet"}</span></div>`).join("") || `<div class="muted small">No evidence.</div>`;
+    const blk = (f.publish_blockers || []).length && f.next !== "published" ? `<div class="tiny"><b>${f.next === "blocked" ? "Cannot be published:" : "Before it can be published:"}</b> ${esc(f.publish_blockers.join("; "))}</div>` : "";
+    const who = f.approve_blocker ? `<div class="muted tiny">${esc(f.approve_blocker)}</div>` : "";
+    const pub = acts.includes("publish") ? (O.wrPubConfirm === f.version_id ? `<button class="opill" data-action="owner:wrpubok:claim_versions:${f.version_id}">Confirm: publish</button><button class="opill" data-action="owner:wrpubcancel">Cancel</button>` : `<button class="opill" data-action="owner:wrpub:${f.version_id}">Publish</button>`) : "";
+    const steps = acts.filter((x) => x !== "publish").map((x) => `<button class="opill" data-action="owner:wrevrev:claim_versions:${f.version_id}:${x}">${esc(WR_DECISION_LABEL[x])}</button>`).join("");
+    return `<tr><td>${entLabel(f.subject)} <span class="muted">${esc(f.predicate)}</span> ${entLabel(f.object)}${valueText(f) ? `<div class="muted tiny">${esc(valueText(f))}</div>` : ""}</td><td>v${f.version_no} ${wrBadge(f.status, !!f.published_at)}${f.current ? ` <span class="muted tiny">current</span>` : ""}${blk}${who}</td><td>${ev}</td><td>${steps}${pub}</td></tr>`;
+  }).join("") : "";
+  const fp = `<div class="ocontrols">${EV_STAGES.map(([id, l]) => `<button class="opill${id === stage ? " on" : ""}" data-action="owner:wrevstage:${id}" aria-pressed="${id === stage}">${esc(l)}</button>`).join("")}</div>`;
+  return intro + `<h4 class="gh">1–2. Sources and their versions</h4>` + sp + (S && S.rows && S.rows.length ? table("<th>Source</th><th>Version</th><th>Facts relying on it</th>", srcRows) : "") + pagerFoot(S, "owner:wrevsrcpage", sstage === "waiting" ? "No source is waiting: every source these facts rely on is approved." : "No source yet.")
+    + `<h4 class="gh">3–5. The facts</h4>` + fp + (F && F.rows && F.rows.length ? table("<th>Fact</th><th>Status</th><th>Evidence</th><th></th>", factRows) : "") + pagerFoot(F, "owner:wrevfactpage", "No fact in this group.");
+}
+function browseHtml(O, d, R) {
+  if (d.wr6Missing) return `<div class="muted small onote">${esc(d.wr6Error)}</div>`;
+  const B = O.wrB || {}, what = B.what || "entities", P = d.wrBrowse, kindLabel = new Map((R.entity_kinds || []).map((k) => [k.code, k.label]));
+  const nodes = []; for (const dm of (d.wrTax && d.wrTax.domains) || []) for (const n of dm.nodes || []) nodes.push([n.code, `${n.code} ${((n.names || []).find((x) => x.language === "en") || (n.names || [])[0] || {}).name || ""}`]);
+  const sel = (key, opts, label, val) => `<select class="ofield" data-wr="${key}" aria-label="${esc(label)}">${opts.map(([v, t]) => `<option value="${esc(v)}"${v === (val || "") ? " selected" : ""}>${esc(t)}</option>`).join("")}</select>`;
+  const pick = `<div class="ocontrols">${[["entities", "Places & things"], ["claims", "Facts"]].map(([id, l]) => `<button class="opill${id === what ? " on" : ""}" data-action="owner:wrbwhat:${id}" aria-pressed="${id === what}">${esc(l)}</button>`).join("")}</div>`;
+  const q = `<input class="ofield osearch" type="search" data-wr="bq" value="${esc(B.q || "")}" placeholder="${what === "entities" ? "Any name, any language" : "A name in the fact"}" aria-label="Search" autocomplete="off">`;
+  const types = [...(R.relationship_types || []).map((t) => [t.code, t.label]), ...(R.attribute_types || []).map((t) => [t.code, t.label + " (a value)"])];
+  const filters = what === "entities"
+    ? `<div class="ocontrols">${q}${sel("bkind", [["", "Any kind"], ...(R.entity_kinds || []).map((k) => [k.code, k.label])], "Kind", B.kind)}${sel("bstatus", BROWSE_STATUSES, "Status", B.status || "live")}${sel("barea", [["", "Any subject area"], ["none", "In no subject area"], ...nodes], "Subject area", B.area)}${sel("bsort", [["newest", "Newest first"], ["name", "By name"]], "Order", B.sort || "newest")}<button class="opill" data-action="owner:wrbgo">Search</button></div>`
+    : `<div class="ocontrols">${q}${sel("bpred", [["", "Any type"], ...types], "Type", B.predicate)}${sel("bcstatus", CLAIM_STATUSES, "Status", B.cstatus || "all")}<button class="opill" data-action="owner:wrbgo">Search</button>${B.entity ? `<span class="small">About one thing <button class="opill" data-action="owner:wrbclear">Show all</button></span>` : ""}</div>`;
+  let assign = "";
+  if (what === "entities") {
+    const A = O.wrAsg || {}, ticked = assignable(P && P.rows, A.ticks);
+    if (!A.area) assign = nodes.length ? `<div class="ocontrols">${sel("basgn", nodes, "Subject area to fill")}<button class="opill" data-action="owner:wrbasgn">Put several things in this subject area…</button></div>` : `<div class="muted tiny">No subject area yet: they come only from your approved list (Subject areas view).</div>`;
+    else {
+      const run = A.run, res = run ? `<div class="small onote" role="status">${run.running ? `Assigning ${run.done} of ${run.of}…` : `${run.stopped ? "Stopped" : "Done"}: ${run.ok} put in ${esc(A.area)}, ${run.results.length - run.ok} refused, ${run.of - run.results.length} not tried.`}${run.results.filter((x) => !x.ok).map((x) => `<div class="muted tiny">${esc(x.name)}: ${esc(x.msg)}</div>`).join("")}</div>` : "";
+      const go = A.confirm ? `<b class="small">Put ${ticked.length} things in ${esc(A.area)} as draft assignments (each is reviewed later)?</b><button class="opill" data-action="owner:wrbasgnok">Confirm: assign ${ticked.length}</button><button class="opill" data-action="owner:wrbasgncancel">Cancel</button>`
+        : run && run.running ? `<button class="opill" data-action="owner:wrbasgnstop">Stop</button>`
+        : `<button class="opill" data-action="owner:wrbtickall">Tick all that can be added (shown)</button>${ticked.length ? `<button class="opill" data-action="owner:wrbasgnask">Assign ${ticked.length} ticked</button>` : ""}<button class="opill" data-action="owner:wrbasgnend">Done</button>`;
+      assign = `<div class="onote"><div class="small">Filling the subject area <b>${esc(A.area)}</b>: tick the things to add. Things that cannot be added say why.</div><div class="ocontrols">${go}</div>${res}</div>`;
+    }
+  }
+  let rows = "";
+  if (P && P.rows && what === "entities") rows = table("<th>Thing</th><th>Status</th><th>Subject areas</th><th></th>", P.rows.map((e) => {
+    const A = O.wrAsg || {}, tick = A.area ? (e.assign === "" ? `<label class="tiny"><input type="checkbox" data-action="owner:wrbtick:${e.id}"${(A.ticks || []).includes(e.id) ? " checked" : ""}> add</label>` : `<span class="muted tiny">${esc(e.assign || "")}</span>`) : "";
+    return `<tr><td><b>${esc(e.name || "(no name)")}</b><div class="muted tiny">${esc(kindLabel.get(e.kind) || e.kind)} · ${e.name_count} name${e.name_count === 1 ? "" : "s"}${e.names.length > 1 ? ": " + esc(e.names.map((n) => `${n.name} (${n.language})`).slice(0, 4).join(", ")) : ""}</div></td><td>${wrBadge(e.status, e.published)}</td><td class="small">${e.areas.map((a) => esc(a.code) + (a.status === "draft" ? " <span class=\"muted tiny\">draft</span>" : "")).join(", ") || `<span class="muted">none</span>`}</td><td>${tick}${e.claims ? `<button class="opill" data-action="owner:wrbfacts:${e.id}">${e.claims} fact${e.claims === 1 ? "" : "s"}</button>` : ""}<span class="muted tiny">${e.links ? `${e.links} catalog link${e.links === 1 ? "" : "s"}` : ""}</span></td></tr>`;
+  }).join(""));
+  else if (P && P.rows) rows = table("<th>Fact</th><th>Latest version</th><th></th>", P.rows.map((c) => `<tr><td>${entLabel(c.subject)} <span class="muted">${esc(c.predicate)}</span> ${entLabel(c.object)}${valueText(c.latest) ? `<div class="muted tiny">${esc(valueText(c.latest))}</div>` : ""}</td><td>v${c.latest.version_no} ${wrBadge(c.latest.status, !!c.latest.published_at)}${c.latest.suspended_at ? ` <span class="gbadge draft">Suspended</span>` : ""}${c.latest.current ? ` <span class="muted tiny">current</span>` : ""}${(c.latest.problems || []).length ? `<div class="muted tiny">${esc(c.latest.problems.join("; "))}</div>` : ""}</td><td class="small muted">${c.latest.evidence} evidence${c.versions > 1 ? ` · ${c.versions} versions` : ""}</td></tr>`).join(""));
+  return `<div class="muted small onote">Everything in the reference, read from the database a page at a time (no limit of 300). Search looks in every name and language.</div>` + pick + filters + assign + (P && P.rows && P.rows.length ? rows : "") + pagerFoot(P, "owner:wrbpage", "Nothing matches.");
+}
+// Several candidate things for one catalog row, side by side. Choosing one confirms it; 003's rule then rejects the others.
+function compareHtml(O, d) {
+  const C = d.wrCmp;
+  if (!O.wrCmp) return "";
+  const close = `<button class="opill" data-action="owner:wrcmpclose">Close</button>`;
+  if (C === undefined) return `<div class="onote"><p class="muted" role="status">Loading the candidates…</p></div>`;
+  if (C === null) return `<div class="onote"><p class="muted small" role="alert">${esc(d.wrCmpError || "Could not load the candidates.")}</p>${close}</div>`;
+  const notes = compareCandidates(C.catalog, C.candidates), cands = C.candidates || [];
+  const col = (fn) => cands.map((c, i) => `<td>${fn(c, notes[i])}</td>`).join("");
+  const ICON = { ok: "✓", warn: "!", bad: "✕", info: "·" };
+  const rows = [
+    ["Thing", (c) => `<b>${esc(c.entity.name || "(no name)")}</b>`],
+    ["Status", (c) => wrBadge(c.entity.status, c.entity.published) + (c.entity.superseded_by ? ` <span class="gbadge">Replaced</span>` : "")],
+    ["Names", (c) => (c.entity.names || []).map((n) => `<div class="small">${esc(n.name)} <span class="muted tiny">${esc(n.language)} · ${esc(n.name_kind)}${n.status !== "verified" ? " · " + esc(n.status) : ""}</span></div>`).join("")],
+    ["How it was found", (c) => `<span class="small">${esc(WR_METHOD_LABEL[c.link.method] || c.link.method || "")}${c.link.score ? " · " + c.link.score : ""}</span>${c.link.note ? `<div class="muted tiny">${esc(c.link.note)}</div>` : ""}`],
+    ["Subject areas", (c) => `<span class="small">${esc((c.entity.areas || []).join(", ")) || "none"}</span>`],
+    ["Facts", (c) => `<span class="small">${c.entity.claims}</span>`],
+    ["Other catalog rows", (c) => (c.entity.other_links || []).map((o) => `<div class="small">${esc(o.name || o.catalog_id)} <span class="muted tiny">${esc(o.table)} · ${esc(o.status)}</span></div>`).join("") || `<span class="muted small">none</span>`],
+    ["Worth noticing", (c, n) => n.notes.map(([k, t]) => `<div class="small">${ICON[k]} ${esc(t)}</div>`).join("")],
+    ["", (c) => c.link.status !== "suggested" ? `<span class="gbadge ok">Confirmed</span>` : O.wrCmpPick === c.link.id
+      ? `<div class="small"><b>Confirm "${esc(c.entity.name || "")}" for "${esc(C.catalog.name)}"?</b> ${cands.length - 1 ? `The other ${cands.length - 1} suggestion${cands.length > 2 ? "s are" : " is"} then rejected.` : ""} Undo stays possible.</div><button class="opill" data-action="owner:wrcmpok:${c.link.id}">Confirm this one</button><button class="opill" data-action="owner:wrcmpcancel">Cancel</button>`
+      : `<button class="opill" data-action="owner:wrcmppick:${c.link.id}">Choose this one</button>`]];
+  const body = rows.map(([label, fn]) => `<tr><th class="small">${esc(label)}</th>${col(fn)}</tr>`).join("");
+  return `<div class="onote"><div><b>${esc(C.catalog.name)}</b> <span class="muted small">${esc(C.catalog.table)}${C.catalog.detail ? " · " + esc(C.catalog.detail) : ""} · ${esc(C.catalog.basis)}</span> ${close}</div>
+    <div class="muted tiny">${cands.length} candidate${cands.length === 1 ? "" : "s"}${C.rejected ? `, ${C.rejected} already rejected` : ""}. Nothing is chosen for you.</div>
+    <div class="otablewrap"><table class="otable"><tbody>${body}</tbody></table></div></div>`;
+}
 const wrBadge = (st, published) => (st === "verified" && published ? `<span class="gbadge ok">Published</span>` : st === "verified" ? `<span class="gbadge">Approved</span>`
   : st === "pending_review" ? `<span class="gbadge star">Waiting for review</span>` : st === "retired" ? `<span class="gbadge">Retired</span>` : `<span class="gbadge draft">Draft</span>`);
 const wrButtons = (verb, id, decisions) => decisions.map((dec) => `<button class="opill" data-action="owner:${verb}:${id}:${dec}">${esc(WR_DECISION_LABEL[dec])}</button>`).join("");
@@ -601,6 +747,10 @@ export function referenceTable(O, d) {
         + table("<th>Area</th><th>Waiting</th><th></th>", rows, "Nothing is waiting for you.")
         + (Q.missing.length ? `<div class="muted tiny">Not counted yet (needs ${esc(Q.missing.join(", "))}).</div>` : "");
     }
+  } else if (view === "evidence") {
+    body = evidenceHtml(O, d);
+  } else if (view === "browse") {
+    body = browseHtml(O, d, R);
   } else if (view === "entities") {
     const form = `<div class="ocontrols">${wrSelect("kind", (R.entity_kinds || []).map((k) => [k.code, k.label]), "Kind")}${wrInput("name", "Name")}${wrSelect("lang", WR_LANGS, "Language", "en")}${wrSelect("namekind", (R.name_kinds || []).map((k) => [k.code, k.label]), "Kind of name", "common")}<button class="opill" data-action="owner:wrnew">Create draft</button></div>`;
     const rows = ents.filter((e) => !q || (e.names || []).some((n) => fold(n.name).includes(q))).map((e) => {
@@ -706,11 +856,12 @@ export function referenceTable(O, d) {
     else list = table("<th>Catalog row</th><th>Reference thing</th><th></th>", (Q.rows || []).filter((r) => !q || fold(r.name || "").includes(q)).map((r) => {
       const links = (r.links || []).map((l) => `<div class="small">${esc(l.entity_name || "(no name)")} ${l.status === "confirmed" ? `<span class="gbadge ok">Confirmed</span>` : `<span class="gbadge draft">Suggested</span>`} <span class="muted tiny">${esc(WR_METHOD_LABEL[l.method] || l.method)}${l.score ? " · " + l.score : ""}${l.entity_status === "draft" ? " · thing is a draft" : ""}</span> ${l.status === "suggested" ? `<button class="opill" data-action="owner:wrdecide:${l.id}:confirmed">Confirm</button><button class="opill" data-action="owner:wrdecide:${l.id}:rejected">Reject</button>` : `<button class="opill" data-action="owner:wrundo:${l.id}">Undo</button>`}</div>`).join("");
       const make = (r.links || []).length ? "" : vint ? `<button class="opill" data-action="owner:wrrow:identity:${r.catalog_id}">Build product + edition</button>` : `<button class="opill" data-action="owner:wrrow:seed:${r.catalog_id}">Make a draft</button>`;
+      const cmp = (r.links || []).filter((l) => l.status === "suggested").length > 1 ? `<button class="opill" data-action="owner:wrcmp:${r.catalog_id}">Compare side by side</button>` : "";
       const tick = (r.links || []).filter((l) => l.status === "suggested").map((l) => `<label class="tiny"><input type="checkbox" data-action="owner:wrtick:${l.id}"${(O.wrTicks || []).includes(l.id) ? " checked" : ""}> tick ${esc((l.entity_name || "").slice(0, 24))}</label>`).join(" ");
-      return `<tr><td>${esc(r.name || "")}${r.detail ? `<div class="muted tiny">${esc(r.detail)}</div>` : ""}</td><td>${links || `<span class="muted small">none</span>`}</td><td>${make}${tick}</td></tr>`;
+      return `<tr><td>${esc(r.name || "")}${r.detail ? `<div class="muted tiny">${esc(r.detail)}</div>` : ""}</td><td>${links || `<span class="muted small">none</span>`}</td><td>${cmp}${make}${tick}</td></tr>`;
     }).join(""), filter === "waiting" ? "Nothing waiting for a decision here." : "None.");
     const ticks = (O.wrTicks || []).length, tickBar = ticks ? `<div class="ocontrols"><b class="small">${ticks} ticked</b><button class="opill" data-action="owner:wrticked:confirmed">Confirm ticked</button><button class="opill" data-action="owner:wrticked:rejected">Reject ticked</button><button class="opill" data-action="owner:wrticked:clear">Clear ticks</button></div>` : "";
-    body = picker + counts + tools + filters + tickBar + list;
+    body = picker + counts + tools + filters + tickBar + compareHtml(O, d) + list;
   }
   return views + note + body;
 }
